@@ -47,7 +47,7 @@
 | `bww2mxml/`、`miditools/`、`demos/` | 独立转换/辅助工具、演示谱 | 默认构建范围看顶层 CMake |
 | `omr/`、`avsomr/` | 可选 PDF/视觉识谱、外部识谱服务模块 | 默认 OFF；不要推断当前启用 |
 | `telemetry/`、`crashreporter/`、`snap/`、`.github/`、`.tx/` | 统计、崩溃、发行、CI、翻译配置 | 构建/发布相关任务 |
-| `personal/` | 本分支个人版本、日志、AI 指南与导航工具 | 与应用构建隔离 |
+| `personal/` | 本分支个人版本、日志、AI 指南、导航校验与 Windows 本地构建入口 | 不修改上游构建文件；[实测与脚本](09-windows-build-check.md) |
 
 完整的 Git 跟踪文件数量/类型统计保存在 [baseline.json](baseline.json)，不是运行时依赖清单。
 

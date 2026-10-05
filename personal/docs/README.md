@@ -4,9 +4,9 @@
 
 - 源码基准：`f2a80b9f59dd396698b3b507a19a56bfb8791af2`，`3.x`，2026-10-05 整理。
 - 应用版本：`config.cmake` 为 `3.7.0`；个人维护版本见 [VERSION](../VERSION)。
-- 个人仓库：`origin = git@github.com:Freddd13/MuseScore.git`；用户说明的上游是 Jojo-Schmitz/MuseScore。本次未比较上游分支，不能据此判断领先/落后。
+- 个人仓库：`origin = git@github.com:Freddd13/MuseScore.git`；上游是 Jojo-Schmitz/MuseScore。2026-10-05 后续构建任务已核对上游 `3.x` HEAD 与上述源码基准相同；最新状态仍需重新核对，见 [09](09-windows-build-check.md)。
 - 本机仓库：`E:\programming\funcodes\muse3_dev\MuseScore`；外层工作区不是 Git 仓库。
-- 证据等级：这里的结构与调用链来自本地源码静态阅读；测试/构建命令为源码推导的操作指南，应用未在本次编译运行。环境与覆盖范围见 [基准快照](08-baseline-and-limits.md)。
+- 证据等级：结构与调用链来自源码静态阅读，首次调查环境见 [基准快照](08-baseline-and-limits.md)。后续 Debug 编译、安装、版本启动实测已通过；离屏 PDF 生成后退出超时，运行限制见 [09](09-windows-build-check.md)。
 
 ## 60 秒架构模型
 
@@ -31,6 +31,7 @@ libmscore: 乐谱对象 + 编辑规则 + 撤销 + 排版 + MSCX/MSCZ + MIDI 渲�
 | 根据功能找文件/测试 | [04 功能开发定位表](04-feature-map.md) | [源码索引](source-map.tsv) |
 | 钢琴卷帘、双谱表、踏板、MIDI、力度 | [05 钢琴开发专题](05-piano-development.md) | `pianoroll/`、`rendermidi.cpp` |
 | Windows 构建、测试、调试 | [06 构建与验证](06-build-and-test.md) | CMake、`mtest/`、CI 脚本 |
+| 当前电脑如何编译、实测阻塞与本地 SDK | [09 Windows 构建实测](09-windows-build-check.md) | `personal/tools/build_windows.ps1` |
 | 开发、版本、日志、提交、上游合并 | [07 开发流程](07-development-workflow.md) | [更新日志](../CHANGELOG.md) |
 | 判断哪些结论需重新验证 | [08 基准与限制](08-baseline-and-limits.md) | [机器快照](baseline.json) |
 

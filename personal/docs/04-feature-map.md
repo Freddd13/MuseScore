@@ -60,6 +60,7 @@
 | 3.6 样式迁移 | `mscore/migration/` | reader 的格式兼容与 UI 字体/位置迁移不是同一件事 |
 | 翻译 | `tr/QT_TRANSLATE_NOOP`、`share/locale/`、顶层 lupdate/lrelease 目标 | `doc/i18n.md`；不要批量改全部 .ts 来实现一个功能 |
 | 调试/脚本辅助 | `mscore/debugger/`、`mscore/script/`、`mtest/testscript/` | 脚本运行测试当前有 QSKIP，不能报告为有效覆盖 |
+| 个人 Windows 构建复现 | `personal/tools/build_windows.ps1` | Qt 5 本地 SDK、Build Tools 识别、VS2019/v142；[本机实测](09-windows-build-check.md) |
 
 ## 常用定位命令
 
