@@ -3,18 +3,38 @@ import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.3
 import MuseScore 3.0
 import "Harmony.js" as Harmony
+import "Preferences.js" as Preferences
+import "Analysis.js" as Analysis
+import QtQuick.Dialogs 1.3
+import QtQuick.Window 2.2
 
 MuseScore {
     id: root
     menuPath: "Plugins.Harmony Assistant"
     description: "钢琴和声助手：持续音识别、级数、音程功能与可选谱面配色。"
-    version: "1.0.0"
+    version: "1.1.0"
     requiresScore: true
     pluginType: "dock"
     dockArea: "right"
     implicitWidth: 360
     implicitHeight: 740
 
+    property var configuration: Preferences.defaults()
+    property bool loadingConfiguration: false
+    property bool ribbon: (width > 460 && height < 300) ||
+        (typeof panelPlacement === "string" && (panelPlacement === "top" || panelPlacement === "bottom") && height < 400)
+    property bool expanded: flick.width >= 680
+    property bool advancedNative: observer && typeof observer.contextSnapshot === "function"
+    property var contextNotes: []
+    property var analysisRecords: []
+    property var pendingRecords: []
+    property var importedRecords: []
+    property string analysisFingerprint: ""
+    property int analysisNextTick: 0
+    property bool analysisDirty: true
+    property string pendingFileAction: ""
+    property string pendingExport: ""
+    property int preferredRibbonHeight: 140
     property bool started: false
     property var observer: null
     property bool surfaceActive: visible && (!observer || observer.surfaceVisible)
@@ -60,6 +80,157 @@ MuseScore {
     property color muted: "#6B7785"
     property var qualityNames: Harmony.defs.map(function(d) { return d.name })
 
+    function windowTicks() {return [0,240,480,960,1920][arpeggioWindow.currentIndex] || 0}
+    function windowHeight() {return 650}
+    function functionText(pitch, tonic, definition) {
+        var fixed=configuration.noteLabels[Harmony.mod12(pitch)]
+        if(typeof fixed==="string" && fixed.length)return fixed
+        var label=Harmony.labelFor(pitch,tonic,definition)
+        return configuration.labels[label] === undefined ? label : configuration.labels[label]
+    }
+    function colorFor(pitch, tonic, definition) {
+        return configuration.colors[Harmony.role(Harmony.labelFor(pitch,tonic,definition))] || configuration.colors["外"]
+    }
+    function collectPreferences() {
+        var c=JSON.parse(JSON.stringify(configuration))
+        c.auto=autoChord.checked; c.follow=followPlayback.checked; c.coloring=scoreColoring.checked
+        c.allColor=allColor.checked; c.chordLabels=showChords.checked; c.noteFunctions=showFunctions.checked
+        c.pedal=pedalContext.checked; c.window=arpeggioWindow.currentIndex; c.scope=scope.currentIndex
+        c.keyMode=keyMode.currentIndex; c.keyTonic=keyTonic.currentIndex; c.manualKey=manualKey
+        c.root=rootCombo.currentIndex; c.quality=qualityCombo.currentIndex
+        c.keyboard=keyboardExpanded; c.settings=settingsExpanded
+        return Preferences.clean(c)
+    }
+    function applyPreferences(value) {
+        loadingConfiguration=true
+        try {
+            var c=Preferences.clean(value)
+            configuration=c
+            autoChord.checked=c.auto; followPlayback.checked=c.follow; scoreColoring.checked=c.coloring
+            allColor.checked=c.allColor; showChords.checked=c.chordLabels; showFunctions.checked=c.noteFunctions
+            pedalContext.checked=c.pedal; arpeggioWindow.currentIndex=c.window; scope.currentIndex=c.scope
+            keyMode.currentIndex=c.keyMode; keyTonic.currentIndex=c.keyTonic; manualKey=c.manualKey
+            rootCombo.currentIndex=c.root; qualityCombo.currentIndex=c.quality
+            keyboardExpanded=c.keyboard; settingsExpanded=c.settings
+        } catch(error) {noticeText="配置未应用："+String(error)}
+        finally {loadingConfiguration=false}
+        optionsChanged()
+    }
+    function savePreferences() {
+        if(!started || loadingConfiguration)return
+        var c=collectPreferences()
+        if(advancedNative) {
+            if(!observer.saveConfiguration("HarmonyAssistant",c))noticeText="配置保存失败，请检查设置目录权限。"
+        } else if(settingsStore.item) settingsStore.item.payload=JSON.stringify(c)
+    }
+    function optionsChanged(rebuild) {
+        if(!started || loadingConfiguration)return
+        configurationTimer.restart()
+        if(rebuild!==false) {analysisDirty=true; analysisTimer.stop()}
+        requestRefresh(false)
+        if(advancedNative) {
+            if(rebuild===false && !analysisDirty)applyScorePreview()
+            else {observer.setScorePreview([]); scheduleAnalysis()}
+        }
+    }
+    function needsAnalysis() {return advancedNative && ((scoreColoring.checked && allColor.checked) || showChords.checked || showFunctions.checked || pendingExport.length>0)}
+    function scheduleAnalysis() {
+        if(!started || !surfaceActive || !curScore || !needsAnalysis() || analysisTimer.running || !analysisDirty)return
+        setScope()
+        pendingRecords=[]
+        analysisNextTick=0
+        analysisTimer.start()
+    }
+    function frameResult(frame) {
+        var notes=frame.analysisNotes || frame.notes || []
+        var pitches=notes.map(function(n){return n.pitch})
+        var result=!notes.length ? {root:-1,definition:-1} : autoChord.checked ? Harmony.detect(pitches) :
+            {root:Harmony.rootPcs[rootCombo.currentIndex],definition:qualityCombo.currentIndex}
+        var imported=Analysis.atTick(importedRecords,frame.tick)
+        if(imported){result.root=imported.root;result.definition=imported.definition}
+        var chord="", degree="", tonic=Harmony.rootPcs[keyTonic.currentIndex]
+        if(!manualKey) {
+            var major=[11,6,1,8,3,10,5,0,7,2,9,4,11,6,1]
+            tonic=major[(frame.keySignature || 0)+7]
+            if(keyMode.currentIndex===1)tonic=Harmony.mod12(tonic+9)
+        }
+        if(result.root>=0) {
+            var name=nameOf(result.root)
+            for(var i=0;i<notes.length;++i)if(Harmony.mod12(notes[i].pitch)===result.root){name=Harmony.spelledName(notes[i].tpc,notes[i].pitch,prefersFlats());break}
+            chord=name+Harmony.defs[result.definition].suffix
+            degree=Harmony.roman(tonic,keyMode.currentIndex===1,result.root,result.definition)
+        }
+        return {tick:frame.tick,bar:frame.bar,beat:frame.beat,root:result.root,definition:result.definition,
+            chord:chord,degree:degree,notes:notes}
+    }
+    function buildAnalysisChunk() {
+        if(!curScore || !surfaceActive || !needsAnalysis())return
+        var batch=observer.analysisFrames(analysisNextTick,32,firstTrack,endTrack,pedalContext.checked,windowTicks())
+        analysisFingerprint=batch.fingerprint || ""
+        var frames=batch.frames || []
+        for(var i=0;i<frames.length;++i)pendingRecords.push(frameResult(frames[i]))
+        analysisNextTick=batch.nextTick
+        if(analysisNextTick>=0) {analysisTimer.start(); return}
+        analysisRecords=pendingRecords; pendingRecords=[]; analysisDirty=false
+        applyScorePreview()
+        if(pendingExport.length){var action=pendingExport;pendingExport="";chooseFile(action)}
+    }
+    function applyScorePreview() {
+        if(!advancedNative)return
+        var descriptors=[], lastChord=""
+        for(var i=0;i<analysisRecords.length;++i) {
+            var frame=analysisRecords[i], onset=[]
+            if(frame.root<0){lastChord="";continue}
+            // Attribute notes when they are written; later sustained contexts cannot recolor an earlier attack.
+            for(var n=0;n<frame.notes.length;++n)if(frame.notes[n].tick===frame.tick)onset.push(frame.notes[n])
+            for(n=0;n<onset.length;++n) {
+                var d=JSON.parse(JSON.stringify(onset[n]))
+                if(scoreColoring.checked && allColor.checked)d.color=colorFor(d.pitch,frame.root,frame.definition)
+                if(showFunctions.checked)d.label=functionText(d.pitch,frame.root,frame.definition)
+                if(showChords.checked && n===0 && frame.chord!==lastChord)d.chord=frame.chord+" · "+frame.degree
+                if(d.color || d.label || d.chord)descriptors.push(d)
+            }
+            if(onset.length)lastChord=frame.chord
+        }
+        observer.setScorePreview(descriptors)
+        // The active layer must be last so it can highlight labels during playback.
+        observer.clearNotePreviewColors()
+        repaintNotes()
+    }
+    function prepareExport(action) {
+        pendingExport=action
+        if(analysisDirty || !analysisRecords.length) {analysisDirty=true; scheduleAnalysis()}
+        else {pendingExport="";chooseFile(action)}
+    }
+    function chooseFile(action) {pendingFileAction=action; exchangeDialog.open()}
+    function exchangeFile(path) {
+        try {
+            var action=pendingFileAction, content=""
+            if(action.indexOf("import")===0) {
+                content=observer.readTextFile(path)
+                if(!content.length)throw Error("文件为空、超过 16 MiB 或无法读取")
+                var parsed=JSON.parse(content)
+                if(action==="import-config") {applyPreferences(Preferences.clean(parsed));savePreferences();noticeText="配置已导入并保存。"}
+                else {
+                    var imported=Analysis.validate(parsed)
+                    setScope()
+                    var fingerprint=observer.contextSnapshot(0,firstTrack,endTrack,pedalContext.checked,windowTicks(),false).fingerprint
+                    if(imported.fingerprint!==fingerprint)throw Error("分析与当前乐谱 / 乐器范围不一致，未应用")
+                    importedRecords=imported.frames; analysisDirty=true; scheduleAnalysis(); requestRefresh(false)
+                    noticeText="已导入 "+imported.frames.length+" 个分析切片。"
+                }
+            } else {
+                content=action==="export-config" ? JSON.stringify(collectPreferences(),null,2) :
+                    action==="csv" ? Analysis.csv(analysisRecords) :
+                    JSON.stringify(Analysis.document(analysisRecords,analysisFingerprint,collectPreferences()),null,2)
+                var suffix=action==="csv"?".csv":".json"
+                if(path.toLowerCase().slice(-suffix.length)!==suffix)path+=suffix
+                if(!observer.writeTextFile(path,content))throw Error("无法写入文件")
+                noticeText="已导出："+decodeURIComponent(path)
+            }
+        } catch(error) {noticeText="操作未完成："+String(error)}
+    }
+
     function same(a, b) { return a && b && a.is(b) }
     function isOpen(score) {
         if (!score) return false
@@ -83,9 +254,10 @@ MuseScore {
     function rootName() {
         if (chordRoot < 0) return "—"
         if (!autoChord.checked) return Harmony.rootNames[rootCombo.currentIndex]
-        for (var i = 0; i < currentNotes.length; ++i)
-            if (Harmony.mod12(currentNotes[i].pitch) === chordRoot)
-                return Harmony.spelledName(currentNotes[i].tpc, currentNotes[i].pitch, prefersFlats())
+        var namingNotes = contextNotes.length ? contextNotes : currentNotes
+        for (var i = 0; i < namingNotes.length; ++i)
+            if (Harmony.mod12(namingNotes[i].pitch) === chordRoot)
+                return Harmony.spelledName(namingNotes[i].tpc, namingNotes[i].pitch, prefersFlats())
         return nameOf(chordRoot)
     }
     function rootIndex(pc) {
@@ -140,6 +312,10 @@ MuseScore {
         activeColorKeys = ({})
         undoPause = false
         timeline = []
+        analysisTimer.stop()
+        importedRecords = []
+        analysisRecords = []
+        analysisDirty = true
         cacheDirty = true
         manualKey = false
         lastPlaying = false
@@ -169,6 +345,9 @@ MuseScore {
             cacheDirty = true
             buildTimer.stop()
             buildSegment = null
+            analysisDirty = true
+            if (advancedNative) observer.clearAllPreviews()
+            if (importedRecords.length) {importedRecords=[]; noticeText="乐谱已变更，已退出导入结果；请重新分析。"}
         }
         if (surfaceActive) refreshTimer.restart()
     }
@@ -185,7 +364,7 @@ MuseScore {
         selectionTrack = location.track
         var oldFirst = firstTrack, oldEnd = endTrack
         setScope()
-        if (oldFirst !== firstTrack || oldEnd !== endTrack) cacheDirty = true
+        if (oldFirst !== firstTrack || oldEnd !== endTrack) {cacheDirty = true;analysisDirty=true;importedRecords=[];if(advancedNative)observer.setScorePreview([])}
         currentTick = location.tick
         if (observer) {cacheDirty = false; displayTick(location.tick, true)}
         else if (cacheDirty) beginBuild()
@@ -260,7 +439,9 @@ MuseScore {
         if ((!observer && cacheDirty) || tick < 0) return
         var notes = [], pitches = []
         if (observer) {
-            nativeSnapshot = observer.snapshot(tick, firstTrack, endTrack, lastPlaying && followPlayback.checked)
+            nativeSnapshot = advancedNative ? observer.contextSnapshot(tick, firstTrack, endTrack,
+                pedalContext.checked, windowTicks(), lastPlaying && followPlayback.checked) :
+                observer.snapshot(tick, firstTrack, endTrack, lastPlaying && followPlayback.checked)
             notes = nativeSnapshot.notes || []
         } else {
             for (var t = 0; t < timeline.length; ++t) {
@@ -268,6 +449,9 @@ MuseScore {
                 if (event) for (var n = 0; n < event.notes.length; ++n) notes.push(event.notes[n])
             }
         }
+        var detectedNotes = observer && nativeSnapshot.analysisNotes ? nativeSnapshot.analysisNotes : notes
+        var contextChanged = JSON.stringify(detectedNotes) !== JSON.stringify(contextNotes)
+        contextNotes = detectedNotes
         notes.sort(function(a,b) {return a.pitch - b.pitch || a.track - b.track})
         for (var i = 0; i < notes.length; ++i) pitches.push(notes[i].pitch)
         var changed = JSON.stringify(notes) !== JSON.stringify(currentNotes)
@@ -278,7 +462,7 @@ MuseScore {
                     " · 第 " + nativeSnapshot.bar + " 小节 · 第 " + nativeSnapshot.beat + " 拍"
         var previousKey = keyTonic.currentIndex
         initializeKey(tick)
-        if (!changed && !force) {
+        if (!changed && !contextChanged && !force) {
             if (previousKey !== keyTonic.currentIndex) updateTexts()
             return
         }
@@ -288,12 +472,16 @@ MuseScore {
     }
     function analyze() {
         alternativesText = ""
-        if (!currentNotes.length) {
+        if (!contextNotes.length && !currentNotes.length) {
             chordRoot = -1
             chordDefinition = -1
             matchText = currentTick < 0 ? "请选择音符、和弦或休止符" : "空拍 · 没有持续音"
         } else if (autoChord.checked) {
-            var result = Harmony.detect(currentPitches)
+            var contextPitches = contextNotes.map(function(n){return n.pitch})
+            var result = Harmony.detect(contextPitches.length ? contextPitches : currentPitches)
+            var imported = Analysis.atTick(importedRecords, currentTick)
+            if (imported) result = {root:imported.root,definition:imported.definition,kind:"已导入的分析",alternatives:[]}
+            else if (contextPitches.length > currentPitches.length) result.kind += " · 踏板 / 琶音上下文"
             chordRoot = result.root
             chordDefinition = result.definition
             matchText = result.kind
@@ -306,6 +494,11 @@ MuseScore {
                     names.push(nameOf(alt.root) + Harmony.defs[alt.definition].suffix)
                 }
                 if (names.length) alternativesText = "也可能是 " + names.join(" / ")
+                if(contextPitches.length>currentPitches.length) {
+                    var instant=Harmony.detect(currentPitches)
+                    if(instant.root>=0 && (instant.root!==chordRoot || instant.definition!==chordDefinition))
+                        alternativesText += (alternativesText.length?" · ":"")+"即时音："+nameOf(instant.root)+Harmony.defs[instant.definition].suffix
+                }
             }
         } else {
             chordRoot = Harmony.rootPcs[rootCombo.currentIndex]
@@ -315,6 +508,7 @@ MuseScore {
         updateTexts()
         updatePianoRange()
         repaintNotes()
+        scheduleAnalysis()
     }
     function updateTexts() {
         chordText = chordRoot < 0 ? (currentPitches.length === 1 ? noteName(currentNotes[0]) : "—") :
@@ -331,6 +525,7 @@ MuseScore {
             if (Harmony.mod12(bass.pitch) !== chordRoot) chordText += "/" + Harmony.spelledName(bass.tpc, bass.pitch, prefersFlats())
         }
         var degrees = ["1","3","5","7","9","11","13"], rows = []
+        var roleNotes = contextNotes.length ? contextNotes : currentNotes
         for (var d = 0; d < degrees.length; ++d) {
             var degree = degrees[d], labels = [], played = [], expected = false
             if (chordDefinition >= 0) {
@@ -341,13 +536,13 @@ MuseScore {
                         labels.push(definition.labels[k])
                     }
             }
-            for (i = 0; i < currentNotes.length; ++i) {
-                var functionLabel = Harmony.labelFor(currentNotes[i].pitch, chordRoot, chordDefinition)
-                if (Harmony.role(functionLabel) === degree) played.push(noteName(currentNotes[i]))
+            for (i = 0; i < roleNotes.length; ++i) {
+                var functionLabel = Harmony.labelFor(roleNotes[i].pitch, chordRoot, chordDefinition)
+                if (Harmony.role(functionLabel) === degree) played.push(noteName(roleNotes[i]))
             }
             rows.push({degree:degree, label:labels.length ? labels.join(" / ") : degree,
                        notes:played.length ? played.join(" · ") : expected ? "缺音" : "—",
-                       present:played.length > 0, expected:expected, color:Harmony.colors[degree]})
+                       present:played.length > 0, expected:expected, color:configuration.colors[degree]})
         }
         toneRows = rows
     }
@@ -372,7 +567,7 @@ MuseScore {
         var wanted = {}, writes = [], ledger = colorLedger.slice(0), nextActive = {}
         if (enabled && chordRoot >= 0)
             for (var i = 0; i < currentNotes.length; ++i)
-                wanted[locatorKey(currentNotes[i])] = {location:currentNotes[i], color:Harmony.colorFor(currentNotes[i].pitch, chordRoot, chordDefinition)}
+                wanted[locatorKey(currentNotes[i])] = {location:currentNotes[i], color:colorFor(currentNotes[i].pitch, chordRoot, chordDefinition)}
         for (i = 0; i < ledger.length; ++i) {
             var record = ledger[i]
             if (!all && !activeColorKeys[record.key] && !wanted[record.key]) continue
@@ -413,15 +608,21 @@ MuseScore {
     }
     function repaintNotes() {
         if (observer) {
-            var colors = []
-            if (scoreColoring.checked && chordRoot >= 0)
-                for (var i = 0; i < currentNotes.length; ++i) {
-                    var descriptor = {}
-                    for (var field in currentNotes[i]) descriptor[field] = currentNotes[i][field]
-                    descriptor.color = Harmony.colorFor(descriptor.pitch, chordRoot, chordDefinition)
-                    colors.push(descriptor)
+            var descriptors = []
+            if (chordRoot >= 0) {
+                var notes = currentNotes.length ? currentNotes : contextNotes
+                var chordAnchor=0
+                for(var a=1;a<notes.length;++a)if(notes[a].tick>notes[chordAnchor].tick)chordAnchor=a
+                for (var i=0;i<notes.length;++i) {
+                    var d=JSON.parse(JSON.stringify(notes[i]))
+                    if(scoreColoring.checked)d.color=colorFor(d.pitch,chordRoot,chordDefinition)
+                    if(advancedNative && showFunctions.checked)d.label=functionText(d.pitch,chordRoot,chordDefinition)
+                    if(advancedNative && showChords.checked && i===chordAnchor)d.chord=chordText+" · "+degreeText
+                    if(advancedNative)d.active=lastPlaying && followPlayback.checked
+                    if(d.color || d.label || d.chord)descriptors.push(d)
                 }
-            observer.setNotePreviewColors(colors)
+            }
+            observer.setNotePreviewColors(descriptors)
         } else syncColors(scoreColoring.checked && !lastPlaying)
     }
     function restoreColors(all) {
@@ -432,6 +633,9 @@ MuseScore {
         undoPause = false
         scoreColoring.checked = false
         restoreColors(true)
+        if(advancedNative)observer.clearAllPreviews()
+        applyScorePreview()
+        savePreferences()
     }
     function updatePianoRange() {
         if (!currentPitches.length) {pianoStart = 48; pianoOctaves = 3; return}
@@ -441,7 +645,7 @@ MuseScore {
     }
     function midiActive(midi) {return currentPitches.indexOf(midi) >= 0}
     function pianoColor(midi, black) {
-        return midiActive(midi) ? Harmony.colorFor(midi, chordRoot, chordDefinition) : black ? "#28333D" : "#FFFFFF"
+        return midiActive(midi) ? colorFor(midi, chordRoot, chordDefinition) : black ? "#28333D" : "#FFFFFF"
     }
     function whiteMidi(index) {return pianoStart + Math.floor(index / 7) * 12 + [0,2,4,5,7,9,11][index % 7]}
     function blackMidi(index) {return pianoStart + Math.floor(index / 5) * 12 + [1,3,6,8,10][index % 5]}
@@ -487,6 +691,11 @@ MuseScore {
         if (typeof root.newScoreObserver === "function") {
             observer = root.newScoreObserver()
             if (observer) scoreColoring.checked = true
+            changeScore()
+            if (advancedNative) {
+                var saved=observer.loadConfiguration("HarmonyAssistant")
+                if(saved.schema)applyPreferences(saved)
+            } else settingsStore.active=true
         }
         requestRefresh(true)
     }
@@ -511,10 +720,27 @@ MuseScore {
     }
     onSurfaceActiveChanged: {
         if (!started) return
-        if (!surfaceActive) {refreshTimer.stop(); playbackTimer.stop(); buildTimer.stop()}
-        else {followNativePosition(); requestRefresh(false)}
+        if (!surfaceActive) {refreshTimer.stop(); playbackTimer.stop(); buildTimer.stop(); analysisTimer.stop()}
+        else if(advancedNative) {analysisDirty=true; scheduleAnalysis()}
+        if (surfaceActive) {followNativePosition(); requestRefresh(false)}
     }
-    Component.onDestruction: {if (started) {undoPause = false; restoreColors(true)}}
+    Component.onDestruction: {if (started) {savePreferences(); undoPause = false; restoreColors(true); if(advancedNative)observer.clearAllPreviews()}}
+    Timer {id:configurationTimer; interval:350; onTriggered:savePreferences()}
+    Timer {id:analysisTimer; interval:12; onTriggered:buildAnalysisChunk()}
+    Loader {id:settingsStore; active:false; source:"SettingsStore.qml"; onLoaded:{if(item.payload.length){try{applyPreferences(JSON.parse(item.payload))}catch(error){noticeText="配置未读取："+error}}}}
+    FileDialog {
+        id:exchangeDialog
+        title:pendingFileAction.indexOf("import")===0 ? "导入 JSON" : "导出和声信息"
+        selectExisting:pendingFileAction.indexOf("import")===0
+        nameFilters:pendingFileAction==="csv" ? ["CSV (*.csv)"] : ["JSON (*.json)"]
+        onAccepted:exchangeFile(String(fileUrl))
+    }
+    Window {
+        id:detailPopup; width:760; height:650; visible:false
+        title:"和声助手 · 详细面板"; flags:Qt.Tool
+        property bool opened:visible
+        function open(){visible=true; requestActivate()}
+    }
     Timer {id:refreshTimer; interval:55; onTriggered:refreshSelection()}
     Timer {id:buildTimer; interval:10; repeat:true; onTriggered:buildChunk()}
     Timer {id:playbackTimer; interval:16; onTriggered:followNativePosition()}
@@ -527,21 +753,24 @@ MuseScore {
     }
 
     Rectangle {
+        id:backdrop
         anchors.fill: parent
-        color: "#F4F6F8"
+        color: "#f4f4f4"
         Flickable {
             id: flick
+            parent:root.ribbon ? detailPopup.contentItem : backdrop
             anchors.fill: parent
             clip: true
             contentWidth: width
             contentHeight: panel.height + 24
             boundsBehavior: Flickable.StopAtBounds
+            visible:!root.ribbon || detailPopup.opened
             ScrollBar.vertical: ScrollBar { }
-            Column {
+            Flow {
                 id: panel
                 x: 12
                 y: 12
-                width: Math.max(180, flick.width - 24)
+                width: Math.max(160, flick.width - 24)
                 spacing: 10
                 Column {
                     width: parent.width
@@ -550,14 +779,20 @@ MuseScore {
                         width: parent.width
                         UiLabel {text:"和声助手"; Layout.fillWidth:true; color:ink; font.pixelSize:19; font.bold:true}
                         ToolButton {
-                            font.family: "Microsoft YaHei UI";text:"键盘"; checked:keyboardExpanded; checkable:true; font.pixelSize:11; onClicked:keyboardExpanded=checked}
+                            text:typeof root.panelFloating === "boolean" && root.panelFloating ? "停靠" : "悬浮"
+                            visible:typeof root.setPanelFloating === "function"
+                            font.pixelSize:11
+                            onClicked:root.setPanelFloating(!root.panelFloating)
+                        }
                         ToolButton {
-                            font.family: "Microsoft YaHei UI";text:"设置"; checked:settingsExpanded; checkable:true; font.pixelSize:11; onClicked:settingsExpanded=checked}
+                            font.family: "Microsoft YaHei UI";text:"键盘"; checked:keyboardExpanded; checkable:true; font.pixelSize:11; onClicked:{keyboardExpanded=checked; configurationTimer.restart()}}
+                        ToolButton {
+                            font.family: "Microsoft YaHei UI";text:"设置"; checked:settingsExpanded; checkable:true; font.pixelSize:11; onClicked:{settingsExpanded=checked; configurationTimer.restart()}}
                     }
                     UiLabel {width:parent.width; text:Harmony.rootNames[keyTonic.currentIndex]+(keyMode.currentIndex===0?" 大调":" 小调")+" · "+scopeText; color:muted; font.pixelSize:11; wrapMode:Text.Wrap}
                 }
                 PanelCard {
-                    width: parent.width
+                    width: root.expanded ? (panel.width-10)/2 : panel.width
                     UiLabel {text:positionText; color:muted; font.pixelSize:11}
                     UiLabel {width:parent.width; text:chordText; color:ink; font.pixelSize:30; font.bold:true; wrapMode:Text.WrapAnywhere}
                     RowLayout {
@@ -572,7 +807,7 @@ MuseScore {
                     UiLabel {width:parent.width; visible:settingsExpanded; text:voicingText; color:ink; font.pixelSize:12; wrapMode:Text.Wrap}
                 }
                 PanelCard {
-                    width: parent.width
+                    width: root.expanded ? (panel.width-10)/2 : panel.width
                     UiLabel {text:"音程功能"; color:ink; font.bold:true; font.pixelSize:13}
                     Flow {
                         width: parent.width
@@ -584,11 +819,12 @@ MuseScore {
                                 height: toneBody.implicitHeight + 12
                                 radius: 6
                                 color: modelData.present ? "#F2F5F7" : "#FAFBFC"
-                                border.color: modelData.present ? modelData.color : "#E6E9ED"
+                                border.color:"#e0e0e0"
+                                Rectangle {width:3; height:parent.height-16; x:0; y:8; color:modelData.present?modelData.color:"#e0e0e0"; radius:1}
                                 Column {
                                     id:toneBody
                                     x:6; y:6; width:parent.width-12; spacing:4
-                                    UiLabel {width:parent.width; text:modelData.label; color:modelData.color; font.pixelSize:14; font.bold:true; wrapMode:Text.Wrap}
+                                    UiLabel {width:parent.width; text:modelData.label; color:ink; font.pixelSize:14; font.bold:true; wrapMode:Text.Wrap}
                                     UiLabel {width:parent.width; text:modelData.notes; color:modelData.present?ink:muted; font.pixelSize:11; wrapMode:Text.Wrap}
                                 }
                             }
@@ -596,7 +832,7 @@ MuseScore {
                     }
                     UiLabel {
                         width:parent.width; color:muted; font.pixelSize:10; wrapMode:Text.Wrap
-                        text:"有色框：实际发声 · 缺音：尚未发声 · —：未使用\n挂音显示 2 / 4，六和弦显示 6。"
+                        text:"色条：识别音（含开启的上下文） · 缺音：未奏出 · —：未使用\n挂音显示 2 / 4，六和弦显示 6。"
                     }
                     Flow {
                         width:parent.width; spacing:5
@@ -605,14 +841,15 @@ MuseScore {
                             delegate:Rectangle {
                                 property string functionLabel:Harmony.labelFor(modelData.pitch,chordRoot,chordDefinition)
                                 width:noteChip.implicitWidth+16; height:26; radius:4
-                                color:Harmony.colorFor(modelData.pitch,chordRoot,chordDefinition)
-                                UiLabel {id:noteChip; anchors.centerIn:parent; text:noteName(modelData)+" · "+functionLabel; color:"white"; font.pixelSize:11}
+                                color:"#f4f4f4"; border.color:"#e0e0e0"
+                                Rectangle {x:0;y:6;width:3;height:14;color:root.colorFor(modelData.pitch,chordRoot,chordDefinition)}
+                                UiLabel {id:noteChip; anchors.centerIn:parent; text:noteName(modelData)+" · "+root.functionText(modelData.pitch,chordRoot,chordDefinition); color:ink; font.pixelSize:11}
                             }
                         }
                     }
                 }
                 PanelCard {
-                    width:parent.width
+                    width:root.expanded ? (panel.width-10)/2 : panel.width
                     visible:keyboardExpanded
                     RowLayout {
                         width:parent.width
@@ -655,7 +892,7 @@ MuseScore {
                     }
                 }
                 PanelCard {
-                    width:parent.width
+                    width:root.expanded ? (panel.width-10)/2 : panel.width
                     visible:settingsExpanded
                     UiLabel {text:"识别与调性"; color:ink; font.bold:true; font.pixelSize:13}
                     RowLayout {
@@ -665,45 +902,52 @@ MuseScore {
                             font.family: "Microsoft YaHei UI";
                             id:keyTonic; Layout.fillWidth:true; Layout.minimumWidth:55; implicitHeight:32
                             model:Harmony.rootNames; font.pixelSize:12
-                            onActivated:{manualKey=true; updateTexts()}
+                            onActivated:{manualKey=true; updateTexts(); optionsChanged()}
                         }
                         ComboBox {
                             font.family: "Microsoft YaHei UI";
                             id:keyMode; Layout.preferredWidth:80; implicitHeight:32
                             model:["大调","小调"]; font.pixelSize:12
-                            onActivated:{if(!manualKey && currentTick>=0) initializeKey(currentTick); updateTexts()}
+                            onActivated:{if(!manualKey && currentTick>=0) initializeKey(currentTick); updateTexts(); optionsChanged()}
                         }
                     }
                     UiLabel {width:parent.width; text:manualKey?"调性由你指定":"主音取自当前位置调号；大 / 小调请自行确认"; color:muted; font.pixelSize:10; wrapMode:Text.Wrap}
                     RowLayout {
                         width:parent.width
                         Switch {
-                            font.family: "Microsoft YaHei UI";id:autoChord; text:"自动识别"; checked:true; font.pixelSize:12; onToggled:analyze()}
+                            font.family: "Microsoft YaHei UI";id:autoChord; text:"自动识别"; checked:true; font.pixelSize:12; onToggled:{analyze(); optionsChanged()}}
                         Item {Layout.fillWidth:true}
                         Button {
-                            font.family: "Microsoft YaHei UI";text:"读调号"; implicitHeight:32; font.pixelSize:11; onClicked:{manualKey=false; if(currentTick>=0)initializeKey(currentTick); updateTexts()}}
+                            font.family: "Microsoft YaHei UI";text:"读调号"; implicitHeight:32; font.pixelSize:11; onClicked:{manualKey=false; if(currentTick>=0)initializeKey(currentTick); updateTexts(); optionsChanged()}}
                     }
+                    Switch {id:pedalContext; text:"踏板保持"; checked:true; enabled:advancedNative; onToggled:optionsChanged()}
+                    RowLayout {
+                        width:parent.width
+                        UiLabel {text:"无踏板聚合"; color:muted; font.pixelSize:11}
+                        ComboBox {id:arpeggioWindow; model:["即时","半拍","1 拍","2 拍","4 拍"]; Layout.fillWidth:true; implicitHeight:32; onActivated:optionsChanged()}
+                    }
+                    UiLabel {width:parent.width; text:"聚合限当前小节，休止截断。快速转和弦时建议即时或半拍；踏板保持不等同于声学残响。"; color:muted; font.pixelSize:10; wrapMode:Text.Wrap; visible:settingsExpanded}
                     ComboBox {
                             font.family: "Microsoft YaHei UI";
                         id:scope; width:parent.width; implicitHeight:32; font.pixelSize:12
                         model:["当前乐器（钢琴双谱表）","全谱"]
-                        onActivated:requestRefresh(true)
+                        onActivated:{requestRefresh(true); optionsChanged()}
                     }
                     RowLayout {
                         width:parent.width
                         ComboBox {
-                            font.family: "Microsoft YaHei UI";id:rootCombo; Layout.preferredWidth:76; implicitHeight:32; model:Harmony.rootNames; font.pixelSize:12; onActivated:{autoChord.checked=false; analyze()}}
+                            font.family: "Microsoft YaHei UI";id:rootCombo; Layout.preferredWidth:76; implicitHeight:32; model:Harmony.rootNames; font.pixelSize:12; onActivated:{autoChord.checked=false; analyze(); optionsChanged()}}
                         ComboBox {
-                            font.family: "Microsoft YaHei UI";id:qualityCombo; Layout.fillWidth:true; Layout.minimumWidth:80; implicitHeight:32; model:qualityNames; font.pixelSize:12; onActivated:{autoChord.checked=false; analyze()}}
+                            font.family: "Microsoft YaHei UI";id:qualityCombo; Layout.fillWidth:true; Layout.minimumWidth:80; implicitHeight:32; model:qualityNames; font.pixelSize:12; onActivated:{autoChord.checked=false; analyze(); optionsChanged()}}
                     }
                 }
                 PanelCard {
-                    width:parent.width
+                    width:root.expanded ? (panel.width-10)/2 : panel.width
                     Switch {
                             font.family: "Microsoft YaHei UI";
                         id:followPlayback; text:"跟随播放"; checked:true; enabled:playbackAvailable; font.pixelSize:12
                         visible:settingsExpanded && playbackAvailable
-                        onToggled:{lastPlayTick=-1; requestRefresh(false)}
+                        onToggled:{lastPlayTick=-1; requestRefresh(false); configurationTimer.restart()}
                     }
                     UiLabel {
                         width:parent.width; font.pixelSize:10; color:muted; wrapMode:Text.Wrap
@@ -713,8 +957,11 @@ MuseScore {
                     Switch {
                             font.family: "Microsoft YaHei UI";
                         id:scoreColoring; text:"谱面临时配色"; checked:false; font.pixelSize:12
-                        onToggled:{if(checked)undoPause=false; if(!internalChange)repaintNotes()}
+                        onToggled:{if(checked)undoPause=false; if(!internalChange){repaintNotes(); optionsChanged()}}
                     }
+                    Switch {id:allColor; text:"配色覆盖全部小节"; checked:false; enabled:advancedNative && scoreColoring.checked; onToggled:optionsChanged()}
+                    Switch {id:showChords; text:"谱面上方显示和弦 / 级数"; checked:false; enabled:advancedNative; onToggled:optionsChanged()}
+                    Switch {id:showFunctions; text:"音旁显示功能名"; checked:false; enabled:advancedNative; onToggled:optionsChanged()}
                     UiLabel {
                         width:parent.width; font.pixelSize:10; color:muted; wrapMode:Text.Wrap
                         visible:scoreColoring.checked || settingsExpanded
@@ -729,6 +976,51 @@ MuseScore {
                     }
                     UiLabel {width:parent.width; visible:noticeText.length>0; text:noticeText; color:muted; font.pixelSize:10; wrapMode:Text.Wrap}
                 }
+                PanelCard {
+                    width:root.expanded ? (panel.width-10)/2 : panel.width
+                    visible:settingsExpanded
+                    ConfigurationEditor {width:parent.width; configuration:root.configuration; onModified:{root.configuration=configuration; optionsChanged(false)}}
+                    RowLayout {
+                        width:parent.width
+                        Button {text:"导入配置"; Layout.fillWidth:true; enabled:advancedNative; onClicked:chooseFile("import-config")}
+                        Button {text:"导出配置"; Layout.fillWidth:true; enabled:advancedNative; onClicked:chooseFile("export-config")}
+                    }
+                    UiLabel {width:parent.width; text:"设置自动保存，下次启动自动读取。"; color:muted; font.pixelSize:10; wrapMode:Text.Wrap}
+                }
+                PanelCard {
+                    width:root.expanded ? (panel.width-10)/2 : panel.width
+                    visible:settingsExpanded
+                    UiLabel {text:"全谱和弦分析"; color:ink; font.bold:true; font.pixelSize:13}
+                    Flow {
+                        width:parent.width; spacing:6
+                        Button {text:"导出 JSON"; enabled:advancedNative; onClicked:prepareExport("json")}
+                        Button {text:"导出 CSV"; enabled:advancedNative; onClicked:prepareExport("csv")}
+                        Button {text:"导入 JSON"; enabled:advancedNative; onClicked:chooseFile("import-analysis")}
+                        Button {text:"重新检测"; enabled:advancedNative; onClicked:{importedRecords=[]; optionsChanged()}}
+                    }
+                    UiLabel {width:parent.width; text:analysisTimer.running?"正在分批分析…":analysisRecords.length+" 个时间切片"+(importedRecords.length?" · 使用导入分析":""); color:muted; font.pixelSize:11; wrapMode:Text.Wrap}
+                }
+            }
+        }
+        RowLayout {
+            visible:root.ribbon; anchors.fill:parent; anchors.margins:12; spacing:16
+            Column {
+                Layout.preferredWidth:Math.min(root.width*.38,280); spacing:2
+                UiLabel {width:parent.width; text:chordText; color:ink; font.pixelSize:Math.min(32,Math.max(18,root.height*.22)); font.bold:true; elide:Text.ElideRight}
+                UiLabel {width:parent.width; text:degreeText+" · "+positionText; color:muted; font.pixelSize:11; elide:Text.ElideRight}
+            }
+            Flow {
+                Layout.fillWidth:true; Layout.alignment:Qt.AlignVCenter; spacing:6
+                Repeater {model:root.toneRows; delegate:Rectangle {
+                    width:42; height:30; color:"#ffffff"; radius:4
+                    Rectangle {x:0;y:8;width:3;height:14;color:modelData.present?modelData.color:"#d0d0d0"}
+                    UiLabel {anchors.centerIn:parent; text:modelData.label; color:modelData.present?ink:muted; font.pixelSize:12}
+                }}
+            }
+            Column {
+                spacing:4
+                Button {text:"详细面板"; onClicked:detailPopup.open(); implicitHeight:30; font.pixelSize:11}
+                Button {text:"悬浮"; visible:typeof root.setPanelFloating==="function"; onClicked:root.setPanelFloating(true); implicitHeight:30; font.pixelSize:11}
             }
         }
     }

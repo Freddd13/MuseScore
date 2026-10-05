@@ -1,14 +1,26 @@
-# 和声助手 1.0.0
+# 和声助手 1.1.0
 
-MuseScore 3 Evolution 钢琴编曲面板。完整版搭配个人主程序版本 `0.2.0` 使用；界面与和弦算法仍是独立插件，主程序仅新增通用观察和临时绘色接口。
+MuseScore 3 Evolution 钢琴编曲面板。完整版搭配个人主程序版本 `0.3.0` 使用；音乐规则与界面仍在插件，主程序只提供通用数值快照、屏幕预览、停靠状态和文件读写接口。
 
 ## 开始使用
 
-本机新程序：`E:\programming\funcodes\muse3_dev\MuseScore\msvc.install_harmony_release_x64\bin\MuseScore3Evo.exe`。
+本机新程序：`E:\programming\funcodes\muse3_dev\MuseScore\msvc.install_harmony_1_1_x64\bin\MuseScore3Evo.exe`。
 
-插件已放入新程序的 `plugins/HarmonyAssistant/`。启动新程序，在「插件 → 插件管理器」勾选 `HarmonyAssistant_MS3.qml`，然后运行「插件 → Harmony Assistant」。选择钢琴谱上的音符即可；普通空格播放自动跟随。
+插件已放入新程序的 `plugins/HarmonyAssistant/`，并同步到你原先已启用的个人插件目录；旧文件逐个备份为 `.pre-1.1.0.bak`。启动新程序，在「插件 → 插件管理器」勾选 `HarmonyAssistant_MS3.qml`，然后运行「插件 → Harmony Assistant」。选择钢琴谱上的音符即可；普通空格播放自动跟随。请使用上面的新程序路径，旧程序和旧安装目录均保留。
 
-单独安装插件时，将 `HarmonyAssistant_MS3.qml`、`Harmony.js`、`PanelCard.qml`、`UiLabel.qml` 四个文件放在同一目录。标准 MuseScore 3 仍可使用选区分析；没有原生接口时不能准确跟随播放，也没有独立的屏幕配色层。
+单独安装插件时，将本目录的运行文件一起复制：`HarmonyAssistant_MS3.qml`、`Harmony.js`、`Preferences.js`、`Analysis.js`、`ConfigurationEditor.qml`、`SettingsStore.qml`、`PanelCard.qml`、`UiLabel.qml`。标准 MuseScore 3 仍可使用原有选区分析与颜色恢复；新增全谱图层、踏板上下文及分析交换需要新主程序。只勾选主入口，不勾选组件或 tests 下的测试插件。
+
+## 1.1 新功能
+
+- 修复点击「插件」菜单时的主程序终止：析构清理仅比较 Element 地址，禁止调用已经析构的派生类型虚函数。另修复插件目录被重复递归扫描的问题。
+- 顶部/底部停靠自动收为横条，优先显示当前和弦、级数和功能音；点击「详细面板」打开独立工具窗口。侧栏可滚动，宽窗口双列显示。标题栏可拖动/双击悬浮，面板内也提供悬浮/停靠按钮。
+- 中性背景、细色条、清晰的文字层级；提供 Carbon、柔和、单色以及自定义功能色。默认黄褐色加深以保证小文字的可读性。
+- 设置中可逐项改变 `1 / ♭3 / 3 / … / 13 / 外` 的文字，留空隐藏该功能名；也可按十二个固定音级覆盖文字。每次启动自动读取配置，修改合并保存；支持配置 JSON 导入/导出。
+- 「谱面临时配色」控制当前音，「配色覆盖全部小节」提供独立全谱底层；关闭配色或恢复原色同时移除全部颜色，文字开关保持独立。
+- 「谱面上方显示和弦 / 级数」「音旁显示功能名」两个独立开关。全谱标注分批生成；编辑后重新分析。用现有谱面空间放置小标签，避开音符、升降号、连线和其他文字；空间不足时省略该标签，不覆盖记谱内容。播放时当前标签使用浅蓝底和深蓝文字高亮，不添加持续动画计时器。
+- 全谱分析 JSON 导入/导出，CSV 导出供表格查看。JSON 包含 tick、小节/拍、和弦、级数、音符定位和源谱指纹，可修改 root/definition 后导回；错误格式、超大文件或与当前谱/乐器范围不匹配的结果拒绝应用。编辑或改变分析范围后退出导入结果，回到检测；原文件保留。
+
+配置位于应用数据目录（跟随便携模式和 `-c` 独立目录）的 `plugin-settings/HarmonyAssistant.json`，使用原子写入。旧宿主用 Qt Settings 保存基础偏好。导入/导出通过文件选择器选择位置，不扫描用户其他乐谱。实时颜色和文字都是屏幕图层，不写入 MSCX、undo、PDF 或图片导出；要保留分析，请导出 JSON。
 
 ## 已实现功能
 
@@ -24,7 +36,14 @@ MuseScore 3 Evolution 钢琴编曲面板。完整版搭配个人主程序版本 
 
 自动主音取当前位置调号，包括中途调号变化；调号不能区分关系大小调，请自行选择。手动设置主音后不再自动覆盖，「读调号」恢复自动读取。级数使用平行大调基准，例如 A 小调中的 C 大三和弦是 ♭III，E 大三和弦是 V。
 
-实际音名保留谱面 TPC 拼写；主音菜单在 C♭ 等边界调性使用等音替代。停播时按记谱时值读取持续音，播放时按 NoteEvent 发声音高读取。踏板下 Note-off 后的声学残响不计入和弦，避免将整段踏板内的旧音全部堆成当前和弦。和弦识别是辅助建议，音高集合本身不能唯一决定上下文和根音。
+实际音名保留谱面 TPC 拼写；主音菜单在 C♭ 等边界调性使用等音替代。面板的实际音列表仍显示当前位置/播放活动音，和弦识别可以使用额外上下文：
+
+1. 即时模式按各声部时值取持续音；延音线沿链计算持续终点，播放时合并真实 NoteEvent。
+2. 开启「踏板保持」时，将当前钢琴踏板区间内的音和踩下时仍保持的音纳入候选，包含双谱表；抬踏板后丢弃已释放音。同一音高保留最近的拼写。它模拟记谱踏板状态，不能测量声音衰减。
+3. 无踏板可选择半拍、1、2、4 拍聚合，限制在当前小节；该声部休止截断，避免长期累积旋律音。默认即时，快速转和弦可用即时或半拍；长窗口可能混合经过音和前后和弦。
+4. 将音高集合变成十二位掩码，与 29 类、12 根音的预计算模板匹配，允许缺五音/不完整和弦，保留歧义候选；弱双音仍不强判。上下文参与时会明确标记「踏板 / 琶音上下文」。级数仍按选定/读取的调性推导。
+
+参考 [Tonal 的音级掩码检测](https://github.com/tonaljs/tonal/tree/main/packages/chord-detect) 与 [music21 的纵向切片](https://music21.org/music21docs/usersGuide/usersGuide_09_chordify.html)思路，未引入运行库。踏板/琶音是本插件的时序输入策略；不能声称与 Synthesia 内部算法相同。音高和踏板状态仍不能唯一决定和声意图，歧义时请用手动根音/类型或导入的分析。配色参考 [IBM Carbon 分类色](https://www.carbondesignsystem.com/building-blocks/data-visualization/color-palettes) 与 [IBM 中性色使用原则](https://www.ibm.com/design/language/color/)。
 
 ## 兼容旧程序
 
@@ -35,11 +54,12 @@ MuseScore 3 Evolution 钢琴编曲面板。完整版搭配个人主程序版本 
 ## 维护边界
 
 - `Harmony.js`：ES5 音乐逻辑，不依赖 Qt/MuseScore 对象。
-- 主 QML：选区、调性、显示状态与宿主适配；`PanelCard.qml`、`UiLabel.qml` 负责基础排版。
+- `Preferences.js`：版本化配置、输入校验和配色预设；`Analysis.js`：分析交换格式、校验、CSV 和二分定位。
+- 主 QML：选区、调性、显示状态与宿主适配；`ConfigurationEditor.qml`、`SettingsStore.qml`、`PanelCard.qml`、`UiLabel.qml` 负责配置与排版。
 - 主程序 `ScoreObserver`：GUI 线程真实位置、数值快照、按内容版本失效的声部索引。
 - `NotePreviewLayers`：视图内独立颜色层；模型、音频回调、文件格式不承担和弦功能。
 
-本目录是插件编辑源。发布时将四个运行文件及本 README 同步到主仓库 `share/plugins/HarmonyAssistant/`，主仓库已有的递归安装规则会打包它们；不要单独修改那份发布快照。主程序架构/API/合并点详见其 `personal/docs/10-score-observer.md`。
+本目录是插件编辑源。发布时将上述八个运行文件及本 README 同步到主仓库 `share/plugins/HarmonyAssistant/`，现有递归安装规则会打包它们。原稿、1.0 备份与旧 ZIP 均保留。native 下的迁移脚本只记录一次性的开发过程，不能重复运行；供其他机器应用的最终修改见版本化 patch。主程序架构/API/合并点详见其 `personal/docs/10-score-observer.md`。
 
 ## 验证与性能
 
@@ -47,12 +67,18 @@ MuseScore 3 Evolution 钢琴编曲面板。完整版搭配个人主程序版本 
 
 ```powershell
 node HarmonyAssistant/test-harmony.cjs
+node HarmonyAssistant/tests/test-exchange.cjs
 python HarmonyAssistant/tests/render_and_check.py
+python HarmonyAssistant/tests/test_modern_panel.py
 python HarmonyAssistant/tests/run_native_smoke.py <新程序exe> <独立测试目录>
 ```
 
-前两项分别验证和弦逻辑，以及 Qt 5 的持续音、颜色恢复、撤销、模拟播放、隐藏恢复和 280/360/460 px 排版。第三项用真实 Release 程序、独立设置和测试谱验证原生接口、Cmaj13、原色不变和缓存复用。
+前两项验证和弦逻辑、配置和分析交换；两项 Python 面板测试用 Qt 5 验证持续音、颜色恢复、撤销、模拟播放、隐藏恢复、全谱图层及 280/360/460 px 排版。最后一项用真实 Release 程序、独立设置和测试谱验证原生接口、Cmaj13、原色不变、配置与缓存。可加第三个参数指定安装目录里的主 QML，验证发布副本。
 
-主程序新增 `tst_scoreobserver`，检查持续音与范围、保存字节一致、预览/普通绘制区别、撤销失效、颜色层隔离及 1000 小节/6000 音符性能；既有 `tst_note` 用于相关回归。本机 Release 实测：新原生测试 8 项、原有音符测试 11 项全部通过；1000 小节/6000 音符首次索引 10.13 ms，1000 次缓存查询总计 1.54 ms。真实 QML 宿主 1000 次跨接口查询约 9–18 ms（不同运行负载）；这些数字是当前机器/测试谱的测量，不是所有工程的上限。详细结果见主程序个人更新日志。尚未对实际音频设备、长时间播放、踏板声学残响和所有谱面特殊写法作完整实机验收，不能声称达到 DAW 硬实时保证。
+本次 Release 验证：`tst_scoreobserver` 11 项、既有 `tst_note` 11 项、真实 Widgets/QML 宿主 `tst_pluginhost` 3 项全部通过，无失败或跳过。实际宿主测试覆盖原崩溃的缩略谱重排路径、四次菜单打开、插件加载、顶部横条、悬浮双列、重新停靠与关闭重开；QML 原生窗口截图经过检查。颜色和文字的屏幕绘制差异、MSCX 保存字节一致、撤销失效和图层隔离均有回归检查。
+
+1000 小节/6000 音符实测：首次索引 24.34 ms，1000 次原生缓存查询 2.07 ms，1000 次踏板/时序上下文查询 5.37 ms；6000 音符的数值分析帧 20.20 ms、全谱色层定位 23.23 ms。真实 QML 跨接口 1000 次查询约 10 ms，上下文约 19 ms。全谱音乐检测另由插件分批执行，这些数字不包含所有标注避让场景，也不是所有工程的上限。详细日志及边界见主程序个人更新日志。实际音频设备、长时间播放、声学残响和全部特殊谱法尚未作完整实机验收，不能承诺零开销或 DAW 硬实时保证。
+
+Windows 真实 GUI 测试需完整安装资源和 Qt 运行时，使用 `tests/run_native_gui.py <tst_pluginhost.exe> <安装根目录> <输出目录>`；其复制到独立运行时目录，设置一致的 Qt 模块/平台路径，采用临时应用设置及 45 秒超时。它关闭硬件音序器，不控制已有进程。截图 `ribbon.png`、`floating-panel.png` 来自 QML 原生窗口；Qt Widgets 的整窗 grab 不包含嵌入的原生 QML 内容。
 
 播放位置来自原程序 GUI 侧约 20 ms 心跳；插件最多合并等待 16 ms，再按有效音集合变化识别和绘色。普通选区合并 55 ms；持续音集合不变时不重复识别。首次/编辑后构建当前范围索引，随后每声部二分查询；隐藏原生面板停止计时和更新。

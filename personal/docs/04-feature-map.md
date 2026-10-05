@@ -76,4 +76,4 @@ rg -n 'QSKIP|add_test|subdirs|MTEST_LINK_MSCOREAPP' mtest
 
 ## 和声辅助入口
 
-当前和弦、罗马级数、功能音和键盘在 `share/plugins/HarmonyAssistant/`；真实播放观察在 `mscore/plugin/api/scoreobserver.*`；屏幕配色在 `mscore/notepreview.h` 与 ScoreView，颜色不写模型。验证为 `mtest/mscore/scoreobserver` 和相邻 `mtest/libmscore/note`。接口与合并点见 [10](10-score-observer.md)。
+当前和弦、罗马级数、功能音和键盘在 `share/plugins/HarmonyAssistant/`；真实播放观察在 `mscore/plugin/api/scoreobserver.*`；屏幕配色在 `mscore/notepreview.h` 与 ScoreView，颜色不写模型。踏板保持与有限琶音窗口、全谱配色/文字、JSON/CSV 分析交换和配置在插件及通用 API；QmlPlugin 停靠桥接暴露实际位置/悬浮状态。验证为 `mtest/mscore/scoreobserver`、实际 Widgets/QML 宿主 `mtest/mscore/pluginhost` 和相邻 `mtest/libmscore/note`。接口与合并点见 [10](10-score-observer.md)。

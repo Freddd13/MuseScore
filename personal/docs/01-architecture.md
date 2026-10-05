@@ -77,4 +77,4 @@
 
 ## 通用插件观察与屏幕预览
 
-`mscore/plugin/api/scoreobserver.*` 在 GUI 线程提供数值快照与 Seq 位置事件；`mscore/notepreview.h` 在 ScoreView 内维护临时图层。核心 Note 只增加 draw 重载，默认绘制/文件格式/音频回调保持原语义。插件发布快照在 `share/plugins/HarmonyAssistant/`。详见 [10](10-score-observer.md)。
+`mscore/plugin/api/scoreobserver.*` 在 GUI 线程提供数值快照与 Seq 位置事件；`mscore/notepreview.h` 在 ScoreView 内维护临时图层。核心 Note 只增加 draw 重载，默认绘制/文件格式/音频回调保持原语义。插件发布快照在 `share/plugins/HarmonyAssistant/`。0.3.0 的 QmlPlugin 暴露停靠位置/悬浮状态；ScoreObserver 扩展踏板/时序快照、分批分析帧、两个屏幕层和原子文本/配置读写。谱面解释、交换格式和颜色规则仍在插件；不扩展音频线程或文件格式。详见 [10](10-score-observer.md)。

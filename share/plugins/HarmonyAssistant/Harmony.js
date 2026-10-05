@@ -1,8 +1,8 @@
 .pragma library
 
 // ES5 only: also runs in the Qt 5.9 QML engine used by MuseScore 3.
-var colors = {"1":"#B75555", "3":"#9D711E", "5":"#377CAB", "7":"#805EB1",
-              "9":"#278879", "11":"#AE673F", "13":"#A85185", "外":"#737E8A"};
+var colors = {"1":"#002d9c", "3":"#6929c4", "5":"#005d5d", "7":"#9f1853",
+              "9":"#8a3800", "11":"#198038", "13":"#8e6a00", "外":"#697077"};
 var rootNames = ["C","C♯","D♭","D","D♯","E♭","E","F","F♯","G♭","G","G♯","A♭","A","A♯","B♭","B"];
 var rootPcs = [0,1,1,2,3,3,4,5,6,6,7,8,8,9,10,10,11];
 var sharpNames = ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"];
@@ -65,33 +65,44 @@ function labelFor(pc, tonic, definition) {
     return i<0?"外":d.labels[i];
 }
 function colorFor(pc, tonic, definition) {return colors[role(labelFor(pc,tonic,definition))] || colors["外"];}
+function bitCount(bits) {var count=0;while(bits){bits&=bits-1;++count;}return count;}
+var templates=[];
+for(var tr=0;tr<12;++tr) for(var td=0;td<defs.length;++td) {
+    var mask=0, fifth=0;
+    for(var ti=0;ti<defs[td].intervals.length;++ti) {
+        var bit=1<<mod12(tr+defs[td].intervals[ti]);mask|=bit;
+        if(defs[td].labels[ti]==="5")fifth=bit;
+    }
+    templates.push({root:tr,definition:td,mask:mask,fifth:fifth});
+}
 function detect(pitches) {
-    var pcs=unique(pitches), bass=pitches.length?mod12(Math.min.apply(Math,pitches)):-1;
-    if(pcs.length<2) return {root:-1, definition:-1, kind:pcs.length?"单音":"空拍", alternatives:[]};
+    var mask=0,bass=128;
+    for(var i=0;i<pitches.length;++i){mask|=1<<mod12(pitches[i]);bass=Math.min(bass,pitches[i]);}
+    var count=bitCount(mask);bass=mod12(bass);
+    if(count<2)return {root:-1,definition:-1,kind:count?"单音":"空拍",alternatives:[]};
     var candidates=[];
-    for(var r=0;r<12;++r) for(var j=0;j<defs.length;++j) {
-        var d=defs[j], missing=[], extra=[], hits=0, cost=0;
-        for(var i=0;i<d.intervals.length;++i) {
-            if(pcs.indexOf(mod12(r+d.intervals[i]))>=0) ++hits;
-            else {
-                missing.push(d.labels[i]);
-                cost+=d.labels[i]==="5"?1.3:d.labels[i]==="1"?3.5:5;
-            }
-        }
-        for(i=0;i<pcs.length;++i) if(d.intervals.indexOf(mod12(pcs[i]-r))<0) extra.push(pcs[i]);
-        cost+=extra.length*4.5;
-        if(r===bass) cost-=0.3;
-        // Weak dyads must not be promoted to seventh or extended chords.
-        if(pcs.length===2 && !(d.suffix==="5" && !missing.length && !extra.length)) continue;
-        if(hits<3 && pcs.length>2) continue;
-        candidates.push({root:r,definition:j,cost:cost,missing:missing,extra:extra});
+    for(var t=0;t<templates.length;++t) {
+        var template=templates[t],missing=template.mask&~mask,extra=mask&~template.mask;
+        if(count===2 && !(defs[template.definition].suffix==="5" && !missing && !extra))continue;
+        if(count>2 && bitCount(mask&template.mask)<3)continue;
+        var cost=bitCount(missing)*5+bitCount(extra)*4.5;
+        if(missing & template.fifth)cost-=3.7;
+        if(missing & (1<<template.root))cost-=1.5;
+        if(template.root===bass)cost-=0.3;
+        candidates.push({root:template.root,definition:template.definition,cost:cost,missingMask:missing,extraMask:extra});
     }
     candidates.sort(function(a,b){return a.cost-b.cost || a.definition-b.definition || a.root-b.root;});
     if(!candidates.length || candidates[0].cost>5.5)
-        return {root:-1,definition:-1,kind:pcs.length===2?"双音 · 请指定和弦":"未确定和弦",alternatives:[]};
-    var best=candidates[0], alternatives=[];
+        return {root:-1,definition:-1,kind:count===2?"双音 · 请指定和弦":"未确定和弦",alternatives:[]};
+    function detail(candidate) {
+        var definition=defs[candidate.definition];candidate.missing=[];candidate.extra=[];
+        for(var i=0;i<definition.intervals.length;++i)if(candidate.missingMask & (1<<mod12(candidate.root+definition.intervals[i])))candidate.missing.push(definition.labels[i]);
+        for(i=0;i<12;++i)if(candidate.extraMask & (1<<i))candidate.extra.push(i);
+        return candidate;
+    }
+    var best=detail(candidates[0]),alternatives=[];
     for(var c=1;c<candidates.length && alternatives.length<2;++c)
-        if(candidates[c].cost-best.cost<0.8) alternatives.push(candidates[c]);
+        if(candidates[c].cost-best.cost<0.8)alternatives.push(detail(candidates[c]));
     best.kind=best.missing.length || best.extra.length?"候选 · 不完整/含外音":alternatives.length?"匹配 · 存在歧义":"完整匹配";
     best.alternatives=alternatives;
     return best;

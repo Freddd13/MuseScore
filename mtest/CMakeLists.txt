@@ -192,6 +192,7 @@ subdirs (
         mscore/workspaces
         mscore/palette
         mscore/scoreobserver
+        mscore/pluginhost
         importmidi
         capella
         biab

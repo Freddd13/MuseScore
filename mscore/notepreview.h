@@ -16,19 +16,37 @@
 
 #include <QColor>
 #include <QHash>
+#include <QFont>
+#include <QString>
 #include <QRectF>
 #include <QVector>
 
 namespace Ms {
-class Note;
+class Element;
 
 struct NotePreviewEntry {
       QColor color;
       QRectF bounds;
+      QString label;
+      QString chord;
+      QRectF labelBox;
+      QRectF chordBox;
+      bool active = false;
+      QPointF anchor;
+      qreal spatium = 0;
       bool operator==(const NotePreviewEntry& other) const
-            { return color == other.color && bounds == other.bounds; }
+            { return color == other.color && bounds == other.bounds && label == other.label && chord == other.chord
+                  && labelBox == other.labelBox && chordBox == other.chordBox && active == other.active && anchor == other.anchor && spatium == other.spatium; }
       };
-using NotePreviewColors = QHash<const Note*, NotePreviewEntry>;
+using NotePreviewColors = QHash<const Element*, NotePreviewEntry>;
+
+inline QFont notePreviewFont(qreal spatium, bool chord)
+      {
+      QFont font("Arial");
+      font.setPixelSize(qMax(5, qRound(spatium * (chord ? 1.35 : 1.0))));
+      font.setBold(chord);
+      return font;
+      }
 
 class NotePreviewLayers {
       struct Layer { const void* owner; NotePreviewColors colors; };
@@ -55,7 +73,15 @@ class NotePreviewLayers {
             else _layers.append({owner, colors});
             return dirty;
             }
-      QColor color(const Note* note) const
+      const NotePreviewEntry* entry(const Element* note) const
+            {
+            for (auto layer = _layers.crbegin(); layer != _layers.crend(); ++layer) {
+                  auto item = layer->colors.constFind(note);
+                  if (item != layer->colors.constEnd()) return &item.value();
+                  }
+            return nullptr;
+            }
+      QColor color(const Element* note) const
             {
             for (auto layer = _layers.crbegin(); layer != _layers.crend(); ++layer) {
                   auto entry = layer->colors.constFind(note);
@@ -63,7 +89,7 @@ class NotePreviewLayers {
                   }
             return QColor();
             }
-      void remove(const Note* note)
+      void remove(const Element* note)
             { for (auto& layer : _layers) layer.colors.remove(note); }
       void clear() { _layers.clear(); }
       };

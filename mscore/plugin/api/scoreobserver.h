@@ -37,6 +37,18 @@ class ScoreObserver : public QObject {
       Q_PROPERTY(double indexBuildMilliseconds READ indexBuildMilliseconds NOTIFY indexChanged)
 
       struct Event { int tick; int end; QVariantList notes; };
+      struct PedalWindow { int start; int end; int firstTrack; int endTrack; };
+      QVector<PedalWindow> _pedals;
+      QVector<int> _frameTicks;
+      QString _fingerprint;
+      QVector<int> _measureStarts;
+      NotePreviewColors _baseColors;
+      QObject _baseOwner;
+      void applyPreview(QObject* owner, const QVariantList& notes);
+      Ms::Note* resolve(const QVariantMap& value, const QHash<int, Ms::Segment*>* segments = nullptr) const;
+      void clearPreview(QObject* owner);
+      QVariantList contextNotes(int tick, int firstTrack, int endTrack, bool pedal, int windowTicks);
+
       QPointer<Ms::Score> _score;
       QVector<QMetaObject::Connection> _scoreConnections;
       QVector<QPointer<Ms::ScoreView>> _previewViews;
@@ -69,6 +81,14 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QVariantMap snapshot(int tick, int firstTrack, int endTrack, bool sounding = false);
       Q_INVOKABLE void setNotePreviewColors(const QVariantList& notes);
       Q_INVOKABLE void clearNotePreviewColors();
+      Q_INVOKABLE void clearAllPreviews();
+      Q_INVOKABLE void setScorePreview(const QVariantList& notes);
+      Q_INVOKABLE QVariantMap contextSnapshot(int tick, int firstTrack, int endTrack, bool pedal, int windowTicks, bool sounding = false);
+      Q_INVOKABLE QVariantMap analysisFrames(int fromTick, int limit, int firstTrack, int endTrack, bool pedal, int windowTicks);
+      Q_INVOKABLE QVariantMap loadConfiguration(const QString& name) const;
+      Q_INVOKABLE bool saveConfiguration(const QString& name, const QVariantMap& data) const;
+      Q_INVOKABLE QString readTextFile(const QString& path) const;
+      Q_INVOKABLE bool writeTextFile(const QString& path, const QString& text) const;
    signals:
       void scoreChanged();
       void positionChanged();

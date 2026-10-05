@@ -8,8 +8,10 @@ FIXTURE = HERE / 'mtest/mscore/scoreobserver'
 APP = Path(sys.argv[1]).resolve()
 WORK = Path(sys.argv[2]).resolve()
 WORK.mkdir(parents=True, exist_ok=True)
+(WORK / "settings").mkdir(parents=True, exist_ok=True)
 source = (FIXTURE / 'smoke.qml').read_text(encoding='utf-8')
-source = source.replace('../../../share/plugins/HarmonyAssistant/HarmonyAssistant_MS3.qml', (PLUGIN / 'HarmonyAssistant_MS3.qml').as_uri())
+panel = Path(sys.argv[3]).resolve() if len(sys.argv) > 3 else PLUGIN / 'HarmonyAssistant_MS3.qml'
+source = source.replace('../../../share/plugins/HarmonyAssistant/HarmonyAssistant_MS3.qml', panel.as_uri())
 (WORK / 'smoke.qml').write_text(source, encoding='utf-8')
 environment = dict(os.environ, QT_QPA_PLATFORM='offscreen', QT_QUICK_BACKEND='software', QML_DISABLE_DISK_CACHE='1')
 command = [str(APP), '-s', '-m', '-c', str(WORK / 'settings'), '-p', str(WORK / 'smoke.qml'), str(FIXTURE / 'piano.mscx')]
@@ -24,6 +26,6 @@ print(json.dumps({'exit':status,'report':str(WORK / 'native-smoke.json')}, ensur
 if (WORK / 'native-smoke.json').exists():
     report = json.loads((WORK / 'native-smoke.json').read_text(encoding='utf-8-sig'))
     print(json.dumps(report, ensure_ascii=True))
-    sys.exit(bool(report['failures']))
+    sys.exit(bool(report['failures']) or status != 0)
 print(output.decode('utf-8', errors='replace').encode('ascii',errors='backslashreplace').decode('ascii')[-7000:])
 sys.exit(1)

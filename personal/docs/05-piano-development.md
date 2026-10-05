@@ -86,4 +86,4 @@
 
 ## 和弦观察与实时配色
 
-个人 0.2.0 的 ScoreObserver 提供按声部持续音和 Seq activeNoteEvents；插件实现和弦识别。播放音高与 writtenPitch/TPC 分开，跨分谱投射，踏板声学残响不纳入当前和弦。ScoreView 色层只作用屏幕，不影响撤销/保存/导出；保留编辑选中颜色及播放标记。参考 [10](10-score-observer.md)。
+个人 0.2.0 的 ScoreObserver 提供按声部持续音和 Seq activeNoteEvents；插件实现和弦识别。播放音高与 writtenPitch/TPC 分开，跨分谱投射，0.3.0 的 contextSnapshot 另提供记谱踏板区间保持音及限小节/休止截断的短时聚合；它模拟踏板状态，不估计声音衰减。即时音列表和推断上下文分开。ScoreView 色层只作用屏幕，不影响撤销/保存/导出；保留编辑选中颜色及播放标记。参考 [10](10-score-observer.md)。

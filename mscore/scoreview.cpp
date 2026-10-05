@@ -1240,9 +1240,9 @@ void ScoreView::drawElements(QPainter& painter, QList<Element*>& el, Element* ed
                   continue;
             QPointF pos(e->pagePos());
             painter.translate(pos);
-            const QColor preview = !_notePreviewLayers.empty() && e->isNote()
-                  && !score()->printing() && !fotoMode()
-                  ? _notePreviewLayers.color(toNote(e)) : QColor();
+            const auto previewEntry = !_notePreviewLayers.empty() && e->isNote()
+                  && !score()->printing() && !fotoMode() ? _notePreviewLayers.entry(toNote(e)) : nullptr;
+            const QColor preview = previewEntry ? previewEntry->color : QColor();
             if (preview.isValid()) {
                   const auto note = toNote(e);
                   const bool editingSelection = note->selected() && !score()->isPlaying();
@@ -1258,6 +1258,21 @@ void ScoreView::drawElements(QPainter& painter, QList<Element*>& el, Element* ed
                         }
                   }
             else e->draw(&painter);
+            if (previewEntry && e->visible()) {
+                  auto drawLabel = [&](const QString& text, const QRectF& box, bool chord) {
+                        if (box.isEmpty()) return;
+                        painter.save();
+                        painter.setFont(notePreviewFont(e->spatium(), chord));
+                        painter.setPen(Qt::NoPen);
+                        painter.setBrush(previewEntry->active ? QColor("#d0e2ff") : QColor(255,255,255,238));
+                        painter.drawRoundedRect(box, e->spatium()*.18, e->spatium()*.18);
+                        painter.setPen(previewEntry->active ? QColor("#0043ce") : QColor("#343a3f"));
+                        painter.drawText(box, Qt::AlignCenter, text);
+                        painter.restore();
+                        };
+                  drawLabel(previewEntry->label, previewEntry->labelBox, false);
+                  drawLabel(previewEntry->chord, previewEntry->chordBox, true);
+                  }
             painter.translate(-pos);
             if (e->selected())
                   drawDebugInfo(painter, e);
@@ -5711,7 +5726,8 @@ void ScoreView::setNotePreviewColors(QObject* owner, const NotePreviewColors& co
 
 void ScoreView::onElementDestruction(Element* e)
       {
-      if (e->isNote()) _notePreviewLayers.remove(toNote(e));
+      // Only compare opaque addresses: derived virtual functions are no longer available.
+      _notePreviewLayers.remove(e);
       if (editData.element == e) {
             editData.element = nullptr;
             if (editMode())

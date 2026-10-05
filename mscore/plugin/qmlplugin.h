@@ -13,9 +13,12 @@
 #ifndef __QMLPLUGIN_H__
 #define __QMLPLUGIN_H__
 
+#include <QPointer>
 #include "libmscore/mscore.h"
 #include "libmscore/musescoreCore.h"
 #include "libmscore/utils.h"
+
+class QDockWidget;
 
 namespace Ms {
 
@@ -46,6 +49,10 @@ class MScore;
 
 class QmlPlugin : public QQuickItem {
       Q_OBJECT
+      Q_PROPERTY(QString panelPlacement READ panelPlacement NOTIFY panelDockChanged)
+      Q_PROPERTY(bool panelFloating READ panelFloating NOTIFY panelDockChanged)
+      QPointer<QDockWidget> _panelDock;
+      QString _panelPlacement;
 
       QString _menuPath;
       QString _pluginType;
@@ -64,6 +71,13 @@ class QmlPlugin : public QQuickItem {
 
    public:
       QmlPlugin(QQuickItem* parent = 0);
+      void attachPanelDock(QDockWidget* dock);
+      QString panelPlacement() const { return _panelPlacement; }
+      bool panelFloating() const;
+      Q_INVOKABLE void setPanelFloating(bool floating);
+   signals:
+      void panelDockChanged();
+   public:
 
       void setMenuPath(const QString& s)   { _menuPath = s;    }
       QString menuPath() const             { return _menuPath; }

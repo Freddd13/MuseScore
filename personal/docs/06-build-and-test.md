@@ -104,3 +104,9 @@ Pop-Location
 ## 观察器回归（0.2.0）
 
 新增 `tst_scoreobserver` 使用完整 mscoreapp，覆盖持续音、撤销、保存和屏幕预览隔离、长谱缓存。Windows 测试需独立构建 `ms_pch` 后编译 mtest.sln；Release 运行时配置见 [10](10-score-observer.md)。相关 `tst_note` 的 Win32 Chord 名称保护已扩展到 MSVC。
+
+## 0.3.0 GUI 与上下文回归
+
+新增 tst_pluginhost 验证真实主窗口的菜单、谱面重排、原生 QML 面板和停靠；它关闭硬件音序器，使用临时应用设置，不能替代实际音频设备验收。Windows 测试需要安装资源和 Qt QML/platform 目录；编译测试后运行 `python personal/tools/test_harmony_gui.py <tst_pluginhost.exe> <安装根目录> <输出目录>`，脚本准备隔离运行时并限时 45 秒。直接在原 build 子目录执行时 Qt 资源路径可能不完整。原生 QML 截图用 grabWindow，Widgets grab 不包含嵌入窗口。
+
+tst_scoreobserver 增加踏板边界、时序聚合/休止、全谱帧与原子配置测试；tst_note 保持原测试内容。实际安装插件 smoke 可用 `python personal/tools/test_harmony_host.py <新程序exe> <独立目录> <安装目录内主QML>`；先创建 -c 目录再启动，避免默认设置回退。通过项、性能与限制见个人更新日志 0.3.0。

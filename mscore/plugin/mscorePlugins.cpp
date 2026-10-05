@@ -475,6 +475,7 @@ void MuseScore::pluginTriggered(QString pp)
                   QWidget* w = QWidget::createWindowContainer(view);
                   dock->setWidget(w);
                   addDockWidget(area, dock);
+                  p->attachPanelDock(dock);
                   const Qt::Orientation orientation =
                      (area == Qt::RightDockWidgetArea || area == Qt::LeftDockWidgetArea)
                      ? Qt::Vertical

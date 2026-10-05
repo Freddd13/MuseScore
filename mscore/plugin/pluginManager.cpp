@@ -145,7 +145,7 @@ void PluginManager::writePluginList()
 //---------------------------------------------------------
 
 #ifdef SCRIPT_INTERFACE
-static void updatePluginList(QList<QString>& pluginPathList, const QString& pluginPath,
+static void updatePluginList(const QString& pluginPath,
    QList<PluginDescription>& pluginList)
       {
       QDirIterator it(pluginPath, QDir::NoDot|QDir::NoDotDot|QDir::Dirs|QDir::Files,
@@ -173,8 +173,7 @@ static void updatePluginList(QList<QString>& pluginPathList, const QString& plug
                               }
                         }
                   }
-            else
-                  updatePluginList(pluginPathList, path, pluginList);
+
             }
       }
 #endif
@@ -195,7 +194,7 @@ void PluginManager::updatePluginList(bool forceRefresh)
             }
 
       for (const QString& _pluginPath : pluginPathList) {
-            Ms::updatePluginList(pluginPathList, _pluginPath, _pluginList);
+            Ms::updatePluginList(_pluginPath, _pluginList);
             }
       //remove non existing files
       auto i = _pluginList.begin();
