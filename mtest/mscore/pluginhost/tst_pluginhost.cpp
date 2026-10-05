@@ -3,6 +3,7 @@
 #include <QDockWidget>
 #include <QMenuBar>
 #include <QQuickView>
+#include <QJSValue>
 #include <QTemporaryDir>
 #include <QSettings>
 #include "mtest/testutils.h"
@@ -70,7 +71,7 @@ class TestPluginHost : public QObject {
             for(auto window:QGuiApplication::allWindows()) {
                   auto view=qobject_cast<QQuickView*>(window);
                   auto root=view ? qobject_cast<QmlPlugin*>(view->rootObject()) : nullptr;
-                  if(root && root->version()=="1.1.0") {panel=root;panelView=view;break;}
+                  if(root && root->version()=="1.2.0") {panel=root;panelView=view;break;}
                   }
             for(auto candidate:main->findChildren<QDockWidget*>())
                   if(candidate->windowTitle()=="Harmony Assistant") {dock=candidate;break;}
@@ -86,6 +87,53 @@ class TestPluginHost : public QObject {
             QTest::qWait(50);
             const auto preview=main->currentScoreView()->grab().toImage();
             QVERIFY(original!=preview);
+            // Native fixed label hit testing must emit to its owning observer.
+            QVariantMap anchor; for(const auto& descriptor:descriptors) {const auto value=descriptor.toMap();if(value.value("tick").toInt()==480 && value.value("track").toInt()==0) {anchor=value;break;}} QVERIFY(!anchor.isEmpty());anchor["chord"]="Cmaj13";anchor["degree"]="Imaj13";
+            anchor["chordTick"]=480;anchor["chordUntil"]=960;anchor["chordOrder"]=2;
+            observer->setScorePreview({anchor});observer->setActiveScorePreview(600);
+            QSignalSpy activation(observer,&PluginAPI::ScoreObserver::previewActivated);
+            // Locate the fixed row through a separate generic layer with known hit geometry.
+            NotePreviewLayers interaction;QObject interactionOwner;
+            NotePreviewEntry hit;hit.chord="C";hit.chordBox=QRectF(10,10,40,20);hit.chordTick=480;hit.activationTarget=observer;
+            interaction.replace(&interactionOwner,{{nullptr,hit}});
+            QVERIFY(interaction.activate(QPointF(20,20)));QCOMPARE(activation.size(),1);
+            QVERIFY(!interaction.activate(QPointF(90,90)));
+            auto firstMarker=observer->snapshot(0,4,8).value("notes").toList().front().toMap();
+            firstMarker["chord"]="C";firstMarker["degree"]="I";firstMarker["chordTick"]=0;firstMarker["chordUntil"]=480;firstMarker["chordOrder"]=2;
+            observer->setScorePreview({firstMarker,anchor});
+            const auto note=toChord(score->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest)->element(0))->notes().front();
+            auto scoreView=main->currentScoreView();QPointF hitPoint;bool found=false;
+            for(int dy=-qRound(note->spatium()*24);dy<0 && !found;dy+=2) for(int dx=2;dx<note->spatium()*6;dx+=2) {
+                  const auto candidate=note->canvasPos()+QPointF(dx,dy);
+                  if(scoreView->activateNotePreview(candidate)){hitPoint=candidate;found=true;break;}
+                  }
+            QVERIFY(found);
+            observer->setScorePreview({firstMarker,anchor});
+            const int priorClicks=activation.size();
+            const auto physical=scoreView->toPhysical(hitPoint+QPointF(8,8)).toPoint();
+            QVERIFY(scoreView->rect().contains(physical));
+            QTest::mouseDClick(scoreView,Qt::LeftButton,Qt::NoModifier,physical);
+            QTRY_VERIFY(activation.size()>priorClicks);
+            const auto bass=toChord(score->firstSegment(SegmentType::ChordRest)->element(4))->notes().front();
+            observer->setScorePreview({firstMarker,anchor});
+            QPointF bassHit;bool bassFound=false;
+            for(int dy=-qRound(bass->spatium()*32);dy<0 && !bassFound;dy+=2) for(int dx=2;dx<40;dx+=2) {
+                  const auto candidate=bass->canvasPos()+QPointF(dx,dy);
+                  if(scoreView->activateNotePreview(candidate)){bassHit=candidate;bassFound=true;break;}
+                  }
+            QVERIFY(bassFound);QVERIFY(qAbs(bassHit.y()-hitPoint.y())<=2.0);
+            QCOMPARE(panel->property("currentTick").toInt(),0);
+            observer->setScorePreview({firstMarker,anchor});observer->setActiveScorePreview(600);QTest::qWait(30);
+            scoreView->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("score-fixed-label.png"));
+            // The panel jump keeps dock placement; top docks open their full detail tool window.
+            QVERIFY(QMetaObject::invokeMethod(panel,"openAnnotation",Q_ARG(QVariant,480),Q_ARG(QVariant,0)));
+            auto editor=panel->findChild<QObject*>("harmonyConfiguration");QVERIFY(editor);
+            QVERIFY(QMetaObject::invokeMethod(editor,"openColor",Q_ARG(QVariant,QString()),Q_ARG(QVariant,QString("chordColor")),Q_ARG(QVariant,QString("#ffee99"))));
+            QTest::qWait(50);
+            auto picker=editor->findChild<QObject*>("harmonyColorPicker");QVERIFY(picker);
+            picker->setProperty("color",QColor("#224466"));
+            QVERIFY(QMetaObject::invokeMethod(picker,"accept"));QTest::qWait(30);
+            QCOMPARE(panel->property("configuration").value<QJSValue>().property("chordColor").toString(),QString("#224466"));
             observer->clearAllPreviews();QTest::qWait(30);
             observer->setScorePreview(descriptors);
             score->doLayout(); // includes deletion of System / StaffLines, not just Notes

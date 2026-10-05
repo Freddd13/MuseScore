@@ -44,6 +44,7 @@ class ScoreObserver : public QObject {
       QVector<int> _measureStarts;
       NotePreviewColors _baseColors;
       QObject _baseOwner;
+      int _activePreviewTick = -1;
       void applyPreview(QObject* owner, const QVariantList& notes);
       Ms::Note* resolve(const QVariantMap& value, const QHash<int, Ms::Segment*>* segments = nullptr) const;
       void clearPreview(QObject* owner);
@@ -83,6 +84,8 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE void clearNotePreviewColors();
       Q_INVOKABLE void clearAllPreviews();
       Q_INVOKABLE void setScorePreview(const QVariantList& notes);
+      Q_INVOKABLE void setActiveScorePreview(int tick);
+      Q_INVOKABLE void activatePreview(int tick, int track) { emit previewActivated(tick, track); }
       Q_INVOKABLE QVariantMap contextSnapshot(int tick, int firstTrack, int endTrack, bool pedal, int windowTicks, bool sounding = false);
       Q_INVOKABLE QVariantMap analysisFrames(int fromTick, int limit, int firstTrack, int endTrack, bool pedal, int windowTicks);
       Q_INVOKABLE QVariantMap loadConfiguration(const QString& name) const;
@@ -92,6 +95,7 @@ class ScoreObserver : public QObject {
    signals:
       void scoreChanged();
       void positionChanged();
+      void previewActivated(int tick, int track);
       void enabledChanged();
       void indexChanged();
       void surfaceVisibleChanged();

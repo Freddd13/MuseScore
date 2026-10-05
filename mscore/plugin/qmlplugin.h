@@ -75,6 +75,7 @@ class QmlPlugin : public QQuickItem {
       QString panelPlacement() const { return _panelPlacement; }
       bool panelFloating() const;
       Q_INVOKABLE void setPanelFloating(bool floating);
+      Q_INVOKABLE void focusPanel();
    signals:
       void panelDockChanged();
    public:

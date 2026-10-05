@@ -4,7 +4,7 @@ import FileIO 3.0
 
 MuseScore {
     menuPath: "Plugins.Harmony native smoke"
-    version: "1.1.0"
+    version: "1.2.0"
     requiresScore: true
     FileIO {id: report}
     onRun: {
@@ -27,10 +27,16 @@ MuseScore {
             result.indexBuilds = panel.observer.indexBuildCount
             result.indexMilliseconds = panel.observer.indexBuildMilliseconds
             result.persistedLabel = panel.configuration.labels["3"]
+            result.persistedStyle = {content:panel.configuration.chordContent,order:panel.configuration.chordOrder,
+                scale:panel.configuration.chordScale,color:panel.configuration.chordColor,position:panel.configuration.ribbonAlign}
+            if(result.persistedLabel==="third" && (result.persistedStyle.content!==1 || result.persistedStyle.order!==3 ||
+                result.persistedStyle.scale!==140 || result.persistedStyle.color!=="#224466" || result.persistedStyle.position!==2))
+                result.failures.push("appearance preferences not restored")
             if (!result.api) result.failures.push("observer missing")
             if (result.chord !== "Cmaj13") result.failures.push("chord: " + result.chord)
             if (result.notes !== 6) result.failures.push("sustained note count")
             if (!panel.advancedNative) result.failures.push("1.1 context API missing")
+            if (!panel.fixedChordNative) result.failures.push("fixed marker API missing")
             var context=panel.observer.contextSnapshot(480,0,8,true,480,false)
             if(context.analysisNotes.length!==6)result.failures.push("context note count")
             var frames=panel.observer.analysisFrames(0,128,0,8,true,0)
@@ -39,9 +45,11 @@ MuseScore {
             var config=panel.collectPreferences()
             config.allColor=true;config.noteFunctions=true;config.chordLabels=true
             config.labels["3"]="third";config.colors["3"]="#123abc"
+            config.chordContent=1;config.chordOrder=3;config.chordScale=140;config.chordColor="#224466";config.ribbonAlign=2
             panel.applyPreferences(config)
             panel.buildAnalysisChunk()
             if(!panel.analysisRecords.length)result.failures.push("full score analysis missing")
+            panel.observer.setActiveScorePreview(600)
             var preferences=panel.observer.loadConfiguration("NativeSmoke")
             var saved={schema:1,label:"third",enabled:true}
             if(!panel.observer.saveConfiguration("NativeSmoke",saved))result.failures.push("configuration write")

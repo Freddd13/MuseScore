@@ -12,7 +12,7 @@ MuseScore {
     id: root
     menuPath: "Plugins.Harmony Assistant"
     description: "钢琴和声助手：持续音识别、级数、音程功能与可选谱面配色。"
-    version: "1.1.0"
+    version: "1.2.0"
     requiresScore: true
     pluginType: "dock"
     dockArea: "right"
@@ -25,6 +25,9 @@ MuseScore {
         (typeof panelPlacement === "string" && (panelPlacement === "top" || panelPlacement === "bottom") && height < 400)
     property bool expanded: flick.width >= 680
     property bool advancedNative: observer && typeof observer.contextSnapshot === "function"
+    property bool fixedChordNative: observer && typeof observer.setActiveScorePreview === "function"
+    property bool chromaticChord: Harmony.isChromatic(Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,chordRoot,chordDefinition)
+    property color chordInk:configuration.chromaticAccent && chromaticChord ? configuration.chromaticColor : ink
     property var contextNotes: []
     property var analysisRecords: []
     property var pendingRecords: []
@@ -82,6 +85,36 @@ MuseScore {
 
     function windowTicks() {return [0,240,480,960,1920][arpeggioWindow.currentIndex] || 0}
     function windowHeight() {return 650}
+    function setRibbonPosition(index) {
+        var c=JSON.parse(JSON.stringify(configuration));c.ribbonAlign=index
+        configuration=Preferences.clean(c);configurationTimer.restart()
+    }
+    function openAnnotation(tick,track) {
+        if(!curScore)return
+        if(!lastPlaying) {
+            var partEnd=curScore.nstaves*4
+            for(var p=0;p<curScore.parts.length;++p)if(curScore.parts[p].startTrack===track){partEnd=curScore.parts[p].endTrack;break}
+            var frame=observer.snapshot(tick,track,partEnd,false)
+            if(frame.notes.length) {var note=resolveNote(curScore,frame.notes[0]);if(note)curScore.selection.select(note)}
+            selectionTrack=track;setScope();displayTick(tick,true)
+        }
+        if(typeof root.focusPanel==="function")root.focusPanel()
+        if(root.ribbon)detailPopup.open()
+        flick.contentY=0
+    }
+    function chordDescriptor(note,frame) {
+        var d=JSON.parse(JSON.stringify(note))
+        if(fixedChordNative) {
+            d.chord=configuration.chordContent===1 ? "" : frame.chord
+            d.degree=configuration.chordContent===0 ? "" : frame.degree
+            d.chordTick=frame.tick;d.chordUntil=frame.tick
+            d.chordOrder=configuration.chordOrder;d.chordScale=configuration.chordScale/100
+            d.chordFont=["","Edwin","Arial"][configuration.chordFont]
+            d.chordColor=configuration.chromaticAccent && frame.chromatic ? configuration.chromaticColor : configuration.chordColor
+            d.highlightColor=configuration.highlightColor;d.highlightBackground=configuration.highlightBackground
+        } else d.chord=configuration.chordContent===0 ? frame.chord : configuration.chordContent===1 ? frame.degree : frame.chord+" · "+frame.degree
+        return d
+    }
     function functionText(pitch, tonic, definition) {
         var fixed=configuration.noteLabels[Harmony.mod12(pitch)]
         if(typeof fixed==="string" && fixed.length)return fixed
@@ -161,7 +194,7 @@ MuseScore {
             degree=Harmony.roman(tonic,keyMode.currentIndex===1,result.root,result.definition)
         }
         return {tick:frame.tick,bar:frame.bar,beat:frame.beat,root:result.root,definition:result.definition,
-            chord:chord,degree:degree,notes:notes}
+            chord:chord,degree:degree,notes:notes,chromatic:Harmony.isChromatic(tonic,keyMode.currentIndex===1,result.root,result.definition)}
     }
     function buildAnalysisChunk() {
         if(!curScore || !surfaceActive || !needsAnalysis())return
@@ -177,20 +210,25 @@ MuseScore {
     }
     function applyScorePreview() {
         if(!advancedNative)return
-        var descriptors=[], lastChord=""
+        var descriptors=[], lastChord="", lastBar=-1, marker=null
         for(var i=0;i<analysisRecords.length;++i) {
             var frame=analysisRecords[i], onset=[]
-            if(frame.root<0){lastChord="";continue}
+            if(frame.root<0){lastChord="";marker=null;continue}
             // Attribute notes when they are written; later sustained contexts cannot recolor an earlier attack.
             for(var n=0;n<frame.notes.length;++n)if(frame.notes[n].tick===frame.tick)onset.push(frame.notes[n])
             for(n=0;n<onset.length;++n) {
                 var d=JSON.parse(JSON.stringify(onset[n]))
                 if(scoreColoring.checked && allColor.checked)d.color=colorFor(d.pitch,frame.root,frame.definition)
                 if(showFunctions.checked)d.label=functionText(d.pitch,frame.root,frame.definition)
-                if(showChords.checked && n===0 && frame.chord!==lastChord)d.chord=frame.chord+" · "+frame.degree
-                if(d.color || d.label || d.chord)descriptors.push(d)
+                if(showChords.checked && n===0 && (frame.chord!==lastChord || (fixedChordNative && frame.bar!==lastBar))) {
+                    var styled=chordDescriptor(d,frame)
+                    for(var key in styled)d[key]=styled[key]
+                    marker=d
+                }
+                if(d.color || d.label || d.chord || d.degree)descriptors.push(d)
             }
-            if(onset.length)lastChord=frame.chord
+            if(marker)marker.chordUntil=i+1<analysisRecords.length ? analysisRecords[i+1].tick : frame.tick+480
+            if(onset.length){lastChord=frame.chord;lastBar=frame.bar}
         }
         observer.setScorePreview(descriptors)
         // The active layer must be last so it can highlight labels during playback.
@@ -326,6 +364,7 @@ MuseScore {
     }
     function clearDisplay(message) {
         currentTick = -1
+        if(fixedChordNative)observer.setActiveScorePreview(-1)
         currentNotes = []
         currentPitches = []
         chordRoot = -1
@@ -456,6 +495,7 @@ MuseScore {
         for (var i = 0; i < notes.length; ++i) pitches.push(notes[i].pitch)
         var changed = JSON.stringify(notes) !== JSON.stringify(currentNotes)
         currentTick = tick
+        if(fixedChordNative)observer.setActiveScorePreview(lastPlaying && followPlayback.checked ? tick : -1)
         positionText = lastPlaying && followPlayback.checked ? "正在播放 · 包含持续音" : "当前选区 · 包含持续音"
         if (observer && nativeSnapshot.bar !== undefined)
             positionText = (lastPlaying && followPlayback.checked ? "播放" : "选区") +
@@ -617,12 +657,13 @@ MuseScore {
                     var d=JSON.parse(JSON.stringify(notes[i]))
                     if(scoreColoring.checked)d.color=colorFor(d.pitch,chordRoot,chordDefinition)
                     if(advancedNative && showFunctions.checked)d.label=functionText(d.pitch,chordRoot,chordDefinition)
-                    if(advancedNative && showChords.checked && i===chordAnchor)d.chord=chordText+" · "+degreeText
+                    if(advancedNative && !fixedChordNative && showChords.checked && i===chordAnchor)d.chord=chordText+" · "+degreeText
                     if(advancedNative)d.active=lastPlaying && followPlayback.checked
                     if(d.color || d.label || d.chord)descriptors.push(d)
                 }
             }
             observer.setNotePreviewColors(descriptors)
+            if(fixedChordNative)observer.setActiveScorePreview(lastPlaying && followPlayback.checked ? currentTick : -1)
         } else syncColors(scoreColoring.checked && !lastPlaying)
     }
     function restoreColors(all) {
@@ -750,6 +791,7 @@ MuseScore {
         ignoreUnknownSignals:true
         onPositionChanged:{if(!playbackTimer.running)playbackTimer.start()}
         onScoreChanged:requestRefresh(true)
+        onPreviewActivated:root.openAnnotation(tick,track)
     }
 
     Rectangle {
@@ -792,22 +834,26 @@ MuseScore {
                     UiLabel {width:parent.width; text:Harmony.rootNames[keyTonic.currentIndex]+(keyMode.currentIndex===0?" 大调":" 小调")+" · "+scopeText; color:muted; font.pixelSize:11; wrapMode:Text.Wrap}
                 }
                 PanelCard {
+                    id:summaryCard; objectName:"harmonySummary"
                     width: root.expanded ? (panel.width-10)/2 : panel.width
-                    UiLabel {text:positionText; color:muted; font.pixelSize:11}
-                    UiLabel {width:parent.width; text:chordText; color:ink; font.pixelSize:30; font.bold:true; wrapMode:Text.WrapAnywhere}
+                    minimumBodyHeight:settingsExpanded ? 246 : 208
+                    StableLabel {text:positionText; color:muted; font.pixelSize:11}
+                    StableLabel {text:chordText; color:chordInk; font.pixelSize:30; font.bold:true}
                     RowLayout {
                         width: parent.width
                         UiLabel {text:"级数"; color:muted; font.pixelSize:12}
-                        UiLabel {Layout.fillWidth:true; text:degreeText; color:ink; font.pixelSize:21; font.bold:true; wrapMode:Text.WrapAnywhere}
+                        StableLabel {Layout.fillWidth:true; text:degreeText; color:chordInk; font.pixelSize:21; font.bold:true}
                     }
-                    UiLabel {width:parent.width; text:matchText; color:muted; font.pixelSize:12; wrapMode:Text.Wrap}
-                    UiLabel {width:parent.width; visible:text.length>0; text:alternativesText; color:muted; font.pixelSize:11; wrapMode:Text.Wrap}
+                    StableLabel {reservedLines:2; text:matchText+(configuration.chromaticAccent && chromaticChord?" · 含调外音":""); color:muted; font.pixelSize:12}
+                    StableLabel {reservedLines:2; text:alternativesText; color:muted; font.pixelSize:11}
                     Rectangle {width:parent.width; height:1; color:"#EBEEF0"}
-                    UiLabel {width:parent.width; text:inversionText; color:muted; font.pixelSize:11; wrapMode:Text.Wrap}
-                    UiLabel {width:parent.width; visible:settingsExpanded; text:voicingText; color:ink; font.pixelSize:12; wrapMode:Text.Wrap}
+                    StableLabel {text:inversionText; color:muted; font.pixelSize:11}
+                    StableLabel {visible:settingsExpanded; reservedLines:2; text:voicingText; color:ink; font.pixelSize:12}
                 }
                 PanelCard {
+                    id:tonesCard; objectName:"harmonyFunctions"
                     width: root.expanded ? (panel.width-10)/2 : panel.width
+                    minimumBodyHeight:body.width>=290 ? 264 : 332
                     UiLabel {text:"音程功能"; color:ink; font.bold:true; font.pixelSize:13}
                     Flow {
                         width: parent.width
@@ -816,7 +862,7 @@ MuseScore {
                             model: toneRows
                             delegate: Rectangle {
                                 width: Math.max(64, (parent.width - (parent.width >= 290 ? 18 : 12)) / (parent.width >= 290 ? 4 : 3))
-                                height: toneBody.implicitHeight + 12
+                                height:64
                                 radius: 6
                                 color: modelData.present ? "#F2F5F7" : "#FAFBFC"
                                 border.color:"#e0e0e0"
@@ -824,8 +870,8 @@ MuseScore {
                                 Column {
                                     id:toneBody
                                     x:6; y:6; width:parent.width-12; spacing:4
-                                    UiLabel {width:parent.width; text:modelData.label; color:ink; font.pixelSize:14; font.bold:true; wrapMode:Text.Wrap}
-                                    UiLabel {width:parent.width; text:modelData.notes; color:modelData.present?ink:muted; font.pixelSize:11; wrapMode:Text.Wrap}
+                                    StableLabel {text:modelData.label; color:ink; font.pixelSize:14; font.bold:true}
+                                    StableLabel {reservedLines:2; text:modelData.notes; color:modelData.present?ink:muted; font.pixelSize:11}
                                 }
                             }
                         }
@@ -835,7 +881,7 @@ MuseScore {
                         text:"色条：识别音（含开启的上下文） · 缺音：未奏出 · —：未使用\n挂音显示 2 / 4，六和弦显示 6。"
                     }
                     Flow {
-                        width:parent.width; spacing:5
+                        width:parent.width; height:57; clip:true; spacing:5
                         Repeater {
                             model:currentNotes
                             delegate:Rectangle {
@@ -849,6 +895,7 @@ MuseScore {
                     }
                 }
                 PanelCard {
+                    objectName:"harmonyKeyboard"
                     width:root.expanded ? (panel.width-10)/2 : panel.width
                     visible:keyboardExpanded
                     RowLayout {
@@ -974,7 +1021,7 @@ MuseScore {
                         Button {
                             font.family: "Microsoft YaHei UI";text:"刷新"; Layout.fillWidth:true; implicitHeight:32; font.pixelSize:12; onClicked:requestRefresh(true)}
                     }
-                    UiLabel {width:parent.width; visible:noticeText.length>0; text:noticeText; color:muted; font.pixelSize:10; wrapMode:Text.Wrap}
+                    StableLabel {reservedLines:2; text:noticeText; color:muted; font.pixelSize:10}
                 }
                 PanelCard {
                     width:root.expanded ? (panel.width-10)/2 : panel.width
@@ -1002,25 +1049,37 @@ MuseScore {
                 }
             }
         }
-        RowLayout {
-            visible:root.ribbon; anchors.fill:parent; anchors.margins:12; spacing:16
-            Column {
-                Layout.preferredWidth:Math.min(root.width*.38,280); spacing:2
-                UiLabel {width:parent.width; text:chordText; color:ink; font.pixelSize:Math.min(32,Math.max(18,root.height*.22)); font.bold:true; elide:Text.ElideRight}
-                UiLabel {width:parent.width; text:degreeText+" · "+positionText; color:muted; font.pixelSize:11; elide:Text.ElideRight}
+        Item {
+            visible:root.ribbon; anchors.fill:parent; clip:true
+            Item {
+                id:ribbonGroup; objectName:"harmonyRibbonGroup"
+                width:Math.max(100,Math.min(630,parent.width-ribbonControls.width-36)); height:parent.height-24
+                anchors.verticalCenter:parent.verticalCenter
+                x:{var maximum=Math.max(12,parent.width-ribbonControls.width-width-36);
+                    return configuration.ribbonAlign===0 ? 12 : configuration.ribbonAlign===2 ? maximum :
+                        configuration.ribbonAlign===3 ? 12+(maximum-12)*configuration.ribbonPosition/100 : Math.max(12,Math.min(maximum,(parent.width-width)/2))}
+                RowLayout {
+                    anchors.fill:parent; spacing:16
+                    Column {
+                        Layout.preferredWidth:ribbonTones.visible ? 244 : ribbonGroup.width; Layout.alignment:Qt.AlignVCenter; spacing:2
+                        StableLabel {text:chordText; color:chordInk; font.pixelSize:Math.min(32,Math.max(18,root.height*.22)); font.bold:true}
+                        StableLabel {text:degreeText+" · "+positionText; color:muted; font.pixelSize:11}
+                    }
+                    Flow {
+                        id:ribbonTones; visible:ribbonGroup.width>=540; Layout.fillWidth:true; Layout.alignment:Qt.AlignVCenter; spacing:6
+                        Repeater {model:root.toneRows; delegate:Rectangle {
+                            width:42; height:30; color:"#ffffff"; radius:4
+                            Rectangle {x:0;y:8;width:3;height:14;color:modelData.present?modelData.color:"#d0d0d0"}
+                            UiLabel {anchors.centerIn:parent; text:modelData.label; color:modelData.present?ink:muted; font.pixelSize:12}
+                        }}
+                    }
+                }
             }
-            Flow {
-                Layout.fillWidth:true; Layout.alignment:Qt.AlignVCenter; spacing:6
-                Repeater {model:root.toneRows; delegate:Rectangle {
-                    width:42; height:30; color:"#ffffff"; radius:4
-                    Rectangle {x:0;y:8;width:3;height:14;color:modelData.present?modelData.color:"#d0d0d0"}
-                    UiLabel {anchors.centerIn:parent; text:modelData.label; color:modelData.present?ink:muted; font.pixelSize:12}
-                }}
-            }
             Column {
-                spacing:4
-                Button {text:"详细面板"; onClicked:detailPopup.open(); implicitHeight:30; font.pixelSize:11}
-                Button {text:"悬浮"; visible:typeof root.setPanelFloating==="function"; onClicked:root.setPanelFloating(true); implicitHeight:30; font.pixelSize:11}
+                id:ribbonControls; width:112; anchors.right:parent.right; anchors.rightMargin:12; anchors.verticalCenter:parent.verticalCenter; spacing:4
+                ComboBox {width:parent.width; model:["靠左","居中","靠右","自定位置"]; currentIndex:configuration.ribbonAlign; implicitHeight:28; font.pixelSize:11; onActivated:root.setRibbonPosition(currentIndex)}
+                Button {width:parent.width; text:"详细面板"; onClicked:detailPopup.open(); implicitHeight:28; font.pixelSize:11}
+                Button {width:parent.width; text:"悬浮"; visible:typeof root.setPanelFloating==="function"; onClicked:root.setPanelFloating(true); implicitHeight:28; font.pixelSize:11}
             }
         }
     }

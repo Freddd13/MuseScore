@@ -1,4 +1,4 @@
-# 10 通用乐谱观察与临时音符预览（个人版本 0.3.0）
+# 10 通用乐谱观察与临时音符预览（个人版本 0.4.0）
 
 和声助手采用插件 + 最小原生接口。纯插件可完成和弦解释、级数、功能标签和界面，但标准 API 没有逐拍播放信号和独立临时色层；反复写 Note.color 会影响撤销、保存与排版。因此原生侧只提供可供其他插件复用的查询/预览能力，音乐解释留在独立 QML/JS。
 
@@ -77,3 +77,13 @@ ScoreObserver 的 loadConfiguration/saveConfiguration 按无路径分隔符的�
 性能边界：上下文小节起点用数字索引二分查找；超过 64 音符的预览批次一次扫描 segments 建局部解析表，防止 tick2measure 逐音线性扫描。临时原生指针不跨这次 GUI 调用缓存。首次索引、全谱检测和初始标注仍有成本，播放/隐藏/插件未开启时不运行全谱任务；不能承诺所有工程零开销或 DAW 硬实时。
 
 新增回归：tst_scoreobserver 的踏板起落/范围、分批帧、琶音/休止、原子配置；tst_pluginhost 的真实主窗口/插件菜单/停靠/析构。测试采用独立目录、关闭硬件音序器，Qt Windows 渲染用于布局截图；不能替代实际音频/MIDI 设备和长时间编辑验收。最终测量与通过项见 CHANGELOG。
+
+## 0.4.0：固定记号、样式与点击
+
+描述符可含 chord / degree、chordTick / chordUntil（半开区间）、chordOrder（0–3）、chordScale（0.6–2）、chordFont、chordColor / highlightColor / highlightBackground。输入长度和数值范围受限，空字体采用 score 的 chordSymbolAFontFace。同系统/乐器用共同顶部行；固定标记在 ScoreView::paint 独立绘制，不依赖当前 Note 的 draw，不改模型排版。音旁 label 保留原有避让规则。过密标注省略，不无限上移。
+
+setActiveScorePreview(tick) 在每乐器有序标记索引二分查当前区间，仅改变小型 QSet，重绘旧/新标记；tick=-1 清高亮。不要把当前 chord 重复附到每个活动音符。固定 base 层与当前音符层分别维护；打印/foto 沿原语义。
+
+命中 ScoreView::activateNotePreview 后向弱 QObject 接收者调用 activatePreview，发出 previewActivated(tick, partStartTrack)。events.cpp 仅在左键双击命中时消费事件。插件 focusPanel() 聚焦已有停靠窗口，不强制悬浮；和声插件决定停止时选位置、横条打开详情，播放中不改变播放位置。QPointer 防止销毁回调；Element 键仍禁止解引用。
+
+真实 GUI suite 验证固定行、普通鼠标双击、低音锚点整乐器跳转和颜色对话框。新增 fixedMarkerHighlightAndStyle / fixedMarkerHighlightPerformance；已测性能与边界以 CHANGELOG 0.4.0 为准。

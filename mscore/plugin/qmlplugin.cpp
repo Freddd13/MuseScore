@@ -47,6 +47,12 @@ void QmlPlugin::attachPanelDock(QDockWidget* dock)
       connect(dock, &QDockWidget::topLevelChanged, this, [this](bool) { emit panelDockChanged(); });
       if (auto main = qobject_cast<QMainWindow*>(dock->parentWidget())) location(main->dockWidgetArea(dock));
       }
+void QmlPlugin::focusPanel()
+      {
+      if (!_panelDock) return;
+      _panelDock->show();_panelDock->raise();_panelDock->activateWindow();
+      if (_panelDock->widget()) _panelDock->widget()->setFocus(Qt::OtherFocusReason);
+      }
 bool QmlPlugin::panelFloating() const { return _panelDock && _panelDock->isFloating(); }
 void QmlPlugin::setPanelFloating(bool floating)
       { if (_panelDock) { _panelDock->setFloating(floating); _panelDock->show(); } }

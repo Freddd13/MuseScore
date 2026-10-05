@@ -177,6 +177,51 @@ class TestScoreObserver : public QObject, public MTest {
             layers.clear();
             QVERIFY(layers.empty());
             }
+      void fixedMarkerHighlightAndStyle()
+            {
+            NotePreviewLayers layers; QObject owner;
+            const auto first=reinterpret_cast<const Element*>(quintptr(1));
+            const auto second=reinterpret_cast<const Element*>(quintptr(2));
+            NotePreviewEntry entry;
+            entry.chord="Cmaj7";entry.degree="Imaj7";entry.spatium=5;
+            entry.chordFont=QFont("Arial");entry.chordFont.setPixelSize(12);
+            entry.degreeFont=entry.chordFont;
+            const auto horizontal=layoutPreviewChord(entry,0);
+            QVERIFY(entry.primaryBox.left()<entry.secondaryBox.left());
+            layoutPreviewChord(entry,1);QVERIFY(entry.primaryBox.left()>entry.secondaryBox.left());
+            const auto vertical=layoutPreviewChord(entry,2);
+            QVERIFY(entry.primaryBox.top()<entry.secondaryBox.top());
+            QVERIFY(vertical.height()>horizontal.height());
+            layoutPreviewChord(entry,3);QVERIFY(entry.primaryBox.top()>entry.secondaryBox.top());
+            entry.chordBox=QRectF(10,10,70,20);entry.bounds=entry.chordBox;
+            entry.chordTick=0;entry.chordUntil=960;
+            NotePreviewColors base {{first,entry}};
+            entry.chordTick=960;entry.chordUntil=1440;entry.chordBox.translate(100,0);entry.bounds=entry.chordBox;
+            base.insert(second,entry);layers.replace(&owner,base);
+            int activeTick=-1,count=0;
+            auto inspect=[&]() {activeTick=-1;count=0;layers.forEachChord([&](const NotePreviewEntry& value,bool active){
+                  QCOMPARE(value.chordBox.top(),qreal(10));++count;if(active)activeTick=value.chordTick;});};
+            QVERIFY(!layers.setActiveChord(&owner,480).isEmpty());inspect();QCOMPARE(activeTick,0);QCOMPARE(count,2);
+            QVERIFY(layers.setActiveChord(&owner,720).isEmpty());
+            layers.setActiveChord(&owner,960);inspect();QCOMPARE(activeTick,960);
+            // A current note/function layer must not cover the fixed chord underneath.
+            QObject foreground;layers.replace(&foreground,{{second,{Qt::blue,QRectF(100,30,20,20)}}});
+            inspect();QCOMPARE(count,2);QCOMPARE(activeTick,960);
+            layers.setActiveChord(&owner,1440);inspect();QCOMPARE(activeTick,-1);
+            layers.remove(first);inspect();QCOMPARE(count,1);
+            }
+      void fixedMarkerHighlightPerformance()
+            {
+            NotePreviewLayers layers;QObject owner;NotePreviewColors colors;
+            for(int i=0;i<6000;++i) {
+                  NotePreviewEntry entry;entry.color=Qt::blue;entry.bounds=QRectF(i,30,2,2);
+                  if(i%6==0){entry.chord="C";entry.chordBox=QRectF(i,10,10,8);entry.chordTick=i*80;entry.chordUntil=(i+6)*80;}
+                  colors.insert(reinterpret_cast<const Element*>(quintptr(i+1)),entry);
+                  }
+            layers.replace(&owner,colors);QElapsedTimer timer;timer.start();
+            for(int i=0;i<1000;++i)layers.setActiveChord(&owner,i*480);
+            qInfo("6000 notes / 1000 fixed markers: 1000 indexed highlight changes %.3f ms",double(timer.nsecsElapsed())/1000000.0);
+            }
       void longScorePerformance()
             {
             QFile fixture(root + "/mscore/scoreobserver/piano.mscx");

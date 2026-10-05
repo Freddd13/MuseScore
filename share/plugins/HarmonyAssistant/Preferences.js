@@ -15,15 +15,23 @@ function defaults() {
     return {schema:1,colors:colors,labels:names,noteLabels:{},palette:"Carbon",auto:true,
         follow:true,coloring:true,allColor:false,chordLabels:false,noteFunctions:false,
         pedal:true,window:0,scope:0,keyMode:0,keyTonic:0,manualKey:false,
-        root:0,quality:0,keyboard:false,settings:false};
+        root:0,quality:0,keyboard:false,settings:false,
+        ribbonAlign:1,ribbonPosition:50,chordContent:2,chordOrder:0,chordFont:0,chordScale:100,
+        chordColor:"#343a3f",highlightColor:"#0043ce",highlightBackground:"#d0e2ff",
+        chromaticAccent:true,chromaticColor:"#a2191f"};
 }
 function clean(source) {
     if(!source || source.schema!==1) throw Error("配置版本应为 1");
-    var out=defaults(), booleans=["auto","follow","coloring","allColor","chordLabels","noteFunctions","pedal","manualKey","keyboard","settings"];
+    var out=defaults(), booleans=["auto","follow","coloring","allColor","chordLabels","noteFunctions","pedal","manualKey","keyboard","settings","chromaticAccent"];
     for(var i=0;i<booleans.length;++i) if(typeof source[booleans[i]]==="boolean") out[booleans[i]]=source[booleans[i]];
-    var limits={window:4,scope:1,keyMode:1,keyTonic:16,root:16,quality:28};
+    var limits={window:4,scope:1,keyMode:1,keyTonic:16,root:16,quality:28,ribbonAlign:3,ribbonPosition:100,chordContent:2,chordOrder:3,chordFont:2};
     for(var key in limits) if(typeof source[key]==="number" && source[key]===Math.floor(source[key]) && source[key]>=0 && source[key]<=limits[key])out[key]=source[key];
     if(palettes[source.palette])out.palette=source.palette;
+    if(typeof source.chordScale==="number" && Math.floor(source.chordScale)===source.chordScale && source.chordScale>=60 && source.chordScale<=200)out.chordScale=source.chordScale;
+    var styleColors=["chordColor","highlightColor","highlightBackground","chromaticColor"];
+    for(i=0;i<styleColors.length;++i){var k=styleColors[i];if(source[k]!==undefined){
+        if(typeof source[k]!=="string" || !/^#[0-9a-f]{6}$/i.test(source[k]))throw Error("颜色需要 #RRGGBB："+k);
+        out[k]=source[k];}}
     for(i=0;i<roles.length;++i) {
         var role=roles[i], color=source.colors && source.colors[role];
         if(color!==undefined && !/^#[0-9a-f]{6}$/i.test(color)) throw Error("颜色需要 #RRGGBB："+role);

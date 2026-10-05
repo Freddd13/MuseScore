@@ -114,6 +114,17 @@ function roman(tonic, minorKey, chordRoot, definition) {
     var d=defs[definition], base=map[mod12(chordRoot-tonic)];
     return (d.minor?base.toLowerCase():base)+d.roman;
 }
+function isChromatic(tonic, minorKey, chordRoot, definition) {
+    if(chordRoot<0 || definition<0 || !defs[definition])return false;
+    var scale=minorKey?[0,2,3,5,7,8,10]:[0,2,4,5,7,9,11], mask=0;
+    for(var i=0;i<scale.length;++i)mask|=1<<mod12(tonic+scale[i]);
+    // Minor's dominant and leading-tone chords may use the harmonic-minor leading tone.
+    var relative=mod12(chordRoot-tonic);
+    if(minorKey && (relative===7 || relative===11))mask|=1<<mod12(tonic+11);
+    var intervals=defs[definition].intervals;
+    for(i=0;i<intervals.length;++i)if(!(mask & (1<<mod12(chordRoot+intervals[i]))))return true;
+    return false;
+}
 function inversion(label) {
     return {"1":"原位","3":"第一转位","♭3":"第一转位","5":"第二转位","♭5":"第二转位","♯5":"第二转位",
             "7":"第三转位","♭7":"第三转位","♭♭7":"第三转位"}[label] || "延伸音 / 外音低音";

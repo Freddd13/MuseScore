@@ -1271,7 +1271,7 @@ void ScoreView::drawElements(QPainter& painter, QList<Element*>& el, Element* ed
                         painter.restore();
                         };
                   drawLabel(previewEntry->label, previewEntry->labelBox, false);
-                  drawLabel(previewEntry->chord, previewEntry->chordBox, true);
+
                   }
             painter.translate(-pos);
             if (e->selected())
@@ -1475,6 +1475,20 @@ void ScoreView::paint(const QRect& r, QPainter& p)
                   p.translate(-pos);
                   r1 -= _matrix.mapRect(pr).toAlignedRect();
                   }
+            }
+      if (!score()->printing() && !fotoMode()) {
+            _notePreviewLayers.forEachChord([&](const NotePreviewEntry& entry, bool active) {
+                  const auto box=entry.chordBox.translated(entry.anchor);
+                  if (!box.intersects(fr)) return;
+                  p.save();p.translate(box.topLeft());
+                  p.setPen(Qt::NoPen);
+                  p.setBrush(active ? entry.highlightBackground : QColor(255,255,255,235));
+                  p.drawRoundedRect(QRectF(QPointF(),box.size()),entry.spatium*.18,entry.spatium*.18);
+                  p.setPen(active ? entry.highlightColor : entry.chordColor);
+                  p.setFont(entry.chordFont);p.drawText(entry.primaryBox,Qt::AlignCenter,entry.chord);
+                  p.setFont(entry.degreeFont);p.drawText(entry.secondaryBox,Qt::AlignCenter,entry.degree);
+                  p.restore();
+                  });
             }
       if (dropRectangle.isValid())
             p.fillRect(dropRectangle, QColor(80, 0, 0, 80));
@@ -5723,6 +5737,14 @@ void ScoreView::setNotePreviewColors(QObject* owner, const NotePreviewColors& co
       const QRectF dirty = _notePreviewLayers.replace(owner, colors);
       if (!dirty.isEmpty()) dataChanged(dirty);
       }
+
+void ScoreView::setActiveNotePreview(QObject* owner, int tick)
+      {
+      const auto dirty=_notePreviewLayers.setActiveChord(owner,tick);
+      if (!dirty.isEmpty()) dataChanged(dirty);
+      }
+bool ScoreView::activateNotePreview(const QPointF& canvasPosition)
+      { return _notePreviewLayers.activate(canvasPosition); }
 
 void ScoreView::onElementDestruction(Element* e)
       {

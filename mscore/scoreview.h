@@ -527,6 +527,8 @@ class ScoreView : public QWidget, public MuseScoreView {
       Element* getEditElement();
       void onElementDestruction(Element*) override;
       void setNotePreviewColors(QObject* owner, const NotePreviewColors& colors);
+      void setActiveNotePreview(QObject* owner, int tick);
+      bool activateNotePreview(const QPointF& canvasPosition);
 
       virtual Element* elementNear(QPointF) override;
       QList<Element*> elementsNear(QPointF);

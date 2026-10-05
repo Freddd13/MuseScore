@@ -758,6 +758,9 @@ void ScoreView::tripleClickTimeOut()
 
 void ScoreView::mouseDoubleClickEvent(QMouseEvent* mouseEvent)
       {
+      if (mouseEvent->button()==Qt::LeftButton && !fotoMode() && activateNotePreview(toLogical(mouseEvent->pos()))) {
+            mouseEvent->accept();return;
+            }
       QTimer::singleShot(QApplication::doubleClickInterval(), this, SLOT(tripleClickTimeOut()));
       tripleClickPending = true;
 

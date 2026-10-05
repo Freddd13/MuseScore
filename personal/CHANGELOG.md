@@ -2,6 +2,25 @@
 
 个人版本记录本仓库的个人维护增量；应用上游版本另由 `config.cmake` 管理。历史源码提交尚未追溯归类，此处从首次建立指南开始记录，不代表此前没有个人改动。
 
+## 0.4.0 — 2026-10-05
+
+- 类型：和声助手 1.2.0 显示与交互完善；上游应用仍为 3.7.0，数据格式不变。
+- 插件需求：顶部横条默认居中、可选左右及百分比位置；谱面只和弦/只级数/同时显示、四种排列、字体/字号/颜色及离调强调；稳定侧栏区域、悬停全文、实际颜色对话框。设置 schema 1 向后兼容并自动保存加载，原分析/配色/交换/手动/键盘功能保留。
+- 原生修改：mscore/notepreview.h 添加固定文字布局、每乐器有序标记索引和小型活动集合；mscore/plugin/api/scoreobserver.h/.cpp 提供 setActiveScorePreview、previewActivated、受限样式描述符、同系统/乐器统一四行避让。播放切换只改活动集合和旧/新标记脏区域，不复制全谱 QHash。
+- 视图接线：mscore/scoreview.h/.cpp 在屏幕 paint 单独绘制固定记号，避免依赖当前音符绘制；mscore/events.cpp 双击命中标记时通知所属观察器，非命中沿原处理；mscore/plugin/qmlplugin.h/.cpp 增加 focusPanel。弱 QObject 接收目标，析构仍只比较不透明 Element 地址。
+- 解耦：界面、配置、音乐解释/离调模板规则都在 share/plugins/HarmonyAssistant；新增 StableLabel/ColorOption/AppearanceEditor，共十一个运行文件及 README。原生仅提供泛用屏幕标记、时间索引和交互。没有修改 libmscore 数据、序列化、Seq、Driver 或音频回调。
+- 排版边界：固定文字锚定写入音符/节拍；同系统/乐器统一行，最多四个邻近候选，冲突省略。默认取谱样式的和弦字体（Edwin），不是 Harmony 原生后缀渲染。太密或太大文字不能保证全部放下；只作用屏幕，不写入 MSCX/PDF/undo。离调强调基于模板含调外音，小调 V/导音允许升七级，不保证唯一功能解释。
+- 验证：Release 主程序和测试编译/链接成功；tst_scoreobserver 13、既有 tst_note 11、真实 tst_pluginhost 3 项通过，0 失败/跳过。JS 和 Qt5 面板通过，验证旧配置/样式限值/离调规则、播放不重建底层、左右居中和侧栏固定位置；GUI 验证菜单崩溃路径、固定记号同一行、真实鼠标双击、低音锚点整乐器跳转、选色器写入、顶栏/悬浮/停靠/关闭重开。截图已检查。
+- 安装：独立 msvc.install_harmony_1_2_x64/bin/MuseScore3Evo.exe；补齐同 Qt SDK 的 Qt5QmlModels.dll / Qt5QmlWorkerScript.dll，解决独立启动缺库。旧程序/目录/备份保留。用户启用副本逐个与父提交比较后保存 .pre-1.2.0.bak，再同步十二个发布文件。
+- 实际安装 smoke：独立 -c 设置连续两次启动，通过 Cmaj13/6 持续音、原色不变、配置保存/再读取、空拍清空、分析帧与索引复用；第二次自动恢复仅级数、级数在上、字号 140%、颜色 #224466、横条右对齐和功能名 third。
+- 性能：1000 小节/6000 音符首次索引 24.031 ms；1000 次缓存 snapshot 1.678 ms、context 4.262 ms；数值帧 16.030 ms、全谱色层几何 16.123 ms。6000 音符/1000 标记的索引单测中，1000 次高亮切换共 0.716 ms（不含实际重绘）；安装 QML 跨接口 snapshot 约 8 ms、context 19 ms。初始检测/布局有成本，不承诺所有工程零开销或 DAW 硬实时。
+- 测试夹具修正：固定标记使用实际写入 tick480 的锚点，不误用持续低音；搜索范围按实际 spatium 扩展至乐器上方，缩放取整后用文字框内部坐标双击。没有为测试改谱面排版或生产导入路径。运行时完整 staging 防止缺 DLL 导致测试无法启动。
+- 未验收：实际音频/MIDI 设备、长时间会话和全部特殊谱法；原有延音/踏板语义未改变。实际 GUI fixture 关闭硬件音序器，不控制用户已打开的应用。
+- 日志：msvc.build_harmony_release_x64/harmony-1-2-build.log、harmony-1-2-install.log、harmony-observer-1-2/gui.txt、harmony-note-1-2/gui.txt、harmony-gui-1-2/gui.txt 和截图；插件 tests/native-smoke-installed-1-2。更新相关指南、源码索引，基线快照保留。
+- Git 父提交：a818d9a7009306a721363b17a2aab4ee3178ab09。
+- Git 提交主题：feat(plugins): align fixed harmony annotations and configurable display。
+- 提交定位：personal-v0.4.0 标签指向本条提交，git rev-parse personal-v0.4.0 查询 SHA；核对远端后普通 push origin/3.x 与标签，不强推。
+
 ## 0.3.0 — 2026-10-05
 
 - 类型：修复插件菜单崩溃，发布和声助手 1.1.0；上游应用基线仍为 3.7.0，不修改谱面格式或应用版本字段。
