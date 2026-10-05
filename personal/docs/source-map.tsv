@@ -1,0 +1,77 @@
+topic	path	symbol	line	role	tests
+启动	main/main.cpp	int main(	56	资源与应用入口	-
+模块装配	main/modulessetup.cpp	void ModulesSetup::setup()	52	可选模块注册	-
+主应用初始化	mscore/musescore.cpp	int runApplication(	8761	应用初始化与CLI	-
+命令分发	mscore/musescore.cpp	void MuseScore::cmd(QAction* a)	6781	状态检查与事务	-
+主窗口更新	mscore/musescore.cpp	void MuseScore::endCmd(bool undoRedo)	6859	UI与插件结束通知	-
+快捷键	mscore/shortcut.cpp	Shortcut::getShortcut(	4397	命令注册与查询	-
+视图命令	mscore/scoreview.cpp	void ScoreView::cmd(const char* s)	2191	视图本地命令表	-
+事件与输入模式	mscore/events.cpp	void ScoreView::changeState(ViewState s)	1125	交互状态切换	-
+核心命令	libmscore/cmd.cpp	void Score::cmd(const QAction* a, EditData& ed)	4468	核心命令分发	mtest/libmscore/tools
+编辑事务开始	libmscore/cmd.cpp	void Score::startCmd()	199	开启用户撤销单元	mtest/libmscore/readwriteundoreset
+编辑事务结束	libmscore/cmd.cpp	void Score::endCmd(bool rollback)	239	布局及状态同步	mtest/libmscore/readwriteundoreset
+撤销栈	libmscore/undo.cpp	void UndoStack::push(UndoCommand* cmd, EditData* ed)	277	记录并执行undo命令	mtest/libmscore/readwriteundoreset
+模型属性链接	libmscore/scoreElement.cpp	static void changeProperties(	271	关联谱属性传播	mtest/libmscore/links
+属性系统	libmscore/property.h	enum class Pid	61	可编辑属性ID	-
+样式系统	libmscore/style.h	enum class Sid	50	谱面样式ID	-
+Score模型	libmscore/score.h	class Score :	396	谱面容器与命令API	-
+MasterScore模型	libmscore/score.h	class MasterScore :	1292	总谱共享状态与撤销	-
+轨道与声部	libmscore/element.h	int staffIdx() const	359	逻辑Staff/Voice/Track	-
+跨谱表位置	libmscore/chordrest.h	int vStaffIdx() const	119	staffMove后的显示谱表	mtest/libmscore/beam
+时间精度	libmscore/fraction.h	static Fraction fromTicks(	239	整型tick到Fraction	-
+时间单位	libmscore/mscore.h	static constexpr int DIVISION	95	PPQ常量	-
+音符模型	libmscore/note.h	class Note final	255	音高拼写与播放事件	mtest/libmscore/note
+播放事件单位	libmscore/noteevent.h	class NoteEvent {	25	千分之一音符时值	-
+选择	libmscore/select.h	class Selection {	147	列表与范围选择	mtest/libmscore/selectionfilter
+输入状态	libmscore/input.h	class InputState {	42	输入目标及节奏上下文	-
+跨时间元素	libmscore/spanner.h	class Spanner :	123	起止锚点与视觉分段	mtest/libmscore/spanners
+音符输入	libmscore/noteentry.cpp	Note* Score::addPitch(	130	输入NoteVal	mtest/libmscore/note
+创建音符休止	libmscore/cmd.cpp	Segment* Score::setNoteRest(	761	节奏实现与填充	mtest/libmscore/copypaste
+修改记谱时值	libmscore/cmd.cpp	void Score::changeCRlen(ChordRest* cr, const Fraction&	1294	时值变更	mtest/libmscore/tuplet
+翻转与跨谱表beam	libmscore/edit.cpp	void Score::cmdFlip()	1648	方向循环	mtest/libmscore/beam
+交换声部	libmscore/edit.cpp	void Score::cmdExchangeVoice(	3070	逻辑声部分配	mtest/libmscore/exchangevoices
+钢琴拆谱表	libmscore/score.cpp	void Score::splitStaff(	2544	按音高分拆Staff	mtest/libmscore/splitstaff
+总体排版	libmscore/layout.cpp	void Score::doLayout()	5266	全谱布局	mtest/libmscore/layout
+范围排版	libmscore/layout.cpp	void Score::doLayoutRange(	5286	增量布局	mtest/libmscore/layout_elements
+连续视图排版	libmscore/layoutlinear.cpp	void Score::layoutLinear(	187	连续布局	-
+beam布局	libmscore/beam.cpp	void Beam::layout()	514	连梁与跨谱表	mtest/libmscore/beam
+属性检查器	mscore/inspector/inspectorBase.cpp	void InspectorBase::valueChanged(	390	多选属性事务	-
+跨谱表beam检查器	mscore/inspector/inspectorBeam.cpp	Pid::STEM_DIRECTION	28	方向属性UI	-
+文件分发	mscore/file.cpp	Score::FileError readScore(MasterScore* score	2301	格式导入路由	mtest/musicxml/io;mtest/importmidi
+原生保存	libmscore/scorefile.cpp	bool MasterScore::saveFile(bool generateBackup)	387	保存与备份	mtest/libmscore/readwriteundoreset
+原生压缩读取	libmscore/scorefile.cpp	Score::FileError MasterScore::loadCompressedMsc(	832	MSCZ解包与读取	mtest/libmscore/compat206
+MusicXML导入	importexport/musicxml/importmxml.cpp	MusicXMLParserPass1 pass1(	114	两遍parser入口	mtest/musicxml/io
+MusicXML导出	importexport/musicxml/exportxml.cpp	ExportMusicXml	281	交换格式导出	mtest/musicxml/io
+MIDI导入	importexport/midiimport/importmidi.cpp	Score::FileError importMidi(	1179	文件转记谱	mtest/importmidi
+MIDI转换	importexport/midiimport/importmidi.cpp	QList<MTrack> convertMidi(	1076	拆手与量化流水线	mtest/importmidi
+MIDI左右手拆分	importexport/midiimport/importmidi_lrhand.h	void splitIntoLeftRightHands(	16	MIDI轨道拆手	mtest/importmidi
+卷帘编辑器	mscore/pianoroll/pianoroll.cpp	void PianorollEditor::setStaff(	1769	目标谱表与界面接线	-
+卷帘方向	mscore/pianoroll/pianoroll.cpp	void PianorollEditor::setOrientation(	2139	横向纵向布局	-
+卷帘范围	mscore/pianoroll/pianoroll.cpp	void PianorollEditor::setScope(	2202	STAFF/PART/SCORE	-
+卷帘偏好持久化	mscore/pianoroll/pianoroll.cpp	void PianorollEditor::writeSettings()	2283	工作区与设置	-
+卷帘音符添加	mscore/pianoroll/pianoview.cpp	QVector<Note*> PianoView::addNote(	4036	保持节奏边界	mtest/libmscore/note
+卷帘数据重建	mscore/pianoroll/pianoview.cpp	void PianoView::updateNotes()	6262	scene与Note引用重建	-
+卷帘删除	mscore/pianoroll/pianoview.cpp	void PianoView::deleteSelectedNotes()	6857	删除逻辑音符	-
+卷帘事件拖动	mscore/pianoroll/pianoview.cpp	void PianoView::finishNoteEventAdjustDrag()	3102	演奏事件调整	-
+卷帘时间桶	mscore/pianoroll/pianorolledittool.h	inline int pianoRollTimeBucket(	61	范围查询与负tick	-
+力度曲线	mscore/pianoroll/pianolevels.cpp	void PianoLevels::adjustLevelLerp(	1182	批量线性调整	-
+起音参数	mscore/pianoroll/pianolevelsfilter.cpp	void PianoLevelFilterOnTime::setValue(	69	ChangeNoteEvent	-
+主窗口键盘	mscore/pianotools.cpp	PianoTools::PianoTools(	463	独立虚拟钢琴	-
+实时MIDI输入	mscore/musescore.cpp	void MuseScore::midiNoteReceived(	3722	硬件与UI输入转发	-
+生成播放事件	libmscore/rendermidi.cpp	void Score::createPlayEvents(Chord* chord)	2227	Auto/User事件策略	mtest/libmscore/midi
+播放MIDI渲染	libmscore/rendermidi.cpp	void MidiRenderer::renderScore(	2376	分块渲染	mtest/libmscore/midi
+踏板播放	libmscore/rendermidi.cpp	void MidiRenderer::renderSpanners(	1108	踏板控制器及跨时元素	mtest/libmscore/spanners
+播放事件收集	mscore/seq.cpp	void Seq::collectEvents(int utick)	1511	缓存与异步结果	-
+音频回调	mscore/seq.cpp	void Seq::process(unsigned framesPerPeriod, float* buffer)	1110	实时事件调度与合成	-
+播放界面心跳	mscore/seq.cpp	void Seq::heartBeatTimeout()	2575	输入消息与显示同步	-
+独立节拍器	mscore/seq.cpp	void Seq::independentMetronome(unsigned n, float* p)	917	练习节拍音频生成	-
+主合成器	audio/midi/msynthesizer.cpp	void MasterSynthesizer::process(unsigned n, float* p)	280	合成与效果器	-
+音频Driver	audiodrivers/driver.h	class Driver {	33	设备接口	-
+插件属性写入	mscore/plugin/api/scoreelement.cpp	Ownership::SCORE	127	undo与插件对象所有权	mtest/scripting
+插件能力	mscore/plugin/api/qmlpluginapi.h	class PluginAPI	53	QML注册与回调	mtest/scripting
+偏好注册	mscore/preferences.cpp	Preferences::init	52	设置默认值	-
+应用版本	config.cmake	SET(MUSESCORE_VERSION_PATCH	24	上游应用版本	-
+顶层构建	CMakeLists.txt	cmake_minimum_required(VERSION 3.16)	20	Qt与编译配置	-
+测试构建注册	mtest/CMakeLists.txt	enable_testing()	14	suite注册	-
+测试目标	mtest/CreateMtestTarget.cmake	add_test(${TARGET}	105	CTest与QTest接线	-
+脚本测试跳过	mtest/testscript/tst_runscripts.cpp	QSKIP(	52	当前不可算运行覆盖	mtest/testscript

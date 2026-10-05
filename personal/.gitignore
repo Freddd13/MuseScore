@@ -1,0 +1,2 @@
+# The upstream ignore rule "VERSION" also matches personal/VERSION.
+!VERSION
