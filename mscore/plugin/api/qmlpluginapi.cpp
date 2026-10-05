@@ -20,6 +20,7 @@
 #include "part.h"
 #include "qmlpluginapi.h"
 #include "score.h"
+#include "scoreobserver.h"
 #include "selection.h"
 #include "shortcut.h"
 #include "tie.h"
@@ -262,6 +263,12 @@ void PluginAPI::log2(const QString& txt, const QString& txt2)
 //   newQProcess
 ///   Not enabled currently (so excluded from plugin docs)
 //---------------------------------------------------------
+
+QObject* PluginAPI::newScoreObserver()
+      {
+      // Parent to the plugin instance: destruction removes every screen preview layer.
+      return new ScoreObserver(this);
+      }
 
 MsProcess* PluginAPI::newQProcess()
       {

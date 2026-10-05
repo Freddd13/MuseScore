@@ -447,6 +447,7 @@ class Note final : public Element {
       Chord* chord() const            { return (Chord*)parent(); }
       void setChord(Chord* a)         { setParent((Element*)a);  }
       void draw(QPainter*) const override;
+      void draw(QPainter*, const QColor& screenColor) const;
 
       void read(XmlReader&) override;
       bool readProperties(XmlReader&) override;

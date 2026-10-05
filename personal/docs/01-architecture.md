@@ -74,3 +74,7 @@
 ## 解耦时的优先落点
 
 纯资源/默认值需求先考虑模板、乐器 XML、样式或工作区；已有插件 API 足够时可用插件。新 UI 操作应留在对应面板与局部助手；新增可复用音乐规则才放核心。文件解析规则落对应 import/export；播放解释落 MIDI renderer；驱动只处理设备层问题。具体例子见 [功能表](04-feature-map.md) 与 [开发流程](07-development-workflow.md)。
+
+## 通用插件观察与屏幕预览
+
+`mscore/plugin/api/scoreobserver.*` 在 GUI 线程提供数值快照与 Seq 位置事件；`mscore/notepreview.h` 在 ScoreView 内维护临时图层。核心 Note 只增加 draw 重载，默认绘制/文件格式/音频回调保持原语义。插件发布快照在 `share/plugins/HarmonyAssistant/`。详见 [10](10-score-observer.md)。

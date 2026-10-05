@@ -87,6 +87,8 @@ set (SOURCE_LIB
       )
 
 add_library(testutils STATIC ${SOURCE_LIB})
+# Test helpers include sym.h directly; consume the bundled FreeType public headers.
+target_link_libraries(testutils freetype)
 
 # testutils version that is linked to a full mscoreapp target
 add_library(testutils_mscoreapp STATIC
@@ -189,6 +191,7 @@ subdirs (
         libmscore/utils
         mscore/workspaces
         mscore/palette
+        mscore/scoreobserver
         importmidi
         capella
         biab

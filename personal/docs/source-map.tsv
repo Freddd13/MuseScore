@@ -5,7 +5,7 @@ topic	path	symbol	line	role	tests
 命令分发	mscore/musescore.cpp	void MuseScore::cmd(QAction* a)	6781	状态检查与事务	-
 主窗口更新	mscore/musescore.cpp	void MuseScore::endCmd(bool undoRedo)	6859	UI与插件结束通知	-
 快捷键	mscore/shortcut.cpp	Shortcut::getShortcut(	4397	命令注册与查询	-
-视图命令	mscore/scoreview.cpp	void ScoreView::cmd(const char* s)	2191	视图本地命令表	-
+视图命令	mscore/scoreview.cpp	void ScoreView::cmd(const char* s)	2209	视图本地命令表	-
 事件与输入模式	mscore/events.cpp	void ScoreView::changeState(ViewState s)	1125	交互状态切换	-
 核心命令	libmscore/cmd.cpp	void Score::cmd(const QAction* a, EditData& ed)	4468	核心命令分发	mtest/libmscore/tools
 编辑事务开始	libmscore/cmd.cpp	void Score::startCmd()	199	开启用户撤销单元	mtest/libmscore/readwriteundoreset
@@ -75,3 +75,7 @@ MIDI左右手拆分	importexport/midiimport/importmidi_lrhand.h	void splitIntoLe
 测试构建注册	mtest/CMakeLists.txt	enable_testing()	14	suite注册	-
 测试目标	mtest/CreateMtestTarget.cmake	add_test(${TARGET}	105	CTest与QTest接线	-
 脚本测试跳过	mtest/testscript/tst_runscripts.cpp	QSKIP(	52	当前不可算运行覆盖	mtest/testscript
+插件实时观察	mscore/plugin/api/scoreobserver.cpp	ScoreObserver::ScoreObserver(	31	GUI 心跳与生命周期；不修改音频回调	mtest/mscore/scoreobserver
+持续音缓存	mscore/plugin/api/scoreobserver.cpp	void ScoreObserver::ensureIndex(	131	内容状态/范围失效，每声部二分持续音	mtest/mscore/scoreobserver
+屏幕临时音符颜色	mscore/scoreview.cpp	void ScoreView::setNotePreviewColors(	5697	按 owner 隔离的屏幕色层，旧新局部重绘	mtest/mscore/scoreobserver
+和声辅助插件	share/plugins/HarmonyAssistant/HarmonyAssistant_MS3.qml	    function followNativePosition()	469	插件音乐解释、级数、功能音和 GUI 播放合并	mtest/mscore/scoreobserver

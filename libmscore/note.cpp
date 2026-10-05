@@ -1312,10 +1312,16 @@ bool Note::isNoteName() const
 
 void Note::draw(QPainter* painter) const
       {
+      draw(painter, curColor());
+      }
+
+// Explicit color is used by screen-only preview layers; normal export retains curColor().
+void Note::draw(QPainter* painter, const QColor& screenColor) const
+      {
       if (_hidden)
             return;
 
-      QColor c(curColor());
+      const QColor& c = screenColor;
       painter->setPen(c);
       bool tablature = staff() && staff()->isTabStaff(chord()->tick());
 

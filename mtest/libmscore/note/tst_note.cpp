@@ -493,7 +493,7 @@ void TestNote::alteredUnison()
       {
       MasterScore* score = readScore(DIR + "altered-unison.mscx");
       Measure* m = score->firstMeasure();
-#ifdef __MINGW32__ // apparently defined for 64bit too. Needed to avoid a conflict with windows.h and its declaration of `Chord`
+#if defined(__MINGW32__) || defined(_MSC_VER) // Windows builds, including 64bit. Needed to avoid a conflict with windows.h and its declaration of `Chord`
       Ms::Chord* c = m->findChord(Fraction(0, 1), 0);
 #else
       Chord* c = m->findChord(Fraction(0, 1), 0);

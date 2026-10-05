@@ -73,3 +73,7 @@ rg -n 'QSKIP|add_test|subdirs|MTEST_LINK_MSCOREAPP' mtest
 ```
 
 修改入口有多种候选时，以“最小改变能负责正确语义的层”为选择依据：只换显示不动模型，只改记谱规则不动音频 Driver；新增数据先确认所有保存/撤销消费者。详见 [开发流程](07-development-workflow.md)。
+
+## 和声辅助入口
+
+当前和弦、罗马级数、功能音和键盘在 `share/plugins/HarmonyAssistant/`；真实播放观察在 `mscore/plugin/api/scoreobserver.*`；屏幕配色在 `mscore/notepreview.h` 与 ScoreView，颜色不写模型。验证为 `mtest/mscore/scoreobserver` 和相邻 `mtest/libmscore/note`。接口与合并点见 [10](10-score-observer.md)。

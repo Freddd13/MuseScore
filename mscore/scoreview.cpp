@@ -202,6 +202,7 @@ ScoreView::ScoreView(QWidget* parent)
 
 void ScoreView::setScore(Score* s)
       {
+      _notePreviewLayers.clear();
       if (_score) {
             if (_score->isMaster()) {
                   MasterScore* ms = static_cast<MasterScore*>(s);
@@ -1239,7 +1240,24 @@ void ScoreView::drawElements(QPainter& painter, QList<Element*>& el, Element* ed
                   continue;
             QPointF pos(e->pagePos());
             painter.translate(pos);
-            e->draw(&painter);
+            const QColor preview = !_notePreviewLayers.empty() && e->isNote()
+                  && !score()->printing() && !fotoMode()
+                  ? _notePreviewLayers.color(toNote(e)) : QColor();
+            if (preview.isValid()) {
+                  const auto note = toNote(e);
+                  const bool editingSelection = note->selected() && !score()->isPlaying();
+                  note->draw(&painter, editingSelection || !note->visible()
+                        ? note->curColor() : preview);
+                  // Retain a distinct native playback mark without hiding the role color.
+                  if (note->mark()) {
+                        painter.save();
+                        painter.setPen(QPen(note->curColor(), score()->spatium() * 0.08));
+                        const QRectF box = note->bbox();
+                        painter.drawLine(box.bottomLeft(), box.bottomRight());
+                        painter.restore();
+                        }
+                  }
+            else e->draw(&painter);
             painter.translate(-pos);
             if (e->selected())
                   drawDebugInfo(painter, e);
@@ -5676,8 +5694,24 @@ Element* ScoreView::getEditElement()
 //   onElementDestruction
 //---------------------------------------------------------
 
+void ScoreView::setNotePreviewColors(QObject* owner, const NotePreviewColors& colors)
+      {
+      if (!owner) return;
+      if (!_notePreviewOwners.contains(owner) && !colors.isEmpty()) {
+            _notePreviewOwners.insert(owner);
+            connect(owner, &QObject::destroyed, this, [this, owner]() {
+                  _notePreviewOwners.remove(owner);
+                  const QRectF dirty = _notePreviewLayers.replace(owner, {});
+                  if (!dirty.isEmpty()) dataChanged(dirty);
+                  });
+            }
+      const QRectF dirty = _notePreviewLayers.replace(owner, colors);
+      if (!dirty.isEmpty()) dataChanged(dirty);
+      }
+
 void ScoreView::onElementDestruction(Element* e)
       {
+      if (e->isNote()) _notePreviewLayers.remove(toNote(e));
       if (editData.element == e) {
             editData.element = nullptr;
             if (editMode())

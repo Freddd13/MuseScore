@@ -14,6 +14,7 @@
 #define __SCANVAS_H__
 
 #include "fotomode.h"
+#include "notepreview.h"
 #include "globals.h"
 #include "zoombox.h"
 
@@ -181,6 +182,9 @@ class ScoreView : public QWidget, public MuseScoreView {
       ZoomState _previousLogicalZoom { ZoomIndex::ZOOM_PAGE_WIDTH, 0.0 }; // for zoom-level toggling
 
       QFocusFrame* focusFrame;
+
+      NotePreviewLayers _notePreviewLayers;
+      QSet<QObject*> _notePreviewOwners;
 
       EditData editData;
       std::vector<std::unique_ptr<ElementGroup>> dragGroups;
@@ -522,6 +526,7 @@ class ScoreView : public QWidget, public MuseScoreView {
       FotoLasso* fotoLasso() const    { return _foto;    }
       Element* getEditElement();
       void onElementDestruction(Element*) override;
+      void setNotePreviewColors(QObject* owner, const NotePreviewColors& colors);
 
       virtual Element* elementNear(QPointF) override;
       QList<Element*> elementsNear(QPointF);

@@ -83,3 +83,7 @@
 根据实际改动挑选必要场景：普通双谱表/和弦 → 2–4 声部 →跨谱表 beam → 附点/连音符/跨小节 tie → 八度线/踏板/反复 → 多选/多谱表 → undo/redo → 保存重开 → 实时播放/MIDI 导出。卷帘外观改动另测横/纵、缩放、停靠/浮动、空谱和切换文件。
 
 基准没有默认注册的专门 `mtest/mscore/pianoroll` suite。可复用 `beam/splitstaff/links/parts/note/midi` 等邻近核心测试；GUI 场景需实际操作或新增有意义的集成测试。不得把邻近测试通过写成卷帘新行为全部已验证。
+
+## 和弦观察与实时配色
+
+个人 0.2.0 的 ScoreObserver 提供按声部持续音和 Seq activeNoteEvents；插件实现和弦识别。播放音高与 writtenPitch/TPC 分开，跨分谱投射，踏板声学残响不纳入当前和弦。ScoreView 色层只作用屏幕，不影响撤销/保存/导出；保留编辑选中颜色及播放标记。参考 [10](10-score-observer.md)。

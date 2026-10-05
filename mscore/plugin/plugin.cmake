@@ -17,6 +17,8 @@ set (PLUGIN_API_SRC
     ${CMAKE_CURRENT_LIST_DIR}/api/playevent.h
     ${CMAKE_CURRENT_LIST_DIR}/api/qmlpluginapi.cpp
     ${CMAKE_CURRENT_LIST_DIR}/api/qmlpluginapi.h
+    ${CMAKE_CURRENT_LIST_DIR}/api/scoreobserver.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/api/scoreobserver.h
     ${CMAKE_CURRENT_LIST_DIR}/api/score.cpp
     ${CMAKE_CURRENT_LIST_DIR}/api/scoreelement.cpp
     ${CMAKE_CURRENT_LIST_DIR}/api/scoreelement.h

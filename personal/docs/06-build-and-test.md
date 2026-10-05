@@ -100,3 +100,7 @@ Pop-Location
 [.vscode/launch.json](../../.vscode/launch.json) 的 Windows 默认程序指向 `msvc.install_x64/bin/MuseScore3.exe`，参数 `-d`；这是配置值，应检查实际生成的可执行名称。新程序路径与安装/运行资源不能混淆。命令行转换/批处理仍从 runApplication/parseCommandLineArguments 进入，不是独立无 GUI 核心进程。
 
 调试一个编辑动作可依次在 `MuseScore::cmd`、`ScoreView::cmd`、具体核心命令、`UndoStack::push`、`Score::endCmd` 设断点；绘制问题加 `doLayoutRange` 与对应元素 layout；播放问题加 renderer/Seq 的事件路径，但不要随意阻塞实时音频回调。
+
+## 观察器回归（0.2.0）
+
+新增 `tst_scoreobserver` 使用完整 mscoreapp，覆盖持续音、撤销、保存和屏幕预览隔离、长谱缓存。Windows 测试需独立构建 `ms_pch` 后编译 mtest.sln；Release 运行时配置见 [10](10-score-observer.md)。相关 `tst_note` 的 Win32 Chord 名称保护已扩展到 MSVC。
