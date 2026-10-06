@@ -1,6 +1,6 @@
 # 个人分支开发入口
 
-这是 Freddd13 的 MuseScore 3 Evolution 分支，主要服务个人钢琴编曲需求。工作区外层的 AGENTS.md 仍适用；这里提供随仓库保存的简短入口。
+这是 Freddd13 的 MuseScore 3 Evolution 分支，主要服务个人钢琴编曲需求。下面的原 AGENTS.md 仍适用；这里提供随仓库保存的简短入口。
 
 ## 每次任务先读
 
@@ -20,3 +20,19 @@
 
 谱面模型/编辑/排版在 `libmscore/`；界面在 `mscore/`；钢琴卷帘在 `mscore/pianoroll/`；播放调度在 `mscore/seq.cpp`；导入在 `importexport/`；测试在 `mtest/`。
 不要按 MuseScore 4 的 `src/engraving` 或 `src/notation` 架构寻找此分支。源码导航索引为 `personal/docs/source-map.tsv`。
+
+---
+
+---
+
+**用户原agents.md（勿删）：**
+
+本项目主要是在Musescore3(evolution)版本基础上增加开发个人钢琴在编曲等时刻的特殊需求版本。
+
+我使用的musescore3主要依托 https://github.com/Freddd13/MuseScore，这里项目下Musescore是我分支[Jojo-Schmitz/MuseScore](https://github.com/Jojo-Schmitz/MuseScore)的个人仓库，我们在此对musescore进行必需的个人同步开发更新，这台电脑本地的软件本体仓库位置在 E:\programming\funcodes\muse3_dev\MuseScore.
+
+**应当注意**，尽可能避免大动软件本身，因为后续还要去拉官方的更新和我们的自己的更新去合并。但对于一些必须这样实现的功能是可以的，不管怎样，如果对软件代码进行了修改，则必须在我的仓库目录的个人更新日志下记录具体的修改日志和git commit相关信息，每次都要做好commit，在更改原项目时要注意尽可能解耦和最小化影响地修改，使得最大可能可以无痛合并上游的更改。如果没有冲突且确认无误你可以在commit后直接push到我的仓库里。
+
+- 每次更改必须个人版本更新
+- 每次更改同步更新项目结构和功能开发指南
+- 存在多修改任务和不同PC下的开发，每次任务处理的最开始先拉取最新代码合理合并
