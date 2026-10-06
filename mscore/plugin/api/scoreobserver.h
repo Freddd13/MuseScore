@@ -23,6 +23,7 @@
 
 namespace Ms {
 class ScoreView;
+class Page;
 namespace PluginAPI {
 class Score;
 
@@ -43,6 +44,8 @@ class ScoreObserver : public QObject {
       QString _fingerprint;
       QVector<int> _measureStarts;
       NotePreviewColors _baseColors;
+      // Geometry only; page keys are opaque and cleared with the base layer.
+      QHash<const Ms::Page*, QVector<QRectF>> _baseChordBoxes;
       QObject _baseOwner;
       int _activePreviewTick = -1;
       void applyPreview(QObject* owner, const QVariantList& notes);

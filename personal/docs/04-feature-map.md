@@ -79,3 +79,5 @@ rg -n 'QSKIP|add_test|subdirs|MTEST_LINK_MSCOREAPP' mtest
 当前和弦、罗马级数、功能音和键盘在 `share/plugins/HarmonyAssistant/`；真实播放观察在 `mscore/plugin/api/scoreobserver.*`；屏幕配色在 `mscore/notepreview.h` 与 ScoreView，颜色不写模型。踏板保持与有限琶音窗口、全谱配色/文字、JSON/CSV 分析交换和配置在插件及通用 API；QmlPlugin 停靠桥接暴露实际位置/悬浮状态。验证为 `mtest/mscore/scoreobserver`、实际 Widgets/QML 宿主 `mtest/mscore/pluginhost` 和相邻 `mtest/libmscore/note`。接口与合并点见 [10](10-score-observer.md)。
 
 0.4.0 和声显示入口：share/plugins/HarmonyAssistant/AppearanceEditor.qml 配置位置/顺序/颜色/字体，ColorOption.qml 选色，StableLabel.qml 固定行高与全文提示。原生固定记号、高亮和双击见 scoreobserver.*、notepreview.h、ScoreView::paint / activateNotePreview、events.cpp；真实交互测试为 tst_pluginhost。
+
+0.5.0 新入口：AppearanceEditor 配置原谱优先、背景遮罩、顶部/右侧共存；applyPreview / previewTickX 实现和声变化 x 锚点；QmlPlugin::showDetailPanel 接受一个已有控件树。编辑遮挡接线见 ScoreView::previewEditBounds / editelement.cpp，回归为 tst_pluginhost。

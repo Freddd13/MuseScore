@@ -278,6 +278,7 @@ class ScoreView : public QWidget, public MuseScoreView {
 
       void setShadowNote(const QPointF&);
       void drawElements(QPainter& p,QList<Element*>& el, Element* editElement);
+      QRectF previewEditBounds() const;
       bool dragTimeAnchorElement(const QPointF& pos);
       bool dragMeasureAnchorElement(const QPointF& pos);
       virtual void lyricsTab(bool back, bool end, bool moveOnly) override;
@@ -526,7 +527,7 @@ class ScoreView : public QWidget, public MuseScoreView {
       FotoLasso* fotoLasso() const    { return _foto;    }
       Element* getEditElement();
       void onElementDestruction(Element*) override;
-      void setNotePreviewColors(QObject* owner, const NotePreviewColors& colors);
+      void setNotePreviewColors(QObject* owner, const NotePreviewColors& colors, const NotePreviewMarkers& markers = {});
       void setActiveNotePreview(QObject* owner, int tick);
       bool activateNotePreview(const QPointF& canvasPosition);
 

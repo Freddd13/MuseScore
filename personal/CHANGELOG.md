@@ -2,6 +2,24 @@
 
 个人版本记录本仓库的个人维护增量；应用上游版本另由 `config.cmake` 管理。历史源码提交尚未追溯归类，此处从首次建立指南开始记录，不代表此前没有个人改动。
 
+## 0.5.0 — 2026-10-06
+
+- 类型：和声助手 1.3.0，补齐移动/编辑遮挡、变化节拍锚点、背景遮罩与顶部摘要/右侧详情。上游应用仍为 3.7.0，谱面格式不变。
+- 插件：share/plugins/HarmonyAssistant/HarmonyAssistant_MS3.qml 的全谱描述符在释放/踏板变化等无新音时也生成独立标记，chordTick 与用于定位乐器的数值 Note 描述符分离；Preferences.js / AppearanceEditor.qml 增加 chordMask、respectExistingHarmony、dualPanel，schema 1 向后兼容、自动读取/原子保存/配置交换。顶部操作三行，保持居中/自定位置，右侧完整内容仍能加宽双列、拖动悬浮；原功能保留。
+- 原生标注：mscore/notepreview.h 分离颜色 QHash 和标记 QVector，一个持续 Note 可对应多次变化；每乐器二分时间索引和小型活动集合不变。QMultiHash 不透明来源索引用于析构时清掉该音所有标记，不调用已析构 Element 的虚函数；旧内联记号描述符仍支持。
+- 原生几何：mscore/plugin/api/scoreobserver.h/.cpp 用变化所在 Measure/System 的节拍 x 锚点，无新音时在相邻 ChordRest 位置之间插值，不使用来源音的位置；同系统/乐器共同四行避让。当前功能标签避开固定记号缓存并复用全谱几何，原谱普通/Nashville 和弦及 Roman 级数可优先保留，另一个字段可补充。背景遮罩关闭后仍避让原谱并保留文字高亮。
+- 编辑优先级：mscore/scoreview.h/.cpp 隐去与当前原生编辑/拖动对象相交的临时标签，编辑状态不消费插件双击；mscore/editelement.cpp 在开始/结束编辑时补齐标记区域刷新。普通选择/播放不移动固定记号；原生对象、光标和快捷键仍走原流程。
+- 通用双面板：mscore/plugin/qmlplugin.h/.cpp 暴露 detailPanelHost/detailPanelVisible、showDetailPanel/focusDetailPanel 和关闭通知；一个辅助 QDockWidget/QQuickWindow 可接受已有 QML 控件的视觉重挂载。默认右侧，标题/背景由插件属性提供；关闭保存偏好，主插件销毁清理辅助面板。不另建 QML engine/ScoreObserver/全谱分析；和声/配置/UI 仍在插件，无 libmscore 模型、Seq、Driver 或音频回调改动。
+- 验证：Release 主程序及三组测试编译/链接；tst_scoreobserver 14、tst_note 11、真实 tst_pluginhost 5 项通过，0 失败/跳过。新增持续音共享源的多个记号与析构清理、真实无新音 tick240 的横坐标、双面板单观察器/控件共享/关闭重开/悬浮返回、原谱和弦/Roman 优先级、遮罩显隐、当前标签移动不遮固定记号、原生和弦文字编辑与方向键光标。JS、固定位置及双面板 QML 测试通过；截图检查。
+- 性能：1000 小节/6000 音符首次索引 23.187 ms；1000 次缓存 snapshot 1.779 ms、context 4.517 ms；数值帧 16.364 ms、全谱色层几何 16.368 ms。6000 音符/1000 标记的单测中，1000 次高亮切换共 0.909 ms（不含屏幕重绘）；实际安装 QML 跨接口 snapshot 10–11 ms、context 18–19 ms。遮罩单测首次对白纸比较白色背景无可见差异，改用有色高亮背景后验证通过，不改生产实现。
+- 部署：独立 msvc.install_harmony_1_3_x64/bin/MuseScore3Evo.exe，保留全部旧安装；同 SDK Qt5QmlModels.dll / Qt5QmlWorkerScript.dll 补齐。启用副本逐文件与父提交比较，保存 .pre-1.3.0.bak 后同步十二个发布文件。配置 restart smoke 同一隔离目录连续启动两次验证新增三个开关与已有样式/功能名恢复，临时图层不改原色。
+- 构建环境：PCH 缓存失效时只在构建进程设置 /Y- /MP1，不改上游默认；新增宿主字段后早期部分旧对象混用导致 GUI 创建崩溃，强制重新编译 mscoreapp 全部已有源（仅更新时间戳、不删文件）并重新链接后复验。该早期产物未部署到启用副本。审批服务曾因账户限额暂时无法完成自动审查，恢复后正常通过；没有绕过限制。
+- 边界：密集/过大记号会省略；相邻节拍间位置是视觉插值；原谱和弦优先保留不改变原谱颜色。标注仅屏幕显示、不写 undo/MSCX/PDF；真实音频/MIDI 硬件与长会话未验收，不承诺零开销或 DAW 硬实时。
+- 日志：msvc.build_harmony_release_x64/harmony-1-3-build.log、harmony-1-3-recompile.log、harmony-1-3-install.log、harmony-gui-1-3/gui.txt、harmony-observer-1-3/gui.txt、harmony-note-1-3/gui.txt；插件 tests/native-smoke-installed-1-3 与 native-gui-1-3。旧日志及首次调查基线保留。
+- Git 父提交：9a5ae07ec43b3c6aacd53692c199b8f94ced8e75。
+- Git 提交主题：feat(plugins): anchor harmonic changes and share detail docks。
+- 提交定位：personal-v0.5.0 标签指向本次提交；git rev-parse personal-v0.5.0 查询 SHA。核对 origin/3.x 后普通 push 分支/标签，不强推。
+
 ## 0.4.0 — 2026-10-05
 
 - 类型：和声助手 1.2.0 显示与交互完善；上游应用仍为 3.7.0，数据格式不变。

@@ -141,6 +141,7 @@ void ScoreView::startEdit(bool editMode)
       editData.curGrip = editMode ? e->initialEditModeGrip() : Grip::NO_GRIP;
 
       editData.element->startEdit(editData);
+      if (!_notePreviewLayers.empty()) updateAll();
       updateGrips();
 
       QGuiApplication::inputMethod()->reset();
@@ -172,6 +173,7 @@ void ScoreView::endEdit()
                   lyricsEndEdit();
             }
       editData.clearData();
+      if (!_notePreviewLayers.empty()) updateAll();
       mscore->updateInspector();
       }
 

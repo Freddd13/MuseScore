@@ -18,11 +18,11 @@ function defaults() {
         root:0,quality:0,keyboard:false,settings:false,
         ribbonAlign:1,ribbonPosition:50,chordContent:2,chordOrder:0,chordFont:0,chordScale:100,
         chordColor:"#343a3f",highlightColor:"#0043ce",highlightBackground:"#d0e2ff",
-        chromaticAccent:true,chromaticColor:"#a2191f"};
+        chromaticAccent:true,chromaticColor:"#a2191f",respectExistingHarmony:true,chordMask:true,dualPanel:true};
 }
 function clean(source) {
     if(!source || source.schema!==1) throw Error("配置版本应为 1");
-    var out=defaults(), booleans=["auto","follow","coloring","allColor","chordLabels","noteFunctions","pedal","manualKey","keyboard","settings","chromaticAccent"];
+    var out=defaults(), booleans=["auto","follow","coloring","allColor","chordLabels","noteFunctions","pedal","manualKey","keyboard","settings","chromaticAccent","respectExistingHarmony","chordMask","dualPanel"];
     for(var i=0;i<booleans.length;++i) if(typeof source[booleans[i]]==="boolean") out[booleans[i]]=source[booleans[i]];
     var limits={window:4,scope:1,keyMode:1,keyTonic:16,root:16,quality:28,ribbonAlign:3,ribbonPosition:100,chordContent:2,chordOrder:3,chordFont:2};
     for(var key in limits) if(typeof source[key]==="number" && source[key]===Math.floor(source[key]) && source[key]>=0 && source[key]<=limits[key])out[key]=source[key];

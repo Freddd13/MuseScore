@@ -1223,8 +1223,16 @@ static void drawDebugInfo(QPainter& p, const Element* _e)
 //   drawElements
 //---------------------------------------------------------
 
+QRectF ScoreView::previewEditBounds() const
+      {
+      if (!editData.element || (!editMode() && state!=ViewState::DRAG_OBJECT)) return {};
+      const qreal margin=editData.element->spatium();
+      return editData.element->canvasBoundingRect().adjusted(-margin,-margin,margin,margin);
+      }
+
 void ScoreView::drawElements(QPainter& painter, QList<Element*>& el, Element* editElement)
       {
+      const auto protectedArea=previewEditBounds();
       std::stable_sort(el.begin(), el.end(), elementLessThan);
       for (const Element* e : el) {
             e->itemDiscovered = 0;
@@ -1260,7 +1268,7 @@ void ScoreView::drawElements(QPainter& painter, QList<Element*>& el, Element* ed
             else e->draw(&painter);
             if (previewEntry && e->visible()) {
                   auto drawLabel = [&](const QString& text, const QRectF& box, bool chord) {
-                        if (box.isEmpty()) return;
+                        if (box.isEmpty() || box.translated(e->canvasPos()).intersects(protectedArea)) return;
                         painter.save();
                         painter.setFont(notePreviewFont(e->spatium(), chord));
                         painter.setPen(Qt::NoPen);
@@ -1477,13 +1485,16 @@ void ScoreView::paint(const QRect& r, QPainter& p)
                   }
             }
       if (!score()->printing() && !fotoMode()) {
+            const auto protectedArea=previewEditBounds();
             _notePreviewLayers.forEachChord([&](const NotePreviewEntry& entry, bool active) {
                   const auto box=entry.chordBox.translated(entry.anchor);
-                  if (!box.intersects(fr)) return;
+                  if (!box.intersects(fr) || box.intersects(protectedArea)) return;
                   p.save();p.translate(box.topLeft());
-                  p.setPen(Qt::NoPen);
-                  p.setBrush(active ? entry.highlightBackground : QColor(255,255,255,235));
-                  p.drawRoundedRect(QRectF(QPointF(),box.size()),entry.spatium*.18,entry.spatium*.18);
+                  if (entry.chordMask) {
+                        p.setPen(Qt::NoPen);
+                        p.setBrush(active ? entry.highlightBackground : QColor(255,255,255,235));
+                        p.drawRoundedRect(QRectF(QPointF(),box.size()),entry.spatium*.18,entry.spatium*.18);
+                        }
                   p.setPen(active ? entry.highlightColor : entry.chordColor);
                   p.setFont(entry.chordFont);p.drawText(entry.primaryBox,Qt::AlignCenter,entry.chord);
                   p.setFont(entry.degreeFont);p.drawText(entry.secondaryBox,Qt::AlignCenter,entry.degree);
@@ -5723,10 +5734,10 @@ Element* ScoreView::getEditElement()
 //   onElementDestruction
 //---------------------------------------------------------
 
-void ScoreView::setNotePreviewColors(QObject* owner, const NotePreviewColors& colors)
+void ScoreView::setNotePreviewColors(QObject* owner, const NotePreviewColors& colors, const NotePreviewMarkers& markers)
       {
       if (!owner) return;
-      if (!_notePreviewOwners.contains(owner) && !colors.isEmpty()) {
+      if (!_notePreviewOwners.contains(owner) && (!colors.isEmpty() || !markers.isEmpty())) {
             _notePreviewOwners.insert(owner);
             connect(owner, &QObject::destroyed, this, [this, owner]() {
                   _notePreviewOwners.remove(owner);
@@ -5734,7 +5745,7 @@ void ScoreView::setNotePreviewColors(QObject* owner, const NotePreviewColors& co
                   if (!dirty.isEmpty()) dataChanged(dirty);
                   });
             }
-      const QRectF dirty = _notePreviewLayers.replace(owner, colors);
+      const QRectF dirty = _notePreviewLayers.replace(owner, colors, markers);
       if (!dirty.isEmpty()) dataChanged(dirty);
       }
 
@@ -5744,7 +5755,11 @@ void ScoreView::setActiveNotePreview(QObject* owner, int tick)
       if (!dirty.isEmpty()) dataChanged(dirty);
       }
 bool ScoreView::activateNotePreview(const QPointF& canvasPosition)
-      { return _notePreviewLayers.activate(canvasPosition); }
+      {
+      // Native text editing owns double clicks until it ends; hidden overlays must not seize them.
+      if (editMode() || state==ViewState::DRAG_OBJECT) return false;
+      return _notePreviewLayers.activate(canvasPosition);
+      }
 
 void ScoreView::onElementDestruction(Element* e)
       {

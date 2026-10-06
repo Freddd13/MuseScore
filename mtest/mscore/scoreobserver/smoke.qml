@@ -4,7 +4,7 @@ import FileIO 3.0
 
 MuseScore {
     menuPath: "Plugins.Harmony native smoke"
-    version: "1.2.0"
+    version: "1.3.0"
     requiresScore: true
     FileIO {id: report}
     onRun: {
@@ -28,9 +28,11 @@ MuseScore {
             result.indexMilliseconds = panel.observer.indexBuildMilliseconds
             result.persistedLabel = panel.configuration.labels["3"]
             result.persistedStyle = {content:panel.configuration.chordContent,order:panel.configuration.chordOrder,
-                scale:panel.configuration.chordScale,color:panel.configuration.chordColor,position:panel.configuration.ribbonAlign}
+                scale:panel.configuration.chordScale,color:panel.configuration.chordColor,position:panel.configuration.ribbonAlign,
+                mask:panel.configuration.chordMask,dual:panel.configuration.dualPanel,respect:panel.configuration.respectExistingHarmony}
             if(result.persistedLabel==="third" && (result.persistedStyle.content!==1 || result.persistedStyle.order!==3 ||
-                result.persistedStyle.scale!==140 || result.persistedStyle.color!=="#224466" || result.persistedStyle.position!==2))
+                result.persistedStyle.scale!==140 || result.persistedStyle.color!=="#224466" || result.persistedStyle.position!==2 ||
+                result.persistedStyle.mask!==false || result.persistedStyle.dual!==false || result.persistedStyle.respect!==false))
                 result.failures.push("appearance preferences not restored")
             if (!result.api) result.failures.push("observer missing")
             if (result.chord !== "Cmaj13") result.failures.push("chord: " + result.chord)
@@ -46,6 +48,7 @@ MuseScore {
             config.allColor=true;config.noteFunctions=true;config.chordLabels=true
             config.labels["3"]="third";config.colors["3"]="#123abc"
             config.chordContent=1;config.chordOrder=3;config.chordScale=140;config.chordColor="#224466";config.ribbonAlign=2
+            config.chordMask=false;config.dualPanel=false;config.respectExistingHarmony=false
             panel.applyPreferences(config)
             panel.buildAnalysisChunk()
             if(!panel.analysisRecords.length)result.failures.push("full score analysis missing")

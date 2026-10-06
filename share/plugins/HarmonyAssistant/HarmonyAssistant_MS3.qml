@@ -12,7 +12,7 @@ MuseScore {
     id: root
     menuPath: "Plugins.Harmony Assistant"
     description: "钢琴和声助手：持续音识别、级数、音程功能与可选谱面配色。"
-    version: "1.2.0"
+    version: "1.3.0"
     requiresScore: true
     pluginType: "dock"
     dockArea: "right"
@@ -26,6 +26,7 @@ MuseScore {
     property bool expanded: flick.width >= 680
     property bool advancedNative: observer && typeof observer.contextSnapshot === "function"
     property bool fixedChordNative: observer && typeof observer.setActiveScorePreview === "function"
+    property bool dualDetailActive:ribbon && configuration.dualPanel && typeof root.detailPanelVisible==="boolean" && root.detailPanelVisible
     property bool chromaticChord: Harmony.isChromatic(Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,chordRoot,chordDefinition)
     property color chordInk:configuration.chromaticAccent && chromaticChord ? configuration.chromaticColor : ink
     property var contextNotes: []
@@ -38,6 +39,8 @@ MuseScore {
     property string pendingFileAction: ""
     property string pendingExport: ""
     property int preferredRibbonHeight: 140
+    property string detailPanelTitle:"和声助手 · 详细面板"
+    property color detailPanelBackground:"#f4f4f4"
     property bool started: false
     property var observer: null
     property bool surfaceActive: visible && (!observer || observer.surfaceVisible)
@@ -99,8 +102,33 @@ MuseScore {
             selectionTrack=track;setScope();displayTick(tick,true)
         }
         if(typeof root.focusPanel==="function")root.focusPanel()
-        if(root.ribbon)detailPopup.open()
+        if(root.ribbon)openDetails()
         flick.contentY=0
+    }
+    function syncDetailPanel() {
+        if(!started || loadingConfiguration)return
+        if(typeof root.showDetailPanel==="function")root.showDetailPanel(ribbon && configuration.dualPanel)
+        if(!ribbon)detailPopup.visible=false
+    }
+    function toggleDetailPanel() {
+        var c=JSON.parse(JSON.stringify(configuration));c.dualPanel=!dualDetailActive
+        configuration=Preferences.clean(c);configurationTimer.restart();syncDetailPanel()
+    }
+    function openDetails() {
+        if(dualDetailActive) {
+            if(typeof root.focusDetailPanel==="function")root.focusDetailPanel()
+            else root.showDetailPanel(true)
+        }
+        else detailPopup.open()
+    }
+    function openDetailWindow() {
+        var c=JSON.parse(JSON.stringify(configuration));c.dualPanel=false
+        configuration=Preferences.clean(c);syncDetailPanel();configurationTimer.restart();detailPopup.open()
+    }
+    function detailPanelClosed() {
+        if(!started)return
+        var c=JSON.parse(JSON.stringify(configuration));c.dualPanel=false
+        configuration=Preferences.clean(c);configurationTimer.restart()
     }
     function chordDescriptor(note,frame) {
         var d=JSON.parse(JSON.stringify(note))
@@ -112,6 +140,8 @@ MuseScore {
             d.chordFont=["","Edwin","Arial"][configuration.chordFont]
             d.chordColor=configuration.chromaticAccent && frame.chromatic ? configuration.chromaticColor : configuration.chordColor
             d.highlightColor=configuration.highlightColor;d.highlightBackground=configuration.highlightBackground
+            d.preferExistingHarmony=configuration.respectExistingHarmony
+            d.chordMask=configuration.chordMask
         } else d.chord=configuration.chordContent===0 ? frame.chord : configuration.chordContent===1 ? frame.degree : frame.chord+" · "+frame.degree
         return d
     }
@@ -158,6 +188,7 @@ MuseScore {
     }
     function optionsChanged(rebuild) {
         if(!started || loadingConfiguration)return
+        syncDetailPanel()
         configurationTimer.restart()
         if(rebuild!==false) {analysisDirty=true; analysisTimer.stop()}
         requestRefresh(false)
@@ -216,19 +247,23 @@ MuseScore {
             if(frame.root<0){lastChord="";marker=null;continue}
             // Attribute notes when they are written; later sustained contexts cannot recolor an earlier attack.
             for(var n=0;n<frame.notes.length;++n)if(frame.notes[n].tick===frame.tick)onset.push(frame.notes[n])
+            var signature=frame.chord+"\t"+frame.degree
+            var changed=signature!==lastChord || (fixedChordNative && onset.length && frame.bar!==lastBar)
+            var newMarker=showChords.checked && changed && frame.notes.length && (fixedChordNative || onset.length) ?
+                chordDescriptor(onset.length ? onset[0] : frame.notes[0],frame) : null
             for(n=0;n<onset.length;++n) {
                 var d=JSON.parse(JSON.stringify(onset[n]))
                 if(scoreColoring.checked && allColor.checked)d.color=colorFor(d.pitch,frame.root,frame.definition)
                 if(showFunctions.checked)d.label=functionText(d.pitch,frame.root,frame.definition)
-                if(showChords.checked && n===0 && (frame.chord!==lastChord || (fixedChordNative && frame.bar!==lastBar))) {
-                    var styled=chordDescriptor(d,frame)
-                    for(var key in styled)d[key]=styled[key]
+                if(newMarker && n===0) {
+                    for(var key in newMarker)d[key]=newMarker[key]
                     marker=d
                 }
                 if(d.color || d.label || d.chord || d.degree)descriptors.push(d)
             }
+            if(newMarker && !onset.length) {marker=newMarker;descriptors.push(marker)}
             if(marker)marker.chordUntil=i+1<analysisRecords.length ? analysisRecords[i+1].tick : frame.tick+480
-            if(onset.length){lastChord=frame.chord;lastBar=frame.bar}
+            lastChord=signature;lastBar=frame.bar
         }
         observer.setScorePreview(descriptors)
         // The active layer must be last so it can highlight labels during playback.
@@ -738,6 +773,7 @@ MuseScore {
                 if(saved.schema)applyPreferences(saved)
             } else settingsStore.active=true
         }
+        syncDetailPanel()
         requestRefresh(true)
     }
     onScoreStateChanged: {
@@ -765,6 +801,7 @@ MuseScore {
         else if(advancedNative) {analysisDirty=true; scheduleAnalysis()}
         if (surfaceActive) {followNativePosition(); requestRefresh(false)}
     }
+    onRibbonChanged:syncDetailPanel()
     Component.onDestruction: {if (started) {savePreferences(); undoPause = false; restoreColors(true); if(advancedNative)observer.clearAllPreviews()}}
     Timer {id:configurationTimer; interval:350; onTriggered:savePreferences()}
     Timer {id:analysisTimer; interval:12; onTriggered:buildAnalysisChunk()}
@@ -793,6 +830,7 @@ MuseScore {
         onScoreChanged:requestRefresh(true)
         onPreviewActivated:root.openAnnotation(tick,track)
     }
+    Connections {target:root; ignoreUnknownSignals:true; onPanelDetailClosed:root.detailPanelClosed()}
 
     Rectangle {
         id:backdrop
@@ -800,13 +838,13 @@ MuseScore {
         color: "#f4f4f4"
         Flickable {
             id: flick
-            parent:root.ribbon ? detailPopup.contentItem : backdrop
+            parent:root.dualDetailActive ? root.detailPanelHost : root.ribbon ? detailPopup.contentItem : backdrop
             anchors.fill: parent
             clip: true
             contentWidth: width
             contentHeight: panel.height + 24
             boundsBehavior: Flickable.StopAtBounds
-            visible:!root.ribbon || detailPopup.opened
+            visible:!root.ribbon || detailPopup.opened || root.dualDetailActive
             ScrollBar.vertical: ScrollBar { }
             Flow {
                 id: panel
@@ -1053,7 +1091,8 @@ MuseScore {
             visible:root.ribbon; anchors.fill:parent; clip:true
             Item {
                 id:ribbonGroup; objectName:"harmonyRibbonGroup"
-                width:Math.max(100,Math.min(630,parent.width-ribbonControls.width-36)); height:parent.height-24
+                width:{var available=Math.max(100,parent.width-ribbonControls.width-36);return available>=630 ? 630 : Math.min(320,available)}
+                height:parent.height-24
                 anchors.verticalCenter:parent.verticalCenter
                 x:{var maximum=Math.max(12,parent.width-ribbonControls.width-width-36);
                     return configuration.ribbonAlign===0 ? 12 : configuration.ribbonAlign===2 ? maximum :
@@ -1062,8 +1101,8 @@ MuseScore {
                     anchors.fill:parent; spacing:16
                     Column {
                         Layout.preferredWidth:ribbonTones.visible ? 244 : ribbonGroup.width; Layout.alignment:Qt.AlignVCenter; spacing:2
-                        StableLabel {text:chordText; color:chordInk; font.pixelSize:Math.min(32,Math.max(18,root.height*.22)); font.bold:true}
-                        StableLabel {text:degreeText+" · "+positionText; color:muted; font.pixelSize:11}
+                        StableLabel {text:chordText; color:chordInk; horizontalAlignment:ribbonTones.visible ? Text.AlignLeft : Text.AlignHCenter; font.pixelSize:Math.min(32,Math.max(18,root.height*.22)); font.bold:true}
+                        StableLabel {text:degreeText+" · "+positionText; color:muted; horizontalAlignment:ribbonTones.visible ? Text.AlignLeft : Text.AlignHCenter; font.pixelSize:11}
                     }
                     Flow {
                         id:ribbonTones; visible:ribbonGroup.width>=540; Layout.fillWidth:true; Layout.alignment:Qt.AlignVCenter; spacing:6
@@ -1078,8 +1117,12 @@ MuseScore {
             Column {
                 id:ribbonControls; width:112; anchors.right:parent.right; anchors.rightMargin:12; anchors.verticalCenter:parent.verticalCenter; spacing:4
                 ComboBox {width:parent.width; model:["靠左","居中","靠右","自定位置"]; currentIndex:configuration.ribbonAlign; implicitHeight:28; font.pixelSize:11; onActivated:root.setRibbonPosition(currentIndex)}
-                Button {width:parent.width; text:"详细面板"; onClicked:detailPopup.open(); implicitHeight:28; font.pixelSize:11}
-                Button {width:parent.width; text:"悬浮"; visible:typeof root.setPanelFloating==="function"; onClicked:root.setPanelFloating(true); implicitHeight:28; font.pixelSize:11}
+                Button {width:parent.width; text:root.dualDetailActive ? "隐藏右侧详情" : "右侧详情"; visible:typeof root.showDetailPanel==="function"; onClicked:root.toggleDetailPanel(); implicitHeight:28; font.pixelSize:11}
+                RowLayout {
+                    width:parent.width; spacing:4
+                    Button {Layout.fillWidth:true; text:"窗口"; onClicked:root.openDetailWindow(); implicitHeight:28; font.pixelSize:11}
+                    Button {Layout.fillWidth:true; text:"悬浮"; visible:typeof root.setPanelFloating==="function"; onClicked:root.setPanelFloating(true); implicitHeight:28; font.pixelSize:11}
+                }
             }
         }
     }

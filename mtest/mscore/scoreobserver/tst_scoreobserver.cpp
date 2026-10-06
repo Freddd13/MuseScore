@@ -210,6 +210,26 @@ class TestScoreObserver : public QObject, public MTest {
             layers.setActiveChord(&owner,1440);inspect();QCOMPARE(activeTick,-1);
             layers.remove(first);inspect();QCOMPARE(count,1);
             }
+      void multipleChangesOnOneSustainedNote()
+            {
+            NotePreviewLayers layers;QObject owner;
+            const auto source=reinterpret_cast<const Element*>(quintptr(1));
+            NotePreviewEntry first;first.sourceAnchor=source;first.chord="C";
+            first.chordTick=0;first.chordUntil=240;first.chordBox=QRectF(10,10,40,20);first.bounds=first.chordBox;
+            auto second=first;second.chord="Am";second.chordTick=240;second.chordUntil=480;
+            second.chordBox.translate(60,0);second.bounds=second.chordBox;second.chordMask=false;
+            const NotePreviewMarkers markers{first,second};
+            layers.replace(&owner,{{source,{Qt::red,QRectF(10,40,10,10)}}},markers);
+            layers.setActiveChord(&owner,240);
+            int count=0,active=-1;
+            layers.forEachChord([&](const NotePreviewEntry& entry,bool enabled){++count;if(enabled)active=entry.chordTick;});
+            QCOMPARE(count,2);QCOMPARE(active,240);QCOMPARE(layers.color(source),QColor(Qt::red));
+            QVERIFY(layers.replace(&owner,{{source,{Qt::red,QRectF(10,40,10,10)}}},markers).isEmpty());
+            layers.remove(source);count=0;
+            layers.forEachChord([&](const NotePreviewEntry&,bool){++count;});
+            QCOMPARE(count,0);QVERIFY(!layers.color(source).isValid());
+            // Removal compares opaque identities only: source is deliberately not dereferenceable.
+            }
       void fixedMarkerHighlightPerformance()
             {
             NotePreviewLayers layers;QObject owner;NotePreviewColors colors;

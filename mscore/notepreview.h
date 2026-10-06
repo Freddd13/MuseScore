@@ -34,7 +34,8 @@ struct NotePreviewEntry {
       QColor chordColor = QColor("#343a3f");
       QColor highlightColor = QColor("#0043ce");
       QColor highlightBackground = QColor("#d0e2ff");
-      bool chordActive = false;
+      bool chordMask = true;
+      const Element* sourceAnchor = nullptr; // opaque identity for destruction cleanup only
       int chordTick = -1;
       int chordUntil = 0;
       int annotationTrack = 0;
@@ -47,12 +48,14 @@ struct NotePreviewEntry {
                   && chordFont == other.chordFont && degreeFont == other.degreeFont
                   && primaryBox == other.primaryBox && secondaryBox == other.secondaryBox
                   && chordColor == other.chordColor && highlightColor == other.highlightColor
-                  && highlightBackground == other.highlightBackground && chordActive == other.chordActive
+                  && highlightBackground == other.highlightBackground && chordMask == other.chordMask
+                  && sourceAnchor == other.sourceAnchor
                   && chordTick == other.chordTick && chordUntil == other.chordUntil
                   && annotationTrack == other.annotationTrack && activationTarget == other.activationTarget;
             }
       };
 using NotePreviewColors = QHash<const Element*, NotePreviewEntry>;
+using NotePreviewMarkers = QVector<NotePreviewEntry>;
 
 inline QFont notePreviewFont(qreal spatium, bool chord)
       {
@@ -99,31 +102,41 @@ class NotePreviewLayers {
       struct Layer {
             const void* owner;
             NotePreviewColors colors;
-            QMap<int,QVector<const Element*>> chords;
-            QSet<const Element*> activeChords;
+            NotePreviewMarkers markers;
+            QMap<int,QVector<int>> chords;
+            QSet<int> activeChords;
+            QMultiHash<const Element*,int> sources;
             };
       QVector<Layer> _layers;
    public:
       bool contains(const void* owner) const
             { for (const auto& layer : _layers) if (layer.owner == owner) return true; return false; }
       bool empty() const { return _layers.isEmpty(); }
-      QRectF replace(const void* owner, const NotePreviewColors& colors)
+      QRectF replace(const void* owner, const NotePreviewColors& colors, const NotePreviewMarkers& markers = {})
             {
+            NotePreviewMarkers next=markers;
+            // Accept legacy inline chord entries, while independent markers may share a source note.
+            for (auto it=colors.cbegin();it!=colors.cend();++it) if (!it->chordBox.isEmpty()) {
+                  auto entry=it.value();entry.sourceAnchor=it.key();next.append(entry);
+                  }
             QRectF dirty;
             int index = -1;
             for (int i=0;i<_layers.size();++i) if (_layers[i].owner==owner) {index=i;break;}
             if (index>=0) {
-                  if (_layers[index].colors==colors) return dirty;
+                  if (_layers[index].colors==colors && _layers[index].markers==next) return dirty;
                   for (const auto& entry : _layers[index].colors) dirty |= entry.bounds;
+                  for (const auto& entry : _layers[index].markers) dirty |= entry.bounds;
                   }
             for (const auto& entry : colors) dirty |= entry.bounds;
-            if (colors.isEmpty()) {if (index>=0) _layers.removeAt(index);return dirty;}
-            Layer layer {owner,colors,{}, {}};
-            for (auto it=colors.cbegin();it!=colors.cend();++it)
-                  if (!it->chordBox.isEmpty()) layer.chords[it->annotationTrack].append(it.key());
+            for (const auto& entry : next) dirty |= entry.bounds;
+            if (colors.isEmpty() && next.isEmpty()) {if (index>=0) _layers.removeAt(index);return dirty;}
+            Layer layer {owner,colors,next,{}, {}, {}};
+            for (int i=0;i<next.size();++i) if (!next[i].chordBox.isEmpty()) {
+                  layer.chords[next[i].annotationTrack].append(i);layer.sources.insert(next[i].sourceAnchor,i);
+                  }
             for (auto& group : layer.chords)
-                  std::sort(group.begin(),group.end(),[&](const Element* a,const Element* b) {
-                        return colors.constFind(a)->chordTick < colors.constFind(b)->chordTick;
+                  std::sort(group.begin(),group.end(),[&](int a,int b) {
+                        return next[a].chordTick < next[b].chordTick;
                         });
             if (index>=0) _layers[index]=layer; else _layers.append(layer);
             return dirty;
@@ -143,21 +156,20 @@ class NotePreviewLayers {
             QRectF dirty;
             for (auto& layer : _layers) {
                   if (layer.owner!=owner) continue;
-                  QSet<const Element*> next;
+                  QSet<int> next;
                   if (tick>=0) for (const auto& group : layer.chords) {
-                        auto it=std::upper_bound(group.cbegin(),group.cend(),tick,[&](int value,const Element* key) {
-                              return value < layer.colors.constFind(key)->chordTick;
+                        auto it=std::upper_bound(group.cbegin(),group.cend(),tick,[&](int value,int index) {
+                              return value < layer.markers[index].chordTick;
                               });
                         if (it==group.cbegin()) continue;
-                        const auto key=*--it;
-                        if (tick < layer.colors.constFind(key)->chordUntil) next.insert(key);
+                        const auto index=*--it;
+                        if (tick < layer.markers[index].chordUntil) next.insert(index);
                         }
                   if (next==layer.activeChords) return dirty;
                   const auto changed=(next-layer.activeChords)+(layer.activeChords-next);
-                  for (const auto key : changed) {
-                        auto it=layer.colors.constFind(key);
-                        if (it==layer.colors.constEnd()) continue;
-                        dirty |= it->chordBox.translated(it->anchor);
+                  for (int index : changed) {
+                        const auto& entry=layer.markers[index];
+                        dirty |= entry.chordBox.translated(entry.anchor);
                         }
                   layer.activeChords=next;
                   }
@@ -166,13 +178,13 @@ class NotePreviewLayers {
       template<typename Callback> void forEachChord(Callback callback) const
             {
             for (const auto& layer : _layers) for (const auto& group : layer.chords)
-                  for (const auto key : group) callback(layer.colors.constFind(key).value(),layer.activeChords.contains(key));
+                  for (int index : group) callback(layer.markers[index],layer.activeChords.contains(index));
             }
       bool activate(const QPointF& canvasPosition) const
             {
             for (auto layer=_layers.crbegin();layer!=_layers.crend();++layer)
-                  for (const auto& group : layer->chords) for (const auto key : group) {
-                        const auto& entry=layer->colors.constFind(key).value();
+                  for (const auto& group : layer->chords) for (int index : group) {
+                        const auto& entry=layer->markers[index];
                         if (entry.activationTarget && entry.chordBox.translated(entry.anchor).contains(canvasPosition))
                               return QMetaObject::invokeMethod(entry.activationTarget,"activatePreview",Qt::DirectConnection,
                                     Q_ARG(int,entry.chordTick),Q_ARG(int,entry.annotationTrack));
@@ -183,11 +195,14 @@ class NotePreviewLayers {
             {
             // Destruction callbacks must never inspect the partially destroyed Element.
             for (auto& layer : _layers) {
-                  auto it=layer.colors.find(note);
-                  if (it==layer.colors.end()) continue;
-                  layer.chords[it->annotationTrack].removeAll(note);
-                  layer.activeChords.remove(note);
-                  layer.colors.erase(it);
+                  layer.colors.remove(note);
+                  const auto indices=layer.sources.values(note);
+                  for (int index : indices) {
+                        auto& entry=layer.markers[index];
+                        layer.chords[entry.annotationTrack].removeAll(index);layer.activeChords.remove(index);
+                        entry.chordBox={};entry.bounds={};entry.sourceAnchor=nullptr;
+                        }
+                  layer.sources.remove(note);
                   }
             }
       void clear() { _layers.clear(); }

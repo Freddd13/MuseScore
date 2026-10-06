@@ -19,6 +19,7 @@
 #include "libmscore/utils.h"
 
 class QDockWidget;
+class QQuickWindow;
 
 namespace Ms {
 
@@ -51,7 +52,11 @@ class QmlPlugin : public QQuickItem {
       Q_OBJECT
       Q_PROPERTY(QString panelPlacement READ panelPlacement NOTIFY panelDockChanged)
       Q_PROPERTY(bool panelFloating READ panelFloating NOTIFY panelDockChanged)
+      Q_PROPERTY(QQuickItem* detailPanelHost READ detailPanelHost NOTIFY panelDetailChanged)
+      Q_PROPERTY(bool detailPanelVisible READ detailPanelVisible NOTIFY panelDetailChanged)
       QPointer<QDockWidget> _panelDock;
+      QPointer<QDockWidget> _detailDock;
+      QPointer<QQuickWindow> _detailWindow;
       QString _panelPlacement;
 
       QString _menuPath;
@@ -62,6 +67,7 @@ class QmlPlugin : public QQuickItem {
       QString _description;
 
    protected:
+      bool eventFilter(QObject* object, QEvent* event) override;
       QString _filePath;            // the path of the source file, without file name
       MuseScoreCore* msc()             { return MuseScoreCore::mscoreCore; }
       const MuseScoreCore* msc() const { return MuseScoreCore::mscoreCore; }
@@ -76,8 +82,14 @@ class QmlPlugin : public QQuickItem {
       bool panelFloating() const;
       Q_INVOKABLE void setPanelFloating(bool floating);
       Q_INVOKABLE void focusPanel();
+      QQuickItem* detailPanelHost() const;
+      bool detailPanelVisible() const;
+      Q_INVOKABLE void showDetailPanel(bool visible);
+      Q_INVOKABLE void focusDetailPanel();
    signals:
       void panelDockChanged();
+      void panelDetailChanged();
+      void panelDetailClosed();
    public:
 
       void setMenuPath(const QString& s)   { _menuPath = s;    }

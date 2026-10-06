@@ -15,6 +15,8 @@
 #include "mscore/plugin/api/util.h"
 #include "mscore/plugin/api/scoreobserver.h"
 #include "libmscore/chord.h"
+#include "libmscore/harmony.h"
+#include "libmscore/measure.h"
 #include "libmscore/note.h"
 #include "libmscore/segment.h"
 
@@ -71,7 +73,7 @@ class TestPluginHost : public QObject {
             for(auto window:QGuiApplication::allWindows()) {
                   auto view=qobject_cast<QQuickView*>(window);
                   auto root=view ? qobject_cast<QmlPlugin*>(view->rootObject()) : nullptr;
-                  if(root && root->version()=="1.2.0") {panel=root;panelView=view;break;}
+                  if(root && root->version()=="1.3.0") {panel=root;panelView=view;break;}
                   }
             for(auto candidate:main->findChildren<QDockWidget*>())
                   if(candidate->windowTitle()=="Harmony Assistant") {dock=candidate;break;}
@@ -144,6 +146,24 @@ class TestPluginHost : public QObject {
             QCOMPARE(panel->panelPlacement(),QString("top"));
             main->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("top.png"));
             QVERIFY(panel->property("ribbon").toBool());
+            QTRY_VERIFY(panel->detailPanelVisible());
+            auto details=main->findChild<QDockWidget*>("pluginDetailDock");QVERIFY(details);
+            QCOMPARE(main->dockWidgetArea(details),Qt::RightDockWidgetArea);
+            QVERIFY(panel->detailPanelHost());
+            QCOMPARE(panel->findChildren<PluginAPI::ScoreObserver*>().size(),1);
+            QCOMPARE(panel->findChildren<QObject*>("harmonyConfiguration").size(),1);
+            auto summary=panel->findChild<QQuickItem*>("harmonySummary");QVERIFY(summary);
+            QCOMPARE(summary->window(),panel->detailPanelHost()->window());
+            auto detailImage=panel->detailPanelHost()->window()->grabWindow();
+            QVERIFY(!detailImage.isNull());
+            detailImage.save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("dual-details.png"));
+            details->setFloating(true);details->resize(800,680);QTest::qWait(50);
+            QVERIFY(details->isFloating());QTRY_VERIFY(panel->property("expanded").toBool());
+            details->setFloating(false);main->addDockWidget(Qt::RightDockWidgetArea,details);
+            main->resizeDocks({details},{360},Qt::Horizontal);QTest::qWait(30);
+            details->close();QTest::qWait(30);QVERIFY(!panel->detailPanelVisible());
+            QVERIFY(QMetaObject::invokeMethod(panel,"toggleDetailPanel"));
+            QTRY_VERIFY(panel->detailPanelVisible());
             auto ribbonImage=panelView->grabWindow();
             QVERIFY(!ribbonImage.isNull());
             ribbonImage.save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("ribbon.png"));
@@ -152,6 +172,8 @@ class TestPluginHost : public QObject {
             dock->resize(800,680);QTest::qWait(50);
             QVERIFY(!panel->property("ribbon").toBool());
             QVERIFY(panel->property("expanded").toBool());
+            QTRY_VERIFY(!panel->detailPanelVisible());
+            QCOMPARE(summary->window(),panelView);
             auto floatingImage=panelView->grabWindow();
             QVERIFY(!floatingImage.isNull());
             floatingImage.save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("floating-panel.png"));
@@ -160,6 +182,7 @@ class TestPluginHost : public QObject {
             main->addDockWidget(Qt::RightDockWidgetArea,dock);QTest::qWait(50);
             QCOMPARE(panel->panelPlacement(),QString("right"));
             dock->close();QTest::qWait(50);
+            QTRY_VERIFY(main->findChildren<QDockWidget*>("pluginDetailDock").isEmpty());
             // Repeated open/close must not retain previews or dereference a destroyed dock.
             main->pluginTriggered(plugin);QTest::qWait(50);
             // This fixture deliberately skips main()'s workspace/audio initialization.
@@ -168,6 +191,107 @@ class TestPluginHost : public QObject {
                   if(candidate->windowTitle()=="Harmony Assistant") candidate->close();
             QTest::qWait(50);
             main->hide();
+            }
+      void changeTickWithoutNewOnset()
+            {
+            auto main=Ms::mscore;
+            auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");
+            QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));
+            main->resize(1100,800);main->show();QTest::qWait(30);
+            PluginAPI::Score wrapped(score);PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);
+            auto first=observer.snapshot(0,4,8).value("notes").toList().front().toMap();
+            first["chord"]="C";first["chordTick"]=0;first["chordUntil"]=240;
+            auto second=first;second["chord"]="Am";second["chordTick"]=240;second["chordUntil"]=480;
+            observer.setScorePreview({first,second});
+            const auto segment=score->firstSegment(SegmentType::ChordRest);
+            const auto next=score->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest);
+            const auto bass=toChord(segment->element(4))->notes().front();
+            const qreal start=segment->canvasPos().x(),half=(start+next->canvasPos().x())/2;
+            auto view=main->currentScoreView();QSignalSpy activation(&observer,&PluginAPI::ScoreObserver::previewActivated);
+            QMap<int,qreal> hits;
+            for(int dy=-qRound(bass->spatium()*40);dy<0 && hits.size()<2;dy+=2)
+                  for(qreal x=start-2;x<half+40 && hits.size()<2;x+=1) {
+                        const auto point=QPointF(x,bass->canvasPos().y()+dy);
+                        if(!view->activateNotePreview(point))continue;
+                        const int tick=activation.last().at(0).toInt();if(!hits.contains(tick))hits.insert(tick,x);
+                        }
+            QVERIFY(hits.contains(0));QVERIFY(hits.contains(240));
+            QVERIFY(qAbs(hits[0]-start)<=2);QVERIFY(qAbs(hits[240]-half)<=2);
+            observer.setActiveScorePreview(300);view->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("no-onset-change.png"));
+            observer.clearAllPreviews();main->hide();
+            }
+      void annotationPrioritiesWhileMoving()
+            {
+            auto main=Ms::mscore;
+            auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");
+            QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));
+            main->resize(1100,800);main->show();QTest::qWait(50);
+            auto view=main->currentScoreView();
+            PluginAPI::Score wrapped(score);PluginAPI::ScoreObserver observer;
+            observer.setScore(&wrapped);
+            auto segment=score->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest);
+            auto harmony=new Harmony(score);harmony->setTrack(0);segment->add(harmony);
+            harmony->setHarmony("F7");score->doLayout();QTest::qWait(20);
+            QVariantMap anchor;
+            for (const auto& descriptor:observer.snapshot(480,0,8).value("notes").toList()) {
+                  const auto value=descriptor.toMap();
+                  if(value.value("tick").toInt()==480 && value.value("track").toInt()==0){anchor=value;break;}
+                  }
+            QVERIFY(!anchor.isEmpty());anchor["chord"]="Cmaj13";anchor["degree"]="Imaj13";
+            anchor["chordTick"]=480;anchor["chordUntil"]=960;anchor["preferExistingHarmony"]=true;
+            const auto baseline=view->grab().toImage();
+            auto onlyChord=anchor;onlyChord["degree"]="";
+            observer.setScorePreview({onlyChord});
+            QCOMPARE(view->grab().toImage(),baseline); // native F7 remains, duplicate analysis stays in panel
+            observer.setScorePreview({anchor});const auto preferred=view->grab().toImage();
+            auto degreeOnly=anchor;degreeOnly["chord"]="";
+            observer.setScorePreview({degreeOnly});QCOMPARE(view->grab().toImage(),preferred);
+            QVERIFY(preferred!=baseline);
+            auto simultaneous=anchor;simultaneous["preferExistingHarmony"]=false;
+            observer.setScorePreview({simultaneous});QVERIFY(view->grab().toImage()!=preferred);
+            // Roman notation retains its own degree while optionally supplementing chord analysis.
+            observer.clearAllPreviews();harmony->setHarmonyType(HarmonyType::ROMAN);
+            harmony->setHarmony("V7");score->doLayout();
+            observer.setScorePreview({anchor});const auto romanPreferred=view->grab().toImage();
+            onlyChord["preferExistingHarmony"]=false;observer.setScorePreview({onlyChord});
+            QCOMPARE(view->grab().toImage(),romanPreferred);
+            observer.clearAllPreviews();harmony->setHarmonyType(HarmonyType::STANDARD);
+            harmony->setHarmony("F7");score->doLayout();
+            observer.setScorePreview({simultaneous});
+            const auto note=toChord(segment->element(0))->notes().front();
+            QPointF hit;bool found=false;
+            for(int dy=-qRound(note->spatium()*24);dy<0 && !found;dy+=2)
+                  for(int dx=2;dx<note->spatium()*12;dx+=2) {
+                        const auto point=note->canvasPos()+QPointF(dx,dy);
+                        if(view->activateNotePreview(point)){hit=point+QPointF(8,8);found=true;break;}
+                        }
+            QVERIFY(found);
+            // Moving selection / changing current function text must not repaint fixed chord text.
+            const auto fixedArea=view->toPhysical(QRectF(hit-QPointF(8,8),QSizeF(note->spatium()*9,note->spatium()*2)));
+            observer.setActiveScorePreview(600); // white inactive mask over white paper is visually identical
+            const auto masked=view->grab(fixedArea).toImage();
+            auto transparent=simultaneous;transparent["chordMask"]=false;
+            observer.setScorePreview({transparent});
+            QVERIFY(view->grab(fixedArea).toImage()!=masked);
+            observer.setScorePreview({simultaneous});
+            const auto fixedPixels=view->grab(fixedArea).toImage();
+            for(int tick:{0,480,0,480}) {
+                  auto current=observer.snapshot(tick,0,8).value("notes").toList();
+                  for(auto& descriptor:current){auto d=descriptor.toMap();d["label"]=tick==0 ? "5" : "thirteen";descriptor=d;}
+                  observer.setNotePreviewColors(current);
+                  QCOMPARE(view->grab(fixedArea).toImage(),fixedPixels);
+                  }
+            observer.clearNotePreviewColors();
+            // Move a native editor over an already cached preview: editor and its caret take priority.
+            harmony->setOffset(harmony->offset()+hit-harmony->canvasBoundingRect().center());
+            view->startEditMode(harmony);QVERIFY(view->textEditMode());
+            QTest::keyClick(view,Qt::Key_Right);
+            const auto editedWithPreview=view->grab().toImage();
+            QVERIFY(!view->activateNotePreview(hit));
+            observer.clearAllPreviews();
+            QCOMPARE(view->grab().toImage(),editedWithPreview);
+            view->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("native-editor-priority.png"));
+            view->changeState(ViewState::NORMAL);main->hide();
             }
       };
 QTEST_MAIN(TestPluginHost)

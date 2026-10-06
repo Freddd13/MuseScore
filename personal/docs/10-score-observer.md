@@ -1,4 +1,4 @@
-# 10 通用乐谱观察与临时音符预览（个人版本 0.4.0）
+# 10 通用乐谱观察与临时音符预览（个人版本 0.5.0）
 
 和声助手采用插件 + 最小原生接口。纯插件可完成和弦解释、级数、功能标签和界面，但标准 API 没有逐拍播放信号和独立临时色层；反复写 Note.color 会影响撤销、保存与排版。因此原生侧只提供可供其他插件复用的查询/预览能力，音乐解释留在独立 QML/JS。
 
@@ -87,3 +87,9 @@ setActiveScorePreview(tick) 在每乐器有序标记索引二分查当前区间�
 命中 ScoreView::activateNotePreview 后向弱 QObject 接收者调用 activatePreview，发出 previewActivated(tick, partStartTrack)。events.cpp 仅在左键双击命中时消费事件。插件 focusPanel() 聚焦已有停靠窗口，不强制悬浮；和声插件决定停止时选位置、横条打开详情，播放中不改变播放位置。QPointer 防止销毁回调；Element 键仍禁止解引用。
 
 真实 GUI suite 验证固定行、普通鼠标双击、低音锚点整乐器跳转和颜色对话框。新增 fixedMarkerHighlightAndStyle / fixedMarkerHighlightPerformance；已测性能与边界以 CHANGELOG 0.4.0 为准。
+
+0.5.0：独立标记、遮罩与共享详情
+
+描述符 chordTick 可不同于来源 Note.tick；来源只数值定位乐器及析构身份。对应变化节拍有 ChordRest 用 segment.pagePos().x，无新音则按相邻节拍 x 插值，使用变化 Measure/System/Page。NotePreviewMarkers 独立存储，颜色表仍按 Note 查找；同一源多个变化不会互相覆盖。chordMask 默认 true；false 仅关背景，不关高亮/碰撞避让。preferExistingHarmony 默认由插件传 true，同 tick/Part 的 Harmony 可清除重复 chord 或 degree 字段，不更改原谱。当前层复用基础标签框并避开固定记号；原生编辑区域优先显示原对象和光标。
+
+QmlPlugin 的 detailPanelHost 是弱窗口对应的 QQuickItem，detailPanelVisible 通知实际显示状态；showDetailPanel(bool) 创建/显隐单个辅助停靠窗口，focusDetailPanel 显式聚焦，panelDetailClosed 区分用户关闭。可选 detailPanelTitle/detailPanelBackground 由 QML 提供。插件通过 visual parent 重挂载同一控件，QObject ownership 保留在原根；没有第二个 QQmlEngine、ScoreObserver 或分析任务。辅助容器拥有 QWindow，插件销毁后 deleteLater 清理 dock；主面板关闭和设置持久化仍沿原生命周期。
