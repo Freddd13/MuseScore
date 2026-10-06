@@ -1253,17 +1253,9 @@ void ScoreView::drawElements(QPainter& painter, QList<Element*>& el, Element* ed
             const QColor preview = previewEntry ? previewEntry->color : QColor();
             if (preview.isValid()) {
                   const auto note = toNote(e);
-                  const bool editingSelection = note->selected() && !score()->isPlaying();
-                  note->draw(&painter, editingSelection || !note->visible()
-                        ? note->curColor() : preview);
-                  // Retain a distinct native playback mark without hiding the role color.
-                  if (note->mark()) {
-                        painter.save();
-                        painter.setPen(QPen(note->curColor(), score()->spatium() * 0.08));
-                        const QRectF box = note->bbox();
-                        painter.drawLine(box.bottomLeft(), box.bottomRight());
-                        painter.restore();
-                        }
+                  // Resolve every native state (playback, selection, drop, invisible) first.
+                  // Only the ordinary color is replaced; curColor remains the authority.
+                  note->draw(&painter, note->curColor(note->visible(),preview));
                   }
             else e->draw(&painter);
             if (previewEntry && e->visible()) {
@@ -1496,7 +1488,11 @@ void ScoreView::paint(const QRect& r, QPainter& p)
                         p.drawRoundedRect(QRectF(QPointF(),box.size()),entry.spatium*.18,entry.spatium*.18);
                         }
                   p.setPen(active ? entry.highlightColor : entry.chordColor);
-                  p.setFont(entry.chordFont);p.drawText(entry.primaryBox,Qt::AlignCenter,entry.chord);
+                  if (!entry.chordPicture.isNull()) {
+                        p.save();p.translate(entry.primaryBox.topLeft());
+                        p.drawPicture(QPointF(),active ? entry.activeChordPicture : entry.chordPicture);p.restore();
+                        }
+                  else {p.setFont(entry.chordFont);p.drawText(entry.primaryBox,Qt::AlignCenter,entry.chord);}
                   p.setFont(entry.degreeFont);p.drawText(entry.secondaryBox,Qt::AlignCenter,entry.degree);
                   p.restore();
                   });

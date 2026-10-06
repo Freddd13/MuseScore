@@ -6,6 +6,7 @@
 #include <QHash>
 #include <QFont>
 #include <QFontMetricsF>
+#include <QPicture>
 #include <QMap>
 #include <QPointer>
 #include <QRectF>
@@ -27,6 +28,10 @@ struct NotePreviewEntry {
       QPointF anchor;
       qreal spatium = 0;
       QString degree;
+      QPicture chordPicture {-1};
+      QPicture activeChordPicture {-1};
+      QSizeF renderedChordSize;
+      QString renderedChordKey;
       QFont chordFont;
       QFont degreeFont;
       QRectF primaryBox;
@@ -45,6 +50,7 @@ struct NotePreviewEntry {
             return color == other.color && bounds == other.bounds && label == other.label && chord == other.chord
                   && labelBox == other.labelBox && chordBox == other.chordBox && active == other.active
                   && anchor == other.anchor && spatium == other.spatium && degree == other.degree
+                  && renderedChordKey == other.renderedChordKey && renderedChordSize == other.renderedChordSize
                   && chordFont == other.chordFont && degreeFont == other.degreeFont
                   && primaryBox == other.primaryBox && secondaryBox == other.secondaryBox
                   && chordColor == other.chordColor && highlightColor == other.highlightColor
@@ -74,7 +80,7 @@ inline QSizeF layoutPreviewChord(NotePreviewEntry& entry, int order)
             QFontMetricsF metrics(font);
             return QSizeF(metrics.horizontalAdvance(text), metrics.height());
             };
-      const auto a = size(entry.chord, entry.chordFont), b = size(entry.degree, entry.degreeFont);
+      const auto a = entry.renderedChordSize.isEmpty() ? size(entry.chord, entry.chordFont) : entry.renderedChordSize, b = size(entry.degree, entry.degreeFont);
       if (a.isEmpty() || b.isEmpty()) {
             const auto single = a.isEmpty() ? b : a;
             (a.isEmpty() ? entry.secondaryBox : entry.primaryBox) = QRectF(QPointF(padding,padding),single);

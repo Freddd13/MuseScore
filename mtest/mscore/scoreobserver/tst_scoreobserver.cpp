@@ -29,6 +29,10 @@
 #include "libmscore/segment.h"
 #include "libmscore/undo.h"
 #include "libmscore/pedal.h"
+#include "libmscore/tie.h"
+#include "libmscore/measure.h"
+#include "libmscore/harmony.h"
+#include "libmscore/chordlist.h"
 
 using namespace Ms;
 class TestScoreObserver : public QObject, public MTest {
@@ -311,6 +315,48 @@ class TestScoreObserver : public QObject, public MTest {
             observer.snapshot(480, 0, 8);
             QBENCHMARK { observer.snapshot(480, 0, 8); }
             QCOMPARE(observer.indexBuildCount(), 1);
+            }
+
+      void tiedAttackAcrossBar()
+            {
+            std::unique_ptr<MasterScore> score(readScore("libmscore/inputrhythm/blank.mscx"));
+            QVERIFY(score);score->startCmd();
+            score->setNoteRest(score->firstMeasure()->first(SegmentType::ChordRest),0,NoteVal(60),Fraction(1,1));
+            score->setNoteRest(score->tick2segment(Fraction(1,1),false,SegmentType::ChordRest),0,NoteVal(60),Fraction(1,4));
+            auto before=toChord(score->findCR(Fraction(),0))->findNote(60);
+            auto after=toChord(score->findCR(Fraction(1,1),0))->findNote(60);
+            auto tie=new Tie(score.get());tie->setStartNote(before);tie->setEndNote(after);
+            tie->setTick(Fraction());tie->setTick2(Fraction(1,1));tie->setTrack(0);score->undoAddElement(tie);score->endCmd();
+            auto pedal=new Pedal(score.get());pedal->setTrack(0);pedal->setTick(Fraction());
+            pedal->setTick2(Fraction::fromTicks(2400));score->addElement(pedal);
+            PluginAPI::Score wrapped(score.get());PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);
+            const auto context=observer.contextSnapshot(1920,0,8,true,0);
+            const auto notes=context.value("analysisNotes").toList();QVERIFY(!notes.isEmpty());
+            QCOMPARE(notes.front().toMap().value("attackTick").toInt(),0);
+            QCOMPARE(context.value("pedalWindows").toList().front().toMap().value("start").toInt(),0);
+            }
+
+      void boundedPedalMetadataAndNativeRenderingIsolation()
+            {
+            std::unique_ptr<MasterScore> score(readScore("mscore/scoreobserver/piano.mscx"));
+            QVERIFY(score);score->doLayout();
+            auto pedal=new Pedal(score.get());pedal->setTrack(4);pedal->setTick(Fraction());
+            pedal->setTick2(Fraction::fromTicks(960));score->addElement(pedal);
+            PluginAPI::Score wrapped(score.get());PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);
+            const auto context=observer.contextSnapshot(480,0,8,true,0);
+            QCOMPARE(context.value("parts").toList().size(),1);
+            QCOMPARE(context.value("pedalWindows").toList().size(),1);
+            QCOMPARE(context.value("pedalWindows").toList().front().toMap().value("end").toInt(),960);
+            QCOMPARE(observer.contextSnapshot(960,0,8,true,0).value("pedalWindows").toList().size(),0);
+            for (const auto note:context.value("analysisNotes").toList())
+                  QVERIFY(note.toMap().contains("attackTick"));
+            const auto state=score->state();
+            const auto descriptions=score->style().chordList()->size();
+            auto anchor=context.value("analysisNotes").toList().front().toMap();
+            anchor["chord"]="C7(b9,#11)/E";anchor["chordTick"]=0;anchor["chordUntil"]=960;
+            observer.setScorePreview({anchor});
+            QCOMPARE(score->style().chordList()->size(),descriptions);QVERIFY(score->state()==state);
+            observer.clearAllPreviews();
             }
       };
 QTEST_MAIN(TestScoreObserver)

@@ -487,6 +487,10 @@ void ScoreView::mousePressEventNormal(QMouseEvent* ev)
 
 void ScoreView::mousePressEvent(QMouseEvent* ev)
       {
+      if (ev->button()==Qt::LeftButton && ev->modifiers()==Qt::NoModifier && !fotoMode()
+            && state==ViewState::NORMAL && activateNotePreview(toLogical(ev->pos()))) {
+            ev->accept();return;
+            }
 
       if (tripleClickPending) {
             if (textEditMode()) {

@@ -19,12 +19,15 @@
 #include "libmscore/chord.h"
 #include "libmscore/harmony.h"
 #include "libmscore/measure.h"
+#include "libmscore/system.h"
+#include "libmscore/page.h"
 #include "libmscore/note.h"
 #include "libmscore/segment.h"
 #include "libmscore/inputrhythm.h"
 #include "mscore/inputrhythmpreference.h"
 #include "libmscore/undo.h"
 #include "mscore/preferences.h"
+#include "mscore/pianotools.h"
 #include "mscore/pianoroll/pianoview.h"
 #include "mscore/workspace.h"
 #include "mscore/shortcut.h"
@@ -159,7 +162,7 @@ class TestPluginHost : public QObject {
             for(auto window:QGuiApplication::allWindows()) {
                   auto view=qobject_cast<QQuickView*>(window);
                   auto root=view ? qobject_cast<QmlPlugin*>(view->rootObject()) : nullptr;
-                  if(root && root->version()=="1.3.0") {panel=root;panelView=view;break;}
+                  if(root && root->version()=="1.4.0") {panel=root;panelView=view;break;}
                   }
             for(auto candidate:main->findChildren<QDockWidget*>())
                   if(candidate->windowTitle()=="Harmony Assistant") {dock=candidate;break;}
@@ -168,6 +171,8 @@ class TestPluginHost : public QObject {
             auto observer=panel->findChild<PluginAPI::ScoreObserver*>();
             QVERIFY(observer);
             observer->setScore(&wrapped);
+            // Freeze the plugin's background analysis while testing the observer layer directly.
+            panel->setProperty("surfaceActive",false);observer->clearAllPreviews();
             auto descriptors=observer->snapshot(480,0,8).value("notes").toList();
             for(auto& descriptor:descriptors){auto value=descriptor.toMap();value["color"]="#005d5d";value["label"]="3";value["active"]=true;descriptor=value;}
             const auto original=main->currentScoreView()->grab().toImage();
@@ -378,6 +383,85 @@ class TestPluginHost : public QObject {
             QCOMPARE(view->grab().toImage(),editedWithPreview);
             view->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("native-editor-priority.png"));
             view->changeState(ViewState::NORMAL);main->hide();
+            }
+
+      void nativeStateColorsAndRangeFrame()
+            {
+            auto main=Ms::mscore;
+            auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");
+            QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));
+            main->resize(1100,800);main->show();QTest::qWait(30);
+            auto view=main->currentScoreView();PluginAPI::Score wrapped(score);
+            PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);
+            auto descriptors=observer.snapshot(480,0,4).value("notes").toList();
+            auto segment=score->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest);
+            auto note=toChord(segment->element(0))->notes().front();
+            auto d=descriptors.front().toMap();d["color"]="#9f1853";
+            for(int state=0;state<3;++state) {
+                  note->setSelected(state==0);note->setMark(state==1);note->setDropTarget(state==2);
+                  observer.clearAllPreviews();view->update();QTest::qWait(10);
+                  const auto baseline=view->grab().toImage();
+                  observer.setNotePreviewColors({d});view->update();QTest::qWait(10);
+                  QCOMPARE(view->grab().toImage(),baseline);
+                  }
+            note->setSelected(false);note->setMark(false);note->setDropTarget(false);
+            observer.clearAllPreviews();view->update();QTest::qWait(10);
+            const auto original=view->grab().toImage();observer.setNotePreviewColors({d});
+            QVERIFY(view->grab().toImage()!=original);
+            observer.clearAllPreviews();view->update();QTest::qWait(10);
+            QCOMPARE(view->grab().toImage(),original);
+            // Native P keyboard state and palette are independent of the score preview.
+            HPiano keyboard;keyboard.resize(600,180);keyboard.show();QTest::qWait(10);
+            score->select(note);keyboard.changeSelection(score->selection());
+            for(int mode=0;mode<3;++mode) {
+                  keyboard.setPlaybackActive(mode==1);
+                  if(mode==1)keyboard.pressPlaybackPitch(note->pitch());
+                  if(mode==2)keyboard.pressPitch(note->pitch());
+                  observer.clearAllPreviews();const auto keys=keyboard.grab().toImage();
+                  observer.setNotePreviewColors({d});QCOMPARE(keyboard.grab().toImage(),keys);
+                  observer.clearAllPreviews();QCOMPARE(keyboard.grab().toImage(),keys);
+                  keyboard.releasePlaybackPitch(note->pitch());keyboard.releasePitch(note->pitch());
+                  }
+            keyboard.hide();
+            score->selection().setRange(segment,score->lastSegment(),0,1);score->selection().update();
+            observer.clearAllPreviews();view->update();QTest::qWait(10);
+            const auto selected=view->grab().toImage();observer.setNotePreviewColors({d});
+            QCOMPARE(view->grab().toImage(),selected);
+            view->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("native-range-color.png"));
+            main->hide();
+            }
+      void denseMarkersKeepTickAndNativeFont()
+            {
+            auto main=Ms::mscore;
+            auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");
+            QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));
+            main->resize(1100,800);main->show();QTest::qWait(30);
+            auto view=main->currentScoreView();PluginAPI::Score wrapped(score);
+            PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);
+            auto first=observer.snapshot(0,4,8).value("notes").toList().front().toMap();
+            first["chord"]="Cmaj7(#11)/E";first["chordTick"]=0;first["chordUntil"]=60;
+            auto second=first;second["chord"]="G7(b9)/B";second["chordTick"]=60;second["chordUntil"]=480;
+            observer.setScorePreview({first,second});
+            QCOMPARE(observer.previewStatus().value("hidden").toInt(),0);
+            QSignalSpy activated(&observer,&PluginAPI::ScoreObserver::previewActivated);
+            const auto segment=score->firstSegment(SegmentType::ChordRest);
+            const auto next=score->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest);
+            const auto note=toChord(segment->element(4))->notes().front();
+            const qreal x0=segment->pagePos().x()+segment->measure()->system()->page()->pos().x();
+            const qreal x1=x0+(next->pagePos().x()-segment->pagePos().x())/8;
+            QMap<int,qreal> hitYs;
+            for(int dy=-qRound(note->spatium()*30);dy<0;dy+=1) {
+                  for(const auto anchor:QVector<QPair<int,qreal>>{{0,x0},{60,x1}}) {
+                        QPointF point(anchor.second+note->spatium()*.3,note->canvasPos().y()+dy);
+                        if(view->activateNotePreview(point) && activated.last().front().toInt()==anchor.first)hitYs.insert(anchor.first,point.y());
+                        }
+                  }
+            QCOMPARE(hitYs.size(),2);QVERIFY(qAbs(hitYs[0]-hitYs[60])>note->spatium());
+            observer.setActiveScorePreview(60);
+            view->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("dense-native-font.png"));
+            const auto normal=view->grab().toImage();first["chordFont"]="Arial";second["chordFont"]="Arial";
+            observer.setScorePreview({first,second});QVERIFY(view->grab().toImage()!=normal);
+            main->hide();
             }
       };
 QTEST_MAIN(TestPluginHost)

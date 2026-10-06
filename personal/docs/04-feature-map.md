@@ -85,3 +85,6 @@ rg -n 'QSKIP|add_test|subdirs|MTEST_LINK_MSCOREAPP' mtest
 0.5.0 新入口：AppearanceEditor 配置原谱优先、背景遮罩、顶部/右侧共存；applyPreview / previewTickX 实现和声变化 x 锚点；QmlPlugin::showDetailPanel 接受一个已有控件树。编辑遮挡接线见 ScoreView::previewEditBounds / editelement.cpp，回归为 tst_pluginhost。
 
 自动规范输入时值（个人 0.7.0）：[inputrhythm.cpp](../../libmscore/inputrhythm.cpp)、`noteentry.cpp` / `cmd.cpp` / `score.cpp` 和 `pianoview.cpp` 接线；应用开关在工具菜单，默认开启。规则、复杂对象保护与回归见 [12](12-input-rhythm.md)。
+
+
+0.8.0 和声区间：share/plugins/HarmonyAssistant/Timeline.js 是纯数值加权识别/人工范围，RangeEditor.qml 为手柄/精确 tick/独立历史，Preferences.js 配置单/多踏板与摘要/详情结果。attackTick 与踏板二分索引、私有 Harmony/QPicture 位于 scoreobserver.cpp；NotePreviewEntry 的字形等价与尺寸位于 notepreview.h；状态颜色优先级入口为 ScoreView::paint，单击接线 events.cpp。新回归在 tst_scoreobserver / tst_pluginhost，不修改音频、原生 P 键盘或选区框。

@@ -15,6 +15,14 @@ Column {
         modified(Preferences.clean(next))
     }
     UiLabel {text:"显示位置与谱面记号"; font.bold:true; color:"#343a3f"; font.pixelSize:13}
+    RowLayout {width:parent.width
+        UiLabel {text:"顶部主和弦";color:"#697077";font.pixelSize:11}
+        ComboBox {model:["实时结果","所属和弦"];currentIndex:configuration.summaryMode;Layout.fillWidth:true;onActivated:editor.option("summaryMode",currentIndex)}
+    }
+    RowLayout {width:parent.width
+        UiLabel {text:"侧边主和弦";color:"#697077";font.pixelSize:11}
+        ComboBox {model:["实时结果","所属和弦"];currentIndex:configuration.detailMode;Layout.fillWidth:true;onActivated:editor.option("detailMode",currentIndex)}
+    }
     Switch {text:"顶部摘要同时显示右侧详情"; checked:configuration.dualPanel; onToggled:if(checked!==configuration.dualPanel)editor.option("dualPanel",checked)}
     RowLayout {
         width:parent.width
@@ -52,6 +60,11 @@ Column {
     }
     Switch {text:"优先保留原谱和弦 / 级数"; checked:configuration.respectExistingHarmony; onToggled:if(checked!==configuration.respectExistingHarmony)editor.option("respectExistingHarmony",checked)}
     Switch {text:"记号背景遮罩"; checked:configuration.chordMask; onToggled:if(checked!==configuration.chordMask)editor.option("chordMask",checked)}
+    Switch {text:"小节开头重述所属和弦";checked:configuration.repeatBars;onToggled:if(checked!==configuration.repeatBars)editor.option("repeatBars",checked)}
+    RowLayout {width:parent.width
+        UiLabel {text:"级数字体";color:"#697077";font.pixelSize:11}
+        TextField {text:configuration.degreeFont;Layout.fillWidth:true;maximumLength:64;onEditingFinished:if(text.trim().length)editor.option("degreeFont",text.trim())}
+    }
     UiLabel {width:parent.width; text:"记号对齐和弦变化的时间位置；关闭遮罩后只显示文字，仍避让原谱，当前记号以文字色高亮。"; color:"#697077"; font.pixelSize:10; wrapMode:Text.Wrap}
     UiLabel {width:parent.width; text:"同位置已有原谱和弦时，分析留在面板，谱面只补充级数；已有罗马级数时只补充和弦。关闭可同时显示，仍会避让。编辑框始终优先。"; color:"#697077"; font.pixelSize:10; wrapMode:Text.Wrap}
     Switch {text:"强调含调外音的和弦"; checked:configuration.chromaticAccent; onToggled:if(checked!==configuration.chromaticAccent)editor.option("chromaticAccent",checked)}

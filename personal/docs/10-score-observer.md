@@ -93,3 +93,14 @@ setActiveScorePreview(tick) 在每乐器有序标记索引二分查当前区间�
 描述符 chordTick 可不同于来源 Note.tick；来源只数值定位乐器及析构身份。对应变化节拍有 ChordRest 用 segment.pagePos().x，无新音则按相邻节拍 x 插值，使用变化 Measure/System/Page。NotePreviewMarkers 独立存储，颜色表仍按 Note 查找；同一源多个变化不会互相覆盖。chordMask 默认 true；false 仅关背景，不关高亮/碰撞避让。preferExistingHarmony 默认由插件传 true，同 tick/Part 的 Harmony 可清除重复 chord 或 degree 字段，不更改原谱。当前层复用基础标签框并避开固定记号；原生编辑区域优先显示原对象和光标。
 
 QmlPlugin 的 detailPanelHost 是弱窗口对应的 QQuickItem，detailPanelVisible 通知实际显示状态；showDetailPanel(bool) 创建/显隐单个辅助停靠窗口，focusDetailPanel 显式聚焦，panelDetailClosed 区分用户关闭。可选 detailPanelTitle/detailPanelBackground 由 QML 提供。插件通过 visual parent 重挂载同一控件，QObject ownership 保留在原根；没有第二个 QQmlEngine、ScoreObserver 或分析任务。辅助容器拥有 QWindow，插件销毁后 deleteLater 清理 dock；主面板关闭和设置持久化仍沿原生命周期。
+
+
+## 0.8.0：区间输入、原生字形与状态颜色
+
+contextSnapshot 新增每乐器当前踏板窗口、parts、scoreEnd；note descriptor 的 attackTick 沿反向 tie 链找到逻辑攻击起点，带循环保护。踏板窗口按乐器/起点排序并合并严格重叠范围，二分查找只传当前窗口，避免每帧携带全谱踏板。相邻抬/踩踏板边界仍分开。旧字段与接口保留；音乐推理仍在插件 Timeline.js，不在 libmscore 或音频侧。
+
+固定标记使用独立 MasterScore 的样式副本和 Harmony::setHarmony/calculateBoundingRect/draw 记录 QPicture。先 checkChordList 支持尚无原生和弦的谱面；未知后缀不会加入用户谱的 ChordList。批次按文本/字体/缩放/颜色复用；渲染内容 SHA256 纳入 Entry 等价判断，防止同尺寸样式变更不重绘。degreeFont 单独配置，previewStatus 返回 hidden/fontFallback。冲突按实际高度逐个上移，最多六行，x 不改变；绝对页边界和原谱对象继续优先。
+
+events.cpp 在 NORMAL、左键且无修饰键命中可见固定记号时激活，双击路径保留；编辑/foto 交还原生操作。ScoreView 音符预览调用原生 curColor(visible,override)，保持选中/播放/拖放/隐藏颜色，不改变 HPiano 或选区框实现。
+
+插件 Timeline.js 的加权模板、区间/人工覆盖、Preferences.js 新显示模式以及 RangeEditor.qml 与宿主解耦。人工修正由既有配置接口保存，原生不理解其 JSON。schema 2 分析由插件处理，schema 1 兼容。实际回归和部署见 CHANGELOG 0.8.0；接口仍是 GUI 屏幕辅助，首次扫描/避让有成本。

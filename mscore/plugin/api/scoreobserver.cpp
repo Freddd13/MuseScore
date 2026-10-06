@@ -31,6 +31,9 @@
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFontMetricsF>
+#include <QFontInfo>
+#include <QPainter>
+#include <memory>
 #include <QJsonDocument>
 #include <QSaveFile>
 #include <QStandardPaths>
@@ -141,6 +144,12 @@ QVariantMap ScoreObserver::describe(const Ms::Note* note, int pitch, bool eventP
             {"index", int(position - notes.begin())}, {"pitch", pitch},
             {"writtenPitch", note->pitch()}, {"writtenTpc", note->tpc()}
             };
+      auto attack=note;
+      QSet<const Ms::Note*> visited;
+      while (attack->tieBack() && attack->tieBack()->startNote() && !visited.contains(attack)) {
+            visited.insert(attack);attack=attack->tieBack()->startNote();
+            }
+      result.insert("attackTick",attack->chord()->tick().ticks());
       if (!eventPitch) result.insert("tpc", note->tpc1());
       return result;
       }
@@ -198,6 +207,16 @@ void ScoreObserver::ensureIndex(int firstTrack, int endTrack)
             _frameTicks.append(window.start); _frameTicks.append(window.end);
             hash.addData(QByteArray::number(window.start) + ":pedal:" + QByteArray::number(window.end) + ";");
             }
+      std::sort(_pedals.begin(),_pedals.end(),[](const auto& a,const auto& b) {
+            return a.firstTrack<b.firstTrack || (a.firstTrack==b.firstTrack && a.start<b.start);
+            });
+      QVector<PedalWindow> continuous;
+      for (const auto& window:_pedals) {
+            if (!continuous.isEmpty() && continuous.back().firstTrack==window.firstTrack && window.start<continuous.back().end)
+                  continuous.back().end=qMax(continuous.back().end,window.end);
+            else continuous.append(window);
+            }
+      _pedals=continuous;
       for (auto measure = _score->firstMeasure(); measure; measure = measure->nextMeasure()) {
             _frameTicks.append(measure->tick().ticks());
             _measureStarts.append(measure->tick().ticks());
@@ -261,6 +280,18 @@ QVariantMap ScoreObserver::snapshot(int tick, int firstTrack, int endTrack, bool
       return result;
       }
 
+const ScoreObserver::PedalWindow* ScoreObserver::pedalWindow(int tick,int track) const
+      {
+      const int part=_score->staff(track/VOICES)->part()->startTrack();
+      const auto after=std::upper_bound(_pedals.cbegin(),_pedals.cend(),std::make_pair(part,tick),
+            [](const auto& key,const auto& window) {
+                  return key.first<window.firstTrack || (key.first==window.firstTrack && key.second<window.start);
+                  });
+      if (after==_pedals.cbegin())return nullptr;
+      const auto& window=*(after-1);
+      return window.firstTrack==part && tick<window.end ? &window : nullptr;
+      }
+
 QVariantList ScoreObserver::contextNotes(int tick, int firstTrack, int endTrack, bool pedal, int windowTicks)
       {
       ensureIndex(firstTrack, endTrack);
@@ -271,11 +302,10 @@ QVariantList ScoreObserver::contextNotes(int tick, int firstTrack, int endTrack,
             const auto& voice = _index[track - firstTrack];
             int start = qMax(barStart, tick - qBound(0, windowTicks, 1920));
             bool heldByPedal = false;
-            if (pedal) for (const auto& window : _pedals)
-                  if (track >= window.firstTrack && track < window.endTrack && window.start <= tick && tick < window.end) {
-                        // Include a note already held when the pedal goes down.
-                        start = qMin(start, window.start); heldByPedal = true;
-                        }
+            if (pedal) if (const auto window=pedalWindow(tick,track)) {
+                  // Include a note already held when the pedal goes down.
+                  start=qMin(start,window->start);heldByPedal=true;
+                  }
             auto next = std::upper_bound(voice.cbegin(), voice.cend(), tick,
                   [](int value, const Event& event) { return value < event.tick; });
             while (next != voice.cbegin()) {
@@ -310,6 +340,14 @@ QVariantMap ScoreObserver::contextSnapshot(int tick, int firstTrack, int endTrac
             context = merged.values();
             }
       result.insert("analysisNotes", context);
+      QVariantList parts,windows;
+      for (const auto part:_score->parts()) if (part->startTrack()<endTrack && part->endTrack()>firstTrack)
+            parts.append(QVariantMap{{"startTrack",part->startTrack()},{"endTrack",part->endTrack()}});
+      for (const auto part:_score->parts()) if (part->startTrack()<endTrack && part->endTrack()>firstTrack)
+            if (const auto window=pedalWindow(tick,part->startTrack()))
+                  windows.append(QVariantMap{{"start",window->start},{"end",window->end},{"firstTrack",window->firstTrack},{"endTrack",window->endTrack}});
+      result.insert("parts",parts);result.insert("pedalWindows",windows);
+      result.insert("scoreEnd",_score->lastMeasure() ? _score->lastMeasure()->endTick().ticks() : 0);
       result.insert("fingerprint", _fingerprint);
       return result;
       }
@@ -383,6 +421,10 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
             }
       QHash<const Page*,QVector<QRectF>> occupied,chordBoxes;
       QHash<const System*,QMap<int,QVector<int>>> groups;
+      // Private style/chord list: parsing unknown symbols must not modify the user's score.
+      std::unique_ptr<Ms::MasterScore> scratch;
+      QHash<QString,NotePreviewEntry> rendered;
+      int hidden=0;QString fontFallback;
       for (const auto& descriptor : descriptors) {
             const auto value=descriptor.toMap();
             auto note=resolve(value,descriptors.size()>64 ? &segments : nullptr);
@@ -458,19 +500,50 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
             if (family.isEmpty()) family=_score->styleSt(Sid::chordSymbolAFontFace);
             qreal scale=value.value("chordScale",1.0).toDouble();
             if (!qIsFinite(scale) || scale<.6 || scale>2.) scale=1.;
-            entry.chordFont=QFont(family);entry.chordFont.setPixelSize(qMax(5,qRound(sp*1.65*scale)));
-            entry.chordFont.setLetterSpacing(QFont::AbsoluteSpacing,-sp*.02);
-            entry.degreeFont=QFont("Arial");entry.degreeFont.setPixelSize(qMax(5,qRound(sp*1.45*scale)));
+            entry.chordFont=QFont(family);entry.chordFont.setPointSizeF(_score->styleD(Sid::chordSymbolAFontSize)*scale);
+            QString degreeFamily=value.value("degreeFont","Arial").toString().left(64);
+            entry.degreeFont=QFont(degreeFamily);entry.degreeFont.setPixelSize(qMax(5,qRound(sp*1.45*scale)));
+            const QFontInfo resolved(entry.chordFont);
+            if (resolved.family().compare(family,Qt::CaseInsensitive)!=0) fontFallback=resolved.family();
             auto readColor=[&](const char* key,const QColor& fallback) {
                   const QColor color(value.value(key).toString());return color.isValid() ? color : fallback;
                   };
             entry.chordColor=readColor("chordColor",entry.chordColor);
             entry.highlightColor=readColor("highlightColor",entry.highlightColor);
             entry.highlightBackground=readColor("highlightBackground",entry.highlightBackground);
+            if (!entry.chord.isEmpty()) {
+                  const QString renderKey=entry.chord+"\t"+family+"\t"+QString::number(scale,'g',12)+"\t"
+                        +entry.chordColor.name()+entry.highlightColor.name();
+                  if (!rendered.contains(renderKey)) {
+                        if (!scratch) {
+                              scratch=std::make_unique<Ms::MasterScore>(_score->style());
+                              // Scores without written Harmony may not yet have loaded their symbol list.
+                              scratch->style().checkChordList();
+                              }
+                        Harmony harmony(scratch.get());
+                        if (!value.value("chordFont").toString().isEmpty()) harmony.setProperty(Pid::FONT_FACE,family);
+                        harmony.setProperty(Pid::FONT_SIZE,_score->styleD(Sid::chordSymbolAFontSize)*scale);
+                        harmony.setHarmony(entry.chord);harmony.calculateBoundingRect();
+                        const auto nativeBox=harmony.bbox();
+                        NotePreviewEntry glyphs;glyphs.renderedChordSize=nativeBox.size();glyphs.renderedChordKey=renderKey;
+                        auto record=[&](const QColor& color,QPicture& picture) {
+                              harmony.setColor(color);QPainter painter(&picture);painter.translate(-nativeBox.topLeft());
+                              static_cast<const Element&>(harmony).draw(&painter);painter.end();
+                              };
+                        record(entry.chordColor,glyphs.chordPicture);record(entry.highlightColor,glyphs.activeChordPicture);
+                        // Include rendered bytes: score style/font/chord-list edits must invalidate equal-sized glyphs.
+                        glyphs.renderedChordKey += QCryptographicHash::hash(
+                              QByteArray(glyphs.chordPicture.data(),glyphs.chordPicture.size()),QCryptographicHash::Sha256).toHex();
+                        rendered.insert(renderKey,glyphs);
+                        }
+                  const auto& glyphs=rendered[renderKey];entry.chordPicture=glyphs.chordPicture;
+                  entry.activeChordPicture=glyphs.activeChordPicture;entry.renderedChordSize=glyphs.renderedChordSize;
+                  entry.renderedChordKey=glyphs.renderedChordKey;
+                  }
             entry.chordBox=QRectF(QPointF(),layoutPreviewChord(entry,qBound(0,value.value("chordOrder").toInt(),3)));
             groups[system][entry.annotationTrack].append(markers.size());markers.append(entry);positions.append(position);
             }
-      // One shared row per system/part. No horizontal nudging: x remains the harmonic change's tick.
+      // Prefer one row per system/part; lift colliding markers while keeping their tick x.
       for (auto systemIt=groups.cbegin();systemIt!=groups.cend();++systemIt) {
             const auto system=systemIt.key();const auto page=system->page();
             for (auto groupIt=systemIt->cbegin();groupIt!=systemIt->cend();++groupIt) {
@@ -479,36 +552,29 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
                   const qreal sp=markers[group.front()].spatium;
                   qreal height=0;for (int index:group) height=qMax(height,markers[index].chordBox.height());
                   const qreal top=system->staffYpage(groupIt.key()/VOICES)-sp*1.5-height;
-                  QVector<QRectF> best;int bestCount=-1;
-                  for (int lane=0;lane<4;++lane) {
-                        QVector<QRectF> boxes;int count=0;
-                        for (int index:group) {
-                              const auto& entry=markers[index];
-                              const QRectF candidate(positions[index].x(),top-lane*sp*1.3,entry.chordBox.width(),height);
+                  for (int index:group) {
+                        auto& entry=markers[index];QRectF placed;
+                        for (int lane=0;lane<6;++lane) {
+                              const QRectF candidate(positions[index].x(),top-lane*(height+sp*.5),entry.chordBox.width(),height);
                               bool collision=!page->bbox().contains(candidate);
-                              if (owner==this) for (const auto& box:_baseChordBoxes.value(page))
-                                    if (box.adjusted(-sp*.12,-sp*.12,sp*.12,sp*.12).intersects(candidate)){collision=true;break;}
-                              for (const auto& box:boxes) if (!box.isEmpty() && box.adjusted(-sp*.2,0,sp*.2,0).intersects(candidate)){collision=true;break;}
-                              if (!collision) for (const auto& box:occupied[page])
-                                    if (box.adjusted(-sp*.12,-sp*.12,sp*.12,sp*.12).intersects(candidate)){collision=true;break;}
+                              for (const auto& box:occupied[page])
+                                    if (box.adjusted(-sp*.15,-sp*.12,sp*.15,sp*.12).intersects(candidate)){collision=true;break;}
                               if (!collision) for (const auto element:page->items(candidate)) {
                                     if (!element->visible() || element->isStaffLines() || element->isPage() || element->isSystem() || element->isMeasure()) continue;
                                     if (element->pageBoundingRect().adjusted(-sp*.12,-sp*.12,sp*.12,sp*.12).intersects(candidate)){collision=true;break;}
                                     }
-                              boxes.append(collision ? QRectF() : candidate);if (!collision)++count;
+                              if (!collision){placed=candidate;break;}
                               }
-                        if (count>bestCount){bestCount=count;best=boxes;}
-                        if (count==group.size()) break;
-                        }
-                  for (int i=0;i<group.size();++i) {
-                        auto& entry=markers[group[i]];
-                        entry.chordBox=best[i].isEmpty() ? QRectF() : best[i].translated(-positions[group[i]]);
-                        if (!best[i].isEmpty()){occupied[page].append(best[i]);chordBoxes[page].append(best[i]);}
+                        entry.chordBox=placed.isEmpty() ? QRectF() : placed.translated(-positions[index]);
+                        if (placed.isEmpty()) ++hidden;
+                        else {occupied[page].append(placed);chordBoxes[page].append(placed);}
                         entry.bounds=entry.chordBox.isEmpty() ? QRectF() : entry.chordBox.translated(entry.anchor);
                         }
+
                   }
             }
-      if (owner==&_baseOwner){_baseColors=colors;_baseChordBoxes=chordBoxes;}
+      if (owner==&_baseOwner){_baseColors=colors;_baseChordBoxes=chordBoxes;
+            setProperty("previewStatus",QVariantMap{{"hidden",hidden},{"fontFallback",fontFallback}});}
       for (auto viewer:_score->getViewer()) {
             auto view=dynamic_cast<Ms::ScoreView*>(viewer);if (!view) continue;
             view->setNotePreviewColors(owner,colors,markers);

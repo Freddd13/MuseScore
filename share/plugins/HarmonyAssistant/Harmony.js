@@ -107,6 +107,41 @@ function detect(pitches) {
     best.alternatives=alternatives;
     return best;
 }
+function detectWeighted(notes, weights, previous, tonic, minorKey, tick) {
+    var maximum=0,mask=0,bass=null,held=notes.filter(function(n){return n.end===undefined || n.end>tick;});
+    var pool=held.length?held:notes;
+    for(var p=0;p<pool.length;++p)if(!bass || pool[p].pitch<bass.pitch)bass=pool[p];
+    for(var pc in weights)maximum=Math.max(maximum,weights[pc]);
+    if(!maximum)return {root:-1,definition:-1,kind:"空拍",alternatives:[]};
+    var normalized=[];
+    for(var i=0;i<12;++i){normalized[i]=(weights[i]||0)/maximum;if(normalized[i]>=.15)mask|=1<<i;}
+    if(bitCount(mask)<3)return detect(notes.map(function(n){return n.pitch;}));
+    var best=null,runner=null,scale=minorKey?[0,2,3,5,7,8,10]:[0,2,4,5,7,9,11];
+    for(var t=0;t<templates.length;++t) {
+        var candidate=templates[t],definition=defs[candidate.definition],hits=bitCount(mask&candidate.mask);
+        if(hits<3)continue;
+        var cost=.23*Math.max(0,definition.intervals.length-3);
+        for(i=0;i<12;++i) {
+            if(candidate.mask&(1<<i)) {
+                var missing=1-normalized[i];
+                cost+=missing*((candidate.fifth&(1<<i))?.45:i===candidate.root?1.8:3.2);
+            } else cost+=normalized[i]*3.0;
+        }
+        if(bass) {
+            var bassPc=mod12(bass.pitch);
+            if(candidate.root===bassPc)cost-=.6;
+            else if(candidate.mask&(1<<bassPc))cost-=.22;
+        }
+        if(previous && previous.root===candidate.root)cost-=previous.definition===candidate.definition?.65:.3;
+        if(scale.indexOf(mod12(candidate.root-tonic))<0)cost+=.12;
+        var result={root:candidate.root,definition:candidate.definition,cost:cost};
+        if(!best || cost<best.cost){runner=best;best=result;}else if(!runner||cost<runner.cost)runner=result;
+    }
+    if(!best || best.cost>6)return {root:-1,definition:-1,kind:"未确定和弦",alternatives:[]};
+    best.alternatives=runner && runner.cost-best.cost<.65?[runner]:[];
+    best.kind=best.alternatives.length?"上下文匹配 · 存在歧义":"上下文匹配";
+    return best;
+}
 function roman(tonic, minorKey, chordRoot, definition) {
     if(chordRoot<0 || definition<0) return "—";
     // Conventional Roman numerals reference the parallel major: A minor uses ♭III, ♭VI, ♭VII.

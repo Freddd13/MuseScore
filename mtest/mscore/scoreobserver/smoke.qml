@@ -4,7 +4,7 @@ import FileIO 3.0
 
 MuseScore {
     menuPath: "Plugins.Harmony native smoke"
-    version: "1.3.0"
+    version: "1.4.0"
     requiresScore: true
     FileIO {id: report}
     onRun: {
@@ -52,6 +52,16 @@ MuseScore {
             panel.applyPreferences(config)
             panel.buildAnalysisChunk()
             if(!panel.analysisRecords.length)result.failures.push("full score analysis missing")
+            while(panel.regionBuilder)panel.buildRegionChunk()
+            if(panel.analysisDirty)result.failures.push("harmonic regions incomplete")
+            if(!panel.automaticRegions.some(function(r){return r.start<=480 && r.end>480 && r.root===0 && r.definition===23}))result.failures.push("upper extensions changed the bass harmony")
+            result.persistedCorrection=panel.manualOverrides.length?panel.manualOverrides[0].chord:""
+            if(result.persistedLabel==="third" && result.persistedCorrection!=="Am/C")result.failures.push("manual correction not restored on restart")
+            panel.displayTick(480,true)
+            panel.editRange("assign",0,720,13,1,0)
+            if(panel.ownedRegion.chord!=="Am/C")result.failures.push("manual region assignment")
+            panel.openAnnotation(0,0)
+            if(panel.annotationTick!==0)result.failures.push("selected annotation tick")
             panel.observer.setActiveScorePreview(600)
             var preferences=panel.observer.loadConfiguration("NativeSmoke")
             var saved={schema:1,label:"third",enabled:true}

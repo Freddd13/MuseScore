@@ -1,16 +1,28 @@
-# 和声助手 1.3.0
+# 和声助手 1.4.0
 
-MuseScore 3 Evolution 钢琴编曲面板。完整版搭配个人主程序版本 `0.5.0` 使用；音乐规则与界面仍在插件，主程序只提供通用数值快照、屏幕预览、停靠状态和文件读写接口。
+MuseScore 3 Evolution 钢琴编曲面板。完整版搭配个人主程序版本 `0.8.0` 使用；音乐规则与界面仍在插件，主程序只提供通用数值快照、屏幕预览、停靠状态和文件读写接口。
 
 ## 开始使用
 
-本机新程序：`E:\programming\funcodes\muse3_dev\MuseScore\msvc.install_harmony_1_3_x64\bin\MuseScore3Evo.exe`。
+本机新程序：`E:\programming\funcodes\muse3_dev\MuseScore\msvc.install_harmony_1_4_x64\bin\MuseScore3Evo.exe`。
 
-插件已放入新程序的 `plugins/HarmonyAssistant/`，并同步到你原先已启用的个人插件目录；旧文件逐个备份为 `.pre-1.3.0.bak`。启动新程序，在「插件 → 插件管理器」勾选 `HarmonyAssistant_MS3.qml`，然后运行「插件 → Harmony Assistant」。选择钢琴谱上的音符即可；普通空格播放自动跟随。请使用上面的新程序路径，旧程序和旧安装目录均保留。
+插件已放入新程序的 `plugins/HarmonyAssistant/`，并同步到你原先已启用的个人插件目录；旧文件逐个备份为 `.pre-1.4.0.bak`。启动新程序，在「插件 → 插件管理器」勾选 `HarmonyAssistant_MS3.qml`，然后运行「插件 → Harmony Assistant」。选择钢琴谱上的音符即可；普通空格播放自动跟随。请使用上面的新程序路径，旧程序和旧安装目录均保留。
 
-单独安装插件时，将本目录的运行文件一起复制：`HarmonyAssistant_MS3.qml`、`Harmony.js`、`Preferences.js`、`Analysis.js`、`ConfigurationEditor.qml`、`SettingsStore.qml`、`PanelCard.qml`、`UiLabel.qml`、`StableLabel.qml`、`ColorOption.qml`、`AppearanceEditor.qml`。标准 MuseScore 3 仍可使用原有选区分析与颜色恢复；新增全谱图层、踏板上下文及分析交换需要新主程序。只勾选主入口，不勾选组件或 tests 下的测试插件。
+单独安装插件时，将本目录的运行文件一起复制：`HarmonyAssistant_MS3.qml`、`Harmony.js`、`Preferences.js`、`Analysis.js`、`ConfigurationEditor.qml`、`SettingsStore.qml`、`PanelCard.qml`、`UiLabel.qml`、`StableLabel.qml`、`ColorOption.qml`、`AppearanceEditor.qml`、`Timeline.js`、`RangeEditor.qml`。标准 MuseScore 3 仍可使用原有选区分析与颜色恢复；新增全谱图层、踏板上下文及分析交换需要新主程序。只勾选主入口，不勾选组件或 tests 下的测试插件。
 
-## 1.3 记号优先级与双面板
+## 1.4 区间识别、人工修正与原生字体
+
+- 设置 →「踏板内识别」选择「一个和弦」或「允许多个」。默认综合整个踏板区间的持续时长与音高证据，只生成一个识别结果；跨小节、延音链不单独产生变化点。多和弦模式仍允许同一踏板内换和声，但降低踏板残留与旧延长音的影响，优先考虑新伴奏与当前实际低音。级数按和弦根音计算，转位低音写在斜线后，不将低音当成新的级数根音。
+- 全谱结果是按乐器保存的半开区间 `[start,end)`。相邻相同根音、类型、低音和调性合并；默认关闭小节重复记号，可单独开启。「顶部摘要结果」与「详细面板结果」各自选择实时或所属和弦，功能音和离调色也分别遵循所选结果。实时瞬间与区间综合结果允许不同。
+- 谱面固定记号保持变化 tick 的 x；拥挤时将冲突记号放到更高的行，其他记号保持共同基线。最多六行，页外或原谱文字占满时显示省略数量提示；避免无限上移。单击或双击可聚焦面板，停止时记号也保持当前高亮。
+- 设置 →「和声范围编辑」提供可拖动的左右范围手柄、起止 tick 精确输入、指定根音/类型/低音、拆分、合并、排除范围、恢复自动以及独立撤销/重做。手柄吸附到 60 tick（四分音符的八分之一）。选中记号再修正；在没有自动结果的位置也能指定新范围。范围操作只修改分析，不修改音符或占用谱面的撤销记录。
+- 人工修正按谱面内容指纹原子保存，下次加载自动读取。编辑谱面导致指纹变化后，旧修正暂停应用并提供复核按钮，不静默套用错位范围。JSON 分析升级为 schema 2，包含区间和人工修正；仍接受 schema 1。CSV 导出区间起止、乐器、根音、低音和来源。
+- 和弦使用原生 `Harmony` 的字形排版，在独立样式副本中生成缓存图片，默认遵循当前谱的和弦字体/后缀规则与字号。Edwin/Arial 覆盖仍可选，级数字体另设；缺字或字体回退会提示。样式变化使缓存失效，原谱的和弦列表、布局与保存内容不被预览改动。
+- 临时着色现在通过原生 `Element::curColor` 保留选中、播放、拖放和隐藏状态的优先级；取消预览恢复原色。P 键盘与选区框宽度保持原实现，加入对照回归。
+
+`Timeline.js` 负责分批区间构建与人工覆盖，`RangeEditor.qml` 负责范围交互。音乐规则仍在插件；软件本体仅补充延音攻击起点、当前踏板元数据、字形预览与鼠标命中。原生实现不会进入音频回调。复杂复调或一个踏板内实际多个和弦应选择多和弦模式或人工修正；识别不等于唯一的功能和声解释。
+
+## 历史 1.3 记号优先级与双面板
 
 - 默认「优先保留原谱和弦 / 级数」：同一节拍、同一乐器已有普通或 Nashville 和弦时，隐藏重复的分析和弦；原谱 Roman 级数则隐藏重复级数。另一项仍可补充显示，面板始终保留完整分析。关闭此选项可同时显示。
 - 当前功能名避开已缓存的固定和弦框，并复用全谱标签的位置。原生文字编辑或拖动过程中，临时标签让出编辑对象附近区域，双击也交还原生编辑；结束编辑后恢复。选择/播放时固定记号保持原位，只更新高亮。
@@ -22,7 +34,7 @@ MuseScore 3 Evolution 钢琴编曲面板。完整版搭配个人主程序版本 
 
 这些新增原生能力需要个人主程序 0.5.0。硬件音频与长时间会话仍需实际使用验收；索引耗时不等于屏幕重绘或硬实时音频性能。
 
-## 1.2 显示与交互
+## 历史 1.2 显示与交互
 
 - 顶部横条默认居中，可在右侧直接切换左 / 中 / 右；设置中的「横条位置」还支持 0–100% 自定义位置，并给右侧按钮留出空间。位置自动保存。横条的详细面板和悬浮功能保留。
 - 「谱面外观与位置」选择和弦 / 级数 / 两者，以及和弦在左、级数在左、和弦在上、级数在上。可设置字号 60–200%、正常文字色、当前高亮文字和背景色。
@@ -36,7 +48,7 @@ MuseScore 3 Evolution 钢琴编曲面板。完整版搭配个人主程序版本 
 
 以上固定记号、高亮索引和双击需要主程序 0.4.0；旧主程序保留兼容路径。
 
-## 1.1 新功能
+## 历史 1.1 新功能
 
 - 修复点击「插件」菜单时的主程序终止：析构清理仅比较 Element 地址，禁止调用已经析构的派生类型虚函数。另修复插件目录被重复递归扫描的问题。
 - 顶部/底部停靠自动收为横条，优先显示当前和弦、级数和功能音；点击「详细面板」打开独立工具窗口。侧栏可滚动，宽窗口双列显示。标题栏可拖动/双击悬浮，面板内也提供悬浮/停靠按钮。
@@ -79,13 +91,13 @@ MuseScore 3 Evolution 钢琴编曲面板。完整版搭配个人主程序版本 
 
 ## 维护边界
 
-- `Harmony.js`：ES5 音乐逻辑，不依赖 Qt/MuseScore 对象。
+- `Harmony.js`：ES5 音乐逻辑，不依赖 Qt/MuseScore 对象；`Timeline.js`：加权区间构建、合并及人工覆盖；`RangeEditor.qml`：范围编辑交互。
 - `Preferences.js`：版本化配置、输入校验和配色预设；`Analysis.js`：分析交换格式、校验、CSV 和二分定位。
 - 主 QML：选区、调性、显示状态与宿主适配；`ConfigurationEditor.qml`、`SettingsStore.qml`、`PanelCard.qml`、`UiLabel.qml`、`StableLabel.qml` 负责配置与稳定排版；`AppearanceEditor.qml`、`ColorOption.qml` 负责样式与选色。
 - 主程序 `ScoreObserver`：GUI 线程真实位置、数值快照、按内容版本失效的声部索引。
 - `NotePreviewLayers`：视图内独立颜色层；模型、音频回调、文件格式不承担和弦功能。
 
-本目录是插件编辑源。发布时将上述十一个运行文件及本 README 同步到主仓库 `share/plugins/HarmonyAssistant/`，现有递归安装规则会打包它们。原稿、1.0 备份与旧 ZIP 均保留。native 下的迁移脚本只记录一次性的开发过程，不能重复运行；供其他机器应用的最终修改见版本化 patch。主程序架构/API/合并点详见其 `personal/docs/10-score-observer.md`。
+本目录是插件编辑源。发布时将上述十三个运行文件及本 README 同步到主仓库 `share/plugins/HarmonyAssistant/`，现有递归安装规则会打包它们。原稿、1.0 备份与旧 ZIP 均保留。native 下的迁移脚本只记录一次性的开发过程，不能重复运行；供其他机器应用的最终修改见版本化 patch。主程序架构/API/合并点详见其 `personal/docs/10-score-observer.md`。
 
 ## 验证与性能
 
@@ -94,14 +106,17 @@ MuseScore 3 Evolution 钢琴编曲面板。完整版搭配个人主程序版本 
 ```powershell
 node HarmonyAssistant/test-harmony.cjs
 node HarmonyAssistant/tests/test-exchange.cjs
+node HarmonyAssistant/tests/test-timeline.cjs
 python HarmonyAssistant/tests/render_and_check.py
 python HarmonyAssistant/tests/test_modern_panel.py
 python HarmonyAssistant/tests/test_fixed_panel.py
 python HarmonyAssistant/tests/test_dual_panel.py
+python HarmonyAssistant/tests/test_regions_panel.py
+python HarmonyAssistant/tests/test_range_drag.py
 python HarmonyAssistant/tests/run_native_smoke.py <新程序exe> <独立测试目录>
 ```
 
-前两项验证和弦逻辑、配置和分析交换；两项 Python 面板测试用 Qt 5 验证持续音、颜色恢复、撤销、模拟播放、隐藏恢复、全谱图层及 280/360/460 px 排版。最后一项用真实 Release 程序、独立设置和测试谱验证原生接口、Cmaj13、原色不变、配置与缓存。可加第三个参数指定安装目录里的主 QML，验证发布副本。
+前两项验证和弦逻辑、配置和分析交换；Python 面板测试用 Qt 5 验证持续音、颜色恢复、撤销、模拟播放、隐藏恢复、全谱图层及 280/360/460 px 排版。最后一项用真实 Release 程序、独立设置和测试谱验证原生接口、Cmaj13、原色不变、配置与缓存。可加第三个参数指定安装目录里的主 QML，验证发布副本。
 
 1.2 Release 验证：`tst_scoreobserver` 13 项、既有 `tst_note` 11 项、真实 Widgets/QML 宿主 `tst_pluginhost` 3 项全部通过，无失败或跳过。实际宿主测试覆盖原崩溃的缩略谱重排路径、四次菜单打开、插件加载、顶部横条、悬浮双列、重新停靠与关闭重开；QML 原生窗口截图经过检查。颜色和文字的屏幕绘制差异、MSCX 保存字节一致、撤销失效和图层隔离均有回归检查。
 
@@ -114,3 +129,7 @@ Windows 真实 GUI 测试需完整安装资源和 Qt 运行时，使用 `tests/r
 1.2 真实安装宿主在同一隔离设置目录连续启动两次，验证仅级数、上下顺序、140% 字号、颜色、横条右对齐和功能名能自动恢复。Windows 部署补齐同 SDK 的 Qt5QmlModels.dll / Qt5QmlWorkerScript.dll；旧安装保留。
 
 1.3 Release 验证：tst_scoreobserver 14、tst_note 11、实际 tst_pluginhost 5 项通过，无失败/跳过；固定布局、配置/交换与双面板 Qt 测试通过。新增用例验证同一持续音两个变化的实际 x 坐标、原谱和弦/Roman 优先级、遮罩开关、移动标签与原生文字光标避让、双面板共用一个观察器和配置控件、关闭重开/悬浮返回。实际安装连续启动两次，新增三个开关与既有样式均恢复。日志及硬件/长会话限制见个人 CHANGELOG 0.5.0。
+
+1.4 验证：原生观察器 16 项、实际 Widgets/QML 宿主 10 项通过。新增持续踏板跨小节、低音转位、新伴奏优先、人工覆盖/抑制/恢复、范围拖动吸附与绑定恢复、摘要/详情独立结果、专用字形及选中/播放/拖放/P 键盘/选区框对照。1000 小节/6000 音符实测：索引 26.47 ms、1000 缓存快照 1.95 ms、上下文 6.46 ms、数值帧 24.04 ms、基础色层定位 21.66 ms；1000 次标记高亮索引变化 0.703 ms，不含绘制。离线 JS 10000 切片约 1.9 秒，生产版本用 32 步/约 6 ms 预算分批构建，首次全谱分析仍有成本。历史数字与说明保留用于追溯；以当前版本说明为准。
+
+最终安装程序连续启动两次通过，样式及 `Am/C` 人工区间均从隔离设置自动恢复；原有音符 suite 11 项通过。导入先校验全部区间再写状态，坏数据不会改动已有人工修正。
