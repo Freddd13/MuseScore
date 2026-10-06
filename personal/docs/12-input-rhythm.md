@@ -1,6 +1,6 @@
 # 12 自动规范输入时值
 
-个人版本 0.7.0。应用默认开启，在工具菜单“重组节奏”旁的“自动规范输入时值”切换；偏好键 `ui/score/noteEntry/autoRhythm` 持久化到应用设置，不写谱面文件。关闭仅改变后续操作，已有延音链保持原样。旧谱仍使用既有重组节奏命令。
+个人版本 0.7.1。应用默认开启，在工具菜单“重组旋律”旁的“自动规范输入时值”切换；偏好键 `ui/score/noteEntry/autoRhythm` 持久化到应用设置，不写谱面文件。关闭仅改变后续操作，已有延音链保持原样。旧谱仍使用既有手动重组命令。0.7.1 修复旧工作区恢复菜单时开关缺失/随旧菜单析构的问题；规则依据、复合拍子详细例子与字体诊断见 [13](13-rhythm-rules-and-font-fallback.md)。
 
 ## 入口和边界
 
@@ -33,4 +33,6 @@
 
 2026-10-06 实测：x64 Release 主程序构建/链接/独立安装；输入时值 24、手动重组 10、音符 11、观察 14、真实 GUI 7 项通过，0 失败/跳过。MIDI 音符事件与未拆分参考谱一致。GUI 清理后连续三次退出码 0。手动黄金谱保持不变。运行 helper 设置 `MTEST_DIFF_DIR=E:/Git/usr/bin`，否则本机默认 Vim diff 不支持 --strip-trailing-cr；observer 配置使用隔离临时目录。普通 core 测试的全局 stub 与实际宿主冲突时，使用既有 MTEST_LINK_MSCOREAPP，不改应用行为。
 
-应用在 `msvc.install_personal_0_7_x64/bin/MuseScore3Evo.exe`；日志在忽略构建树的 rhythm-core / rhythm-manual / rhythm-note / rhythm-observer / rhythm-gui 的 gui.txt 及 rhythm-final-build.log、rhythm-tests-build.log、rhythm-final-install.log。尚无人工长期操作或真实 MIDI/音频硬件验收；大音源限制另见 [11](11-large-sf2.md)。
+0.7.0 的应用/日志保留在 `msvc.install_personal_0_7_x64/bin/MuseScore3Evo.exe` 与忽略构建树的 rhythm-core / rhythm-manual / rhythm-note / rhythm-observer / rhythm-gui 的 gui.txt 及 rhythm-final-build.log、rhythm-tests-build.log、rhythm-final-install.log。尚无人工长期操作或真实 MIDI/音频硬件验收；大音源限制另见 [11](11-large-sf2.md)。
+
+0.7.1 当前应用在 `msvc.install_personal_0_7_1_x64/bin/MuseScore3Evo.exe`；Release 编译/独立安装通过，`--long-version` 隔离启动返回 0，安装/构建 exe SHA256 一致。真实输入测试 41、GUI 8 项通过（0 失败/跳过）；日志为忽略构建树 rhythm-0-7-1-core / rhythm-0-7-1-gui-final 的 gui.txt 与 rhythm-0-7-1-tests-build.log、rhythm-0-7-1-main-build.log、rhythm-0-7-1-install.log。更多拍号的规范依据与例子见 [13](13-rhythm-rules-and-font-fallback.md)，不将例子通过表述为全部特殊记谱已支持。

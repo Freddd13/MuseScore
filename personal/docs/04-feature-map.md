@@ -56,7 +56,7 @@
 | 工作区 | `mscore/workspace.*`、`share/workspaces/` | palette、快捷键/工具栏和卷帘状态；`mtest/mscore/workspaces` |
 | 时间线、导航、对照/比较 | `mscore/timeline.*`、`navigator.*`、`scorecmp/`、`libmscore/scorediff.*` | selection 和 CmdState 更新 |
 | 插件/插件编辑器 | `mscore/plugin/`、`plugin/api/`、`share/plugins/` | QML 包装对象 ownership、命令结束回调、API 文档 |
-| 字体/符号/样式 | `libmscore/sym.*`、`style.*`、`mscore/musescorefonts*.qrc`、`share/styles/`、`fonts/` | 字形度量、fallback、旧谱迁移、视觉参考 |
+| 字体/符号/样式 | `libmscore/textbase.*`、`sym.*`、`style.*`、`mscore/musescorefonts*.qrc`、`share/styles/`、`fonts/` | 普通文本的 Qt 缺字合并与 ScoreText 的 Bravura Text 回退分开诊断；见 [13](13-rhythm-rules-and-font-fallback.md) |
 | 3.6 样式迁移 | `mscore/migration/` | reader 的格式兼容与 UI 字体/位置迁移不是同一件事 |
 | 翻译 | `tr/QT_TRANSLATE_NOOP`、`share/locale/`、顶层 lupdate/lrelease 目标 | `doc/i18n.md`；不要批量改全部 .ts 来实现一个功能 |
 | 调试/脚本辅助 | `mscore/debugger/`、`mscore/script/`、`mtest/testscript/` | 脚本运行测试当前有 QSKIP，不能报告为有效覆盖 |

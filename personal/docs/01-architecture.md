@@ -84,3 +84,5 @@
 0.5.0 将固定记号从音符颜色映射分离为时间标记向量，来源地址仅作析构清理。QmlPlugin 可提供一个共享 QML 控件的辅助停靠宿主；不重复创建分析或连接音频。
 
 自动输入节奏策略集中于 [inputrhythm](../../libmscore/inputrhythm.cpp)，由应用偏好设置，核心编辑仍使用原节拍分组与 undo；详见 [12](12-input-rhythm.md)。
+
+0.7.1 的自动时值开关由主窗口持有，注册进 Workspace 动作表，旧菜单恢复后在 `updateMenus()` 补齐；不扩展上游工作区文件格式。普通中日文回退属于 Qt 文字布局，与 ScoreText 的音乐字体回退不同；规则/诊断边界见 [13](13-rhythm-rules-and-font-fallback.md)。

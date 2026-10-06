@@ -2,6 +2,8 @@
 #include <QtTest/QtTest>
 #include <QDockWidget>
 #include <QMenuBar>
+#include <QMenu>
+#include <QTranslator>
 #include <QQuickView>
 #include <QJSValue>
 #include <QTemporaryDir>
@@ -24,6 +26,9 @@
 #include "libmscore/undo.h"
 #include "mscore/preferences.h"
 #include "mscore/pianoroll/pianoview.h"
+#include "mscore/workspace.h"
+#include "mscore/shortcut.h"
+#include "libmscore/xml.h"
 
 static void initPluginHostResources() { Q_INIT_RESOURCE(musescorefonts_Petaluma); }
 
@@ -57,6 +62,44 @@ class TestPluginHost : public QObject {
             QVERIFY(stored.contains(PREF_SCORE_NOTE_INPUT_AUTO_RHYTHM));
             QVERIFY(!stored.value(PREF_SCORE_NOTE_INPUT_AUTO_RHYTHM).toBool());
             action->trigger(); QVERIFY(InputRhythm::enabled());
+            }
+      void restoredWorkspaceKeepsRhythmMenu()
+            {
+            auto main=Ms::mscore;
+            auto action=main->findChild<QAction*>("auto-rhythmic-input");
+            QVERIFY(action);
+            QDir().mkpath(dataPath+"/workspaces/global");
+            Workspace::writeGlobalMenuBar(main->menuBar());
+            QFile saved(dataPath+"/workspaces/global/menubar.xml");
+            QVERIFY(saved.open(QIODevice::ReadOnly));
+            QByteArray xml=saved.readAll();saved.close();
+            QVERIFY(xml.contains("auto-rhythmic-input"));
+            // Simulate a saved menu from before the personal action existed.
+            xml.replace("<action>auto-rhythmic-input</action>","");
+            QVERIFY(!xml.contains("auto-rhythmic-input"));
+            QVERIFY(saved.open(QIODevice::WriteOnly|QIODevice::Truncate));
+            QCOMPARE(saved.write(xml),qint64(xml.size()));saved.close();
+            XmlReader reader(xml);QVERIFY(reader.readNextStartElement());
+            Workspace workspace;workspace.read(reader);
+            auto tools=Workspace::findMenuFromString("menu-tools");
+            QVERIFY(tools);QVERIFY(tools->actions().contains(action));
+            QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
+            QCOMPARE(main->findChild<QAction*>("auto-rhythmic-input"),action);
+            QTranslator chinese;
+            QVERIFY(chinese.load(QCoreApplication::applicationDirPath()+"/../locale/mscore_zh_CN.qm"));
+            QCoreApplication::installTranslator(&chinese);
+            QEvent language(QEvent::LanguageChange);QCoreApplication::sendEvent(main,&language);
+            main->updateMenus();main->updateMenus();
+            QCOMPARE(tools->actions().count(action),1);
+            QString expected;
+            for (ushort code : {0x81ea,0x52a8,0x89c4,0x8303,0x8f93,0x5165,0x65f6,0x503c})
+                  expected+=QChar(code);
+            QCOMPARE(action->text(),expected);
+            QCOMPARE(tools->actions().indexOf(action),
+                  tools->actions().indexOf(getAction("reset-groupings"))+1);
+            QVERIFY(action->isChecked());action->trigger();QVERIFY(!InputRhythm::enabled());
+            action->trigger();QVERIFY(InputRhythm::enabled());
+            QCoreApplication::removeTranslator(&chinese);main->updateMenus();
             }
       void cleanupTestCase()
             {

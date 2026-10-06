@@ -81,6 +81,23 @@ private slots:
             QTest::newRow("6-8")<<6<<8<<0<<720<<false<<QList<int>{720};
             QTest::newRow("9-8")<<9<<8<<720<<720<<false<<QList<int>{720};
             QTest::newRow("12-8")<<12<<8<<720<<720<<false<<QList<int>{720};
+            QTest::newRow("6-8-dorico-half")<<6<<8<<0<<960<<false<<QList<int>{720,240};
+            QTest::newRow("6-8-whole-bar")<<6<<8<<0<<1440<<false<<QList<int>{1440};
+            QTest::newRow("6-8-cross-big-beat")<<6<<8<<480<<480<<false<<QList<int>{240,240};
+            QTest::newRow("6-8-intra-beat-quarter")<<6<<8<<0<<480<<false<<QList<int>{480};
+            QTest::newRow("6-8-rest-half")<<6<<8<<0<<960<<true<<QList<int>{720,240};
+            QTest::newRow("6-8-offbeat-rest")<<6<<8<<240<<480<<true<<QList<int>{240,240};
+            QTest::newRow("9-8-cross-big-beat")<<9<<8<<480<<480<<false<<QList<int>{240,240};
+            QTest::newRow("9-8-two-big-beats")<<9<<8<<0<<1440<<false<<QList<int>{1440};
+            QTest::newRow("12-8-cross-big-beat")<<12<<8<<1200<<480<<false<<QList<int>{240,240};
+            QTest::newRow("12-8-half-bar")<<12<<8<<0<<1440<<false<<QList<int>{1440};
+            QTest::newRow("6-4-dorico-scaled")<<6<<4<<0<<1920<<false<<QList<int>{1440,480};
+            QTest::newRow("6-16-dorico-scaled")<<6<<16<<0<<480<<false<<QList<int>{360,120};
+            // In 2/2 a quarter is a half-beat syncopation, unlike 4/4.
+            QTest::newRow("2-2-half-beat-syncopation")<<2<<2<<720<<480<<false<<QList<int>{480};
+            QTest::newRow("3-4-full-bar")<<3<<4<<0<<1440<<false<<QList<int>{1440};
+            QTest::newRow("3-4-no-artificial-midpoint")<<3<<4<<480<<960<<false<<QList<int>{960};
+            QTest::newRow("3-8-full-bar")<<3<<8<<0<<720<<false<<QList<int>{720};
             }
       void grouping()
             {
@@ -95,7 +112,8 @@ private slots:
                   QCOMPARE(first->playTicksFraction().ticks(),duration);
                   QCOMPARE(score->inputState().tick().ticks(),start+duration);
                   }
-            else if(start==0) QVERIFY(score->findCR(Fraction(),0)->isFullMeasureRest());
+            else if(start==0 && duration==score->firstMeasure()->ticks().ticks())
+                  QVERIFY(score->findCR(Fraction(),0)->isFullMeasureRest());
             }
       void chordCursorUndoAndSave()
             {
@@ -121,6 +139,18 @@ private slots:
             auto start=prepare(reference.get(),720);reference->startCmd();QVERIFY(enter(reference.get(),start,480));
             QVERIFY(reference->addPitch(value,true));reference->endCmd();
             QVERIFY(!midiNotes(reference.get()).isEmpty());QCOMPARE(midiNotes(reopened.get()),midiNotes(reference.get()));
+            }
+      void compoundEntryContinuesWithRequestedDuration()
+            {
+            auto score=blank(6,8);QVERIFY(score);
+            auto& is=score->inputState();
+            auto segment=prepare(score.get(),0);QVERIFY(segment);
+            score->startCmd();QVERIFY(enter(score.get(),segment,960));score->endCmd();
+            QCOMPARE(durations(score.get(),0,960),QList<int>({720,240}));
+            QCOMPARE(is.tick().ticks(),960);QCOMPARE(is.duration().fraction(),Fraction(1,2));
+            NoteVal next(62);score->startCmd();QVERIFY(score->addPitch(next,false));score->endCmd();
+            QCOMPARE(is.tick().ticks(),1920);QCOMPARE(is.duration().fraction(),Fraction(1,2));
+            QCOMPARE(toChord(score->findCR(Fraction(1,2),0))->upNote()->playTicksFraction().ticks(),960);
             }
       void toggleChangeAndIdempotence()
             {

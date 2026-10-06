@@ -2231,8 +2231,10 @@ MuseScore::MuseScore()
       menuTools->addAction(getAction("enh-current"));
       menuTools->addAction(getAction("pitch-spell"));
       menuTools->addAction(getAction("reset-groupings"));
-      QAction* autoRhythm = menuTools->addAction(tr("Automatically Group Input Rhythms"));
+      QAction* autoRhythm = new QAction(tr("Automatically Group Input Rhythms"), this);
+      menuTools->addAction(autoRhythm);
       autoRhythm->setObjectName("auto-rhythmic-input");
+      Workspace::addActionAndString(autoRhythm, "auto-rhythmic-input");
       autoRhythm->setCheckable(true);
       autoRhythm->setChecked(preferences.getBool(PREF_SCORE_NOTE_INPUT_AUTO_RHYTHM));
       connect(autoRhythm, &QAction::toggled, this, [](bool enabled) {
@@ -2654,6 +2656,8 @@ void MuseScore::retranslate()
 
 void MuseScore::setMenuTitles()
       {
+      if (auto action = findChild<QAction*>("auto-rhythmic-input"))
+            action->setText(tr("Automatically Group Input Rhythms"));
       // The list below is not static, both strings
       // and menu pointers need refreshing.
       const std::initializer_list<std::pair<QMenu*, QString>> titles {
@@ -2727,6 +2731,14 @@ void MuseScore::updateMenus()
       updateMenu(menuFormat,      "menu-format",       "Format");
       updateMenu(menuStretch,     "menu-stretch",      "");
       updateMenu(menuTools,       "menu-tools",        "Tools");
+      if (auto action = findChild<QAction*>("auto-rhythmic-input")) {
+            if (menuTools && !menuTools->actions().contains(action)) {
+                  auto actions = menuTools->actions();
+                  const int anchor = actions.indexOf(getAction("reset-groupings"));
+                  menuTools->insertAction(anchor >= 0 && anchor+1 < actions.size()
+                        ? actions[anchor+1] : nullptr, action);
+                  }
+            }
       updateMenu(menuVoices,      "menu-voices",       "");
       updateMenu(menuMeasure,     "menu-measure",      "");
 #ifdef SCRIPT_INTERFACE
