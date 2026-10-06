@@ -2,6 +2,22 @@
 
 个人版本记录本仓库的个人维护增量；应用上游版本另由 `config.cmake` 管理。历史源码提交尚未追溯归类，此处从首次建立指南开始记录，不代表此前没有个人改动。
 
+## 0.6.0 — 2026-10-06
+
+- 类型：大型标准 SF2 解析修复与播放前预加载。上游应用仍 3.7.0；已有个人版本 0.5.0 的和声助手已独立提交，故本次从 0.5.0 递增；不覆盖旧版本标签。
+- 根因：VSL D-274 V2025A.sf2 为 2,789,995,618 bytes；FSKIP(int) 把 smpl 2,789,809,516 bytes 转为负数，Windows long 仍 32-bit。sfont.h/.cpp 的文件位置/长度/跳转及相关计算改 qint64/quint64，保留格式 unsigned32 字段；检查块边界、单位、采样范围和索引，不删除 RIFF 约 4 GiB 的标准边界。
+- 加载：Sample::load 用临时缓冲、1 MiB 分段读取和取消检查，完整成功后提交，OOM/短读取可重试；sfont3.cpp 保留原 Vorbis 策略并检查解码尺寸。fluid.cpp 对 >=2 GiB 的 SF2 预加载全部预置引用采样，同一 Sample 去重；未完整成功不加入音源列表。音色列表也先准备再提交，分配失败保留旧列表/银行偏移。
+- GUI：fluidgui.cpp 在既有 QtConcurrent 加载入口先 stopWait，保留进度/取消窗并显示具体失败原因；加载结束清除取消状态以免影响旧音源后续预置。fluid.h 进度/取消/全局终止改原子字段。未重构批量替换回滚、Seq、Driver 或 Voice DSP。
+- 正确性验证：Release 主程序及 tst_sfloader 构建/安装/版本启动通过；加载器 10 项通过，0 失败/跳过，包含实际跨 2 GiB 稀疏文件、截断/非法范围、取消/短读取重试、分配失败保留旧音源、小 SF2 和 SF3。真实 GUI 异步/取消 3 项通过，0 失败/跳过，取消后旧列表保持、重载成功及界面心跳通过。
+- 真实 VSL：有记录预加载 2,838 ms，private bytes 增量 2,807,431,168（2.615 GiB），采集时峰值约 2.626 GiB。16/32/64 持续键为 32/64/128 声部，P99 253/465/911 µs，压力最大 402/618/1,128 µs；六秒 WAV 低中高音区/三个力度非零、有限，无削波；实际 CLI 钢琴谱 WAV 导出返回 0，和缺失音源回退结果不同，排除默认 SF3 回退。
+- 稳定性边界：完整十分钟 512-frame / 48 kHz 有记录轮次热阶段 0 read operations / bytes；3 次软件 deadline miss，最长 14.524 ms，返回码 5，严格稳定性未通过。此前十分钟返回码 0，但默认 Qt 日志落到 Windows 调试器而未存数值；已补文件日志，不取其数值作性能证据。真实声卡 underrun、人工听音和 Seq 实际停止/跳转尚未验收；不能承诺任意音源零卡顿，PortAudio 仍使用自动块大小，若设备控制面板允许可试 1024-frame 缓冲，尖峰具体原因未跟踪定位。
+- 回收：首次卸载释放 2,806,112,256 private bytes；连续重载两轮 3,614/3,604 ms，卸载后 13.71/13.24 MiB，未累积音源规模内存。原文件只读，既有循环边界修复规则保留。
+- 维护：新增 mtest/audio/sfloader、sfloadergui；更新 personal/docs/11-large-sf2.md、01/04/README/source-map。夹具/WAV/日志仅在忽略构建目录；修复 Windows GUI Qt 日志输出方式。共享 PCH 丢失时只设置进程 /Y- /MP2，不改上游默认。
+- 部署：独立 msvc.install_personal_0_6_x64/bin/MuseScore3Evo.exe，保留旧程序/音源；同 SDK QmlModels/QmlWorkerScript DLL 补齐。日志位于 msvc.build_personal_0_6_x64：sfloader-tests.txt、vsl-benchmark.txt、vsl-process-peak.json、sf2-preview.wav、sf-isolated-final-build.log、sf-isolated-final-install.log。
+- Git 父提交：94ad5775a5aadc1ba07251fa60894382d60feaf0。
+- Git 提交主题：feat(audio): load and preload large standard SF2 soundfonts。
+- 提交定位：personal-v0.6.0 标签指向本次提交；git rev-parse personal-v0.6.0 查询 SHA。核对 origin/3.x 后普通 push 分支/标签，不强推。
+
 ## 0.5.0 — 2026-10-06
 
 - 类型：和声助手 1.3.0，补齐移动/编辑遮挡、变化节拍锚点、背景遮罩与顶部摘要/右侧详情。上游应用仍为 3.7.0，谱面格式不变。

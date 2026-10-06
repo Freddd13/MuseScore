@@ -32,7 +32,7 @@
 | `mscore/migration/` | 3.6 字体/默认样式/位置迁移与提示 | 新旧谱兼容问题 |
 | `mscore/script/`、`debugger/`、`widgets/` | 脚本录制测试、调试查看、复用控件 | 辅助设施，按需读 |
 | `importexport/` | MusicXML、MIDI import、Guitar Pro/PTB、Capella、OVE、BWW、BIAB、MuseData | 见功能表；MIDI export 在 audio |
-| `audio/midi/` | MIDI 事件、文件、MasterSynthesizer、Fluid、Zerberus | 旧 README 的顶层 fluid/msynth 说明不适用 |
+| `audio/midi/` | MIDI 事件、文件、MasterSynthesizer、Fluid、Zerberus | 旧 README 的顶层 fluid/msynth 说明不适用；[大型 SF2](11-large-sf2.md) 在 Fluid 加载边界内扩展 |
 | `audio/exports/`、`audiofile/` | MIDI/MP3 导出、音频文件写入 | 音频导出另看 `mscore/exportaudio.cpp` |
 | `audiodrivers/` | PortAudio、PortMidi、JACK、ALSA、PulseAudio 驱动 | 由 `mscore/CMakeLists.txt` include `.cmake` 汇入，非独立同名目标 |
 | `effects/`、`aeolus/`、`awl/` | 效果器、可选管风琴合成、音频 UI 控件 | 大多不涉及谱面规则 |

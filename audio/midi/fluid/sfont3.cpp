@@ -1,5 +1,7 @@
 #include <stdlib.h>
 #include <math.h>
+#include <memory>
+#include <limits>
 
 #include "sfont.h"
 
@@ -16,22 +18,22 @@ bool Sample::decompressOggVorbis(char* src, unsigned int size)
       AudioFile af;
       QByteArray ba(src, size);
 
-      start = 0;
-      end   = 0;
       if (!af.open(ba)) {
             qDebug("SoundFont(%s) Sample(%s) decompressOggVorbis: open failed: %s", qPrintable(sf->get_name()), name, af.error());
             return false;
             }
       sf_count_t frames = af.frames();
-      data = new short[frames * af.channels()];
-      if (frames != af.readData(data, frames)) {
+      if (frames < 8 || frames > std::numeric_limits<unsigned int>::max()
+            || af.channels() < 1 || quint64(frames) > std::numeric_limits<size_t>::max() / sizeof(short) / unsigned(af.channels()))
+            return false;
+      std::unique_ptr<short[]> pending(new short[size_t(frames) * af.channels()]);
+      if (frames != af.readData(pending.get(), frames)) {
             qDebug("SoundFont(%s) Sample(%s) read failed: %s", qPrintable(sf->get_name()), name, af.error());
-            delete[] data;
-            data = 0;
             return false;
             }
       // cf. https://musescore.org/en/node/89216#comment-1068379 and following
       end = (unsigned int)frames;
+      start = 0;
 
       // loop is fowled?? (cluck cluck :)
       if (loopend > end || loopstart >= loopend || loopstart <= start) {
@@ -52,6 +54,7 @@ bool Sample::decompressOggVorbis(char* src, unsigned int size)
             return false;
             }
 
+      data = pending.release();
       return true;
       }
 } // namespace

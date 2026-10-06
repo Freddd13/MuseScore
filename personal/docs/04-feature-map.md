@@ -64,6 +64,8 @@
 
 ## 常用定位命令
 
+大型 SF2 的文件长度/边界、加载预热、取消/错误反馈和真实音源回归见 [11](11-large-sf2.md)，入口为 `SFont::load/Sample::load/Fluid::sfload`；没有新增 Driver、Seq 或 Voice DSP 行为。
+
 ```powershell
 rg -n 'id-of-existing-command' mscore/shortcut.cpp mscore/scoreview.cpp libmscore/cmd.cpp
 rg -n 'Pid::STEM_DIRECTION|crossStaffMove' libmscore mscore/inspector

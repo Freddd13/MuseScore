@@ -24,6 +24,9 @@
 #include "fluid.h"
 #include "sfont.h"
 #include "voice.h"
+#include <memory>
+#include <limits>
+#include <new>
 
 // #define DEBUG_SFONT
 
@@ -75,26 +78,73 @@ SFont::~SFont()
 
 bool SFont::read(const QString& s)
       {
+      _error.clear();
       f.setFileName(s);
       if (!load())
             return false;
 
       synth->setLoadProgress(0);
       for (auto instrument : qAsConst(instruments)) {
-            if (synth->loadWasCanceled())
+            if (synth->loadWasCanceled()) {
+                  _error = QStringLiteral("Canceled");
                   return false;
+                  }
 
-            if (!instrument->import_sfont())
+            if (!instrument->import_sfont()) {
+                  _error = QStringLiteral("Invalid instrument data");
                   return false;
+                  }
             }
 
       for (auto preset : qAsConst(presets)) {
-            if (synth->loadWasCanceled())
+            if (synth->loadWasCanceled()) {
+                  _error = QStringLiteral("Canceled");
                   return false;
+                  }
 
-            if (!preset->importSfont())
+            if (!preset->importSfont()) {
+                  _error = QStringLiteral("Invalid preset data");
                   return false;
+                  }
             }
+      return true;
+      }
+
+// Used before publishing large SF2s. Only referenced samples are resident;
+// sample objects shared by zones/presets are read once. No audio-thread I/O.
+bool SFont::preloadSamples()
+      {
+      _error.clear();
+      QSet<Sample*> referenced;
+      for (Preset* p : qAsConst(presets)) {
+            auto addInstrument = [&referenced](Instrument* i) {
+                  if (!i)
+                        return;
+                  if (i->global_zone && i->global_zone->sample)
+                        referenced.insert(i->global_zone->sample);
+                  for (Zone* z : qAsConst(i->zones))
+                        if (z->sample)
+                              referenced.insert(z->sample);
+                  };
+            if (p->global_zone())
+                  addInstrument(p->global_zone()->instrument);
+            for (Zone* z : qAsConst(p->zones))
+                  addInstrument(z->instrument);
+            }
+      // Preserve file order for predictable disk access and cancel/progress.
+      int done = 0;
+      for (Sample* s : qAsConst(sample)) {
+            if (!referenced.contains(s) || s->inRom())
+                  continue;
+            if (synth->loadWasCanceled() || synth->globalTerminate()) {
+                  _error = QStringLiteral("Canceled");
+                  return false;
+                  }
+            if (!s->load())
+                  return false;
+            synth->setLoadProgress(++done * 100 / qMax(1, referenced.size()));
+            }
+      synth->setLoadProgress(100);
       return true;
       }
 
@@ -628,86 +678,104 @@ Sample::~Sample()
 //   load
 //---------------------------------------------------------
 
-void Sample::load()
+bool Sample::load()
       {
-      if (!_valid || data)
-            return;
+      if (data)
+            return true;
+      if (!_valid) {
+            sf->_error = QStringLiteral("Invalid sample: %1").arg(name);
+            return false;
+            }
+      if (sf->synth->loadWasCanceled() || sf->synth->globalTerminate()) {
+            sf->_error = QStringLiteral("Canceled");
+            return false;
+            }
       QFile fd(sf->get_name());
-      if (!fd.open(QIODevice::ReadOnly))
-            return;
-      if (sampletype & FLUID_SAMPLETYPE_OGG_VORBIS) {
-            if (!fd.seek(sf->samplePos() + start))
-                  return;
+      if (!fd.open(QIODevice::ReadOnly)) {
+            sf->_error = QStringLiteral("Sample file open failed: %1").arg(fd.errorString());
+            return false;
             }
-      else {
-            if (!fd.seek(sf->samplePos() + start * sizeof(short)))
-                  return;
+      const bool compressed = sampletype & FLUID_SAMPLETYPE_OGG_VORBIS;
+      const quint64 unit = compressed ? 1 : sizeof(short);
+      const quint64 offset = quint64(sf->samplePos()) + quint64(start) * unit;
+      const quint64 count = quint64(end) - start;
+      const quint64 bytes = count * unit;
+      if (end <= start || offset > quint64(fd.size())
+            || bytes > quint64(fd.size()) - offset || !fd.seek(qint64(offset))) {
+            sf->_error = QStringLiteral("Sample read range is invalid: %1").arg(name);
+            return false;
             }
-      unsigned int size = end - start;
-
-      if (sampletype & FLUID_SAMPLETYPE_OGG_VORBIS) {
-#ifdef SOUNDFONT3
-            std::vector<char> p;
-            p.resize(size);
-            if (fd.read(p.data(), size) != size) {
-                  qDebug("SoundFont(%s) Sample(%s) read %u bytes failed", qPrintable(sf->get_name()), name, size);
-                  setValid(false);
-                  return;
-                  }
-            setValid(decompressOggVorbis(p.data(), size));
-#endif
-            }
-      else {
-            data = new short[size];
-            size *= sizeof(short);
-
-            if (fd.read((char*)data, size) != size) {
-                  qDebug("SoundFont(%s) Sample(%s) read %u bytes failed", qPrintable(sf->get_name()), name, size);
-                  setValid(false);
-                  return;
-                  }
-
-            if (QSysInfo::ByteOrder == QSysInfo::BigEndian) {
-                  unsigned char hi, lo;
-                  unsigned int i, j;
-                  short s;
-                  uchar* cbuf = (uchar*) data;
-                  for (i = 0, j = 0; j < size; i++) {
-                        lo = cbuf[j++];
-                        hi = cbuf[j++];
-                        s = (hi << 8) | lo;
-                        data[i] = s;
+      // Read in bounded pieces, so cancellation also works for a huge sample.
+      auto readSample = [&](char* buffer, qint64 length) {
+            for (qint64 done = 0; done < length;) {
+                  if (sf->synth->loadWasCanceled() || sf->synth->globalTerminate()) {
+                        sf->_error = QStringLiteral("Canceled");
+                        return false;
                         }
+                  const qint64 n = qMin(qint64(1024 * 1024), length - done);
+                  if (fd.read(buffer + done, n) != n) {
+                        sf->_error = QStringLiteral("Sample read failed: %1 (%2)").arg(name, fd.errorString());
+                        return false;
+                        }
+                  done += n;
                   }
-            end       -= start;
-            loopstart -= start;
-            loopend   -= start;
-            start      = 0;
+            return true;
+            };
+      try {
+            if (compressed) {
+#ifdef SOUNDFONT3
+                  if (bytes > quint64(std::numeric_limits<int>::max())) {
+                        sf->_error = QStringLiteral("Compressed sample exceeds Qt 5 buffer capacity: %1").arg(name);
+                        return false;
+                        }
+                  std::vector<char> buffer(size_t(bytes), char(0));
+                  if (!readSample(buffer.data(), qint64(bytes)))
+                        return false;
+                  if (!decompressOggVorbis(buffer.data(), unsigned(bytes))) {
+                        sf->_error = QStringLiteral("Compressed sample decode failed: %1").arg(name);
+                        return false;
+                        }
+#else
+                  sf->_error = QStringLiteral("SF3 support is disabled");
+                  return false;
+#endif
+                  }
+            else {
+                  if (count > std::numeric_limits<size_t>::max() / sizeof(short)) {
+                        sf->_error = QStringLiteral("Sample allocation size overflow: %1").arg(name);
+                        return false;
+                        }
+                  std::unique_ptr<short[]> buffer(new (std::nothrow) short[size_t(count)]);
+                  if (!buffer) {
+                        sf->_error = QStringLiteral("Not enough memory for sample: %1 (%2 bytes)").arg(name).arg(bytes);
+                        return false;
+                        }
+                  if (!readSample(reinterpret_cast<char*>(buffer.get()), qint64(bytes)))
+                        return false;
+                  if (QSysInfo::ByteOrder == QSysInfo::BigEndian) {
+                        uchar* c = reinterpret_cast<uchar*>(buffer.get());
+                        for (quint64 i = 0; i < count; ++i)
+                              buffer[size_t(i)] = short((unsigned(c[2 * i + 1]) << 8) | c[2 * i]);
+                        }
+                  // Publish only a complete buffer; failed/canceled reads leave
+                  // original file offsets intact and can be retried.
+                  data = buffer.release();
+                  end -= start;
+                  loopstart -= start;
+                  loopend -= start;
+                  start = 0;
+                  }
             }
-
-      // sanity checks:
-      // - start < end in SFont::load_shdr(int)
-      // - start < loopstart < loopend < end for !SF3 ibidem
-      // - … for SF3 in Sample::decompressOggVorbis(char *, unsigned int) in sfont3.cpp
-      // - most importantly, they are done *before* start is normalised to 0, which it is at this point
-      //
-      // now add some extra sanity checks from the SF2 spec (biased so they work with unsigned int);
-      // just a warning, they probably work with Fluid, possibly with audible artefacts though...
+      catch (const std::bad_alloc&) {
+            sf->_error = QStringLiteral("Not enough memory for sample: %1").arg(name);
+            return false;
+            }
       if (!(start + 7 < loopstart) || !(loopstart + 31 < loopend) || !(loopend + 7 < end))
-            qDebug("SoundFont(%s) Sample(%s) start(%u) startloop(%u) endloop(%u) end(%u) smaller than SoundFont 2.04 spec chapter 7.10 recommendation",
-                     qPrintable(sf->get_name()), name, start, loopstart, loopend, end);
-
-      // this used to cause a crash
-      if (!data) {
-            qDebug("SoundFont(%s) Sample(%s) data is nil", qPrintable(sf->get_name()), name);
-            setValid(false);
-            }
-
-      // from here, end marks the last sample, not one past as in the SF2 spec
+            qDebug("SoundFont(%s) Sample(%s) loop padding is smaller than the SF2 recommendation", qPrintable(sf->get_name()), name);
       if (end > 0)
-            end -= 1;
-
+            --end;
       optimize();
+      return true;
       }
 
 //---------------------------------------------------------
@@ -760,6 +828,8 @@ void SFont::readchunk(SFChunk* var)
 		var->size = GUINT32_FROM_BE(var->size);
       else
             var->size = GUINT32_FROM_LE(var->size);
+      if (qint64(var->size) > f.size() - f.pos())
+            throw(QString("Chunk exceeds SoundFont file bounds"));
       }
 
 //---------------------------------------------------------
@@ -770,6 +840,7 @@ void SFont::readchunk(SFChunk* var)
 bool SFont::load()
       {
       if (!f.open(QIODevice::ReadOnly)) {
+            _error = QStringLiteral("Unable to open file: %1").arg(f.errorString());
             qCritical("Unable to open file \"%s\"", qPrintable(f.fileName()));
             return false;
             }
@@ -810,6 +881,7 @@ bool SFont::load()
             fixup_igen();
             }
       catch (QString s) {
+            _error = s;
             qDebug("fluid: error loading sound font: %s", qPrintable(s));
             f.close();
             return false;
@@ -894,6 +966,8 @@ void SFont::read_listchunk (SFChunk* chunk)
       readchunk (chunk);
       if (chunkid (chunk->id) != LIST_ID)
             throw(QString("Invalid chunk id in level 0 parse"));
+      if (chunk->size < 4)
+            throw(QString("Invalid LIST chunk size"));
       safe_fread(&chunk->id, 4);
       chunk->size -= 4;
       }
@@ -902,12 +976,16 @@ void SFont::read_listchunk (SFChunk* chunk)
 //   process_info
 //---------------------------------------------------------
 
-void SFont::process_info(int size)
+void SFont::process_info(qint64 size)
       {
       while (size > 0) {
+            if (size < 8)
+                  throw(QString("INFO chunk size mismatch"));
             SFChunk chunk;
             readchunk (&chunk);
             size -= 8;
+            if (chunk.size > size)
+                  throw(QString("INFO sub chunk exceeds its LIST"));
 
             unsigned char id = chunkid (chunk.id);
 
@@ -935,11 +1013,13 @@ void SFont::process_info(int size)
                   unsigned char* item = new unsigned char[chunk.size + 1];
 
                   *(unsigned char *) item = id;
+                  std::unique_ptr<unsigned char[]> pending(item);
                   safe_fread (&item[1], chunk.size);
 
                   /* force terminate info item (don't forget uint8 info ID) */
                   *(item + chunk.size) = '\0';
                   infos.append(item);
+                  pending.release();
 
                   if (id == INAM_ID)
                         _fontName = QString(reinterpret_cast<char*>(item + 1));
@@ -957,10 +1037,12 @@ void SFont::process_info(int size)
 //    return true on success
 //---------------------------------------------------------
 
-void SFont::process_sdta (unsigned int size)
+void SFont::process_sdta (qint64 size)
       {
       if (size == 0)
             return;		// no sample data?
+      if (size < 8)
+            throw(QString("Invalid SDTA chunk size"));
 
       /* read sub chunk */
       SFChunk chunk;
@@ -976,7 +1058,7 @@ void SFont::process_sdta (unsigned int size)
       if (chunk.size > size)
             throw(QString("SDTA chunk size mismatch %1 != %2").arg(size).arg(chunk.size));
       /* sample data follows */
-      setSamplepos((unsigned int)f.pos());
+      setSamplepos(f.pos());
       setSamplesize(chunk.size);
       FSKIP(size);
       }
@@ -985,9 +1067,11 @@ void SFont::process_sdta (unsigned int size)
 //   pdtahelper
 //---------------------------------------------------------
 
-void SFont::pdtahelper (unsigned expid, unsigned reclen, SFChunk* chunk, int* size)
+void SFont::pdtahelper (unsigned expid, unsigned reclen, SFChunk* chunk, qint64* size)
       {
       const char* expstr = CHNKIDSTR (expid);
+      if (*size < 8)
+            throw(QString("PDTA chunk size mismatch"));
 
       readchunk (chunk);
       *size -= 8;
@@ -1006,7 +1090,7 @@ void SFont::pdtahelper (unsigned expid, unsigned reclen, SFChunk* chunk, int* si
 //   process_pdta
 //---------------------------------------------------------
 
-void SFont::process_pdta (int size)
+void SFont::process_pdta (qint64 size)
       {
       static const unsigned id[] = {
             PHDR_ID, PBAG_ID, PMOD_ID, PGEN_ID, IHDR_ID, IBAG_ID, IMOD_ID, IGEN_ID, SHDR_ID
@@ -1015,7 +1099,7 @@ void SFont::process_pdta (int size)
             SFPHDRSIZE, SFBAGSIZE, SFMODSIZE, SFGENSIZE, SFIHDRSIZE,
             SFBAGSIZE, SFMODSIZE, SFGENSIZE, SFSHDRSIZE
             };
-      typedef void (SFont::*LoadFunc)(int);
+      typedef void (SFont::*LoadFunc)(qint64);
       static const LoadFunc funcArray[] = {
             &SFont::load_phdr, &SFont::load_pbag, &SFont::load_pmod, &SFont::load_pgen,
             &SFont::load_ihdr, &SFont::load_ibag, &SFont::load_imod, &SFont::load_igen,
@@ -1026,10 +1110,12 @@ void SFont::process_pdta (int size)
             pdtahelper(id[i], len[i], &chunk, &size);
             (this->*funcArray[i])(chunk.size);
             }
+      if (size != 0)
+            throw(QString("PDTA chunk size mismatch"));
       }
 
 /* preset header loader */
-void SFont::load_phdr (int size)
+void SFont::load_phdr (qint64 size)
       {
       Preset* pr = 0;	/* ptr to current & previous preset */
       unsigned short zndx, pzndx = 0;
@@ -1081,7 +1167,7 @@ void SFont::load_phdr (int size)
       }
 
 /* preset bag loader */
-void SFont::load_pbag (int size)
+void SFont::load_pbag (qint64 size)
       {
       Zone *z, *pz = 0;
       unsigned short genndx, modndx;
@@ -1148,7 +1234,7 @@ void SFont::load_pbag (int size)
 //    preset modulator loader
 //---------------------------------------------------------
 
-void SFont::load_pmod (int size)
+void SFont::load_pmod (qint64 size)
       {
       for (Preset* p : qAsConst(presets)) {
             for(Zone* p2 : qAsConst(p->zones)) {
@@ -1252,7 +1338,7 @@ static void sfont_zone_delete (QList<Zone*>* l, Zone * zone)
  * if a duplicate generator exists replace previous one
  * ------------------------------------------------------------------- */
 
-void SFont::load_pgen (int size)
+void SFont::load_pgen (qint64 size)
       {
       for(Preset* p : qAsConst(presets)) {
             bool gzone          = false;
@@ -1371,7 +1457,7 @@ void SFont::load_pgen (int size)
       }
 
 /* instrument header loader */
-void SFont::load_ihdr(int size)
+void SFont::load_ihdr(qint64 size)
       {
       Instrument *p, *pr = 0;	/* ptr to current & previous instrument */
       unsigned short zndx, pzndx = 0;
@@ -1417,7 +1503,7 @@ void SFont::load_ihdr(int size)
       }
 
 /* instrument bag loader */
-void SFont::load_ibag(int size)
+void SFont::load_ibag(qint64 size)
       {
       Zone *z, *pz = 0;
       unsigned short genndx, modndx, pgenndx = 0, pmodndx = 0;
@@ -1481,7 +1567,7 @@ void SFont::load_ibag(int size)
       }
 
 /* instrument modulator loader */
-void SFont::load_imod(int size)
+void SFont::load_imod(qint64 size)
       {
       for(Instrument* i : qAsConst(instruments)) {
             for(Zone* p2 : qAsConst(i->zones)) {
@@ -1516,7 +1602,7 @@ void SFont::load_imod(int size)
 //    (see load_pgen for loading rules)
 //---------------------------------------------------------
 
-void SFont::load_igen (int size)
+void SFont::load_igen (qint64 size)
       {
       for(Instrument* instr : qAsConst(instruments)) {
             bool gzone     = false;
@@ -1640,7 +1726,7 @@ void SFont::load_igen (int size)
 //    sample header loader
 //---------------------------------------------------------
 
-void SFont::load_shdr (int size)
+void SFont::load_shdr (qint64 size)
       {
       if (size % SFSHDRSIZE || size == 0)	/* size is multiple of SHDR size? */
             throw(QString("Sample header has invalid size"));
@@ -1670,11 +1756,10 @@ void SFont::load_shdr (int size)
                   p->setValid(false);
                   continue;
                   }
-            if ((p->end > getSamplesize()) || (p->start > (p->end - 4))) {
-                  qDebug("Sample(%s) start/end file positions are invalid, disabling", p->name);
-                  p->setValid(false);
-                  continue;
-                  }
+            const quint64 unit = (p->sampletype & FLUID_SAMPLETYPE_OGG_VORBIS) ? 1 : sizeof(short);
+            if (p->end < 4 || p->start > p->end - 4
+                  || quint64(p->end) * unit > quint64(getSamplesize()))
+                  throw(QString("Sample %1 has an invalid sample range").arg(p->name));
             p->setValid(true);
             if (p->sampletype & FLUID_SAMPLETYPE_OGG_VORBIS) {
                   // done in Sample::decompressOggVorbis in sfont3.cpp
@@ -1714,6 +1799,8 @@ void SFont::fixup_pgen()
       for(Preset* p : qAsConst(presets)) {
             for(Zone* z : qAsConst(p->zones)) {
                   if (z->instIdx) {        // load instrument #
+                        if (z->instIdx > instruments.size())
+                              throw(QString("Invalid instrument reference"));
                         z->instrument = instruments[z->instIdx-1];
                         if (!z->instrument)
                               throw(QString("Preset %1 %2: Invalid instrument reference").arg(p->bank).arg(p->num));
@@ -1728,6 +1815,8 @@ void SFont::fixup_igen()
       for(Instrument* p : qAsConst(instruments)) {
             for(Zone* z : qAsConst(p->zones)) {
                   if (z->sampIdx) {
+                        if (z->sampIdx > sample.size())
+                              throw(QString("Invalid sample reference"));
                         z->sample = sample[z->sampIdx - 1];
                         if (!z->sample)
                               throw(QString("Instrument: Invalid sample reference"));
@@ -1741,8 +1830,10 @@ void SFont::fixup_igen()
 //   safe_fread
 //---------------------------------------------------------
 
-void SFont::safe_fread(void* buf, int count)
+void SFont::safe_fread(void* buf, qint64 count)
       {
+      if (count < 0 || count > f.size() - f.pos())
+            throw(QString("Read exceeds SoundFont file bounds"));
       if (f.read((char*)buf, count) != count) {
             if (f.atEnd())
                   throw(QString("EOF while attempting to read %1 bytes").arg(count));
@@ -1755,11 +1846,12 @@ void SFont::safe_fread(void* buf, int count)
 //   safe_fseek
 //---------------------------------------------------------
 
-void SFont::safe_fseek(long ofs)
+void SFont::safe_fseek(qint64 ofs)
       {
+      if (ofs < 0 || ofs > f.size() - f.pos())
+            throw(QString("Seek exceeds SoundFont file bounds"));
       qint64 newpos = ofs + f.pos();
       if (!f.seek(newpos))
             throw(QString("File seek failed with offset = %1").arg(ofs));
       }
 }
-

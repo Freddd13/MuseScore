@@ -29,6 +29,8 @@
 
 #include "mscore/preferences.h"
 #include "mscore/extension.h"
+#include <memory>
+#include <new>
 
 namespace FluidS {
 
@@ -624,29 +626,39 @@ void Fluid::start_voice(Voice* voice)
 
 void Fluid::updatePatchList()
       {
-      qDeleteAll(patches);
-      patches.clear();
-
+      QList<MidiPatch*> pending;
+      std::vector<std::pair<SFont*,int>> offsets;
       int bankOffset = 0;
       int sfid = 0;
-      for (SFont* sf : qAsConst(sfonts)) {
-            sf->setBankOffset(bankOffset);
-            int banks = 0;
-            for (Preset* p : sf->getPresets()) {
-                  MidiPatch* patch = new MidiPatch;
-                  patch->drum = (p->get_banknum() == 128);
-                  patch->synti = name();
-                  if (p->get_banknum() > banks)
-                        banks = p->get_banknum();
-                  patch->bank = p->get_banknum() + bankOffset;
-                  patch->prog = p->get_num();
-                  patch->name = p->get_name();
-                  patch->sfid = sfid;
-                  patches.append(patch);
+      try {
+            for (SFont* sf : qAsConst(sfonts)) {
+                  offsets.emplace_back(sf,bankOffset);
+                  int banks = 0;
+                  for (Preset* p : sf->getPresets()) {
+                        std::unique_ptr<MidiPatch> patch(new MidiPatch);
+                        patch->drum = (p->get_banknum() == 128);
+                        patch->synti = name();
+                        if (p->get_banknum() > banks)
+                              banks = p->get_banknum();
+                        patch->bank = p->get_banknum() + bankOffset;
+                        patch->prog = p->get_num();
+                        patch->name = p->get_name();
+                        patch->sfid = sfid;
+                        pending.append(patch.get());
+                        patch.release();
+                        }
+                  sfid++;
+                  bankOffset += (banks + 1);
                   }
-            sfid++;
-            bankOffset += (banks + 1);
             }
+      catch (...) {
+            qDeleteAll(pending);
+            throw;
+            }
+      for (const auto& offset : offsets)
+            offset.first->setBankOffset(offset.second);
+      patches.swap(pending);
+      qDeleteAll(pending);
 
       /* try to set the correct presets */
       int n = channel.size();
@@ -770,29 +782,42 @@ int Fluid::sfload(const QString& filename)
       if (filename.isEmpty())
             return -1;
 
-      SFont* sf = new SFont(this);
+      _error.clear();
+      std::unique_ptr<SFont> sf;
       try {
+            sf.reset(new SFont(this));
             if (!sf->read(filename)) {
-                  delete sf;
-                  sf = 0;
+                  _error = sf->error();
                   return -1;
                   }
+            if (sf->version().major == 2 && QFileInfo(filename).size() >= (qint64(1) << 31)
+                  && !sf->preloadSamples()) {
+                  _error = sf->error();
+                  return -1;
+                  }
+            if (loadWasCanceled() || globalTerminate()) {
+                  _error = QStringLiteral("Canceled");
+                  return -1;
+                  }
+            sf->setId(++sfont_id);
+            sfonts.prepend(sf.get());
+            try {
+                  updatePatchList();
+                  }
+            catch (...) {
+                  sfonts.removeAll(sf.get());
+                  throw;
+                  }
+            return sf.release()->id();
             }
-      catch(...) {
-            delete sf;
-            sf = 0;
+      catch(const std::bad_alloc&) {
+            _error = QStringLiteral("Not enough memory to load SoundFont");
             return -1;
             }
-
-      sf->setId(++sfont_id);
-
-      /* insert the sfont as the first one on the list */
-      sfonts.prepend(sf);
-
-      /* reset the presets for all channels */
-
-      updatePatchList();
-      return sf->id();
+      catch(...) {
+            _error = QStringLiteral("Unexpected SoundFont loading error");
+            return -1;
+            }
       }
 
 //---------------------------------------------------------

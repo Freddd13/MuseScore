@@ -52,8 +52,9 @@ struct SFVersion {            // version structure
 class SFont {
       Fluid* synth;
       QFile f;
-      unsigned samplepos;           // the position in the file at which the sample data starts
-      unsigned samplesize;          // the size of the sample data
+      qint64 samplepos;             // byte position, not a SoundFont sample index
+      qint64 samplesize;            // byte length (RIFF fields remain unsigned 32-bit)
+      QString _error;
 
       QList<Instrument*> instruments;
       QList<Preset*> presets;
@@ -68,20 +69,20 @@ class SFont {
       QList<unsigned char*> infos;	// list of info strings (1st byte is ID)
 
       void read_listchunk(SFChunk* chunk);
-      void process_info(int size);
-      void process_sdta(unsigned int size);
-      void pdtahelper(unsigned int expid, unsigned int reclen, SFChunk* chunk, int* size);
+      void process_info(qint64 size);
+      void process_sdta(qint64 size);
+      void pdtahelper(unsigned int expid, unsigned int reclen, SFChunk* chunk, qint64* size);
 
-      void process_pdta(int size);
-      void load_phdr(int size);
-      void load_pbag(int size);
-      void load_pmod(int size);
-      void load_pgen(int size);
-      void load_ihdr(int size);
-      void load_ibag(int size);
-      void load_imod(int size);
-      void load_igen(int size);
-      void load_shdr(int size);
+      void process_pdta(qint64 size);
+      void load_phdr(qint64 size);
+      void load_pbag(qint64 size);
+      void load_pmod(qint64 size);
+      void load_pgen(qint64 size);
+      void load_ihdr(qint64 size);
+      void load_ibag(qint64 size);
+      void load_imod(qint64 size);
+      void load_igen(qint64 size);
+      void load_shdr(qint64 size);
 
       void fixup_pgen();
       void fixup_igen();
@@ -90,14 +91,14 @@ class SFont {
       void readchunk(SFChunk*);
       unsigned short READW();
       void READD(unsigned int& var);
-      void FSKIP(int size)    {  return safe_fseek(size); }
+      void FSKIP(qint64 size) { return safe_fseek(size); }
       void FSKIPW();
       unsigned char READB();
       signed char READC();
       void READSTR(char*);
 
-      void safe_fread(void *buf, int count);
-      void safe_fseek(long ofs);
+      void safe_fread(void *buf, qint64 count);
+      void safe_fseek(qint64 ofs);
       bool load();
 
    public:
@@ -110,12 +111,14 @@ class SFont {
       bool read(const QString& file);
 
       int load_sampledata();
-      unsigned int samplePos() const            { return samplepos;  }
+      qint64 samplePos() const                  { return samplepos; }
       int id() const                            { return _id; }
       void setId(int i)                         { _id = i;    }
-      void setSamplepos(unsigned v)             { samplepos = v; }
-      void setSamplesize(unsigned v)            { samplesize = v; }
-      unsigned getSamplesize() const            { return samplesize; }
+      void setSamplepos(qint64 v)               { samplepos = v; }
+      void setSamplesize(qint64 v)              { samplesize = v; }
+      qint64 getSamplesize() const              { return samplesize; }
+      QString error() const                     { return _error; }
+      bool preloadSamples();
       const QList<Preset*> getPresets() const   { return presets; }
       SFVersion version() const                 { return _version; }
       int bankOffset() const                    { return _bankOffset; }
@@ -123,6 +126,7 @@ class SFont {
       QString fontName() const                  { return _fontName; }
 
       friend class Preset;
+      friend class Sample;
       };
 
 //---------------------------------------------------------
@@ -160,7 +164,7 @@ class Sample {
 
       bool inRom() const;
       void optimize();
-      void load();
+      bool load();
       bool valid() const    { return _valid; }
       void setValid(bool v) { _valid = v; }
 #ifdef SOUNDFONT3

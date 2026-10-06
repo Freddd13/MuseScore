@@ -89,3 +89,9 @@ plugin-preview	mscore/plugin/qmlplugin.cpp	QmlPlugin::focusPanel	53	聚焦已有
 plugin-display	mscore/plugin/api/scoreobserver.cpp	static qreal previewTickX	354	变化节拍定位，无新音时插值	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-display	mscore/plugin/qmlplugin.cpp	QmlPlugin::showDetailPanel	68	共享控件的单辅助停靠窗口	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-display	mscore/scoreview.cpp	QRectF ScoreView::previewEditBounds	1226	原生编辑/拖动优先区域	mtest/mscore/pluginhost/tst_pluginhost.cpp
+SF2/SF3解析	audio/midi/fluid/sfont.cpp	bool SFont::load()	840	标准RIFF/LIST边界与HYDRA元数据	mtest/audio/sfloader
+大型SF2预加载	audio/midi/fluid/sfont.cpp	bool SFont::preloadSamples()	115	按引用去重预加载后发布	mtest/audio/sfloader;mtest/audio/sfloadergui
+采样缓冲提交	audio/midi/fluid/sfont.cpp	bool Sample::load()	681	宽类型偏移/分段读取/失败可重试	mtest/audio/sfloader
+SF2文件跳转	audio/midi/fluid/sfont.cpp	void SFont::safe_fseek(qint64 ofs)	1849	修复跨2GiB的signed int/long截断	mtest/audio/sfloader
+音源发布与失败	audio/midi/fluid/fluid.cpp	int Fluid::sfload(const QString& filename)	780	RAII新对象/加载原因/大型阈值	mtest/audio/sfloader
+异步音源GUI	audio/midi/fluid/fluidgui.cpp	void FluidGui::loadSf()	311	先停止播放/后台进度与取消/提示原因	mtest/audio/sfloadergui

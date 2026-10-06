@@ -24,6 +24,7 @@
 
 #include "audio/midi/synthesizer.h"
 #include "audio/midi/midipatch.h"
+#include <atomic>
 
 namespace FluidS {
 
@@ -315,14 +316,14 @@ class Fluid : public Synthesizer {
       float _masterTuning;                // usually 440.0
       double _tuning[128];                // the pitch of every key, in cents
 
-      int _loadProgress = 0;
-      bool _loadWasCanceled = false;
+      std::atomic<int> _loadProgress { 0 };
+      std::atomic<bool> _loadWasCanceled { false };
 
       QMutex mutex;
       void updatePatchList();
 
       //the variable is used to stop loading samples from the sf files
-      bool _globalTerminate = false;
+      std::atomic<bool> _globalTerminate { false };
 
       int fromkey_portamento = Channel::INVALID_NOTE;
       int lastNote = Channel::INVALID_NOTE;
@@ -426,6 +427,7 @@ class Fluid : public Synthesizer {
       virtual void setMasterTuning(double f)  { _masterTuning = f;    }
 
       QString error() const { return _error; }
+      int activeVoiceCount() const { return activeVoices.size(); } // caller owns the synth thread
 
       virtual SynthesizerGui* gui();
 

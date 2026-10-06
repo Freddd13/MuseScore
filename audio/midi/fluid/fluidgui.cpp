@@ -12,6 +12,7 @@
 
 #include "fluidgui.h"
 #include "mscore/icons.h"
+#include "mscore/seq.h"
 
 using namespace Ms;
 
@@ -219,6 +220,9 @@ void FluidGui::soundFontDownClicked()
 
 void FluidGui::loadSoundFontsAsync(QStringList sfonts)
       {
+      if (seq)
+            seq->stopWait();
+      fluid()->setLoadWasCanceled(false);
       QFuture<bool> future = QtConcurrent::run(fluid(), &FluidS::Fluid::loadSoundFonts, sfonts);
       _futureWatcher.setFuture(future);
       _progressTimer->start(1000);
@@ -326,6 +330,9 @@ void FluidGui::loadSf()
                                  tr("SoundFont %1 already loaded").arg(sfPath));
             }
       else {
+            if (seq)
+                  seq->stopWait();
+            fluid()->setLoadWasCanceled(false);
             _loadedSfName = sfName;
             _loadedSfPath = sfPath;
             QFuture<bool> future = QtConcurrent::run(fluid(), &FluidS::Fluid::addSoundFont, sfPath);
@@ -345,6 +352,7 @@ void FluidGui::onSoundFontLoaded()
       bool wasNotCanceled = !_progressDialog->wasCanceled();
       _progressTimer->stop();
       _progressDialog->reset();
+      fluid()->setLoadWasCanceled(false);
       if (loaded) {
             QListWidgetItem* item = new QListWidgetItem;
             item->setText(_loadedSfName);
@@ -357,7 +365,7 @@ void FluidGui::onSoundFontLoaded()
       else if (wasNotCanceled) {
             QMessageBox::warning(this,
             tr("MuseScore"),
-            tr("Cannot load SoundFont %1").arg(_loadedSfPath));
+            tr("Cannot load SoundFont %1\n%2").arg(_loadedSfPath, fluid()->error()));
             }
       loadSf();
       }

@@ -141,6 +141,8 @@ add_custom_target(mtest_build_and_install
 endif (NOT MSVC)
 
 subdirs (
+        audio/sfloader
+        audio/sfloadergui
         libmscore/compat114
         libmscore/compat206
 #        libmscore/album            # obsolete

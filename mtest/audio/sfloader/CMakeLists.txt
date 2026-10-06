@@ -1,0 +1,6 @@
+set(TARGET tst_sfloader)
+set(MTEST_LINK_MSCOREAPP TRUE)
+include(${PROJECT_SOURCE_DIR}/mtest/CreateMtestTarget.cmake)
+if (MSVC)
+      target_link_libraries(${TARGET} Psapi)
+endif ()
