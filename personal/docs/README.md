@@ -32,6 +32,7 @@ libmscore: 乐谱对象 + 编辑规则 + 撤销 + 排版 + MSCX/MSCZ + MIDI 渲�
 | 钢琴卷帘、双谱表、踏板、MIDI、力度 | [05 钢琴开发专题](05-piano-development.md) | `pianoroll/`、`rendermidi.cpp` |
 | Windows 构建、测试、调试 | [06 构建与验证](06-build-and-test.md) | CMake、`mtest/`、CI 脚本 |
 | 当前电脑如何编译、实测阻塞与本地 SDK | [09 Windows 构建实测](09-windows-build-check.md) | `personal/tools/build_windows.ps1` |
+| 自动输入/时值修改的节拍分组与延音链 | [12 自动规范输入时值](12-input-rhythm.md) | `libmscore/inputrhythm.*`、`mtest/libmscore/inputrhythm` |
 | 大型 SF2、预加载、音源失败与性能验证 | [11 大型 SF2](11-large-sf2.md) | `audio/midi/fluid/`、`mtest/audio/sfloader` |
 | 开发、版本、日志、提交、上游合并 | [07 开发流程](07-development-workflow.md) | [更新日志](../CHANGELOG.md) |
 | 判断哪些结论需重新验证 | [08 基准与限制](08-baseline-and-limits.md) | [机器快照](baseline.json) |

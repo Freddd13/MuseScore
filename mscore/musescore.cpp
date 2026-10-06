@@ -120,6 +120,8 @@
 #include "libmscore/page.h"
 #include "libmscore/part.h"
 #include "libmscore/score.h"
+#include "libmscore/inputrhythm.h"
+#include "inputrhythmpreference.h"
 #include "libmscore/scorediff.h"
 #include "libmscore/scoreOrder.h"
 #include "libmscore/segment.h"
@@ -497,6 +499,11 @@ void updateExternalValuesFromPreferences() {
       MScore::playbackSpeedIncrement = preferences.getInt(PREF_APP_PLAYBACK_SPEEDINCREMENT);
       MScore::warnPitchRange = preferences.getBool(PREF_SCORE_NOTE_WARNPITCHRANGE);
       MScore::disableMouseEntry = preferences.getBool(PREF_SCORE_NOTE_INPUT_DISABLE_MOUSE_INPUT);
+      InputRhythm::setEnabled(preferences.getBool(PREF_SCORE_NOTE_INPUT_AUTO_RHYTHM));
+      if (mscore) {
+            if (auto action = mscore->findChild<QAction*>("auto-rhythmic-input"))
+                  action->setChecked(InputRhythm::enabled());
+            }
       MScore::pedalEventsMinTicks = preferences.getInt(PREF_IO_MIDI_PEDAL_EVENTS_MIN_TICKS);
       MScore::layoutBreakColor = preferences.getColor(PREF_UI_SCORE_LAYOUTBREAKCOLOR);
       MScore::frameMarginColor = preferences.getColor(PREF_UI_SCORE_FRAMEMARGINCOLOR);
@@ -2224,6 +2231,14 @@ MuseScore::MuseScore()
       menuTools->addAction(getAction("enh-current"));
       menuTools->addAction(getAction("pitch-spell"));
       menuTools->addAction(getAction("reset-groupings"));
+      QAction* autoRhythm = menuTools->addAction(tr("Automatically Group Input Rhythms"));
+      autoRhythm->setObjectName("auto-rhythmic-input");
+      autoRhythm->setCheckable(true);
+      autoRhythm->setChecked(preferences.getBool(PREF_SCORE_NOTE_INPUT_AUTO_RHYTHM));
+      connect(autoRhythm, &QAction::toggled, this, [](bool enabled) {
+            preferences.setPreference(PREF_SCORE_NOTE_INPUT_AUTO_RHYTHM, enabled);
+            InputRhythm::setEnabled(enabled);
+            });
       menuTools->addAction(getAction("resequence-rehearsal-marks"));
       menuTools->addAction(getAction("unroll-repeats"));
       menuTools->addSeparator();

@@ -2,6 +2,22 @@
 
 个人版本记录本仓库的个人维护增量；应用上游版本另由 `config.cmake` 管理。历史源码提交尚未追溯归类，此处从首次建立指南开始记录，不代表此前没有个人改动。
 
+## 0.7.0 — 2026-10-06
+
+- 类型：自动规范输入时值。应用工具菜单在重组节奏旁提供默认开启的持久化开关，关闭不改已有延音；上游应用仍 3.7.0，谱面格式不变。
+- 核心：新增 libmscore/inputrhythm.h/.cpp，复用 toRhythmicDurationList / regroupNotesAndRests。五线谱新输入、时值按钮/增减/输入状态、卷帘确认新增和时值调整接入；保持常规切分例外、全音符、整小节休止、复合拍子及跨小节延音。
+- 保护：比较分组后才重建；只整理目标 track 的完整延音链，数值 tick/track/pitch 恢复选区、输入光标和卷帘对象，与原编辑共用 Undo。追加和弦音覆盖所有链片段。复杂附着、自定义演奏事件、连音符、装饰音、震音等保守跳过；打开/导入/普通粘贴/纯移调/插件游标不触发整理。
+- 既有算法局部修复：edit.cpp 外部反向延音连接实际插入和弦，释放临时 clone；输入位置按数值恢复，避免失效 Segment。
+- 输入状态时值变更在拆分后定位逻辑终点再前进，避免只前进第一段；应用偏好键局限在 mscore/inputrhythmpreference.h，不增加核心谱面字段。
+- 验证：x64 Release 主程序构建/链接/独立安装；tst_inputrhythm 24、手动 tst_rhythmicGrouping 10、tst_note 11、tst_scoreobserver 14、真实 tst_pluginhost 7 项通过，0 失败/跳过；GUI 清理修正后连续三次退出码 0。覆盖分组/休止/复合拍子、和弦全链、逻辑光标、局部/范围时值命令、单 Undo/Redo、保存重开、分谱、跨谱表、外部延音、自定义事件、开关写盘及普通粘贴保护。重开谱面的 MIDI 音符事件与关闭开关时未拆分参考谱一致。
+- 测试环境：note / rhythmicGrouping 使用既有 MTEST_LINK_MSCOREAPP，解决旧 testutils 全局 stub 与宿主重复符号。observer 配置隔离；pluginhost 在 Qt 清理字体前销毁主窗口，修正测试退出崩溃。helper 设置 MTEST_DIFF_DIR=E:/Git/usr/bin，避免 Vim diff 不支持参数造成假失败。黄金谱及和声助手生产实现未修改。
+- 边界：未进行人工长期操作或真实 MIDI/音频硬件验收；复杂对象保守跳过，不承诺 Dorico 全部规则。大型 SF2 严格稳定性仍以 0.6.0 的实测数据/限制为准。
+- 维护：新增 mtest/libmscore/inputrhythm，扩展真实 pluginhost GUI；更新结构/功能指南、源码索引及 personal/docs/12-input-rhythm.md；中文翻译上下文 Ms::MuseScore。
+- 部署：复用独立 0.6 构建树，保持配置安装前缀避免全量重编，用 cmake --install --prefix 安装到 msvc.install_personal_0_7_x64，保留全部旧程序/原音源/和声助手。
+- Git 父提交：1255ab45ccefbaac710b1fbb58c46e5dc554ce30。
+- Git 提交主题：feat(notation): automatically group input rhythms and tied chords。
+- 提交定位：personal-v0.7.0 标签指向本次提交；普通 push 分支/标签，不强推。
+
 ## 0.6.0 — 2026-10-06
 
 - 类型：大型标准 SF2 解析修复与播放前预加载。上游应用仍 3.7.0；已有个人版本 0.5.0 的和声助手已独立提交，故本次从 0.5.0 递增；不覆盖旧版本标签。

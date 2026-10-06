@@ -161,6 +161,7 @@ endif (APPLE)
 add_library(preferences STATIC
       preferences.cpp
       preferences.h
+      inputrhythmpreference.h
       globals.h
       )
 

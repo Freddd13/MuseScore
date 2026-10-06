@@ -20,6 +20,7 @@
 #include <QUrl>
 #include <memory>
 #include "mtest/testutils.h"
+#include "mscore/musescore.h"
 #include "mscore/notepreview.h"
 #include "mscore/plugin/api/scoreobserver.h"
 #include "mscore/plugin/api/score.h"
@@ -32,8 +33,9 @@
 using namespace Ms;
 class TestScoreObserver : public QObject, public MTest {
       Q_OBJECT
+      QTemporaryDir _configuration { QDir::currentPath()+"/observer-XXXXXX" };
    private slots:
-      void initTestCase() { initMTest(); }
+      void initTestCase() { initMTest();QVERIFY(_configuration.isValid());dataPath=_configuration.path(); }
       void sustainedNotesAndScope()
             {
             std::unique_ptr<MasterScore> score(readScore("mscore/scoreobserver/piano.mscx"));

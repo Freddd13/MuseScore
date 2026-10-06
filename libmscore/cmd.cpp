@@ -45,6 +45,7 @@
 #include "repeat.h"
 #include "rest.h"
 #include "score.h"
+#include "inputrhythm.h"
 #include "segment.h"
 #include "sequencer.h"
 #include "sig.h"
@@ -2745,11 +2746,16 @@ void Score::cmdIncDecDuration(int nSteps, bool stepDotted)
             if (!d.isValid())
                   return;
             Fraction scale = d.ticks() / initialDuration.ticks();
+            const Fraction rangeStart=_selection.tickStart(), rangeEnd=_selection.tickEnd();
+            const int firstStaff=_selection.staffStart(), lastStaff=_selection.staffEnd();
+            std::vector<std::pair<Fraction,int>> rhythmTargets;
             const QSet<ChordRest*> crs = getSelectedChordRests();
             for (ChordRest* cr : crs) {
                   Fraction newTicks = cr->ticks() * scale;
                   if (newTicks < Fraction(1, 1024) || (stepDotted && cr->durationType().dots() != firstCR->durationType().dots() && !cr->isGrace()))
                         return;
+                  if (InputRhythm::enabled() && InputRhythm::eligible(cr))
+                        rhythmTargets.emplace_back(rangeStart+(cr->tick()-rangeStart)*scale,cr->track());
                   }
             QMimeData* mimeData = new QMimeData;
             mimeData->setData(mimeType, _selection.mimeData());
@@ -2758,9 +2764,18 @@ void Score::cmdIncDecDuration(int nSteps, bool stepDotted)
             e.setPasteMode(true);
             deleteRange(_selection.startSegment(), _selection.endSegment(), staff2track(_selection.staffStart()), staff2track(_selection.staffEnd()), selectionFilter());
             pasteStaff(e, _selection.startSegment(), _selection.staffStart(), scale);
+            if (!rhythmTargets.empty()) {
+                  _selection.setRangeTicks(rangeStart,rangeStart+(rangeEnd-rangeStart)*scale,firstStaff,lastStaff);
+                  _selection.updateSelectedElements();
+                  for (const auto& target : rhythmTargets)
+                        InputRhythm::normalize(this,findCR(target.first,target.second));
+                  }
             }
       else if (_selection.isList()) {
             const QSet<ChordRest*> crs = getSelectedChordRests();
+            std::vector<std::pair<Fraction,int>> rhythmTargets;
+            if (InputRhythm::enabled()) for (ChordRest* cr : crs)
+                  if (InputRhythm::eligible(cr)) rhythmTargets.emplace_back(cr->tick(),cr->track());
             for (ChordRest* cr : crs) {
                   // if measure rest is selected as input, then the correct initialDuration will be the
                   // duration of the measure's time signature, else is just the ChordRest's duration
@@ -2789,6 +2804,8 @@ void Score::cmdIncDecDuration(int nSteps, bool stepDotted)
                   if (canReselectItem(e))
                         select(e, SelectType::ADD);
                   }
+            for (const auto& target : rhythmTargets)
+                  InputRhythm::normalize(this,findCR(target.first,target.second));
             }
       }
 
@@ -4327,7 +4344,14 @@ void Score::cmdApplyInputState()
       // apply duration
       TDuration d = _is.duration();
       if (cr->durationType() != d) {
-            changeCRlen(cr, d);
+            const int track = cr->track();
+            const Fraction logicalEnd = cr->tick() + (d.type() == TDuration::DurationType::V_MEASURE
+                  ? cr->measure()->ticks() : d.fraction()/cr->staff()->timeStretch(cr->tick()));
+            if (InputRhythm::changeDuration(this, cr, d)) {
+                  ChordRest* last = findCR(logicalEnd-Fraction::fromTicks(1),track);
+                  if (last && last->endTick() == logicalEnd)
+                        _is.setSegment(last->segment());
+                  }
             _is.moveToNextInputPos();
             }
       }

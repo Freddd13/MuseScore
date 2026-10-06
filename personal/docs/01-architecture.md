@@ -82,3 +82,5 @@
 0.4.0 固定标记的几何和活动索引留在 NotePreviewLayers，ScoreView::paint 屏幕绘制，events.cpp 双击转发与 QmlPlugin::focusPanel 为局部接线。音乐模板、离调强调与样式配置仍在插件；没有新增模型/音频依赖。
 
 0.5.0 将固定记号从音符颜色映射分离为时间标记向量，来源地址仅作析构清理。QmlPlugin 可提供一个共享 QML 控件的辅助停靠宿主；不重复创建分析或连接音频。
+
+自动输入节奏策略集中于 [inputrhythm](../../libmscore/inputrhythm.cpp)，由应用偏好设置，核心编辑仍使用原节拍分组与 undo；详见 [12](12-input-rhythm.md)。

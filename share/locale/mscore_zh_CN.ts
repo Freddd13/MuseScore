@@ -13883,6 +13883,10 @@ Sound: %5</source>
 <context>
     <name>Ms::MuseScore</name>
     <message>
+        <source>Automatically Group Input Rhythms</source>
+        <translation>自动规范输入时值</translation>
+    </message>
+    <message>
         <location filename="../../mscore/exportaudio.cpp" line="343"/>
         <location filename="../../mscore/musescore.cpp" line="7807"/>
         <source>Cancel</source>

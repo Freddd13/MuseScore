@@ -26,6 +26,7 @@
 #include "libmscore/part.h"
 #include "libmscore/rest.h"
 #include "libmscore/score.h"
+#include "libmscore/inputrhythm.h"
 #include "libmscore/segment.h"
 #include "libmscore/staff.h"
 #include "libmscore/tie.h"
@@ -2092,7 +2093,7 @@ bool PianoView::paintOnsetDragSegment(const QPointF& from,
                               tick,
                               duration,
                               pitch,
-                              track);
+                              track, true);
                   }
 
             score->endCmd();
@@ -3016,7 +3017,7 @@ void PianoView::mouseReleaseEvent(QMouseEvent* event)
                                                 startTickFrac,
                                                 duration,
                                                 pitch,
-                                                track);
+                                                track, true);
                                           }
 
                                     score->endCmd();
@@ -4033,7 +4034,7 @@ int PianoView::insertionVoiceForNote(const Fraction& startTick,
 //   addNote
 //---------------------------------------------------------
 
-QVector<Note*> PianoView::addNote(Fraction startTick, Fraction duration, int pitch, int track)
+QVector<Note*> PianoView::addNote(Fraction startTick, Fraction duration, int pitch, int track, bool rhythmicInput)
       {
       QVector<Note*> addedNotes;
       if (!pitchIsValid(pitch) || duration <= Fraction{})
@@ -4044,6 +4045,20 @@ QVector<Note*> PianoView::addNote(Fraction startTick, Fraction duration, int pit
 
       const Fraction requestedStartTick = startTick;
       const Fraction requestedDuration = duration;
+      const bool rhythmic = rhythmicInput && InputRhythm::enabled();
+      auto realizedNotes = [&]() {
+            QVector<Note*> result;
+            const Fraction end = requestedStartTick+requestedDuration;
+            for (Fraction tick=requestedStartTick; tick<end;) {
+                  ChordRest* cr = score->findCR(tick,track);
+                  if (!cr || cr->endTick()<=tick) break;
+                  if (cr->isChord()) {
+                        if (Note* n = toChord(cr)->findNote(pitch)) result.append(n);
+                        }
+                  tick = cr->endTick();
+                  }
+            return result;
+            };
 
       const bool preserveExistingRhythm =
             noteRangeContainsChord(requestedStartTick,
@@ -4078,13 +4093,13 @@ QVector<Note*> PianoView::addNote(Fraction startTick, Fraction duration, int pit
                               curChordRest->segment(),
                               track,
                               newPitch,
-                              requestedDuration);
+                              requestedDuration, Direction::AUTO, false, rhythmic && !curChordRest->tuplet());
 
                   if (newSeg)
                         addedNotes.append(
                               getSegmentNotes(newSeg, track));
 
-                  return addedNotes;
+                  return rhythmic ? realizedNotes() : addedNotes;
                   }
 
             Fraction curStartTick = curChordRest->tick();
@@ -4183,6 +4198,21 @@ QVector<Note*> PianoView::addNote(Fraction startTick, Fraction duration, int pit
                   toggleTie(note);
             }
 
+      if (rhythmic) {
+            // Resolve again after every regroup; Note/Segment pointers from
+            // earlier fragments may have been replaced by the undo operation.
+            const Fraction end = requestedStartTick+requestedDuration;
+            for (Fraction tick=requestedStartTick; tick<end;) {
+                  ChordRest* cr = score->findCR(tick,track);
+                  if (!cr || cr->endTick()<=tick) break;
+                  InputRhythm::normalize(score,cr);
+                  cr = score->findCR(tick,track);
+                  if (!cr || cr->endTick()<=tick) break;
+                  tick = cr->endTick();
+                  }
+            return realizedNotes();
+            }
+
       return addedNotes;
       }
 
@@ -4256,6 +4286,13 @@ void PianoView::changeChordLength(const QPointF& pos) {
             Fraction frac = noteEditLength();
             Chord* chord = note->chord();
             if (chord->ticks() != frac) {
+                  if (InputRhythm::enabled() && InputRhythm::eligible(chord)) {
+                        score->startCmd();
+                        InputRhythm::changeDuration(score,chord,frac);
+                        score->endCmd();
+                        updateNotes();
+                        return;
+                        }
                   //Copy existing cord
                   QList<NoteVal> nvList;
                   for (Note* n: chord->notes())
@@ -4419,7 +4456,7 @@ bool PianoView::paintNoteCell(const QPointF& pos)
                         tick,
                         duration,
                         pitch,
-                        track);
+                        track, true);
 
       score->endCmd();
 
@@ -4674,7 +4711,7 @@ void PianoView::insertNote(int modifiers)
                   track);
 
       if (cr)
-            addNote(insertPosition, noteLen, pickPitch, track);
+            addNote(insertPosition, noteLen, pickPitch, track, true);
 
       score->endCmd();
       }
@@ -6594,6 +6631,10 @@ QString PianoView::serializeSelectedNotes()
                   xml.writeAttribute("staff", QString::number(staffIdx));
                   xml.writeAttribute("veloOff", QString::number(veloOff));
                   xml.writeAttribute("veloType", veloType == Note::ValueType::OFFSET_VAL ? "o" : "u");
+                  bool rhythmEligible = true;
+                  for (Note* part = note->firstTiedNote(); part; part = part->tieFor() ? part->tieFor()->endNote() : nullptr)
+                        rhythmEligible = rhythmEligible && InputRhythm::eligible(part->chord());
+                  xml.writeAttribute("rhythmEligible", rhythmEligible ? "1" : "0");
 
                   for (NoteEvent& evt : note->playEvents()) {
                         int ontime = evt.ontime();
@@ -6985,7 +7026,7 @@ void PianoView::finishNoteGroupDrag(QMouseEvent* event) {
       if (!(event->modifiers() & Qt::ShiftModifier)) {
             deleteSelectedNotes();
             }
-      QVector<Note*> notes = pasteNotes(_dragNoteCache, pasteTickOffset, pasteLengthOffset, pitchOffset, true);
+      QVector<Note*> notes = pasteNotes(_dragNoteCache, pasteTickOffset, pasteLengthOffset, pitchOffset, true, !pasteLengthOffset.isZero());
 
       // Select the resulting pasted notes
       Selection& selection = score->selection();
@@ -7023,7 +7064,7 @@ void PianoView::finishNoteGroupDrag(QMouseEvent* event) {
 //   pasteNotes
 //---------------------------------------------------------
 
-QVector<Note*> PianoView::pasteNotes(const QString& copiedNotes, Fraction pasteStartTick, Fraction lengthOffset, int pitchOffset, bool xIsOffset)
+QVector<Note*> PianoView::pasteNotes(const QString& copiedNotes, Fraction pasteStartTick, Fraction lengthOffset, int pitchOffset, bool xIsOffset, bool rhythmicInput)
       {
       QXmlStreamReader xml(copiedNotes);
       Fraction firstTick;
@@ -7071,7 +7112,8 @@ QVector<Note*> PianoView::pasteNotes(const QString& copiedNotes, Fraction pasteS
 
                         Fraction pos = xIsOffset ? startTick + pasteStartTick : startTick - firstTick + pasteStartTick;
 
-                        currentNotes = addNote(pos, tickLen, pitch + pitchOffset,track);
+                        const bool rhythmic = rhythmicInput && xml.attributes().value("rhythmEligible")==QStringLiteral("1");
+                        currentNotes = addNote(pos, tickLen, pitch + pitchOffset,track,rhythmic);
 
                         for (Note* note : qAsConst(currentNotes)) {
                               note->setVeloOffset(veloOff);

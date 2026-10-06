@@ -11,5 +11,6 @@
 #=============================================================================
 
 set(TARGET tst_note)
+set(MTEST_LINK_MSCOREAPP TRUE)
 
 include(${PROJECT_SOURCE_DIR}/mtest/CreateMtestTarget.cmake)

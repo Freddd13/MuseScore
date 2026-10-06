@@ -19,6 +19,11 @@
 #include "libmscore/measure.h"
 #include "libmscore/note.h"
 #include "libmscore/segment.h"
+#include "libmscore/inputrhythm.h"
+#include "mscore/inputrhythmpreference.h"
+#include "libmscore/undo.h"
+#include "mscore/preferences.h"
+#include "mscore/pianoroll/pianoview.h"
 
 static void initPluginHostResources() { Q_INIT_RESOURCE(musescorefonts_Petaluma); }
 
@@ -40,6 +45,44 @@ class TestPluginHost : public QObject {
             QStringList arguments;
             MuseScore::init(arguments);
             QVERIFY(Ms::mscore);
+            }
+      void automaticRhythmPreference()
+            {
+            auto action=Ms::mscore->findChild<QAction*>("auto-rhythmic-input");
+            QVERIFY(action); QVERIFY(action->isCheckable()); QVERIFY(action->isChecked());
+            QVERIFY(InputRhythm::enabled());
+            action->trigger(); QVERIFY(!InputRhythm::enabled());
+            preferences.save();
+            QSettings stored; stored.sync();
+            QVERIFY(stored.contains(PREF_SCORE_NOTE_INPUT_AUTO_RHYTHM));
+            QVERIFY(!stored.value(PREF_SCORE_NOTE_INPUT_AUTO_RHYTHM).toBool());
+            action->trigger(); QVERIFY(InputRhythm::enabled());
+            }
+      void cleanupTestCase()
+            {
+            // Destroy font selectors before QApplication removes application
+            // fonts and emits fontDatabaseChanged during its own destruction.
+            delete Ms::mscore;Ms::mscore=nullptr;
+            }
+      void pianoRollInputGrouping()
+            {
+            auto main=Ms::mscore;
+            auto score=main->readScore(QString(TESTROOT)+"/mtest/libmscore/inputrhythm/blank.mscx");
+            QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));
+            Pos locators[3];for(auto& locator:locators) locator.setContext(score->tempomap(),score->sigmap());
+            PianoView view;view.setStaff(score->staff(0),locators);
+            const QString xml="<notes firstN=\"3\" firstD=\"8\"><note startN=\"3\" startD=\"8\" lenN=\"1\" lenD=\"4\" pitch=\"60\" voice=\"0\" staff=\"0\" veloOff=\"0\" veloType=\"o\" rhythmEligible=\"1\"/></notes>";
+            score->startCmd();auto plain=view.pasteNotes(xml,Fraction(3,8),Fraction(),0);score->endCmd();
+            QVERIFY(!plain.isEmpty());QCOMPARE(score->findCR(Fraction(3,8),0)->ticks(),Fraction(1,4));
+            EditData ed;score->undoStack()->undo(&ed);
+            score->startCmd();auto grouped=view.pasteNotes(xml,Fraction(3,8),Fraction(),0,false,true);score->endCmd();
+            QCOMPARE(grouped.size(),2);QCOMPARE(grouped.front()->playTicksFraction(),Fraction(1,4));
+            QCOMPARE(grouped.front()->chord()->ticks(),Fraction(1,8));QCOMPARE(grouped.back()->tick(),Fraction(1,2));
+            view.updateNotes();
+            score->undoStack()->undo(&ed);QVERIFY(score->firstMeasure()->first(SegmentType::ChordRest)->cr(0)->isRest());
+            score->undoStack()->redo(&ed);view.updateNotes();
+            QCOMPARE(toChord(score->findCR(Fraction(3,8),0))->upNote()->playTicksFraction(),Fraction(1,4));
+            view.setStaff(nullptr,nullptr);
             }
       void menuMetadataRelayoutAndDocking()
             {

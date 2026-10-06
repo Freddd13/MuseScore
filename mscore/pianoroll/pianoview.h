@@ -363,7 +363,7 @@ private:
                                 int staffIdx,
                                 int preferredVoice) const;
 
-      QVector<Note*> addNote(Fraction startTick, Fraction duration, int pitch, int track);
+      QVector<Note*> addNote(Fraction startTick, Fraction duration, int pitch, int track, bool rhythmicInput = false);
       void handleSelectionClick();
       void insertNote(int modifiers);
       Fraction roundToNearestBeat(int tick, bool down = true) const;
@@ -458,7 +458,7 @@ private:
       void setNotesToVoice(int voice);
 
       QString serializeSelectedNotes();
-      QVector<Note*> pasteNotes(const QString& copiedNotes, Fraction pasteStartTick, Fraction lengthOffset, int pitchOffset, bool xIsOffset = false);
+      QVector<Note*> pasteNotes(const QString& copiedNotes, Fraction pasteStartTick, Fraction lengthOffset, int pitchOffset, bool xIsOffset = false, bool rhythmicInput = false);
       void drawDraggedNotes(QPainter* painter);
       void drawDraggedNote(QPainter* painter, Fraction startTick, Fraction frac, int pitch, int track, QColor color, const QString& pitchName = QString());
 

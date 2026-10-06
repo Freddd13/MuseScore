@@ -39,6 +39,8 @@ env = dict(os.environ, QT_QUICK_BACKEND='software', QML_DISABLE_DISK_CACHE='1',
            HARMONY_TEST_ARTIFACTS=str(output))
 env.pop('QT_QPA_PLATFORM', None)
 env.pop('QT_QUICK_CONTROLS_STYLE', None)
+if env.get('MTEST_DIFF_DIR'):
+    env['PATH'] = env['MTEST_DIFF_DIR'] + os.pathsep + env.get('PATH', '')
 log = output / 'gui.txt'
 try:
     result = subprocess.run([str(target), '-o', str(log) + ',txt'], env=env, timeout=45)

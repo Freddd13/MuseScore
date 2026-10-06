@@ -1050,7 +1050,8 @@ ChordRest* Score::searchNote(const Fraction& tick, int track) const
 
 void Score::regroupNotesAndRests(const Fraction& startTick, const Fraction& endTick, int track)
       {
-      Segment* inputSegment = _is.segment(); // store this so we can get back to it later.
+      const Fraction inputTick = _is.segment() ? _is.segment()->tick() : Fraction(-1,1);
+      const int inputTrack = _is.track();
       Segment* seg = tick2segment(startTick, true, SegmentType::ChordRest);
       for (Measure* msr = seg->measure(); msr && msr->tick() < endTick; msr = msr->nextMeasure()) {
             Fraction maxTick = endTick > msr->endTick() ? msr->endTick() : endTick;
@@ -1158,6 +1159,12 @@ void Score::regroupNotesAndRests(const Fraction& startTick, const Fraction& endT
                                                       }
                                                 }
                                           undoAddCR(nchord2, measure, tick);
+                                          if (firstpart) {
+                                                // External backward ties must target the actual
+                                                // inserted chord, not the temporary clone.
+                                                delete nchord;
+                                                startChord = nchord2;
+                                                }
                                           segment = nchord2->segment();
                                           tick += nchord2->actualTicks();
                                           nchord = nchord2;
@@ -1229,7 +1236,8 @@ void Score::regroupNotesAndRests(const Fraction& startTick, const Fraction& endT
                   }
             }
       // now put the input state back where it was before
-      _is.setSegment(inputSegment);
+      ChordRest* inputCr = inputTick >= Fraction() && inputTrack >= 0 ? findCR(inputTick,inputTrack) : nullptr;
+      _is.setSegment(inputCr ? inputCr->segment() : nullptr);
       }
 
 //---------------------------------------------------------

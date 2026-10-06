@@ -26,6 +26,7 @@
 #include "tie.h"
 #include "tuplet.h"
 #include "undo.h"
+#include "inputrhythm.h"
 #include "utils.h"
 
 namespace Ms {
@@ -138,7 +139,8 @@ Note* Score::addPitch(NoteVal& nval, bool addFlag, InputState* externalInputStat
                   qDebug("Score::addPitch: cr %s", c ? c->name() : "zero");
                   return 0;
                   }
-            Note* note = addNote(toChord(c), nval, /* forceAccidental */ false, externalInputState);
+            Note* note = externalInputState ? addNote(toChord(c), nval, false, externalInputState)
+                  : InputRhythm::addToChain(this, toChord(c), nval, false);
             if (is.lastSegment() == is.segment()) {
                   NoteEntryMethod entryMethod = is.noteEntryMethod();
                   if (entryMethod != NoteEntryMethod::REALTIME_AUTO && entryMethod != NoteEntryMethod::REALTIME_MANUAL)
@@ -243,7 +245,9 @@ Note* Score::addPitch(NoteVal& nval, bool addFlag, InputState* externalInputStat
             select(lastTiedNote);
             }
       else if (!is.usingNoteEntryMethod(NoteEntryMethod::REPITCH)) {
-            Segment* seg = setNoteRest(is.segment(), track, nval, duration, stemDirection, /* forceAccidental */ false, /* rhythmic */ false, externalInputState);
+            const bool rhythmic = InputRhythm::enabled() && !externalInputState
+                  && !is.cr()->tuplet() && !is.cr()->isGrace() && is.noteType()==NoteType::NORMAL;
+            Segment* seg = setNoteRest(is.segment(), track, nval, duration, stemDirection, /* forceAccidental */ false, rhythmic, externalInputState);
             if (seg) {
                   note = toChord(seg->element(track))->upNote();
                   }
@@ -415,13 +419,14 @@ void Score::putNote(const Position& p, bool replace)
                   }
             }
       bool forceAccidental = false;
+      const bool tabStaff = st->isTabStaff(cr->tick());
       if (_is.accidentalType() != AccidentalType::NONE) {
             NoteVal nval2 = noteValForPosition(p, AccidentalType::NONE, error);
             forceAccidental = (nval.pitch == nval2.pitch);
             }
       if (addToChord && cr->isChord()) {
             // if adding, add!
-            addNote(toChord(cr), nval, forceAccidental);
+            InputRhythm::addToChain(this, toChord(cr), nval, forceAccidental);
             _is.setAccidentalType(AccidentalType::NONE);
             return;
             }
@@ -430,10 +435,10 @@ void Score::putNote(const Position& p, bool replace)
 
             if (_is.rest())
                   nval.pitch = -1;
-            setNoteRest(_is.segment(), _is.track(), nval, _is.duration().fraction(), stemDirection, forceAccidental);
+            setNoteRest(_is.segment(), _is.track(), nval, _is.duration().fraction(), stemDirection, forceAccidental, InputRhythm::enabled() && !cr->tuplet());
             _is.setAccidentalType(AccidentalType::NONE);
             }
-      if (!st->isTabStaff(cr->tick()))
+      if (!tabStaff)
             _is.moveToNextInputPos();
       }
 
@@ -743,4 +748,3 @@ void Score::globalInsertChord(const Position& pos)
 
 
 } // namespace Ms
-

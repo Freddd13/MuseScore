@@ -50,6 +50,7 @@
 #include "rest.h"
 #include "revisions.h"
 #include "score.h"
+#include "inputrhythm.h"
 #include "scoreOrder.h"
 #include "segment.h"
 #include "select.h"
@@ -3243,7 +3244,8 @@ void Score::padToggle(Pad p, const EditData& ed)
                                           }
                                     }
                               }
-                        setNoteRest(_is.segment(), _is.track(), nval, _is.duration().fraction(), stemDirection);
+                        setNoteRest(_is.segment(), _is.track(), nval, _is.duration().fraction(), stemDirection, false,
+                              InputRhythm::enabled() && (!_is.cr() || !_is.cr()->tuplet()));
                         _is.moveToNextInputPos();
                         }
                   else
@@ -3323,6 +3325,9 @@ void Score::padToggle(Pad p, const EditData& ed)
                   crs.clear();
             }
 
+      std::vector<std::pair<Fraction,int>> rhythmTargets;
+      if (InputRhythm::enabled()) for (ChordRest* cr : crs)
+            if (InputRhythm::eligible(cr)) rhythmTargets.emplace_back(cr->tick(),cr->track());
       for (ChordRest* cr : crs) {
             if (cr->isChord() && (toChord(cr)->isGrace())) {
                   //
@@ -3345,6 +3350,8 @@ void Score::padToggle(Pad p, const EditData& ed)
                   select(element, SelectType::ADD, 0);
             selection().updateSelectedElements();
             }
+      for (const auto& target : rhythmTargets)
+            InputRhythm::normalize(this,findCR(target.first,target.second));
       }
 
 //---------------------------------------------------------

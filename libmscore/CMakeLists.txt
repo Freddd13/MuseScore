@@ -38,7 +38,7 @@ add_library (libmscore STATIC
       fermata.cpp articulation.cpp barline.cpp beam.cpp bend.cpp box.cpp
       bracket.cpp breath.cpp bsp.cpp changeMap.cpp chord.cpp chordline.cpp
       chordlist.cpp chordrest.cpp clef.cpp cleflist.cpp
-      drumset.cpp durationtype.cpp dynamic.cpp dynamichairpingroup.cpp edit.cpp noteentry.cpp
+      drumset.cpp durationtype.cpp dynamic.cpp dynamichairpingroup.cpp edit.cpp noteentry.cpp inputrhythm.cpp inputrhythm.h
       easeInOut.cpp element.cpp elementgroup.cpp excerpt.cpp
       fifo.cpp fret.cpp glissando.cpp hairpin.cpp
       harmony.cpp hook.cpp image.cpp iname.cpp instrchange.cpp
