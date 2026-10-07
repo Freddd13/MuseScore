@@ -1,6 +1,9 @@
 #include "pianolevelsfilter.h"
 
 #include "libmscore/note.h"
+#include "libmscore/notevelocity.h"
+#include "libmscore/synthesizerstate.h"
+#include "mscore/musescore.h"
 #include "libmscore/chord.h"
 #include "libmscore/staff.h"
 #include "libmscore/score.h"
@@ -212,13 +215,12 @@ QString PianoLevelFilterVeloOffset::tooltip()
 
 int PianoLevelFilterVeloOffset::value(Note* note, NoteEvent* /*evt*/)
       {
-      Staff* staff = note->staff();
 
       //Change velocity to equivalent in new metric
       switch (Note::ValueType(note->veloType())) {
             case Note::ValueType::USER_VAL: {
-                  int dynamicsVel = staff->velocities().val(note->tick());
-                  return static_cast<int>((note->veloOffset() / (qreal)dynamicsVel - 1) * 100);
+                  int dynamicsVel = NoteVelocity::referenceBase(note, mscore ? mscore->synthesizerState().method() : 1);
+                  return NoteVelocity::offsetFor(dynamicsVel, note->veloOffset());
                   }
             default:
             case Note::ValueType::OFFSET_VAL:
@@ -232,13 +234,12 @@ int PianoLevelFilterVeloOffset::value(Note* note, NoteEvent* /*evt*/)
 
 void PianoLevelFilterVeloOffset::setValue(Note* note, NoteEvent* /*evt*/, int value)
       {
-      Staff* staff = note->staff();
       Score* score = note->score();
 
       switch (Note::ValueType(note->veloType())) {
             case Note::ValueType::USER_VAL: {
-                  int dynamicsVel = staff->velocities().val(note->tick());
-                  int newVelocity = static_cast<int>(dynamicsVel * (1 + value / 100.0));
+                  int dynamicsVel = NoteVelocity::referenceBase(note, mscore ? mscore->synthesizerState().method() : 1);
+                  int newVelocity = NoteVelocity::effective(dynamicsVel, Note::ValueType::OFFSET_VAL, value);
 
                   score->undo(new ChangeVelocity(note, Note::ValueType::USER_VAL, newVelocity));
 
@@ -277,7 +278,6 @@ QString PianoLevelFilterVeloUser::tooltip()
 
 int PianoLevelFilterVeloUser::value(Note* note, NoteEvent* /*evt*/)
       {
-      Staff* staff = note->staff();
 
       //Change velocity to equivalent in new metric
       switch (Note::ValueType(note->veloType())) {
@@ -285,8 +285,8 @@ int PianoLevelFilterVeloUser::value(Note* note, NoteEvent* /*evt*/)
                   return note->veloOffset();
             default:
             case Note::ValueType::OFFSET_VAL: {
-                  int dynamicsVel = staff->velocities().val(note->tick());
-                  return static_cast<int>(dynamicsVel * (1 + note->veloOffset() / 100.0));
+                  int dynamicsVel = NoteVelocity::referenceBase(note, mscore ? mscore->synthesizerState().method() : 1);
+                  return note->customizeVelocity(dynamicsVel);
                   }
             }
       }
@@ -297,7 +297,6 @@ int PianoLevelFilterVeloUser::value(Note* note, NoteEvent* /*evt*/)
 
 void PianoLevelFilterVeloUser::setValue(Note* note, NoteEvent* /*evt*/, int value)
       {
-      Staff* staff = note->staff();
       Score* score = note->score();
 
       switch (Note::ValueType(note->veloType())) {
@@ -306,8 +305,8 @@ void PianoLevelFilterVeloUser::setValue(Note* note, NoteEvent* /*evt*/, int valu
                   break;
             default:
             case Note::ValueType::OFFSET_VAL: {
-                  int dynamicsVel = staff->velocities().val(note->tick());
-                  int newVelocity = static_cast<int>((value / (qreal)dynamicsVel - 1) * 100);
+                  int dynamicsVel = NoteVelocity::referenceBase(note, mscore ? mscore->synthesizerState().method() : 1);
+                  int newVelocity = NoteVelocity::offsetFor(dynamicsVel, value);
 
                   score->undo(new ChangeVelocity(note, Note::ValueType::OFFSET_VAL, newVelocity));
                   break;

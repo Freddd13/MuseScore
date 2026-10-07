@@ -194,6 +194,7 @@ subdirs (
         libmscore/utils
         mscore/workspaces
         mscore/palette
+        mscore/performanceeditor
         mscore/scoreobserver
         mscore/pluginhost
         importmidi

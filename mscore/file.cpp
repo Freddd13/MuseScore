@@ -22,6 +22,7 @@
 #include "globals.h"
 #include "instrdialog.h"
 #include "musescore.h"
+#include "performanceeditor/performanceeditor.h"
 #include "newwizard.h"
 #include "palette.h"
 #include "playpanel.h"
@@ -248,6 +249,7 @@ static bool readScoreError(const QString& name, Score::FileError error, bool ask
 
 bool MuseScore::checkDirty(MasterScore* s)
       {
+      PerformanceEditor::flushForScore(s);
       if (s->dirty() || (s->created() && !s->startedEmpty())) {
             QMessageBox::StandardButton n = QMessageBox::warning(this, tr("MuseScore"),
                tr("Save changes to the score \"%1\"\n"
@@ -515,6 +517,7 @@ bool MuseScore::saveFile()
 
 bool MuseScore::saveFile(MasterScore* score)
       {
+      PerformanceEditor::flushForScore(score);
       if (score == 0)
             return false;
       if (score->created()) {
@@ -1898,6 +1901,7 @@ void MuseScore::printFile()
 
 bool MuseScore::saveAs(Score* cs_, bool saveCopy, const QString& path, const QString& ext, SaveReplacePolicy* replacePolicy)
       {
+      PerformanceEditor::flushForScore(cs_);
       bool rv = false;
       QString suffix = "." + ext;
       QString fn(path);

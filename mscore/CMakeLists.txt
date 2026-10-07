@@ -55,6 +55,7 @@ endif (SCRIPT_INTERFACE)
 include(${PROJECT_SOURCE_DIR}/audiodrivers/audiodrivers.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/mixer/mixer.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/pianoroll/pianoroll.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/performanceeditor/performanceeditor.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/cloud/cloud.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/debugger/debugger.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/inspector/inspector.cmake)
@@ -318,6 +319,7 @@ add_library(mscoreapp STATIC
       ${DEBUGGER_SRC}
       ${MSCORE_MIXER_SRC}
       ${PIANOROLL_SRC}
+      ${PERFORMANCEEDITOR_SRC}
       ${WIDGETS_SOURCE_FILES}
       ${OMR_FILES}
       ${PLUGIN_SRC}

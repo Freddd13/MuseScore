@@ -33,6 +33,7 @@ class InspectorNote : public InspectorElementBase {
       Ui::InspectorSegment s;
 
       void block(bool);
+      void valueChanged(int idx, bool reset) override;
 
    private slots:
       void noteHeadSchemeChanged(int val);

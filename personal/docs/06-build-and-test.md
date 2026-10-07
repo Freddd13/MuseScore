@@ -114,3 +114,17 @@ tst_scoreobserver 增加踏板边界、时序聚合/休止、全谱帧与原子�
 0.4.0 使用 msvc.install_harmony_1_2_x64 独立安装，另需同 SDK Qt5QmlModels.dll / Qt5QmlWorkerScript.dll。GUI staging 测试可能从 SDK PATH 找到 DLL，最终必须脱离该 PATH 运行实际安装 smoke；同一 -c 目录运行两次验证配置恢复。Qt GUI fixture 关闭硬件音序器，不能替代设备验收。
 
 0.5.0 使用 msvc.install_harmony_1_3_x64。新增 QmlPlugin/NotePreviewLayers 字段后必须统一编译所有依赖该头文件的对象，再链接主程序及 GUI 测试；本机 PCH 无效时使用进程 _CL_=/Y- /MP1。只增量重编少数对象可能产生 ABI 混用，不能用一次链接成功代替真实宿主测试。
+
+## 0.9.0 演奏编辑器回归
+
+`tst_performanceeditor` 链接完整原生宿主，关闭硬件音序器并隔离设置。常规 suite 包括力度/检视器同步、速度/踏板原生撤销与持久化、MIDI 和鼠标/谱面手柄/Esc；可用 `test_harmony_gui.py` 准备同 SDK 安装资源后运行，工作目录放在忽略构建树，避免测试谱落入源码根目录。
+
+压力槽默认不运行。先运行 actualHostAndMouseInteraction 初始化主窗口，再选择 largeScoreBenchmark：
+
+```powershell
+$env:PERFORMANCE_BENCHMARK='1'
+# 在已 staging 的独立运行目录执行（替换为实际路径）
+& ./runtime/bin/tst_performanceeditor.exe actualHostAndMouseInteraction largeScoreBenchmark -o benchmark.txt,txt
+```
+
+该测试生成 10016/50016 音，分别测全曲和局部视口的预览事件加画布渲染 P95/max，并验证 Esc 不提交、滚动值不跳变。日志 snapshot 含固定 100 ms 等待，不可解读为纯索引重建时间；关闭声卡的 GUI 测试不能代表实际播放稳定性。方案与播放边界见 [14](14-performance-editor.md)，本机最终数据见 [更新日志](../CHANGELOG.md)。

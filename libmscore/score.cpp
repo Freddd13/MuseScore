@@ -413,6 +413,24 @@ void Score::addMeasure(MeasureBase* m, MeasureBase* pos)
       - after inserting/deleting time (changes the sigmap)
 */
 
+void Score::beginTempoEdit() { ++masterScore()->_tempoEditDepth; }
+
+void Score::endTempoEdit()
+      {
+      Score* master = masterScore();
+      Q_ASSERT(master->_tempoEditDepth > 0);
+      if (--master->_tempoEditDepth == 0 && master->_tempoRebuildPending) {
+            master->_tempoRebuildPending = false;
+            master->fixTicks();
+            }
+      }
+
+void Score::requestTempoMapRebuild()
+      {
+      if (masterScore()->_tempoEditDepth) masterScore()->_tempoRebuildPending = true;
+      else fixTicks();
+      }
+
 void Score::fixTicks()
       {
       Fraction tick = Fraction(0,1);
@@ -1380,7 +1398,7 @@ void Score::addElement(Element* element)
                   break;
 
             case ElementType::TEMPO_TEXT:
-                  fixTicks(); // rebuilds tempomap
+                  requestTempoMapRebuild(); // rebuilds tempomap (deferred only inside a tempo edit batch)
                   break;
 
             case ElementType::INSTRUMENT_CHANGE: {
@@ -1555,7 +1573,7 @@ void Score::removeElement(Element* element)
                   }
                   break;
             case ElementType::TEMPO_TEXT:
-                  fixTicks(); // rebuilds tempomap
+                  requestTempoMapRebuild(); // rebuilds tempomap (deferred only inside a tempo edit batch)
                   break;
             case ElementType::INSTRUMENT_CHANGE: {
                   InstrumentChange* ic = toInstrumentChange(element);

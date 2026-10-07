@@ -32,6 +32,8 @@
 #include "libmscore/staff.h"
 #include "libmscore/measure.h"
 #include "libmscore/note.h"
+#include "libmscore/notevelocity.h"
+#include "libmscore/synthesizerstate.h"
 #include "libmscore/repeatlist.h"
 #include "libmscore/score.h"
 #include "libmscore/tempo.h"
@@ -1030,7 +1032,7 @@ Awl::PitchLabel* PianorollEditor::createTweakToolbar(const QSize& iconSize)
       tbTweak->addWidget(veloType);
 
       velocity = new QSpinBox;
-      velocity->setRange(-127, 127);
+      velocity->setRange(NoteVelocity::minOffset, NoteVelocity::maxOffset);
       velocity->setReadOnly(true);
 
       velocity->setPrefix("+");
@@ -2575,6 +2577,7 @@ void PianorollEditor::veloTypeChanged(int val)
             return;
 
       const Note::ValueType vt = Note::ValueType(val);
+      { QSignalBlocker blocker(velocity);
       switch (vt) {
             case Note::ValueType::USER_VAL:
                   velocity->setRange(0, 127);
@@ -2582,12 +2585,14 @@ void PianorollEditor::veloTypeChanged(int val)
                   break;
 
             case Note::ValueType::OFFSET_VAL:
-                  velocity->setRange(-127, 127);
+                  velocity->setRange(NoteVelocity::minOffset, NoteVelocity::maxOffset);
                   velocity->setPrefix(
                         velocity->value() > 0 ? "+" : "");
                   break;
             }
 
+      }
+      _score->updateVelo();
       _score->startCmd();
       for (int i = 0; i < items.size(); i++) {
             PianoItem* item = items[i];
@@ -2595,20 +2600,8 @@ void PianorollEditor::veloTypeChanged(int val)
             if (Note::ValueType(val) == note->veloType())
                   continue;
 
-            int newVelocity = note->veloOffset();
-            int dynamicsVel = staff->velocities().val(note->tick());
-
-            switch (Note::ValueType(val)) {
-                  case Note::ValueType::USER_VAL:
-                        // relative offset -> absolute velocity
-                        newVelocity = qBound(0, dynamicsVel + newVelocity, 127);
-                        break;
-
-                  case Note::ValueType::OFFSET_VAL:
-                        // absolute velocity -> relative offset
-                        newVelocity = qBound(-127, newVelocity - dynamicsVel, 127);
-                        break;
-                  }
+            const int base = NoteVelocity::referenceBase(note, mscore ? mscore->synthesizerState().method() : 1);
+            const int newVelocity = NoteVelocity::converted(note, Note::ValueType(val), base);
 
             _score->undo(new ChangeVelocity(note, Note::ValueType(val), newVelocity));
             updateVelocity(note);
@@ -2733,7 +2726,7 @@ void PianorollEditor::updateVelocity(Note* note)
                   break;
 
             case Note::ValueType::OFFSET_VAL:
-                  velocity->setRange(-127, 127);
+                  velocity->setRange(NoteVelocity::minOffset, NoteVelocity::maxOffset);
                   velocity->setPrefix(value > 0 ? "+" : "");
                   break;
             }

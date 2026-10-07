@@ -13,6 +13,9 @@
 #include "libmscore/score.h"
 #include "libmscore/chord.h"
 #include "libmscore/note.h"
+#include "libmscore/notevelocity.h"
+#include "libmscore/synthesizerstate.h"
+#include "mscore/musescore.h"
 #include "libmscore/notedot.h"
 #include "libmscore/beam.h"
 #include "libmscore/stem.h"
@@ -34,6 +37,7 @@ InspectorNote::InspectorNote(QWidget* parent)
       s.setupUi(addWidget());
       c.setupUi(addWidget());
       n.setupUi(addWidget());
+      n.velocity->setRange(NoteVelocity::minOffset, NoteVelocity::maxOffset);
 
       static const NoteHead::Scheme schemes[] = {
             NoteHead::Scheme::HEAD_AUTO,
@@ -150,10 +154,36 @@ InspectorNote::InspectorNote(QWidget* parent)
 //   setElement
 //---------------------------------------------------------
 
+void InspectorNote::valueChanged(int idx, bool reset)
+      {
+      if (reset || iList[idx].t != Pid::VELO_TYPE) {
+            InspectorElementBase::valueChanged(idx, reset);
+            return;
+            }
+      Score* score = inspector->element()->score();
+      if (score->isPlaying()) { setElement(); return; }
+      score->updateVelo();
+      const auto type = Note::ValueType(n.velocityType->currentIndex());
+      score->startCmd();
+      for (Element* element : *inspector->el()) {
+            if (!element->isNote()) continue;
+            Note* note = toNote(element);
+            if (note->veloType() == type) continue;
+            const int raw = NoteVelocity::converted(note, type, NoteVelocity::referenceBase(note, mscore ? mscore->synthesizerState().method() : 1));
+            note->undoChangeProperty(Pid::VELO_TYPE, int(type));
+            note->undoChangeProperty(Pid::VELO_OFFSET, raw);
+            }
+      score->endCmd();
+      setElement();
+      }
+
 void InspectorNote::setElement()
       {
       Note* note = toNote(inspector->element());
 
+      { QSignalBlocker blocker(n.velocity);
+        n.velocity->setRange(note->veloType() == Note::ValueType::USER_VAL ? qMin(0, note->veloOffset()) : NoteVelocity::minOffset,
+              note->veloType() == Note::ValueType::USER_VAL ? qMax(127, note->veloOffset()) : qMax(NoteVelocity::maxOffset, note->veloOffset())); }
       int i = note->dots().size();
       n.dot1->setEnabled(i > 0);
       n.dot2->setEnabled(i > 1);

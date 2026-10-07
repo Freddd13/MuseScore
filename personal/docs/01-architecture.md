@@ -86,3 +86,7 @@
 自动输入节奏策略集中于 [inputrhythm](../../libmscore/inputrhythm.cpp)，由应用偏好设置，核心编辑仍使用原节拍分组与 undo；详见 [12](12-input-rhythm.md)。
 
 0.7.1 的自动时值开关由主窗口持有，注册进 Workspace 动作表，旧菜单恢复后在 `updateMenus()` 补齐；不扩展上游工作区文件格式。普通中日文回退属于 Qt 文字布局，与 ScoreText 的音乐字体回退不同；规则/诊断边界见 [13](13-rhythm-rules-and-font-fallback.md)。
+
+## 演奏编辑器（0.9.0）
+
+独立 `mscore/performanceeditor/` QWidget + MuseScoreView，通过主窗口选择/换谱和 ScoreView 屏幕绘制接线；属性事务与预览分离。`libmscore/notevelocity.*` 统一整数百分比转换；Score 的临时 tempo 批事务避免逐点重建。Seq 仅暴露后台渲染空闲/停播等待，不改音频线程。详见 [14](14-performance-editor.md)。

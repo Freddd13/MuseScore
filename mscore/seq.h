@@ -372,6 +372,8 @@ class Seq : public QObject, public Sequencer {
       bool isRunning() const    { return running; }
       bool isPlaying() const    { return state == Transport::PLAY; }
       bool isStopped() const    { return state == Transport::STOP; }
+      bool backgroundRenderingIdle() const { return !midiRenderFuture.isRunning(); }
+      void waitForStoppedRendering() { Q_ASSERT(!isPlaying()); if (midiRenderFuture.isRunning()) midiRenderFuture.waitForFinished(); }
 
       void processMessages();
       void process(unsigned framesPerPeriod, float* buffer);

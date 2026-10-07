@@ -39,6 +39,7 @@
 #include "image.h"
 #include "measure.h"
 #include "note.h"
+#include "notevelocity.h"
 #include "notedot.h"
 #include "page.h"
 #include "part.h"
@@ -2603,11 +2604,7 @@ int Note::epitch() const
 
 int Note::customizeVelocity(int velo) const
       {
-      if (veloType() == ValueType::OFFSET_VAL)
-            velo = velo + (velo * veloOffset()) / 100;
-      else if (veloType() == ValueType::USER_VAL)
-            velo = veloOffset();
-      return limit(velo, 1, 127);
+      return NoteVelocity::effective(velo, veloType(), veloOffset());
       }
 
 //---------------------------------------------------------

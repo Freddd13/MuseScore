@@ -860,6 +860,12 @@ class Score : public QObject, public ScoreElement {
       Segment* tick2leftSegment(const Fraction& tick, bool useMMrest = false) const;
       Segment* tick2rightSegment(const Fraction& tick, bool useMMrest = false) const;
       Segment* tick2leftSegmentMM(const Fraction& tick) { return tick2leftSegment(tick, /* useMMRest */ true); }
+      // A local undo batch may defer only tempo-marker rebuild requests.
+      int _tempoEditDepth = 0;
+      bool _tempoRebuildPending = false;
+      void beginTempoEdit();
+      void endTempoEdit();
+      void requestTempoMapRebuild();
       void fixTicks();
       void rebuildTempoAndTimeSigMaps(Measure* m);
       Element* nextElement();

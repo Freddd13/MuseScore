@@ -66,6 +66,7 @@ class ExcerptsDialog;
 class ExportDialog;
 class SynthControl;
 class PianorollEditor;
+class PerformanceEditor;
 class DrumrollEditor;
 class Staff;
 class ScoreTab;
@@ -360,6 +361,8 @@ class MuseScore : public QMainWindow, public MuseScoreCore {
 
       QDockWidget* pianorollDock { 0 };
       PianorollEditor* pianorollEditor   { 0 };
+      PerformanceEditor* _performanceEditor = nullptr;
+      QDockWidget* _performanceDock = nullptr;
       DrumrollEditor* drumrollEditor     { 0 };
       bool _splitScreen                  { false };
       bool _horizontalSplit              { true  };
@@ -901,6 +904,7 @@ class MuseScore : public QMainWindow, public MuseScoreCore {
       Inspector* inspector()           { return _inspector; }
       PluginCreator* pluginCreator()   { return _pluginCreator; }
       ScoreView* currentScoreView() const { return cv; }
+      void showPerformanceEditor(bool);
       ScoreTab* currentScoreTab() const { return ctab; }
       QToolButton* playButton()        { return _playButton;    }
       void showMessage(const QString& s, int timeout);

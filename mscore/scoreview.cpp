@@ -24,6 +24,7 @@
 #include "scoreaccessibility.h"
 #include "scoretab.h"
 #include "scoreview.h"
+#include "performanceeditor/performanceeditor.h"
 #include "seq.h"
 #include "splitstaff.h"
 #include "textcursor.h"
@@ -1125,6 +1126,7 @@ void ScoreView::paintEvent(QPaintEvent* ev)
       shadowNote->draw(&vp);
 
       drawAnchorLines(vp);
+      PerformanceEditor::paintForView(this, vp);
       }
 
 //---------------------------------------------------------

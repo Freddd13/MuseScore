@@ -157,6 +157,7 @@
 #endif
 
 #include "pianoroll/pianoroll.h"
+#include "performanceeditor/performanceeditor.h"
 
 #include "scorecmp/scorecmp.h"
 
@@ -1967,6 +1968,13 @@ MuseScore::MuseScore()
       a->setCheckable(true);
       menuView->addAction(a);
 
+      auto performanceAction = new QAction(tr("演奏编辑器（力度 / 速度 / 踏板）"), this);
+      performanceAction->setObjectName("performance-editor");
+      performanceAction->setCheckable(true);
+      Workspace::addActionAndString(performanceAction, "performance-editor");
+      menuView->addAction(performanceAction);
+      connect(performanceAction, &QAction::toggled, this, &MuseScore::showPerformanceEditor);
+
       a = getAction("toggle-scorecmp-tool");
       a->setCheckable(true);
       menuView->addAction(a);
@@ -2753,6 +2761,8 @@ void MuseScore::updateMenus()
             menuDebug->addAction(_debugLogAction);
             }
 
+      if (auto action = findChild<QAction*>("performance-editor"))
+            if (!menuView->actions().contains(action)) menuView->addAction(action);
       connect(openRecent,     SIGNAL(aboutToShow()),       SLOT(openRecentMenu()));
       connect(openRecent,     SIGNAL(triggered(QAction*)), SLOT(selectScore(QAction*)));
       connect(menuWorkspaces, SIGNAL(aboutToShow()),       SLOT(showWorkspaceMenu()));
@@ -2931,6 +2941,7 @@ void MuseScore::selectionChanged(SelState selectionState)
       getAction("select-similar-range")->setEnabled(selectionState == SelState::RANGE);
       if (pianorollEditor)
             pianorollEditor->changeSelection(selectionState);
+      if (_performanceEditor) _performanceEditor->selectionChanged();
       if (drumrollEditor)
             drumrollEditor->changeSelection(selectionState);
       if (timeline())
@@ -3214,6 +3225,7 @@ void MuseScore::setCurrentScoreView(ScoreView* view)
       else
             cs = 0;
 
+      if (_performanceEditor) _performanceEditor->setView(cv);
       scorePageLayoutChanged();
 
       updateWindowTitle(cs);
@@ -9449,3 +9461,24 @@ void MuseScore::scoreUnrolled(MasterScore * original)
       setCurrentScoreView(appendScore(score));
       }
 } // namespace Ms
+
+namespace Ms {
+void MuseScore::showPerformanceEditor(bool visible)
+      {
+      if (visible && !_performanceEditor) {
+            _performanceDock = new QDockWidget(tr("演奏编辑器"), this);
+            _performanceDock->setObjectName("performanceEditorDock");
+            _performanceDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::TopDockWidgetArea);
+            _performanceEditor = new PerformanceEditor(_performanceDock);
+            _performanceDock->setWidget(_performanceEditor);
+            addDockWidget(Qt::BottomDockWidgetArea, _performanceDock);
+            connect(_performanceDock, &QDockWidget::visibilityChanged, this, [this](bool shown) {
+                  if (auto action = findChild<QAction*>("performance-editor")) {
+                        QSignalBlocker blocker(action); action->setChecked(shown);
+                        }
+                  });
+            _performanceEditor->setView(cv);
+            }
+      if (_performanceDock) _performanceDock->setVisible(visible);
+      }
+}
