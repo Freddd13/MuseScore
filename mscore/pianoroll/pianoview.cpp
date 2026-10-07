@@ -2610,7 +2610,7 @@ void PianoView::showPopupMenu(const QPoint& posGlobal)
 
       popup.addSeparator();
 
-      act = new QAction(tr("Color..."));
+      act = new QAction(tr("Color…"));
       connect(act, &QAction::triggered, this, &PianoView::setSelectedNoteColor);
       popup.addAction(act);
 
