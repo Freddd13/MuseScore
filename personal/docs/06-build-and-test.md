@@ -115,7 +115,7 @@ tst_scoreobserver 增加踏板边界、时序聚合/休止、全谱帧与原子�
 
 0.5.0 使用 msvc.install_harmony_1_3_x64。新增 QmlPlugin/NotePreviewLayers 字段后必须统一编译所有依赖该头文件的对象，再链接主程序及 GUI 测试；本机 PCH 无效时使用进程 _CL_=/Y- /MP1。只增量重编少数对象可能产生 ABI 混用，不能用一次链接成功代替真实宿主测试。
 
-## 0.9.0 演奏编辑器回归
+## 0.10.0 演奏编辑器回归
 
 `tst_performanceeditor` 链接完整原生宿主，关闭硬件音序器并隔离设置。常规 suite 包括力度/检视器同步、速度/踏板原生撤销与持久化、MIDI 和鼠标/谱面手柄/Esc；可用 `test_harmony_gui.py` 准备同 SDK 安装资源后运行，工作目录放在忽略构建树，避免测试谱落入源码根目录。
 
@@ -127,4 +127,4 @@ $env:PERFORMANCE_BENCHMARK='1'
 & ./runtime/bin/tst_performanceeditor.exe actualHostAndMouseInteraction largeScoreBenchmark -o benchmark.txt,txt
 ```
 
-该测试生成 10016/50016 音，分别测全曲和局部视口的预览事件加画布渲染 P95/max，并验证 Esc 不提交、滚动值不跳变。日志 snapshot 含固定 100 ms 等待，不可解读为纯索引重建时间；关闭声卡的 GUI 测试不能代表实际播放稳定性。方案与播放边界见 [14](14-performance-editor.md)，本机最终数据见 [更新日志](../CHANGELOG.md)。
+0.10 压测生成双谱表/四声部、持续音与密集和弦的 10080/50064 音。单独报告纯快照刷新、过滤、原生批选、批量提交；全曲/局部各 40 帧报告两区绘制、合并鼠标处理和定位线局部重绘 P95。换谱 snapshot 另含固定 100 ms 等待，拖动样本含 Qt 事件等待调度误差，日志明确区分。常规 suite 另使用真实 Seq 和静音 Driver 检查长音、休止、反复、循环、播放中首次打开、显示/隐藏和选音不定位；不触碰机器音频/MIDI 设备，不能代表真实声卡/合成长会话验收。另以 QT_SCALE_FACTOR=1.5 运行完整 GUI suite，并检查宽/窄窗口截图。原 tst_note 保存比较依赖 diff.exe，本机需将 E:/Git/usr/bin 加入测试进程 PATH；在忽略的独立运行目录执行，避免输出测试谱污染源码。方案与播放边界见 [14](14-performance-editor.md)，本机最终数据见 [更新日志](../CHANGELOG.md)。

@@ -3389,6 +3389,25 @@ void Score::deselect(Element* el)
 //    staffIdx is valid, if element is of type MEASURE
 //---------------------------------------------------------
 
+bool Score::selectNoteList(const QList<Note*>& notes, Note* focus)
+      {
+      if (_selection.isLocked()) return false;
+      QList<Element*> elements;
+      QSet<Note*> seen;
+      for (Note* note : notes) {
+            if (!note || note->score() != this) return false;
+            if (!seen.contains(note)) { seen.insert(note); elements.append(note); }
+            }
+      if (focus && !seen.contains(focus)) return false;
+      if (focus) { elements.removeOne(focus); elements.prepend(focus); }
+      selectSingle(elements.isEmpty() ? nullptr : elements.takeFirst(), 0);
+      for (Element* element : elements) addRefresh(element->abbox());
+      _selection.add(elements);
+      _selection.setSource(SelectionSource::SCORE);
+      setSelectionChanged(true);
+      return true;
+      }
+
 void Score::select(Element* e, SelectType type, int staffIdx)
       {
       _selection.setSource(SelectionSource::SCORE);

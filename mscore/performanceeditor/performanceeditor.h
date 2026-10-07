@@ -8,7 +8,11 @@
 #include "libmscore/mscoreview.h"
 #include "libmscore/score.h"
 #include "parameteredit.h"
+#include "performanceview.h"
+#include "performancesettings.h"
 class QGridLayout;
+class QSplitter;
+class QToolButton;
 class QResizeEvent;
 class QComboBox;
 class QCheckBox;
@@ -31,8 +35,13 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
             bool selected, audible;
             QRectF bounds;
             System* system;
+            QString name, instrument, written, position, duration;
+            const Part* part = nullptr;
+            bool inScope = true, enabled = true;
             };
-      struct SegmentInfo { int tick; QPointF position; System* system; double bpm; };
+      struct SegmentInfo { int tick; QPointF position; System* system; double bpm; Segment* segment = nullptr; };
+      struct MeasureInfo { int from, until, bar, beat; };
+      QVector<MeasureInfo> _measures;
       struct TempoInfo { TempoText* text; int tick; double bpm; bool visible; };
       struct PedalInfo { Pedal* pedal; int from, until, track; };
       QPointer<ScoreView> _view;
@@ -45,12 +54,63 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QSet<const Element*> _layoutIndex;
       QMap<Note*, VelocityEdit> _pending, _gestureBefore;
       QMap<int, double> _tempoDraft;
-      QWidget* _canvas;
+      QWidget* _canvas = nullptr;
+      PerformanceCanvas *_noteCanvas = nullptr, *_ruler = nullptr;
+      QSplitter* _splitter = nullptr;
+      QScrollBar* _pitchScroll = nullptr;
+      QToolButton* _followButton = nullptr;
+      PerformanceViewport _viewport;
+      PerformanceAppearance _appearance;
+      PerformanceIntervalIndex _intervals;
+      quint64 _visualRevision = 1, _geometryRevision = 0;
+      struct NoteGeometry { int index; QRectF rect; };
+      QVector<NoteGeometry> _noteGeometry;
+      QSet<int> _playingNotes;
+      QMultiHash<const Element*, int> _linkedIndex;
+      QTimer _playTimer, _moveTimer;
+      QPointF _queuedPoint;
+      bool _moveQueued = false, _selecting = false, _marquee = false, _seeking = false;
+      bool _following = true, _automaticScroll = false, _geometryDirty = false;
+      bool _ghostVoices = true, _showValues = false, _snapshotDegraded = false;
+      int _voiceMask = 15, _playTick = -1, _seekTick = -1;
+      QPointF _marqueeStart, _marqueeEnd;
+      Qt::KeyboardModifiers _selectionModifiers;
+      QList<Note*> _selectionBefore;
+      struct ViewMemory { PerformanceViewport viewport; int tick; };
+      QHash<Score*, ViewMemory> _viewMemory;
+      QSet<Score*> _rememberedScores;
+      QVector<QMetaObject::Connection> _transportConnections;
+      int rangeKind() const;
+      void invalidateVisual();
+      void updateSurfaces();
+      void surfaceResized(PerformanceSurface);
+      void paintBackground(QPainter&, PerformanceSurface);
+      void paintForeground(QPainter&, PerformanceSurface);
+      void buildGeometry();
+      QVector<int> hits(QPointF, bool parameter = false) const;
+      bool surfaceEvent(QObject*, QEvent*);
+      void selectIndices(const QVector<int>&, Qt::KeyboardModifiers, bool preserveGroup = false);
+      void selectVoices(int scope);
+      void rebuildFilter();
+      void centerPitch(bool selection = false, bool full = false);
+      void resetRange(bool data);
+      void pauseFollow();
+      void syncTransport();
+      void updatePlayhead();
+      void seek(int);
+      void playbackNotes();
+      void updateHover(int);
+      bool hasNoteValue(const NoteInfo&) const;
+      bool noteEditable(const NoteInfo&) const;
+      QString noteTooltip(int) const;
+      void cancelSurfaceGesture();
+      void queueGesture(QPointF);
+      void drainGesture();
       QLabel* _status;
       QComboBox *_scope, *_voice, *_axis, *_parameter, *_tool;
       QCheckBox *_handles, *_band;
       QDoubleSpinBox* _number;
-      QScrollBar* _scroll;
+      QScrollBar* _scroll = nullptr;
       QGridLayout *_topRow = nullptr, *_actionsRow = nullptr;
       QTimer _refreshTimer, _commitTimer;
       ScoreContentState _state;
@@ -63,7 +123,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       System* _system = nullptr;
       QRectF _lane, _scoreLane, _gestureLane;
       QPointF _press, _last;
-      double _pixelsPerQuarter = 72;
+
       int _relativeMax = 100, _contextTrack = 0, _selectedTempoTick = -1;
       double _tempoMax = 240;
       QVector<int> _dragTargets, _selectedIndices, _systemIndices;
@@ -88,7 +148,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       void cancelGesture();
       void applyPending();
       void paintLane(QPainter&, const QRectF&, bool onScore);
-      void paintTimeline(QPainter&);
+
       void paintOverlay(QPainter&);
       bool eventFilter(QObject*, QEvent*) override;
       void resizeEvent(QResizeEvent*) override;

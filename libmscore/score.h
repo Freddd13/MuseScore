@@ -834,6 +834,8 @@ class Score : public QObject, public ScoreElement {
       void getSelectedChordRest2(ChordRest** cr1, ChordRest** cr2) const;
 
       void select(Element* obj, SelectType = SelectType::SINGLE, int staff = 0);
+      // Atomic note-list selection for editors; preserves the transport position.
+      bool selectNoteList(const QList<Note*>& notes, Note* focus = nullptr);
       void selectSimilar(Element* e, bool sameStaff);
       void selectSimilarInRange(Element* e);
       static void collectMatch(void* data, Element* e);

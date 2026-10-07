@@ -208,6 +208,7 @@ class Selection {
       bool isSingle() const                   { return (_state == SelState::LIST) && (_el.size() == 1); }
 
       void add(Element*);
+      void add(const QList<Element*>&); // Batch append, updating flags once.
       void deselectAll();
       void remove(Element*);
       void clear();

@@ -403,6 +403,16 @@ void Selection::remove(Element* el)
 //   add
 //---------------------------------------------------------
 
+void Selection::add(const QList<Element*>& elements)
+      {
+      IF_ASSERT_FAILED(!isLocked()) {
+            LOGE() << "selection locked, reason: " << lockReason();
+            return;
+            }
+      _el.append(elements);
+      update();
+      }
+
 void Selection::add(Element* el)
       {
       IF_ASSERT_FAILED(!isLocked()) {
