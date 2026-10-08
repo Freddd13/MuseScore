@@ -37,6 +37,9 @@ class Arpeggio final : public Element {
       bool _playArpeggio;
 
       qreal _stretch;
+      int _timingMode = 0; // 0: legacy stretch, 1: start on beat, 2: end on beat
+      qreal _intervalMs = 65.0;
+      qreal _offsetMs = 0.0;
 
       bool _hidden = false; // set in layout, will skip draw if true
 
@@ -98,6 +101,9 @@ class Arpeggio final : public Element {
 
       qreal Stretch() const             { return _stretch; }
       void setStretch(qreal val)        { _stretch = val;  }
+      int timingMode() const { return _timingMode; }
+      qreal intervalMs() const { return _intervalMs; }
+      qreal offsetMs() const { return _offsetMs; }
 
       QVariant getProperty(Pid propertyId) const override;
       bool setProperty(Pid propertyId, const QVariant&) override;
@@ -115,4 +121,3 @@ class Arpeggio final : public Element {
 
 }     // namespace Ms
 #endif
-

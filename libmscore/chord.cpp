@@ -2745,6 +2745,7 @@ Element* Chord::drop(EditData& data)
             case ElementType::ARPEGGIO:
                   {
                   Arpeggio* a = toArpeggio(e);
+                  if (!a->timingMode()) a->setProperty(Pid::ARP_TIMING_MODE, 2);
                   if (arpeggio())
                         score()->undoRemoveElement(arpeggio());
                   a->setTrack(track());

@@ -363,6 +363,9 @@ enum class Pid : short {
 
       PREFER_SHARP_FLAT,
 
+      ARP_TIMING_MODE,
+      ARP_INTERVAL_MS,
+      ARP_OFFSET_MS,
       END
       };
 
@@ -430,4 +433,3 @@ extern QString propertyUserName(Pid);
 Q_DECLARE_METATYPE(QPainterPath); // for properties with P_TYPE::PATH
 
 #endif
-

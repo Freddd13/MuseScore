@@ -2,6 +2,21 @@
 
 个人版本记录本仓库的个人维护增量；应用上游版本另由 `config.cmake` 管理。历史源码提交尚未追溯归类，此处从首次建立指南开始记录，不代表此前没有个人改动。
 
+## 0.14.0 — 2026-10-08
+
+- 琶音：新增默认末音落正拍；检视器首音/末音/旧比率、65 ms 间隔、整体偏移、实际压缩间隔与预设入口。旧谱缺字段保留旧播放。跨谱表同声部统一排序，短和弦限制展开时长。
+- 时序：独立 playbacktiming 助手；展开后 nominalTick 区分重复段和起播对象。Seq 使用必要提前时间，光标保持拍点、过滤无关前文；音频/MIDI 统一预备段并报告偏移，MIDI 写原谱起点 marker。
+- 交互：新增参数名称拖拽/精调/数字输入、Esc/隐藏取消；释放一次撤销。播放中个人参数复用演奏编辑器队列，停播/保存提交，销毁/外部修改清理。
+- 数据：追加三个 Pid（不移动原枚举），原生读写/克隆/关联属性；NPlayEvent nominalTick 仅运行时，不改变文件格式版本。旧版本可能丢失扩展属性。分块只在实际拍前窗口越过边界时合并。
+- 验证：Release 主程序及测试工程通过。MIDI 59/59（旧倚音/重音/震音/颤音/速度等基准不变），真实 Qt 宿主 24/24（数字/名称拖拽/Esc/单次撤销/预设/停播提交/曲首与中途提前音/循环），自动记谱 41/41、和声观察 16/16。独立程序 --long-version 返回 0；默认 SF3 实际 WAV 导出成功、非静音，原首拍偏移 0.129167 s；MIDI 起点标记模型已核对。未运行大谱 benchmark 或真实声卡压力/听感验收。
+- 部署：独立安装 msvc.install_piano_0_14_x64/bin/MuseScore3Evo.exe；构建/安装 SHA256 同为 9f85ca827475cb7eb3f55e8c39585d8328fc731d774449c492622d1ccf18cbae。保留旧程序、配置及音源；Kumo/Freddd13/0.14 标识真实 Qt 测试通过。同 SDK QmlModels/WorkerScript/WebSockets 运行库补齐。
+- 记录：piano014-release-final.log、piano014-install-final.log；piano014-midi-run/gui.txt、piano014-gui-run/gui.txt、piano014-input-run/gui.txt、piano014-observer-run/gui.txt；piano014-installed/verification.json、audio.log。均在忽略的 msvc.build_harmony_release_x64 下。
+- 关联修正：MIDI 测试沿用 note/inputrhythm 的完整宿主链接；隔离脚本将产物写到自己的输出目录；循环结束日志不再解引用 end 迭代器。
+- 维护：更新 VERSION、用户说明、结构/功能指南、15 专题与源码索引。未混入工作区 AGENTS/USER_GUIDE 的既有并行 MCP 改动。
+- Git 父提交：36d1d4b193054799e58774c544da6251f8ad6930。
+- Git 提交主题：feat(playback): add beat-aligned timed arpeggios and safe anticipation。
+- 提交定位：personal-v0.14.0；验证后普通推送，不强推。
+
 ## 0.13.0 — 2026-10-08
 
 - 类型：按用户提供的 REAPER 默认力度截图调整外观，并修复谱行带、原生音头滚轮和 MIDI 纵向显示。执行前 git pull --ff-only，个人 3.x 已最新；保留工作区 AGENTS / USER_GUIDE 的并行 MCP 修改。

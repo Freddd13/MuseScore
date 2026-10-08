@@ -56,6 +56,8 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QHash<const Element*, int> _noteIndex;
       QSet<const Element*> _layoutIndex;
       QMap<Note*, VelocityEdit> _pending, _gestureBefore;
+      struct PropertyDraft { Element* element; Pid pid; QVariant value; };
+      QVector<PropertyDraft> _propertyPending;
       QMap<int, double> _tempoDraft;
       QWidget* _canvas = nullptr;
       PerformanceCanvas *_noteCanvas = nullptr, *_ruler = nullptr;
@@ -199,7 +201,8 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       void convertSelected(Note::ValueType);
       void setSelectedValue(double);
       void fit(bool selection = false);
-      bool hasPending() const { return !_pending.isEmpty(); }
+      bool hasPending() const { return !_pending.isEmpty() || !_propertyPending.isEmpty(); }
+      void queueProperty(Element*, Pid, const QVariant&);
       void flushPending();
       static void paintForView(ScoreView*, QPainter&);
       static void flushForScore(Score*);

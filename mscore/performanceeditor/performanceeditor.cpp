@@ -112,7 +112,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       button(tr("写入选中"), [this] { setSelectedValue(_number->value()); })->setObjectName("performanceWriteValue");
       button(tr("全曲"), [this] { fit(); });
       button(tr("选区"), [this] { fit(true); });
-      button(tr("取消预览"), [this] { cancelWheel(); cancelGesture(); _pending.clear(); status(); updateSurfaces(); if (_view) _view->update(); })->setObjectName("performanceCancelPreview");
+      button(tr("取消预览"), [this] { cancelWheel(); cancelGesture(); _pending.clear(); _propertyPending.clear(); status(); updateSurfaces(); if (_view) _view->update(); })->setObjectName("performanceCancelPreview");
       auto viewControls = new QToolButton(this); viewControls->setText(tr("视窗…")); viewControls->setPopupMode(QToolButton::InstantPopup);
       auto viewMenu = new QMenu(viewControls); viewControls->setMenu(viewMenu); second->addWidget(viewControls, second->count() / 6, second->count() % 6);
       auto viewAction = [this, viewMenu](const QString& label, auto callback) { auto action = viewMenu->addAction(label); connect(action, &QAction::triggered, this, callback); };
@@ -252,7 +252,7 @@ void PerformanceEditor::setView(ScoreView* view)
                   _playTimer.stop(); _intervals.clear(); _playingNotes.clear(); _linkedIndex.clear(); cancelSurfaceGesture();
                   finishWheel(false);
                   _score = nullptr; _notes.clear(); _segments.clear(); _tempos.clear(); _pedals.clear();
-                  _noteIndex.clear(); _layoutIndex.clear(); _pending.clear(); _selectedIndices.clear(); _systemIndices.clear(); _system = nullptr; status(); updateSurfaces();
+                  _noteIndex.clear(); _layoutIndex.clear(); _pending.clear(); _propertyPending.clear(); _selectedIndices.clear(); _systemIndices.clear(); _system = nullptr; status(); updateSurfaces();
                   });
             }
       _overlayDamage = QRegion(); _overBand = false;
@@ -299,7 +299,7 @@ void PerformanceEditor::refresh()
             }
       if (!live && seq && !seq->backgroundRenderingIdle()) { _refreshTimer.start(20); return; }
       const auto state = _score->masterScore()->state();
-      if (hasPending() && _state != state) { finishWheel(false); _pending.clear(); status(tr("乐谱已被其他操作修改，待提交预览已取消。")); }
+      if (hasPending() && _state != state) { finishWheel(false); _pending.clear(); _propertyPending.clear(); status(tr("乐谱已被其他操作修改，待提交预览已取消。")); }
       if (_score->nstaves() == 0) return;
       if (!_dirty && _state == state) {
             if (_geometryDirty) {
@@ -452,6 +452,7 @@ void PerformanceEditor::layoutChanged()
 
 void PerformanceEditor::onElementDestruction(Element* element)
       {
+      _propertyPending.erase(std::remove_if(_propertyPending.begin(), _propertyPending.end(), [element](const PropertyDraft& draft) { return draft.element == element; }), _propertyPending.end());
       // Destruction callbacks must never call virtual methods on the dying Element.
       if (_layoutIndex.remove(element)) {
             cancelGesture(); _system = nullptr; _systemSegments.clear(); _geometryDirty = true;
@@ -459,7 +460,7 @@ void PerformanceEditor::onElementDestruction(Element* element)
             for (auto& segment : _segments) if (segment.system == element) segment.system = nullptr;
             }
       if (_noteIndex.contains(element)) {
-            finishWheel(false); cancelGesture(); cancelSurfaceGesture(); _pending.clear(); _playingNotes.clear(); _notes.clear(); _intervals.clear(); _linkedIndex.clear(); invalidateVisual(); _noteIndex.clear(); _layoutIndex.clear(); _selectedIndices.clear(); _systemIndices.clear(); _system = nullptr;
+            finishWheel(false); cancelGesture(); cancelSurfaceGesture(); _pending.clear(); _propertyPending.clear(); _playingNotes.clear(); _notes.clear(); _intervals.clear(); _linkedIndex.clear(); invalidateVisual(); _noteIndex.clear(); _layoutIndex.clear(); _selectedIndices.clear(); _systemIndices.clear(); _system = nullptr;
             _segments.clear(); _systemSegments.clear();
             }
       bool matched = false;
@@ -478,7 +479,7 @@ void PerformanceEditor::status(const QString& message)
             : (_parameter->currentIndex() == 2 ? tr("原生延音踏板 · CC64 开/关")
                   : (_axis->currentIndex() ? tr("相对整数百分比") : tr("参考 Note-on 力度 1–127")));
       const QString baseline = _snapshotDegraded ? tr(" · 播放中首次打开：基准待停播；仅编辑原相对%／绝对MIDI模式") : QString();
-      const QString pending = hasPending() ? tr(" · %1 音预览中；检视器仍为已保存值").arg(_pending.size()) : QString();
+      const QString pending = hasPending() ? tr(" · %1 音、%2 参数预览中；原生属性尚未提交").arg(_pending.size()).arg(_propertyPending.size()) : QString();
       _status->setText(message.isEmpty() ? (_score ? mode + baseline + pending + tr(" · 可编辑选音 %1 · Ctrl 选音／缩放时间 · Ctrl+Shift 缩放纵向").arg(_selectedIndices.size()) : tr("打开乐谱后使用演奏编辑器。")) : message);
       }
 
@@ -547,17 +548,26 @@ void PerformanceEditor::setSelectedValue(double value)
 void PerformanceEditor::applyPending()
       {
       if (_dragging || _wheelIndex >= 0 || !_score || !hasPending()) { status(); return; }
-      if (_score->isPlaying() || (seq && seq->isPlaying())) { status(); return; }
+      if (_score->isPlaying() || (seq && seq->isPlaying())) { _commitTimer.start(100); status(); return; }
       if (seq && !seq->backgroundRenderingIdle()) { _commitTimer.start(20); return; }
       if (_score->masterScore()->state() != _state) {
-            _pending.clear(); _dirty = true; scheduleRefresh();
+            _pending.clear(); _propertyPending.clear(); _dirty = true; scheduleRefresh();
             status(tr("乐谱已被其他操作修改，待提交预览已取消。")); return;
             }
       const auto edits = _pending;
+      if (!_propertyPending.isEmpty()) {
+            auto properties = _propertyPending; _propertyPending.clear();
+            _committing = true;
+            _score->startCmd();
+            for (const auto& property : properties) property.element->undoChangeProperty(property.pid, property.value);
+            _score->endCmd();
+            _committing = false; _state = _score->masterScore()->state(); _dirty = true;
+            if (edits.isEmpty()) { scheduleRefresh(); status(); return; }
+            }
       const int undoIndex = _score->undoStack()->getCurIdx();
       _committing = true;
       const bool changed = ParameterEdit::velocities(_score, edits);
-      _pending.clear(); _committing = false;
+      _pending.clear(); _propertyPending.clear(); _committing = false;
       // Velocity properties do not change timing, dynamics or event bases. Only
       // reuse this snapshot when the completed native macro proves that no other
       // property/command was added by a host or plugin callback. Undo, external
@@ -595,6 +605,17 @@ void PerformanceEditor::flushPending()
             _score->setIsPlaying(false);
             }
       applyPending();
+      }
+
+void PerformanceEditor::queueProperty(Element* element, Pid pid, const QVariant& value)
+      {
+      if (!element || element->score() != _score || _score->readOnly()) return;
+      if (!hasPending()) _state = _score->masterScore()->state();
+      for (auto& draft : _propertyPending) if (draft.element == element && draft.pid == pid) {
+            draft.value = value; _commitTimer.start(20); status(tr("播放参数将在停播后提交。")); return;
+            }
+      _propertyPending.append({element, pid, value});
+      _commitTimer.start(20); status(tr("播放参数将在停播后提交。"));
       }
 
 void PerformanceEditor::flushForScore(Score* score)

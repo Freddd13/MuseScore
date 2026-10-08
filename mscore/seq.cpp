@@ -49,6 +49,7 @@
 #include "libmscore/sig.h"
 #include "libmscore/staff.h"
 #include "libmscore/tempo.h"
+#include "libmscore/playbacktiming.h"
 #include "libmscore/tie.h"
 #include "libmscore/utils.h"
 
@@ -1160,7 +1161,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                   initInstruments(true);
                   if (playPos == eventsEnd) {
                         if (mscore->loop()) {
-                              qDebug("Seq.cpp - Process - Loop whole score. playPos = %d, cs->pos() = %d", playPos->first, cs->pos().ticks());
+                              qDebug("Seq.cpp - Process - Loop whole score. endUTick = %d, cs->pos() = %d", endUTick, cs->pos().ticks());
                               emit toGui('4');
                               return;
                               }
@@ -1227,7 +1228,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                               }
                         }
                   else {
-                        qreal playPosSeconds = cs->utick2utime(playPosUTick);
+                        qreal playPosSeconds = PlaybackTiming::time(cs, playPosUTick);
                         int playPosFrame = playPosSeconds * MScore::sampleRate;
                         if (playPosFrame >= periodEndFrame)
                               break;
@@ -1236,7 +1237,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                               qDebug("%d:  %d - %d", playPosUTick, playPosFrame, *pPlayFrame);
                               n = 0;
                               }
-                        if (mscore->loop()) {
+                        if (mscore->loop() && !(_preRollTarget >= 0 && playPosUTick < _preRollTarget)) {
                               int loopOutUTick = cs->repeatList().tick2utick(cs->loopOutTick().ticks());
                               if (loopOutUTick < scoreEndUTick) {
                                     qreal framesPerPeriodInTime = static_cast<qreal>(framesPerPeriod) / MScore::sampleRate;
@@ -1301,8 +1302,10 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                               }
                         }
                   const NPlayEvent& event = (*pPlayPos)->second;
-                  playEvent(event, framePos);
-                  if (event.type() == ME_TICK1) {
+                  const bool admitted = _preRollTarget < 0 || playPosUTick >= _preRollTarget
+                        || PlaybackTiming::belongsToStart(event, _preRollTarget);
+                  if (admitted) playEvent(event, framePos);
+                  if (admitted && event.type() == ME_TICK1) {
                         const qreal volume =
                               event.velo()
                               ? qreal(event.value()) / 127.0
@@ -1315,7 +1318,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                                     independentMetronomeEventVolume(event),
                                     true);
                         }
-                  else if (event.type() == ME_TICK2) {
+                  else if (admitted && event.type() == ME_TICK2) {
                         const qreal volume =
                               event.velo()
                               ? qreal(event.value()) / 127.0
@@ -1540,6 +1543,8 @@ void Seq::collectEvents(int utick)
             }
 
       updateEventsEnd();
+      _preparedStartTarget = utick;
+      _preparedStartTick = PlaybackTiming::startTick(events, utick, cs);
       playPos = mscore->loop() ? events.find(cs->loopInTick().ticks()) : events.cbegin();
       playlistChanged = false;
       mutex.unlock();
@@ -1584,6 +1589,7 @@ void Seq::ensureBufferAsync(int utick)
 
 int Seq::getCurTick()
       {
+      if (_preRollTarget >= 0 && playFrame < PlaybackTiming::time(cs, _preRollTarget) * MScore::sampleRate) return _preRollTarget;
       return cs->utime2utick(qreal(playFrame) / qreal(MScore::sampleRate));
       }
 
@@ -1618,8 +1624,10 @@ void Seq::setPos(int utick)
       if (utick != ucur)
             updateSynthesizerState(ucur, utick);
 
-      playFrame = cs->utick2utime(utick) * MScore::sampleRate;
-      playPos   = events.lower_bound(utick);
+      int from = _preparedStartTarget == utick ? _preparedStartTick : utick;
+      _preRollTarget = from < utick ? utick : -1;
+      playFrame = PlaybackTiming::time(cs, from) * MScore::sampleRate;
+      playPos = events.lower_bound(from);
       mutex.unlock();
       }
 
@@ -1658,6 +1666,10 @@ void Seq::seekCommon(int utick)
             }
 
       guiPos = events.lower_bound(utick);
+      mutex.lock();
+      _preparedStartTarget = utick;
+      _preparedStartTick = PlaybackTiming::startTick(events, utick, cs);
+      mutex.unlock();
       mscore->setPos(Fraction::fromTicks(cs->repeatList().utick2tick(utick)));
       unmarkNotes();
       }
@@ -2688,6 +2700,7 @@ void Seq::heartBeatTimeout()
                   }
             }
       int utick = ppos->first;
+      if (_preRollTarget >= 0) utick = qMax(utick, _preRollTarget);
       int t = cs->repeatList().utick2tick(utick);
       mscore->currentScoreView()->moveCursor(Fraction::fromTicks(t));
       mscore->setPos(Fraction::fromTicks(t));
@@ -2735,7 +2748,7 @@ void Seq::updateSynthesizerState(int tick1, int tick2)
 double Seq::curTempo() const
       {
       if (playPos != events.end())
-            return cs ? cs->tempomap()->tempo(playPos->first) : 0.0;
+            return cs ? cs->tempomap()->tempo(qMax(0, playPos->first)) : 0.0;
 
       return 0.0;
       }

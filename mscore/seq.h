@@ -174,6 +174,9 @@ class Seq : public QObject, public Sequencer {
       EventMap countInEvents;             // playlist of any metronome countin clicks
       QQueue<NPlayEvent> _liveEventQueue; // playlist for score editing and note entry (rendered live)
 
+      int _preparedStartTarget = 0;
+      int _preparedStartTick = 0;
+      int _preRollTarget = -1;
       int playFrame;                      // current play position in samples, relative to the first frame of playback
       int countInPlayFrame;               // current play position in samples, relative to the first frame of countin
       int endUTick;                       // the final tick of midi events collected by collectEvents()

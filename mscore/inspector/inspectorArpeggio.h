@@ -27,9 +27,11 @@ class InspectorArpeggio : public InspectorElementBase {
       Q_OBJECT
 
       Ui::InspectorArpeggio g;
+      QLabel* _actualTiming = nullptr;
 
    public:
       InspectorArpeggio(QWidget* parent);
+      void postInit() override;
       };
 
 

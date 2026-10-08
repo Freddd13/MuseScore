@@ -100,3 +100,7 @@
 ## 0.13.0 界面与谱行交互修复
 
 界面与浮层继续隔离在 mscore/performanceeditor；只移动主窗口既有 QAction 工具栏插入位置。新增 refreshLayout / setOverlaySystem / systemAtTick 区分原生排版几何、谱行缓存和播放映射，播放中不生成事件、不读取可变力度基准。
+
+## 琶音时序与参数暂存（0.14.0）
+
+PlaybackTiming 是 libmscore 的局部助手，MidiRenderer 生成带 nominalTick 的原 NPlayEvent。Seq 仅消费准备好的提前窗口；导出采用同一时序。新检视器属性在播放中复用 PerformanceEditor 队列与保存边界；界面拖拽预览不修改音频回调。见 [15](15-piano-expression.md)。

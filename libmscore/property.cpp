@@ -355,6 +355,9 @@ static constexpr PropertyMetaData propertyList[] = {
 
       { Pid::PREFER_SHARP_FLAT,         P_TYPE::INT,            true,  "preferSharpFlat",        DUMMY_QT_TRANSLATE_NOOP("propertyName", "prefer sharps or flats")                        },
 
+      { Pid::ARP_TIMING_MODE, P_TYPE::INT, true, "arpTimingMode", "arpeggio timing" },
+      { Pid::ARP_INTERVAL_MS, P_TYPE::REAL, true, "arpIntervalMs", "arpeggio interval (ms)" },
+      { Pid::ARP_OFFSET_MS, P_TYPE::REAL, true, "arpOffsetMs", "arpeggio offset (ms)" },
       { Pid::END,                       P_TYPE::INT,            false, "++end++",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "<invalid property>")                            }
       };
 

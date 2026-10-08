@@ -11,5 +11,7 @@
 #=============================================================================
 
 set(TARGET tst_midi)
+# Undo and MIDI import use the same real host linkage as note/inputrhythm tests.
+set(MTEST_LINK_MSCOREAPP TRUE)
 
 include(${PROJECT_SOURCE_DIR}/mtest/CreateMtestTarget.cmake)

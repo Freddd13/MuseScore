@@ -905,6 +905,7 @@ class MuseScore : public QMainWindow, public MuseScoreCore {
       PluginCreator* pluginCreator()   { return _pluginCreator; }
       ScoreView* currentScoreView() const { return cv; }
       void showPerformanceEditor(bool);
+      PerformanceEditor* performanceEditor() { if (!_performanceEditor) showPerformanceEditor(false); return _performanceEditor; }
       ScoreTab* currentScoreTab() const { return ctab; }
       QToolButton* playButton()        { return _playButton;    }
       void showMessage(const QString& s, int timeout);

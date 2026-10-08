@@ -78,6 +78,7 @@ void Arpeggio::write(XmlWriter& xml) const
             xml.tag("span", _span);
       writeProperty(xml, Pid::PLAY);
       writeProperty(xml, Pid::TIME_STRETCH);
+      for (auto pid : {Pid::ARP_TIMING_MODE, Pid::ARP_INTERVAL_MS, Pid::ARP_OFFSET_MS}) writeProperty(xml, pid);
       xml.etag();
       }
 
@@ -101,6 +102,8 @@ void Arpeggio::read(XmlReader& e)
                  _playArpeggio = e.readBool();
             else if (tag == "timeStretch")
                   _stretch = e.readDouble();
+            else if (readProperty(tag, e, Pid::ARP_TIMING_MODE) || readProperty(tag, e, Pid::ARP_INTERVAL_MS) || readProperty(tag, e, Pid::ARP_OFFSET_MS))
+                  ;
             else if (!Element::readProperties(e))
                   e.unknown();
             }
@@ -643,6 +646,9 @@ qreal Arpeggio::insetDistance(QVector<Accidental*>& accidentals, qreal mag_) con
 QVariant Arpeggio::getProperty(Pid propertyId) const
       {
       switch(propertyId) {
+            case Pid::ARP_TIMING_MODE: return _timingMode;
+            case Pid::ARP_INTERVAL_MS: return _intervalMs;
+            case Pid::ARP_OFFSET_MS: return _offsetMs;
             case Pid::ARPEGGIO_TYPE:
                   return int(_arpeggioType);
             case Pid::TIME_STRETCH:
@@ -666,6 +672,13 @@ QVariant Arpeggio::getProperty(Pid propertyId) const
 bool Arpeggio::setProperty(Pid propertyId, const QVariant& val)
       {
       switch(propertyId) {
+            case Pid::ARP_TIMING_MODE: _timingMode = qBound(0, val.toInt(), 2); break;
+            case Pid::ARP_INTERVAL_MS:
+                  if (!std::isfinite(val.toDouble())) return false;
+                  _intervalMs = qBound(1.0, val.toDouble(), 1000.0); break;
+            case Pid::ARP_OFFSET_MS:
+                  if (!std::isfinite(val.toDouble())) return false;
+                  _offsetMs = qBound(-1000.0, val.toDouble(), 1000.0); break;
             case Pid::ARPEGGIO_TYPE:
                   setArpeggioType(ArpeggioType(val.toInt()));
                   break;
@@ -697,6 +710,9 @@ bool Arpeggio::setProperty(Pid propertyId, const QVariant& val)
 QVariant Arpeggio::propertyDefault(Pid propertyId) const
       {
       switch(propertyId) {
+            case Pid::ARP_TIMING_MODE: return 0;
+            case Pid::ARP_INTERVAL_MS: return 65.0;
+            case Pid::ARP_OFFSET_MS: return 0.0;
             case Pid::ARP_USER_LEN1:
                   return 0.0;
             case Pid::ARP_USER_LEN2:
@@ -722,4 +738,3 @@ Pid Arpeggio::propertyId(const QStringRef& name) const
       return Element::propertyId(name);
       }
 }
-

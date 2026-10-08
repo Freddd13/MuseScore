@@ -4639,6 +4639,10 @@ bool MuseScore::eventFilter(QObject *obj, QEvent *event)
                   {
                   QKeyEvent* e = static_cast<QKeyEvent*>(event);
 
+                  if (e->key() == Qt::Key_Escape && obj->property("pianoParameterScrubbing").toBool()) {
+                        obj->event(e); return true;
+                        }
+
                   if (zoomBoxAcceptKey(e)) {
                         zoomBox->acceptCurrentText();
                         focusScoreView();
@@ -4668,6 +4672,10 @@ bool MuseScore::eventFilter(QObject *obj, QEvent *event)
             case QEvent::ShortcutOverride:
                   {
                   QKeyEvent* ke = static_cast<QKeyEvent*>(event);
+
+                  if (ke->key() == Qt::Key_Escape && obj->property("pianoParameterScrubbing").toBool()) {
+                        ke->accept(); return true;
+                        }
 
                   if (zoomBoxAcceptKey(ke)) {
                         // Don't let application shortcuts consume Enter while
@@ -9476,7 +9484,7 @@ void MuseScore::scoreUnrolled(MasterScore * original)
 namespace Ms {
 void MuseScore::showPerformanceEditor(bool visible)
       {
-      if (visible && !_performanceEditor) {
+      if (!_performanceEditor) {
             _performanceDock = new QDockWidget(tr("演奏编辑器"), this);
             _performanceDock->setObjectName("performanceEditorDock");
             _performanceDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::TopDockWidgetArea);

@@ -30,6 +30,8 @@
 #include "libmscore/select.h"
 #include "libmscore/repeatlist.h"
 #include "mscore/inspector/inspectorNote.h"
+#include "mscore/inspector/inspectorArpeggio.h"
+#include "libmscore/arpeggio.h"
 #include <QElapsedTimer>
 #include <QProcess>
 #include <QProcessEnvironment>
@@ -86,6 +88,14 @@ class PerformancePaintDamage : public QObject {
       QRegion region;
       bool eventFilter(QObject*, QEvent* event) override
             { if (event->type() == QEvent::Paint) region |= static_cast<QPaintEvent*>(event)->region(); return false; }
+};
+class PerformanceRecordingSynth : public PerformanceSilentSynth {
+   public:
+      unsigned frames = 0;
+      QVector<unsigned> onFrames;
+      QVector<int> onPitches;
+      void process(unsigned n, float*, float*, float*) override { frames += n; }
+      void play(const PlayEvent& event) override { if (event.type() == ME_NOTEON && event.velo()) { onFrames.append(frames); onPitches.append(event.pitch()); } }
 };
 class PerformanceTestDriver : public Driver {
       Transport _state = Transport::STOP;
@@ -705,6 +715,82 @@ class TestPerformanceEditor : public QObject, public MTest {
                   editor.setView(nullptr); score->doLayout(); editor.setView(main->currentScoreView()); QTest::qWait(30);
                   }
             sequenceGuard.reset();
+            }
+      void arpeggioInspectorScrubAndDeferredCommit()
+            {
+            auto main = Ms::mscore; QVERIFY(main);
+            auto score = main->readScore(QString(TESTROOT) + "/mtest/libmscore/midi/timed-arpeggio.mscx"); QVERIFY(score);
+            main->setCurrentScoreView(main->appendScore(score));
+            auto chord = toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(0));
+            auto a = new Arpeggio(score); a->setParent(chord); a->setTrack(0); a->setProperty(Pid::ARP_TIMING_MODE, 2);
+            score->startCmd(); score->undoAddElement(a); score->select(a, SelectType::SINGLE, 0); score->endCmd();
+            getAction("inspector")->setChecked(true); main->cmd(getAction("inspector")); QTest::qWait(100);
+            auto panel = main->findChild<InspectorArpeggio*>(); QVERIFY(panel);
+            auto spin = panel->findChild<QDoubleSpinBox*>("arpIntervalMs"); QVERIFY(spin);
+            auto label = panel->findChild<QLabel*>("arpIntervalMsLabel"); QVERIFY(label);
+            const QPoint press = label->rect().center(), moved = press + QPoint(10, 0);
+            QTest::mousePress(label, Qt::LeftButton, Qt::NoModifier, press);
+            QMouseEvent move(QEvent::MouseMove, moved, moved, label->mapToGlobal(moved), Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(label, &move);
+            QCOMPARE(a->intervalMs(), 65.0); QCOMPARE(spin->value(), 75.0);
+            QTest::mouseRelease(label, Qt::LeftButton, Qt::NoModifier, moved); QTest::qWait(40);
+            QCOMPARE(a->intervalMs(), 75.0);
+            EditData ed; score->undoRedo(true, &ed); QCOMPARE(a->intervalMs(), 65.0);
+            score->undoRedo(false, &ed); QCOMPARE(a->intervalMs(), 75.0);
+            score->startCmd(); score->select(a, SelectType::SINGLE, 0); score->endCmd(); QTest::qWait(50);
+            panel = main->findChild<InspectorArpeggio*>(); label = panel->findChild<QLabel*>("arpIntervalMsLabel"); spin = panel->findChild<QDoubleSpinBox*>("arpIntervalMs");
+            QCOMPARE(score->selection().element(), static_cast<Element*>(a));
+            QTest::mousePress(label, Qt::LeftButton, Qt::NoModifier, press); QApplication::sendEvent(label, &move);
+            QTest::keyClick(label, Qt::Key_Escape); QTest::mouseRelease(label, Qt::LeftButton, Qt::NoModifier, moved);
+            QCOMPARE(a->intervalMs(), 75.0); QCOMPARE(spin->value(), 75.0);
+            QCOMPARE(score->selection().element(), static_cast<Element*>(a));
+            auto editor = main->performanceEditor(); score->setIsPlaying(true); spin->setValue(90.0);
+            QCOMPARE(a->intervalMs(), 75.0); QVERIFY(editor->hasPending());
+            score->setIsPlaying(false); QTRY_COMPARE(a->intervalMs(), 90.0); QVERIFY(!editor->hasPending());
+            score->startCmd(); a->undoChangeProperty(Pid::ARP_TIMING_MODE, 0); a->undoChangeProperty(Pid::ARP_OFFSET_MS, 35.0); score->endCmd(); QTest::qWait(30);
+            panel = main->findChild<InspectorArpeggio*>(); QVERIFY(panel);
+            auto preset = panel->findChild<QPushButton*>("arpeggioApplyPreset"); QVERIFY(preset);
+            QTest::mouseClick(preset, Qt::LeftButton); QTRY_COMPARE(a->timingMode(), 2);
+            QCOMPARE(a->intervalMs(), 65.0); QCOMPARE(a->offsetMs(), 0.0);
+            panel->grab().save("arpeggio-inspector-014.png");
+            score->undoRedo(true, &ed); QCOMPARE(a->timingMode(), 0); QCOMPARE(a->intervalMs(), 90.0); QCOMPARE(a->offsetMs(), 35.0);
+
+            }
+      void arpeggioRealSequencerPreRoll()
+            {
+            auto main = Ms::mscore; QVERIFY(main); QVERIFY(!Ms::seq);
+            auto score = main->readScore(QString(TESTROOT) + "/mtest/libmscore/midi/timed-arpeggio.mscx"); QVERIFY(score);
+            main->setCurrentScoreView(main->appendScore(score));
+            auto chord = toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(0));
+            auto a = new Arpeggio(score); a->setParent(chord); a->setTrack(0); a->setProperty(Pid::ARP_TIMING_MODE, 2); chord->add(a);
+            auto second = toChord(score->firstMeasure()->nextMeasure()->first(SegmentType::ChordRest)->element(0));
+            auto b = new Arpeggio(score); b->setParent(second); b->setTrack(0); b->setProperty(Pid::ARP_TIMING_MODE, 2); second->add(b);
+            MasterSynthesizer synth; MScore::sampleRate = 44100;
+            auto recording = new PerformanceRecordingSynth; synth.registerSynthesizer(recording); synth.setSampleRate(44100); synth.init();
+            Ms::seq = new PerformanceAuditionSeq; auto sequence = Ms::seq;
+            std::unique_ptr<Seq, std::function<void(Seq*)>> guard(sequence, [](Seq* s) { s->stopWait(); s->waitForStoppedRendering(); s->setScoreView(nullptr); delete s; Ms::seq = nullptr; });
+            auto driver = new PerformanceTestDriver(sequence); sequence->setDriver(driver); sequence->setMasterSynthesizer(&synth); QVERIFY(sequence->init()); sequence->setScoreView(main->currentScoreView());
+            score->setPlayPos(Fraction::fromTicks(0)); sequence->start(); QApplication::processEvents(); QVERIFY(sequence->isPlaying());
+            driver->pulse(); QCOMPARE(sequence->getCurTick(), 0);
+            QVERIFY(recording->onFrames.size() >= 1);
+            for (int i = 0; i < 4; ++i) driver->pulse();
+            QVERIFY(sequence->getCurTick() > 0);
+            QVERIFY(recording->onFrames.size() >= 3);
+            QVERIFY(recording->onFrames[1] > recording->onFrames[0] + 2600);
+            sequence->stopWait(); sequence->waitForStoppedRendering(); QApplication::processEvents();
+            recording->onFrames.clear(); recording->onPitches.clear();
+            score->setPlayPos(Fraction::fromTicks(1920)); sequence->start(); QApplication::processEvents();
+            driver->pulse(); QCOMPARE(sequence->getCurTick(), 1920);
+            for (int i = 0; i < 4; ++i) driver->pulse();
+            QCOMPARE(recording->onPitches, QVector<int>({60, 64, 67}));
+            getAction("loop")->setChecked(true); score->setLoopInTick(Fraction::fromTicks(1920)); score->setLoopOutTick(Fraction::fromTicks(3840));
+            bool looped = false; int previous = sequence->getCurTick();
+            for (int i = 0; i < 60; ++i) {
+                  driver->pulse(); QTest::qWait(2); int current = sequence->getCurTick();
+                  if (current < previous) { QCOMPARE(current, 1920); looped = true; break; } previous = current;
+                  }
+            QVERIFY(looped); getAction("loop")->setChecked(false);
+            sequence->stopWait(); sequence->waitForStoppedRendering(); QApplication::processEvents();
             }
       void displaySettingsAcrossProcesses()
             {

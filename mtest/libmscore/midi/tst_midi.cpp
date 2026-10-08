@@ -12,6 +12,7 @@
 
 #include <QCoreApplication>
 #include <QFile>
+#include <QBuffer>
 #include <QIODevice>
 #include <QTextStream>
 #include <QtTest/QtTest>
@@ -19,6 +20,12 @@
 #include "audio/exports/exportmidi.h"
 
 #include "libmscore/chord.h"
+#include "libmscore/arpeggio.h"
+#include "libmscore/playbacktiming.h"
+#include "libmscore/note.h"
+#include "libmscore/tempotext.h"
+#include "libmscore/tempo.h"
+#include <memory>
 #include "libmscore/durationtype.h"
 #include "libmscore/keysig.h"
 #include "libmscore/mcursor.h"
@@ -58,6 +65,8 @@ class TestMidi : public QObject, public MTest
    private slots:
       void initTestCase();
       void midi01();
+      void timedArpeggio();
+      void timedArpeggioSpanAndCap();
       void midi02();
       void midi03();
       void events_data();
@@ -538,6 +547,72 @@ void TestMidi::midiSingleNoteDynamics()
       delete score;
       }
 
+void TestMidi::timedArpeggio()
+      {
+      std::unique_ptr<MasterScore> score(readScore(DIR + "timed-arpeggio.mscx"));
+      QVERIFY(score);
+      auto chord = toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(0));
+      auto a = new Arpeggio(score.get()); a->setParent(chord); a->setTrack(0);
+      chord->add(a);
+      QCOMPARE(a->timingMode(), 0); // Constructors/readers preserve legacy scores.
+      std::unique_ptr<Element> old(writeReadElement(a)); QCOMPARE(toArpeggio(old.get())->timingMode(), 0);
+      a->setProperty(Pid::ARP_TIMING_MODE, 2);
+      std::unique_ptr<Element> restored(writeReadElement(a)); QCOMPARE(toArpeggio(restored.get())->timingMode(), 2);
+      SynthesizerState state; EventMap events; score->renderMidi(&events, false, false, state);
+      QVector<int> onset, off;
+      for (auto& event : events) if (event.second.note() && event.second.note()->chord() == chord)
+            (event.second.velo() ? onset : off).append(event.first);
+      QCOMPARE(onset.size(), 3); QCOMPARE(onset.back(), 0);
+      QVERIFY(qAbs(onset.front() + 125) <= 2);
+      for (int tick : off) QCOMPARE(tick, 479);
+      QCOMPARE(PlaybackTiming::startTick(events, 0, score.get()), onset.front());
+      QVERIFY(PlaybackTiming::time(score.get(), onset.front()) < -0.12);
+      ExportMidi exporter(score.get()); QBuffer midi;
+      QVERIFY(exporter.write(&midi, false, false, state));
+      bool marker = false, finalOnBeat = false, firstAtZero = false;
+      for (const auto& track : exporter.mf.tracks()) for (const auto& event : track.events()) {
+            QVERIFY(event.first >= 0);
+            if (event.second.type() == ME_META && event.second.metaType() == META_MARKER) {
+                  QCOMPARE(event.first, -onset.front()); marker = true;
+                  }
+            if (event.second.type() == ME_NOTEON && event.second.velo()) {
+                  if (event.second.pitch() == 67 && event.first == -onset.front()) finalOnBeat = true;
+                  if (event.second.pitch() == 60 && event.first == 0) firstAtZero = true;
+                  }
+            }
+      QVERIFY(marker); QVERIFY(firstAtZero); QVERIFY(finalOnBeat);
+
+      auto second = toChord(score->firstMeasure()->nextMeasure()->first(SegmentType::ChordRest)->element(0));
+      auto b = new Arpeggio(score.get()); b->setParent(second); b->setTrack(0); b->setProperty(Pid::ARP_TIMING_MODE, 2); second->add(b);
+      events.clear(); score->renderMidi(&events, false, false, state);
+      int start = PlaybackTiming::startTick(events, second->tick().ticks(), score.get());
+      QVERIFY(start > 1700 && start < 1920); // Earlier occurrences of the same pitch are excluded.
+      a->setProperty(Pid::ARP_TIMING_MODE, 1); a->setArpeggioType(ArpeggioType::DOWN);
+      events.clear(); score->renderMidi(&events, false, false, state);
+      QCOMPARE(chord->upNote()->playEvents().front().ontime(), 0);
+      QVERIFY(chord->downNote()->playEvents().front().ontime() > 0);
+      }
+
+void TestMidi::timedArpeggioSpanAndCap()
+      {
+      std::unique_ptr<MasterScore> score(readScore(DIR + "timed-arpeggio.mscx"));
+      SynthesizerState state; EventMap events;
+      auto segment = score->firstMeasure()->first(SegmentType::ChordRest);
+      auto top = toChord(segment->element(0)), bottom = toChord(segment->element(4));
+      auto a = new Arpeggio(score.get()); a->setParent(top); a->setTrack(0); a->setSpan(2);
+      a->setProperty(Pid::ARP_TIMING_MODE, 2); a->setProperty(Pid::ARP_INTERVAL_MS, 1000.0); top->add(a);
+      QCOMPARE(PlaybackTiming::arpeggio(bottom), a);
+      QCOMPARE(PlaybackTiming::arpeggioNotes(a).size(), 6);
+      QVERIFY(qAbs(PlaybackTiming::intervalMs(a) - 50.0) < 0.01);
+      events.clear(); score->renderMidi(&events, false, false, state);
+      QCOMPARE(top->upNote()->playEvents().front().ontime(), 0);
+      QCOMPARE(bottom->downNote()->playEvents().front().ontime(), -500);
+      bottom->downNote()->setPlay(false);
+      QCOMPARE(PlaybackTiming::arpeggioNotes(a).size(), 5);
+      a->setArpeggioType(ArpeggioType::DOWN); events.clear(); score->renderMidi(&events, false, false, state);
+      QCOMPARE(bottom->notes()[1]->playEvents().front().ontime(), 0);
+      }
+
 //---------------------------------------------------------
 //   events
 //---------------------------------------------------------
@@ -614,4 +689,3 @@ void TestMidi::midiExportTestRef(const QString& file)
 QTEST_MAIN(TestMidi)
 
 #include "tst_midi.moc"
-

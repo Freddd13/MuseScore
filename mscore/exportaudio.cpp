@@ -1,3 +1,4 @@
+#include "libmscore/playbacktiming.h"
 //=============================================================================
 //  MusE Score
 //  Linux Music Score Editor
@@ -97,12 +98,22 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
       int oldSampleRate  = MScore::sampleRate;
       MScore::sampleRate = sampleRate;
 
+      const double preRoll = -PlaybackTiming::time(score, -PlaybackTiming::exportOffset(events));
+      if (preRoll > 0) fprintf(stderr, "Kumo audio: score first beat offset %.6f seconds\n", preRoll);
+      std::vector<NPlayEvent> setup;
+      if (preRoll > 0) {
+            for (auto i = events.lower_bound(0); i != events.upper_bound(0); ) {
+                  if (i->second.type() == ME_CONTROLLER || i->second.type() == ME_PROGRAM) { setup.push_back(i->second); i = events.erase(i); }
+                  else ++i;
+                  }
+
+            }
       float peak  = 0.0;
       double gain = 1.0;
       EventMap::const_iterator endPos = events.cend();
       --endPos;
-      const int et = (score->utick2utime(endPos->first) + 1) * MScore::sampleRate;
-      const int maxEndTime = (score->utick2utime(endPos->first) + 3) * MScore::sampleRate;
+      const int et = (PlaybackTiming::time(score, endPos->first) + preRoll + 1) * MScore::sampleRate;
+      const int maxEndTime = (PlaybackTiming::time(score, endPos->first) + preRoll + 3) * MScore::sampleRate;
 
       bool cancelled = false;
       int passes = preferences.getBool(PREF_EXPORT_AUDIO_NORMALIZE) ? 2 : 1;
@@ -130,6 +141,12 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
                         }
                   }
 
+            // Reapply before each normalization pass, after instrument initialization.
+            for (const auto& event : setup) {
+                  const Channel* channel = score->masterScore()->midiMapping(event.channel())->articulation();
+                  if (!channel->mute()) synth->play(event, synth->index(channel->synti()));
+                  }
+
             static const unsigned FRAMES = 512;
             float buffer[FRAMES * 2];
             int playTime = 0;
@@ -144,7 +161,7 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
                   int endTime = playTime + frames;
                   float* p = buffer;
                   for (; playPos != events.cend(); ++playPos) {
-                        int f = score->utick2utime(playPos->first) * MScore::sampleRate;
+                        int f = (PlaybackTiming::time(score, playPos->first) + preRoll) * MScore::sampleRate;
                         if (f >= endTime)
                               break;
                         int n = f - playTime;
@@ -380,4 +397,3 @@ bool MuseScore::saveAudio(Score* score, const QString& name)
 
 #endif // HAS_AUDIOFILE
 }
-

@@ -18,6 +18,7 @@
 #include <set>
 
 #include "arpeggio.h"
+#include "playbacktiming.h"
 #include "articulation.h"
 #include "bend.h"
 #include "changeMap.h"
@@ -270,6 +271,11 @@ static void playNote(EventMap* events,
       ev.setNote(note);
       ev.setNoteEventOwner(noteEventOwner);
       ev.setNoteEventIndex(noteEventIndex);
+      if (noteEventOwner && noteEventIndex >= 0 && noteEventIndex < noteEventOwner->playEvents().size()) {
+            auto chord = noteEventOwner->chord();
+            if (chord->isGrace()) chord = toChord(chord->parent());
+            ev.setNominalTick(onTime - chord->actualTicks().ticks() * noteEventOwner->playEvents()[noteEventIndex].ontime() / 1000);
+            }
       if (offTime < onTime)
             offTime = onTime;
       events->insert(std::pair<int, NPlayEvent>(onTime, ev));
@@ -1393,6 +1399,26 @@ void renderTremolo(Chord* chord, QList<NoteEventList>& ell)
 
 void renderArpeggio(Chord *chord, QList<NoteEventList> & ell)
       {
+      if (auto a = PlaybackTiming::arpeggio(chord)) {
+            auto notes = PlaybackTiming::arpeggioNotes(a);
+            double interval = PlaybackTiming::intervalMs(a);
+            int tick = chord->tick().ticks();
+            auto map = chord->score()->tempomap();
+            double origin = map->tick2time(tick);
+            for (int i = 0; i < chord->notes().size(); ++i) {
+                  auto note = chord->notes()[i];
+                  int rank = notes.indexOf(note);
+                  if (rank < 0) continue;
+                  double ms = a->offsetMs() + interval * (a->timingMode() == 2 ? rank - notes.size() + 1 : rank);
+                  double seconds = origin + ms / 1000.0;
+                  // TempoMap's default negative-time extrapolation ignores tempo at zero.
+                  int onset = seconds < 0 ? qRound(seconds * DIVISION * map->tempo(0) * map->relTempo()) : map->time2tick(seconds);
+                  int offset = qRound(1000.0 * (onset - tick) / chord->actualTicks().ticks());
+                  offset = qMin(999, offset);
+                  ell[i].clear(); ell[i].append(NoteEvent(0, offset, 1000 - offset));
+                  }
+            return;
+            }
       int notes = int(chord->notes().size());
       int l = 64;
       while (l && (l * notes > chord->upNote()->playTicks()))
@@ -2067,7 +2093,7 @@ static QList<NoteEventList> renderChord(Chord* chord, int gateTime, int ontime, 
       if (chord->tremolo()) {
             renderTremolo(chord, ell);
             }
-      else if (chord->arpeggio() && chord->arpeggio()->playArpeggio()) {
+      else if (PlaybackTiming::arpeggio(chord) || (chord->arpeggio() && chord->arpeggio()->playArpeggio())) {
             renderArpeggio(chord, ell);
             arpeggio = true;
             }
@@ -2513,6 +2539,21 @@ bool MidiRenderer::canBreakChunk(const Measure* last)
             for (Staff*& staff : score->staves()) {
                   if (next->isRepeatMeasure(staff))
                         return false;
+                  // Keep an anticipation and its preceding measure in one chunk.
+                  // No duplicate lookahead events are inserted into the playlist.
+                  for (auto segment = next->first(SegmentType::ChordRest); segment; segment = segment->next(SegmentType::ChordRest)) {
+                        for (int voice = 0; voice < VOICES; ++voice) {
+                              auto element = segment->element(staff->idx() * VOICES + voice);
+                              if (!element || !element->isChord()) continue;
+                              auto a = PlaybackTiming::arpeggio(toChord(element));
+                              if (a) {
+                                    double earliest = a->offsetMs();
+                                    if (a->timingMode() == 2) earliest -= PlaybackTiming::intervalMs(a) * (PlaybackTiming::arpeggioNotes(a).size() - 1);
+                                    auto map = score->tempomap();
+                                    if (map->tick2time(segment->tick().ticks()) + earliest / 1000.0 < map->tick2time(next->tick().ticks())) return false;
+                                    }
+                              }
+                        }
                   }
 
       return true;

@@ -102,3 +102,7 @@ rg -n 'QSKIP|add_test|subdirs|MTEST_LINK_MSCOREAPP' mtest
 ## 0.13.0 界面与谱行交互修复
 
 演奏编辑器新增截图风格力度默认色、完整黑白键条、MIDI 基线固定缩放；谱面开启滚轮模式直接调未选音頭，Shift 粗调，Alt 保留移动。Evolution Other Options 的同一按钮移至最后。
+
+## 钢琴琶音（0.14.0）
+
+Arpeggio 属性/原生读写 → PlaybackTiming 参与音/窗口 → renderArpeggio → Seq 与导出；InspectorArpeggio/scrubproperty → PerformanceEditor 参数暂存。定位与测试见 [15](15-piano-expression.md)。

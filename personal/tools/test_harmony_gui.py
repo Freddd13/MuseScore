@@ -43,7 +43,7 @@ if env.get('MTEST_DIFF_DIR'):
     env['PATH'] = env['MTEST_DIFF_DIR'] + os.pathsep + env.get('PATH', '')
 log = output / 'gui.txt'
 try:
-    result = subprocess.run([str(target), '-o', str(log) + ',txt'], env=env, timeout=45)
+    result = subprocess.run([str(target), '-o', str(log) + ',txt'], env=env, timeout=45, cwd=str(output))
     status = result.returncode
 except subprocess.TimeoutExpired:
     status = 124

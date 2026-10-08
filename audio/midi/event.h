@@ -14,6 +14,7 @@
 #define __EVENT_H__
 
 #include <map>
+#include <limits>
 
 namespace Ms {
 
@@ -248,6 +249,7 @@ class NPlayEvent : public PlayEvent {
       const Harmony* _harmony{nullptr};
       const Note* _noteEventOwner { nullptr };
       int _noteEventIndex = -1;
+      int _nominalTick = std::numeric_limits<int>::min(); // unwound owner tick, including note-offs
       int _origin = -1;
       int _discard = 0;
       bool _portamento = false;
@@ -273,6 +275,8 @@ class NPlayEvent : public PlayEvent {
             { return _noteEventIndex;  }
       void setNoteEventIndex(int index)
             { _noteEventIndex = index; }
+      int nominalTick() const { return _nominalTick; }
+      void setNominalTick(int tick) { _nominalTick = tick; }
 
       int getOriginatingStaff() const { return _origin; }
       void setOriginatingStaff(int i) { _origin = i; }
@@ -366,4 +370,3 @@ extern QString midiMetaName(int meta);
 
 }
 #endif
-

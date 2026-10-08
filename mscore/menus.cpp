@@ -1168,6 +1168,7 @@ PalettePanel* MuseScore::newArpeggioPalettePanel()
 
       for (int i = 0; i < 6; ++i) {
             Arpeggio* a = new Arpeggio(gscore);
+            a->setProperty(Pid::ARP_TIMING_MODE, 2);
             a->setArpeggioType(ArpeggioType(i));
             sp->append(a, a->arpeggioTypeName());
             }
@@ -2018,4 +2019,3 @@ QMap<QString, QStringList>* smuflRanges()
       return &ranges;
       }
 }
-

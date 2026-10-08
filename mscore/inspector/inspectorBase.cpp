@@ -14,6 +14,8 @@
 #include "icons.h"
 #include "inspector.h"
 #include "inspectorBase.h"
+#include "mscore/performanceeditor/performanceeditor.h"
+#include "mscore/seq.h"
 #include "musescore.h"
 #include "offsetSelect.h"
 #include "preferences.h"
@@ -391,7 +393,7 @@ void InspectorBase::valueChanged(int idx, bool reset)
       {
       static bool recursion = false;
 
-      if (recursion)
+      if (recursion || !inspector->element())
             return;
       recursion = true;
 
@@ -400,6 +402,15 @@ void InspectorBase::valueChanged(int idx, bool reset)
       QVariant val2 = getValue(ii);                   // get new value from UI
       Element* iElement = inspector->element();
       Score* score  = iElement->score();
+      if (id >= Pid::ARP_TIMING_MODE && (score->isPlaying() || (seq && (seq->isPlaying() || !seq->backgroundRenderingIdle())))) {
+            for (auto element : *inspector->el()) {
+                  for (int k = 0; k < ii.parent; ++k) element = element->parent();
+                  if (auto delegate = element->propertyDelegate(id)) element = delegate;
+                  mscore->performanceEditor()->queueProperty(element, id, reset ? element->propertyDefault(id) : val2);
+                  }
+            recursion = false;
+            return;
+            }
 
 #ifdef MSCORE_UNSTABLE
       if (ScriptRecorder* rec = mscore->getScriptRecorder())
@@ -744,4 +755,3 @@ void InspectorEventObserver::event(EventType evtType, const InspectorItem& ii, c
 #endif
       }
 }
-

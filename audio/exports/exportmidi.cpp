@@ -1,3 +1,4 @@
+#include "libmscore/playbacktiming.h"
 //=============================================================================
 //  MuseScore
 //  Music Composition & Notation
@@ -416,6 +417,26 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
             ++staffIdx;
             }
       tracks.prepend(tempoTrack);
+      const int preRoll = PlaybackTiming::exportOffset(events);
+      if (preRoll) {
+            for (auto& track : tracks) {
+                  std::multimap<int, MidiEvent> shifted;
+                  // Channel setup must precede the first anticipated note, also at tick zero.
+                  for (const auto& event : track.events())
+                        if (event.first == 0 && event.second.type() != ME_NOTEON && event.second.type() != ME_NOTEOFF) shifted.emplace(0, event.second);
+                  for (const auto& event : track.events())
+                        if (!(event.first == 0 && event.second.type() != ME_NOTEON && event.second.type() != ME_NOTEOFF)) shifted.emplace(event.first + preRoll, event.second);
+                  track.events().swap(shifted);
+                  }
+            MidiEvent marker;
+            marker.setType(ME_META);
+            marker.setMetaType(META_MARKER);
+            QByteArray text("Kumo: score first beat");
+            marker.setLen(text.size());
+            marker.setEData(std::vector<unsigned char>(text.begin(), text.end()));
+            tracks.front().insert(preRoll, marker);
+            fprintf(stderr, "Kumo MIDI: score first beat offset %d ticks\n", preRoll);
+            }
       return !mf.write(device);
       }
 
