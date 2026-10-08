@@ -22,10 +22,11 @@ int PerformanceEditor::rangeKind() const
 void PerformanceEditor::updateSurfaces()
       { if (_canvas) _canvas->update(); if (_noteCanvas) _noteCanvas->update(); if (_ruler) _ruler->update(); }
 void PerformanceEditor::invalidateVisual()
-      { ++_visualRevision; updateSurfaces(); }
+      { ++_visualRevision; syncValueScroll(); updateSurfaces(); }
 void PerformanceEditor::surfaceResized(PerformanceSurface surface)
       {
       if (!_scroll || !_noteCanvas) return;
+      if (_valueScroll && _canvas) _valueScroll->setGeometry(_canvas->width() - PerformanceViewport::rightMargin, 0, PerformanceViewport::rightMargin, _canvas->height());
       if (surface == PerformanceSurface::Notes && _pitchScroll) {
             const double rows = _noteCanvas->height() / _viewport.rowHeight;
             _viewport.topPitch = qBound(qMin(127.0, rows - 1), _viewport.topPitch, 127.0);
@@ -269,7 +270,7 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
       const int tick = _seeking ? _seekTick : _playTick;
       if (tick >= 0) { painter.setPen(QPen(c[_seeking ? PerformanceAppearance::Preview : PerformanceAppearance::Playhead], 1.5)); const double x = xForTick(tick, false); painter.drawLine(QPointF(x, 0), QPointF(x, widget->height())); }
       painter.restore();
-      if (surface == PerformanceSurface::Parameter && _dragging) {
+      if (_dragging && ((surface == PerformanceSurface::Parameter && !_noteGesture) || (surface == PerformanceSurface::Notes && _noteGesture))) {
             const QString value = _parameter->currentIndex() == 0 && _anchor >= 0 ? QString::number(noteValue(_anchor), 'f', 0) : QString::number(valueForY(_last.y(), _gestureLane), 'f', 0);
             QRectF badge(qBound(0.0, _last.x() + 10, double(widget->width() - 88)), qBound(0.0, _last.y() - 25, double(widget->height() - 24)), 84, 22);
             painter.fillRect(badge, c[PerformanceAppearance::Background]); painter.setPen(c[PerformanceAppearance::Preview]); painter.drawText(badge, Qt::AlignCenter, value + (rangeKind() == 1 ? " %" : (rangeKind() == 2 ? " BPM" : "")));

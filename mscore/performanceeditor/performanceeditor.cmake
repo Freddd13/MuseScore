@@ -9,6 +9,7 @@ set(PERFORMANCEEDITOR_SRC
       ${CMAKE_CURRENT_LIST_DIR}/performanceselection.h
       ${CMAKE_CURRENT_LIST_DIR}/performancesettings.cpp
       ${CMAKE_CURRENT_LIST_DIR}/performancesettings.h
+      ${CMAKE_CURRENT_LIST_DIR}/performanceoverlay.cpp
       ${CMAKE_CURRENT_LIST_DIR}/performancepainting.cpp
       ${CMAKE_CURRENT_LIST_DIR}/performanceinteraction.cpp
       )

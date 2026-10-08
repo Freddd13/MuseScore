@@ -85,6 +85,13 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _tool = combo({tr("拖动"), tr("铅笔"), tr("直线")}, "performanceTool");
       row->setAlignment(Qt::AlignLeft);
       layout->addLayout(row);
+      _playButton = new QToolButton(this); _playButton->setObjectName("performancePlay"); _playButton->setText(tr("▶ 播放"));
+      _playButton->setToolTip(tr("从当前播放光标开始／停止（空格）")); connect(_playButton, &QToolButton::clicked, this, [this] { togglePlayback(); }); row->addWidget(_playButton, 0, row->count());
+      auto locate = new QToolButton(this); locate->setObjectName("performanceLocateSelection"); locate->setText(tr("移至选音"));
+      locate->setToolTip(tr("把播放光标移到最近选中的音；双击音符可从该处播放。")); connect(locate, &QToolButton::clicked, this, &PerformanceEditor::locateSelection); row->addWidget(locate, 0, row->count());
+      _auditionButton = new QToolButton(this); _auditionButton->setObjectName("performanceAudition"); _auditionButton->setText(tr("试听")); _auditionButton->setCheckable(true);
+      _auditionButton->setChecked(QSettings().value("performanceEditor/audition", true).toBool()); _auditionButton->setToolTip(tr("停播时点选音符／力度端点发声，不移动播放位置。"));
+      connect(_auditionButton, &QToolButton::toggled, this, [](bool on) { QSettings().setValue("performanceEditor/audition", on); }); row->addWidget(_auditionButton, 0, row->count());
       auto second = new QGridLayout; _actionsRow = second;
       auto button = [this, second](const QString& label, auto callback) {
             auto result = new QPushButton(label, this); second->addWidget(result, second->count() / 6, second->count() % 6); connect(result, &QPushButton::clicked, this, callback); return result;
@@ -120,7 +127,8 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             }
       auto values = displayMenu->addAction(tr("音符内显示力度")); values->setCheckable(true); values->setChecked(QSettings().value("performanceEditor/showValues", false).toBool()); _showValues = values->isChecked();
       connect(values, &QAction::toggled, this, [this](bool on) { _showValues = on; QSettings().setValue("performanceEditor/showValues", on); updateSurfaces(); });
-      connect(displayMenu->addAction(tr("编辑配色…")), &QAction::triggered, this, [this] { _appearance.edit(this); invalidateVisual(); });
+      connect(displayMenu->addAction(tr("编辑配色…")), &QAction::triggered, this, [this] { if (_appearance.edit(this)) { applyAppearance(); invalidateVisual(); if (_view) _view->update(); } });
+      connect(displayMenu->addAction(tr("REAPER 灰色默认")), &QAction::triggered, this, [this] { _appearance = PerformanceAppearance(); _appearance.save(); applyAppearance(); invalidateVisual(); if (_view) _view->update(); });
       second->addWidget(appearance, second->count() / 6, second->count() % 6);
       _followButton = new QToolButton(this); _followButton->setText(tr("跟随播放")); _followButton->setToolTip(tr("手动浏览后暂停跟随；单击恢复，下一次开始播放也会恢复。")); _followButton->setCheckable(true); _followButton->setChecked(true);
       connect(_followButton, &QToolButton::clicked, this, [this] { _following = true; _followButton->setChecked(true); updatePlayhead(); });
@@ -128,13 +136,31 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       second->setAlignment(Qt::AlignLeft);
       layout->addLayout(second);
       _splitter = new QSplitter(Qt::Vertical, this); _splitter->setChildrenCollapsible(false);
-      _noteCanvas = new PerformanceCanvas(this, PerformanceSurface::Notes); _noteCanvas->installEventFilter(this);
+      auto noteArea = new QWidget(_splitter); auto noteLayout = new QVBoxLayout(noteArea); noteLayout->setContentsMargins(0, 0, 0, 0); noteLayout->setSpacing(0);
+      auto paneControls = [this](QVBoxLayout* parent, bool notes) {
+            auto row = new QHBoxLayout; row->setContentsMargins(3, 0, 3, 0); row->setSpacing(3); row->addWidget(new QLabel(notes ? tr("音高") : tr("数值范围")));
+            auto add = [this, row](const QString& text, const QString& tip, const QString& name, auto callback) { auto button = new QToolButton; button->setText(text); button->setToolTip(tip); button->setObjectName(name); connect(button, &QToolButton::clicked, this, callback); row->addWidget(button); };
+            const QString prefix = notes ? "performancePitch" : "performanceRange";
+            add("−", tr("只缩小本区纵向视窗，不改变音符属性"), prefix + "Out", [this, notes] { zoomVertical(notes, 1 / 1.4); });
+            add("+", tr("只放大本区纵向视窗，围绕当前选音／数值"), prefix + "In", [this, notes] { zoomVertical(notes, 1.4); });
+            add(notes ? tr("音域") : tr("匹配值"), notes ? tr("显示乐器音域") : tr("放大到选中音的数值范围；没有选音时匹配当前视窗"), prefix + "Fit", [this, notes] { if (notes) centerPitch(false, true); else resetRange(true); });
+            add(notes ? tr("选音") : tr("全范围"), notes ? tr("保持行高，音高区居中选音") : tr("恢复完整数值范围"), prefix + "Reset", [this, notes] { if (notes) centerPitch(true); else resetRange(false); });
+            row->addStretch(); parent->addLayout(row);
+            };
+      paneControls(noteLayout, true);
+      _noteCanvas = new PerformanceCanvas(this, PerformanceSurface::Notes); _noteCanvas->installEventFilter(this); noteLayout->addWidget(_noteCanvas, 1);
       _pitchScroll = new QScrollBar(Qt::Vertical, _noteCanvas); _pitchScroll->setRange(0, 12700);
       connect(_pitchScroll, &QScrollBar::valueChanged, this, [this](int value) { pauseFollow(); _viewport.topPitch = 127 - value / 100.0; invalidateVisual(); });
-      _splitter->addWidget(_noteCanvas);
+      _splitter->addWidget(noteArea);
       auto parameterArea = new QWidget(_splitter); auto areaLayout = new QVBoxLayout(parameterArea); areaLayout->setContentsMargins(0, 0, 0, 0); areaLayout->setSpacing(0);
       _ruler = new PerformanceCanvas(this, PerformanceSurface::Ruler); _ruler->installEventFilter(this); areaLayout->addWidget(_ruler);
+      paneControls(areaLayout, false);
       _canvas = new PerformanceCanvas(this, PerformanceSurface::Parameter); _canvas->installEventFilter(this); areaLayout->addWidget(_canvas, 1);
+      _valueScroll = new QScrollBar(Qt::Vertical, _canvas); _valueScroll->setObjectName("performanceValueScroll");
+      connect(_valueScroll, &QScrollBar::valueChanged, this, [this](int position) {
+            if (rangeKind() == 3) return; pauseFollow(); const auto limit = PerformanceViewport::limits(rangeKind()); auto& range = _viewport.ranges[rangeKind()]; const double span = range.maximum - range.minimum;
+            range.maximum = limit.maximum - (limit.maximum - limit.minimum - span) * position / 10000.0; range.minimum = range.maximum - span; invalidateVisual();
+            });
       _splitter->addWidget(parameterArea); _splitter->setStretchFactor(0, 1); _splitter->setStretchFactor(1, 1); layout->addWidget(_splitter, 1);
       _splitter->restoreState(QSettings().value("performanceEditor/splitter").toByteArray());
       connect(_splitter, &QSplitter::splitterMoved, this, [this] { QSettings().setValue("performanceEditor/splitter", _splitter->saveState()); });
@@ -161,7 +187,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             _number->setDecimals(velocity ? 0 : 2);
             updateSelection(); status(); invalidateVisual(); if (_view) _view->update();
             });
-      for (auto box : {_handles, _band}) connect(box, &QCheckBox::toggled, this, [this] { cancelGesture(); if (_view) _view->update(); });
+      for (auto box : {_handles, _band}) connect(box, &QCheckBox::toggled, this, [this] { cancelGesture(); syncOverlayTracking(); if (_view) _view->update(); });
       if (seq) {
             connect(seq, &Seq::stopped, this, [this] { if (_snapshotDegraded) { _dirty = true; scheduleRefresh(); } _commitTimer.start(0); syncTransport(); });
             connect(seq, &Seq::started, this, [this] { cancelGesture(); _following = true; _followButton->setChecked(true); syncTransport(); status(); });
@@ -172,7 +198,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       connect(&_playTimer, &QTimer::timeout, this, &PerformanceEditor::updatePlayhead);
       _moveTimer.setSingleShot(true); _moveTimer.setInterval(16);
       connect(&_moveTimer, &QTimer::timeout, this, &PerformanceEditor::drainGesture);
-      status();
+      applyAppearance(); status();
       }
 
 void PerformanceEditor::resizeEvent(QResizeEvent*)
@@ -184,13 +210,15 @@ void PerformanceEditor::resizeEvent(QResizeEvent*)
             int cellWidth = 1;
             for (auto widget : widgets) cellWidth = qMax(cellWidth, widget->minimumSizeHint().width());
             const int spacing = qMax(6, grid->horizontalSpacing());
-            const int columns = qBound(1, (width() - 12 + spacing) / (cellWidth + spacing), grid == _topRow ? 5 : 6);
+            const int columns = qBound(1, (width() - 12 + spacing) / (cellWidth + spacing), widgets.size());
             for (int i = 0; i < widgets.size(); ++i) grid->addWidget(widgets[i], i / columns, i % columns);
             }
       }
 
 PerformanceEditor::~PerformanceEditor()
       {
+      invalidateOverlay();
+      if (_view && _trackingOwned) _view->setMouseTracking(_trackingBefore || _view->noteEntryMode() || _view->fotoMode());
       editors.removeAll(this);
       if (_score) _score->removeViewer(this);
       }
@@ -204,7 +232,7 @@ void PerformanceEditor::setView(ScoreView* view)
       if (_score) _viewMemory.insert(_score, {_viewport, _scroll->value()});
       _playTimer.stop(); _playingNotes.clear(); _linkedIndex.clear(); cancelSurfaceGesture();
       for (auto connection : _transportConnections) disconnect(connection); _transportConnections.clear();
-      if (_view) _view->removeEventFilter(this);
+      if (_view) { invalidateOverlay(); if (_trackingOwned) _view->setMouseTracking(_trackingBefore || _view->noteEntryMode() || _view->fotoMode()); _trackingOwned = false; _view->removeEventFilter(this); }
       if (_score) _score->removeViewer(this);
       disconnect(_scoreDestroyed);
       _view = view; _score = next;
@@ -218,7 +246,12 @@ void PerformanceEditor::setView(ScoreView* view)
                   _noteIndex.clear(); _layoutIndex.clear(); _pending.clear(); _selectedIndices.clear(); _systemIndices.clear(); _system = nullptr; status(); updateSurfaces();
                   });
             }
-      if (_view) _view->installEventFilter(this);
+      _overlayDamage = QRegion(); _overBand = false;
+      if (_view) {
+            _view->installEventFilter(this); _overlayMatrix = _view->matrix();
+            _transportConnections.append(connect(_view, &ScoreView::viewRectChanged, this, &PerformanceEditor::overlayViewChanged));
+            _transportConnections.append(connect(_view, &ScoreView::scaleChanged, this, [this](double) { overlayViewChanged(); }));
+            }
       _fitOnRefresh = !_viewMemory.contains(_score);
       _scroll->setRange(0, _score && _score->lastMeasure() ? _score->lastMeasure()->endTick().ticks() : 0);
       _playTick = -1; _following = true; _followButton->setChecked(true); _followButton->setText(tr("跟随播放"));
@@ -231,7 +264,7 @@ void PerformanceEditor::setView(ScoreView* view)
                   connect(_score, &QObject::destroyed, this, [this, next] { _viewMemory.remove(next); _rememberedScores.remove(next); });
                   }
             }
-      _dirty = true; scheduleRefresh(); syncTransport();
+      _dirty = true; scheduleRefresh(); syncTransport(); syncOverlayTracking();
       }
 
 void PerformanceEditor::scheduleRefresh()
@@ -345,7 +378,7 @@ void PerformanceEditor::updateSelection()
             _dirty = true; scheduleRefresh(); return;
             }
       _selectedIndices.clear(); _systemIndices.clear();
-      _system = nullptr;
+      _system = _hover >= 0 && _hover < _notes.size() ? _notes[_hover].system : nullptr;
       for (auto& note : _notes) {
             note.selected = note.note->selected();
             if (note.selected && noteEditable(note)) _selectedIndices.append(int(&note - _notes.data()));
@@ -582,43 +615,6 @@ double PerformanceEditor::yForValue(double value, const QRectF& rect) const
       return rect.bottom() - (value - range.minimum) * rect.height() / (range.maximum - range.minimum);
       }
 
-void PerformanceEditor::paintOverlay(QPainter& painter)
-      {
-      if (!overlayAllowed()) { _scoreLane = QRectF(); return; }
-      painter.save(); painter.resetTransform(); painter.setRenderHint(QPainter::Antialiasing);
-      if (_handles->isChecked() && _parameter->currentIndex() == 0) {
-            QVector<int> handles = _selectedIndices;
-            if (_hover >= 0 && !handles.contains(_hover)) handles.append(_hover);
-            for (int i : handles) {
-                  if (i >= _notes.size()) continue;
-                  const auto& note = _notes[i];
-                  const QRectF bounds = _view->matrix().mapRect(note.bounds);
-                  if (!_view->rect().intersects(bounds.toRect())) continue;
-                  const QPointF handle = bounds.topRight() + QPointF(12, -12);
-                  painter.setPen(QPen(_pending.contains(note.note) ? pendingColor : accent, 2));
-                  painter.setBrush(note.audible ? QBrush(palette().base()) : Qt::NoBrush);
-                  painter.drawEllipse(handle, 5, 5);
-                  if (_view->matrix().m11() > 0.5) painter.drawText(handle + QPointF(8, -4), QString::number(noteValue(i)) + (_axis->currentIndex() ? "%" : ""));
-                  }
-            }
-      _scoreLane = QRectF();
-      if (_band->isChecked() && _system) {
-            double left = _view->width(), right = 0;
-            for (int index : _systemIndices) {
-                  const auto& note = _notes[index];
-                  const QRectF bounds = _view->matrix().mapRect(note.bounds);
-                  left = qMin(left, bounds.left()); right = qMax(right, bounds.right());
-                  }
-            const double y = _view->height() - 114; // Floating strip: never participates in score layout.
-            _scoreLane = QRectF(qBound(48.0, left - 8, double(qMax(48, _view->width() - 100))), y, qMax(60.0, qMin(double(_view->width() - 10), right + 25) - left), 88);
-            painter.setPen(palette().text().color());
-            painter.fillRect(_scoreLane.adjusted(-4, -22, 4, 4), palette().window());
-            painter.drawText(_scoreLane.topLeft() - QPointF(0, 5), tr("当前谱行 · %1 · 浮动参数带").arg(_parameter->currentText()));
-            paintLane(painter, _scoreLane, true);
-            }
-      painter.restore();
-      }
-
 void PerformanceEditor::paintForView(ScoreView* view, QPainter& painter)
       { for (auto editor : editors) if (editor->_view == view) editor->paintOverlay(painter); }
 
@@ -629,7 +625,7 @@ void PerformanceEditor::beginGesture(QPointF point, QRectF rect, bool onScore, i
       if (_parameter->currentIndex() && (_score->isPlaying() || (seq && (seq->isPlaying() || !seq->backgroundRenderingIdle())))) { status(tr("速度与踏板请停播后编辑。")); return; }
       pauseFollow();
       _gestureBefore = _pending; _tempoDraft.clear(); _gestureLane = rect; _press = _last = point;
-      _scoreGesture = onScore; _dragging = true; _anchor = forcedAnchor; _offsetDrag = false; _unlockedTempo = -1;
+      _noteGesture = false; _cycleOnClick = false; _scoreGesture = onScore; _dragging = true; _anchor = forcedAnchor; _offsetDrag = false; _unlockedTempo = -1;
       if (_parameter->currentIndex() == 0) {
             double distance = 13;
             const int from = tickForX(rect.left() - 32, onScore), until = tickForX(rect.right() + 32, onScore);
@@ -711,7 +707,8 @@ void PerformanceEditor::moveGesture(QPointF point)
                   }
             }
       else if (_offsetDrag) {
-            const double delta = valueForY(point.y(), _gestureLane) - valueForY(_press.y(), _gestureLane);
+            const auto range = _viewport.ranges[rangeKind()];
+            const double delta = _noteGesture ? (_press.y() - point.y()) * (range.maximum - range.minimum) / qMax(1.0, _gestureLane.height()) : valueForY(point.y(), _gestureLane) - valueForY(_press.y(), _gestureLane);
             for (int index : _dragTargets) setNoteValue(index, _dragOriginal.value(index) + delta, false);
             }
       else {
@@ -754,8 +751,9 @@ void PerformanceEditor::finishGesture()
       {
       if (!_dragging) return;
       drainGesture();
+      if (_cycleOnClick && QLineF(_press, _last).length() < 3) { const auto candidates = _pressedCandidates; cancelGesture(); cycleHit(candidates); return; }
       _dragging = false; qApp->removeEventFilter(this);
-      if (_view) _view->releaseMouse(); _canvas->releaseMouse();
+      if (_view) _view->releaseMouse(); _canvas->releaseMouse(); _noteCanvas->releaseMouse();
       if (_parameter->currentIndex() == 0) applyPending();
       else {
             QString error;
@@ -782,7 +780,7 @@ void PerformanceEditor::cancelGesture()
       _moveTimer.stop(); _moveQueued = false;
       if (!_dragging) return;
       _pending = _gestureBefore; _gestureBefore.clear(); _tempoDraft.clear(); _dragging = false; qApp->removeEventFilter(this);
-      if (_view) _view->releaseMouse(); if (_canvas) _canvas->releaseMouse();
+      if (_view) _view->releaseMouse(); if (_canvas) _canvas->releaseMouse(); if (_noteCanvas) _noteCanvas->releaseMouse();
       }
 
 bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
@@ -795,9 +793,11 @@ bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
             return true;
             }
       const bool onScore = object == _view;
+      if (onScore && event->type() == QEvent::MouseButtonRelease) QTimer::singleShot(0, this, [this] { syncOverlayTracking(); });
       if (object != _canvas && !onScore) return false;
       if (event->type() == QEvent::Show && object == _canvas) { scheduleRefresh(); return false; }
       if (onScore && !overlayAllowed()) return false;
+      if (onScore && overlayEvent(event)) return true;
       if (event->type() == QEvent::ShortcutOverride && _dragging && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) { event->accept(); return true; }
       if (event->type() == QEvent::Hide) cancelGesture();
       if (event->type() == QEvent::KeyPress && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape && _dragging) {
@@ -806,12 +806,7 @@ bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       if (event->type() == QEvent::MouseMove) {
             auto mouse = static_cast<QMouseEvent*>(event);
             if (_dragging) { queueGesture(mouse->pos()); return true; }
-            if (onScore && _handles->isChecked()) {
-                  Element* element = _view->elementNear(_view->toLogical(mouse->pos()));
-                  int hover = _noteIndex.value(element, -1);
-                  if (hover >= 0 && !_notes[hover].enabled) hover = -1;
-                  if (hover != _hover) { _hover = hover; updateSelection(); }
-                  }
+
             }
       if (event->type() == QEvent::MouseButtonPress) {
             auto mouse = static_cast<QMouseEvent*>(event);
@@ -825,7 +820,7 @@ bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
                               .arg(note.audible ? QString() : tr(" · 不独立发声")));
                         action->setEnabled(note.audible && note.enabled);
                         connect(action, &QAction::triggered, this, [this, i] {
-                              selectIndices({i}, Qt::NoModifier);
+                              selectIndices({i}, Qt::NoModifier); updateHover(i); audition(i);
                               });
                         }
                   if (!menu.isEmpty()) menu.exec(mouse->globalPos());

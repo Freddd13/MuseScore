@@ -15,6 +15,7 @@
 #include <QMenu>
 #include <QHelpEvent>
 #include <QToolTip>
+#include <QPaintEvent>
 #include "mscore/pianoroll/pianoview.h"
 #include "libmscore/ottava.h"
 #include "libmscore/instrument.h"
@@ -65,6 +66,18 @@ class PerformanceSilentSynth : public Synthesizer {
       const QList<MidiPatch*>& getPatchInfo() const override { return _patches; }
       SynthesizerGroup state() const override { return SynthesizerGroup("Fluid", {}); }
       bool setState(const SynthesizerGroup&) override { return true; }
+};
+class PerformanceAuditionSeq : public Seq {
+   public:
+      int previews = 0, previewPitch = -1, previewVelocity = -1;
+      void startNote(int channel, int pitch, int velocity, int duration, double tuning) override
+            { ++previews; previewPitch = pitch; previewVelocity = velocity; Seq::startNote(channel, pitch, velocity, duration, tuning); }
+};
+class PerformancePaintDamage : public QObject {
+   public:
+      QRegion region;
+      bool eventFilter(QObject*, QEvent* event) override
+            { if (event->type() == QEvent::Paint) region |= static_cast<QPaintEvent*>(event)->region(); return false; }
 };
 class PerformanceTestDriver : public Driver {
       Transport _state = Transport::STOP;
@@ -398,6 +411,84 @@ class TestPerformanceEditor : public QObject, public MTest {
                   });
             QVERIFY(restored.edit(main)); PerformanceAppearance defaults; restored.load(); QCOMPARE(restored.colors[PerformanceAppearance::Background], defaults.colors[PerformanceAppearance::Background]); QCOMPARE(original->color(), native);
             }
+      void endpointPickingZoomAndDirectLocation()
+            {
+            auto main = Ms::mscore; auto score = main->readScore(QString(TESTROOT) + "/mtest/mscore/scoreobserver/piano.mscx"); QVERIFY(score);
+            main->setCurrentScoreView(main->appendScore(score)); auto editor = main->findChild<PerformanceEditor*>(); QVERIFY(editor); QTest::qWait(80);
+            auto note = noteAt(score); const auto chord = note->chord()->notes(); QVERIFY(chord.size() >= 2);
+            QMap<Note*, VelocityEdit> edits; for (int i = 0; i < chord.size(); ++i) edits[chord[i]] = {Note::ValueType::USER_VAL, 20 + i * 30};
+            QVERIFY(ParameterEdit::velocities(score, edits)); QTest::qWait(80); editor->fit();
+            auto canvas = editor->findChild<QWidget*>("performanceParameterCanvas"); auto notes = editor->findChild<QWidget*>("performanceNoteCanvas");
+            auto tool = editor->findChild<QComboBox*>("performanceTool"); tool->setCurrentIndex(0);
+            auto axis = editor->findChild<QComboBox*>("performanceAxis"); axis->setCurrentIndex(0); QTest::qWait(50);
+            auto endpoint = [canvas](int value) { return QPoint(76 + qRound((canvas->width() - 90) / 4.0), qRound(canvas->height() - 18 - (value - 1) * (canvas->height() - 36) / 126.0)); };
+            score->setPlayPos(Fraction::fromTicks(1440)); const auto state = score->state();
+            QTest::mouseClick(canvas, Qt::LeftButton, Qt::NoModifier, endpoint(20)); QVERIFY(chord[0]->selected());
+            QTest::mouseClick(canvas, Qt::LeftButton, Qt::NoModifier, endpoint(50)); QVERIFY(chord[1]->selected()); QVERIFY(!chord[0]->selected());
+            QCOMPARE(score->playPos().ticks(), 1440); QVERIFY(score->state() == state);
+            QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, endpoint(50)); QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, endpoint(50) - QPoint(0, 12)); QTest::qWait(80);
+            QCOMPARE(chord[0]->veloOffset(), 20); QVERIFY(chord[1]->veloOffset() > 50);
+            edits.clear(); for (auto target : chord) edits[target] = {Note::ValueType::USER_VAL, 20}; QVERIFY(ParameterEdit::velocities(score, edits)); QTest::qWait(80);
+            PerformanceSelection::apply(score, {chord[0]}, chord[0]); editor->selectionChanged();
+            const auto cycleState = score->state(); QTest::mouseClick(canvas, Qt::LeftButton, Qt::NoModifier, endpoint(20)); QVERIFY(chord[1]->selected()); QVERIFY(score->state() == cycleState);
+            QTest::mouseClick(canvas, Qt::LeftButton, Qt::AltModifier, endpoint(20)); QCOMPARE(score->selection().noteList().size(), 1); QVERIFY(score->state() == cycleState);
+            PerformanceSelection::apply(score, {chord[0]}, chord[0]); editor->selectionChanged(); QTest::mouseClick(editor->findChild<QToolButton*>("performancePitchReset"), Qt::LeftButton);
+            const auto pitchBar = notes->findChild<QScrollBar*>(); const double row = notes->height() * 100.0 / pitchBar->pageStep(), top = 127 - pitchBar->value() / 100.0;
+            const QPoint noteHit(endpoint(20).x() + 5, qRound((top - chord[0]->ppitch()) * row + row / 2));
+            QTest::mousePress(notes, Qt::LeftButton, Qt::AltModifier, noteHit);
+            QMouseEvent velocityMove(QEvent::MouseMove, QPointF(noteHit - QPoint(0, 12)), Qt::NoButton, Qt::LeftButton, Qt::AltModifier); QApplication::sendEvent(notes, &velocityMove);
+            QTest::mouseRelease(notes, Qt::LeftButton, Qt::AltModifier, velocityMove.pos()); QTest::qWait(80); QVERIFY(chord[0]->veloOffset() > 20); for (int i = 1; i < chord.size(); ++i) QCOMPARE(chord[i]->veloOffset(), 20);
+            QVERIFY(ParameterEdit::velocities(score, edits)); QTest::qWait(80); const auto navigationState = score->state();
+            auto rangeFit = editor->findChild<QToolButton*>("performanceRangeFit"); auto rangeScroll = editor->findChild<QScrollBar*>("performanceValueScroll"); QVERIFY(rangeFit); QVERIFY(rangeScroll);
+            const QImage before = canvas->grab().toImage(); const int pitchPage = notes->findChild<QScrollBar*>()->pageStep();
+            QTest::mouseClick(rangeFit, Qt::LeftButton); QVERIFY(before != canvas->grab().toImage()); QVERIFY(rangeScroll->maximum() > 0); QCOMPARE(notes->findChild<QScrollBar*>()->pageStep(), pitchPage);
+            rangeScroll->setValue(5000); for (auto target : chord) QCOMPARE(target->veloOffset(), 20);
+            const int axisPosition = rangeScroll->value();
+            QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(25, 40));
+            QMouseEvent pan(QEvent::MouseMove, QPointF(25, 55), Qt::NoButton, Qt::LeftButton, Qt::NoModifier); QApplication::sendEvent(canvas, &pan);
+            QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, pan.pos()); QVERIFY(rangeScroll->value() != axisPosition); for (auto target : chord) QCOMPARE(target->veloOffset(), 20);
+            const int rangePosition = rangeScroll->value(); QTest::mouseClick(editor->findChild<QToolButton*>("performancePitchIn"), Qt::LeftButton); QVERIFY(notes->findChild<QScrollBar*>()->pageStep() < pitchPage); QCOMPARE(rangeScroll->value(), rangePosition);
+            QTest::mouseClick(editor->findChild<QToolButton*>("performanceLocateSelection"), Qt::LeftButton); QCOMPARE(score->playPos().ticks(), 480);
+            notes->findChild<QScrollBar*>()->setValue(0); // Guarantee an empty high-pitch row after the independent zoom tests.
+            const QPoint blank(76 + (notes->width() - 90) / 2, 2); QTest::mouseClick(notes, Qt::LeftButton, Qt::NoModifier, blank); QVERIFY(std::abs(score->playPos().ticks() - 960) <= 4); QVERIFY(score->state() == navigationState);
+            main->grab().save("performance-editor-011.png");
+            }
+      void overlappingNotesCycleEveryVoice()
+            {
+            auto main = Ms::mscore; auto score = main->readScore(QString(TESTROOT) + "/mtest/mscore/scoreobserver/piano.mscx"); QVERIFY(score);
+            main->setCurrentScoreView(main->appendScore(score)); auto editor = main->findChild<PerformanceEditor*>(); auto original = noteAt(score);
+            QList<Note*> targets {original}; score->startCmd();
+            for (int voice = 1; voice <= 2; ++voice) { auto chord = original->chord()->clone(); chord->setTrack(voice); chord->setParent(original->chord()->segment()); score->undoAddElement(chord); targets.append(chord->notes().front()); }
+            score->endCmd(); QTest::qWait(80); PerformanceSelection::apply(score, {original}, original); editor->selectionChanged(); editor->fit(true);
+            QTest::mouseClick(editor->findChild<QToolButton*>("performancePitchReset"), Qt::LeftButton);
+            auto notes = editor->findChild<QWidget*>("performanceNoteCanvas"); auto scroll = notes->findChild<QScrollBar*>(); const double row = notes->height() * 100.0 / scroll->pageStep(), top = 127 - scroll->value() / 100.0;
+            const QPoint hit(80, qRound((top - original->ppitch()) * row + row / 2)); const auto state = score->state(); score->setPlayPos(Fraction::fromTicks(1440));
+            for (int i : {1, 2, 0}) { QTest::mouseClick(notes, Qt::LeftButton, Qt::NoModifier, hit); QCOMPARE(score->selection().noteList().size(), size_t(1)); QVERIFY(targets[i]->selected()); QCOMPARE(score->playPos().ticks(), 1440); QVERIFY(score->state() == state); }
+            main->grab().save("performance-editor-011-overlap.png");
+            }
+      void overlayBidirectionalHoverAndScrollDamage()
+            {
+            auto main = Ms::mscore; auto score = main->currentScore(); auto view = main->currentScoreView(); auto editor = main->findChild<PerformanceEditor*>(); QVERIFY(editor);
+            for (auto toggle : editor->findChildren<QCheckBox*>()) toggle->setChecked(true);
+            QVERIFY(view->hasMouseTracking());
+            auto note = noteAt(score); PerformanceSelection::apply(score, {note}, note); editor->selectionChanged(); editor->fit(true);
+            QTest::mouseClick(editor->findChild<QToolButton*>("performancePitchReset"), Qt::LeftButton); QTest::qWait(60);
+            auto notes = editor->findChild<QWidget*>("performanceNoteCanvas"); auto pitch = notes->findChild<QScrollBar*>();
+            const double top = 127 - pitch->value() / 100.0, row = notes->height() * 100.0 / pitch->pageStep(); const QPoint hit(80, qRound((top - note->ppitch()) * row + row / 2));
+            QMouseEvent hover(QEvent::MouseMove, QPointF(hit), Qt::NoButton, Qt::NoButton, Qt::NoModifier); QApplication::sendEvent(notes, &hover); QTest::qWait(30);
+            const QPoint scoreHit = view->matrix().mapRect(note->canvasBoundingRect()).center().toPoint();
+            QHelpEvent help(QEvent::ToolTip, scoreHit, view->mapToGlobal(scoreHit)); QApplication::sendEvent(view, &help); QVERIFY(QToolTip::text().contains(QString("MIDI %1").arg(note->ppitch()))); QToolTip::hideText();
+            QMouseEvent back(QEvent::MouseMove, QPointF(scoreHit), Qt::NoButton, Qt::NoButton, Qt::NoModifier); QApplication::sendEvent(view, &back);
+            QHelpEvent backHelp(QEvent::ToolTip, hit, notes->mapToGlobal(hit)); QApplication::sendEvent(notes, &backHelp); QVERIFY(QToolTip::text().contains(QString("MIDI %1").arg(note->ppitch()))); QToolTip::hideText();
+            view->repaint(); PerformancePaintDamage recorder; view->installEventFilter(&recorder);
+            const QPoint oldOffset(qRound(view->matrix().dx()), qRound(view->matrix().dy()));
+            QWheelEvent wheel(QPointF(150, 150), view->mapToGlobal(QPoint(150, 150)), QPoint(), QPoint(0, -120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false); QApplication::sendEvent(view, &wheel); QApplication::processEvents();
+            const QPoint delta(qRound(view->matrix().dx()) - oldOffset.x(), qRound(view->matrix().dy()) - oldOffset.y()); QVERIFY(!delta.isNull());
+            // Both the old fixed strip and its scrolled copy must receive score repaints.
+            const QPoint band(80, view->height() - 120); QVERIFY(recorder.region.contains(band));
+            if (view->rect().contains(band + delta)) QVERIFY(recorder.region.contains(band + delta));
+            view->removeEventFilter(&recorder); main->grab().save("performance-overlay-011.png");
+            }
       void legacyRollSelectionAndPitchTooltip()
             {
             auto main = Ms::mscore; QVERIFY(main); auto score = fixture(); QVERIFY(score);
@@ -431,13 +522,24 @@ class TestPerformanceEditor : public QObject, public MTest {
             const QString path = _directory.path() + "/transport.mscx"; QFile file(path); QVERIFY(file.open(QIODevice::WriteOnly)); file.write(xml); file.close();
             auto score = main->readScore(path); QVERIFY(score); main->setCurrentScoreView(main->appendScore(score)); score->firstMeasure()->setRepeatStart(true); score->setExpandRepeats(true);
             MasterSynthesizer synth; MScore::sampleRate = 44100; synth.registerSynthesizer(new PerformanceSilentSynth); synth.setSampleRate(44100); synth.init();
-            Ms::seq = new Seq; auto sequence = Ms::seq;
+            Ms::seq = new PerformanceAuditionSeq; auto sequence = static_cast<PerformanceAuditionSeq*>(Ms::seq);
             std::unique_ptr<Seq, std::function<void(Seq*)>> sequenceGuard(sequence, [](Seq* s) { s->stopWait(); s->waitForStoppedRendering(); s->setScoreView(nullptr); delete s; Ms::seq = nullptr; }); auto driver = new PerformanceTestDriver(sequence); sequence->setDriver(driver); sequence->setMasterSynthesizer(&synth); QVERIFY(sequence->init()); sequence->setScoreView(main->currentScoreView());
             connect(sequence, &Seq::started, score, [score] { score->setIsPlaying(true); }); connect(sequence, &Seq::stopped, score, [score] { score->setIsPlaying(false); });
             {
                   PerformanceEditor editor; editor.resize(1000, 660); editor.setView(main->currentScoreView()); editor.show(); QTest::qWait(80); editor.fit();
                   auto ruler = editor.findChild<QWidget*>("performanceRuler"); QVERIFY(ruler);
                   auto playbackTimer = editor.findChild<QTimer*>("performancePlaybackTimer"); QVERIFY(playbackTimer);
+                  auto transport = editor.findChild<QToolButton*>("performancePlay"); auto audition = editor.findChild<QToolButton*>("performanceAudition"); QVERIFY(transport); QVERIFY(audition);
+                  auto previewNotes = editor.findChild<QWidget*>("performanceNoteCanvas"); auto pitchScroll = previewNotes->findChild<QScrollBar*>();
+                  QTest::mouseClick(editor.findChild<QToolButton*>("performancePitchReset"), Qt::LeftButton); editor.fit(); QTest::qWait(30);
+                  auto previewNote = noteAt(score, 0); const QPoint previewHit(80, qRound((127 - pitchScroll->value() / 100.0 - previewNote->ppitch()) * 12 + 6));
+                  score->setPlayPos(Fraction::fromTicks(1920)); const auto auditionState = score->state();
+                  audition->setChecked(true); QTest::mouseClick(previewNotes, Qt::LeftButton, Qt::NoModifier, previewHit); QCOMPARE(sequence->previews, 1); QCOMPARE(sequence->previewPitch, previewNote->ppitch()); QCOMPARE(score->playPos().ticks(), 1920); QVERIFY(score->state() == auditionState);
+                  audition->setChecked(false); QTest::mouseClick(previewNotes, Qt::LeftButton, Qt::NoModifier, previewHit); QCOMPARE(sequence->previews, 1);
+                  QTest::mouseClick(transport, Qt::LeftButton); QApplication::processEvents(); QVERIFY(sequence->isPlaying());
+                  QTest::mouseClick(transport, Qt::LeftButton); sequence->waitForStoppedRendering(); QApplication::processEvents(); QVERIFY(!sequence->isPlaying());
+                  QTest::mouseDClick(previewNotes, Qt::LeftButton, Qt::NoModifier, previewHit); QApplication::processEvents(); QVERIFY(sequence->isPlaying()); QVERIFY(sequence->getCurTick() < 480);
+                  QTest::keyClick(previewNotes, Qt::Key_Space); sequence->waitForStoppedRendering(); QApplication::processEvents(); QVERIFY(!sequence->isPlaying());
                   QSignalSpy beats(sequence, &Seq::heartBeat); QSignalSpy starts(sequence, &Seq::started);
                   score->setPlayPos(Fraction::fromTicks(0)); sequence->start(); QApplication::processEvents(); QVERIFY(sequence->isPlaying()); QVERIFY(starts.count() > 0); QTRY_VERIFY(playbackTimer->isActive());
                   auto lineX = [ruler]() {
@@ -546,6 +648,15 @@ class TestPerformanceEditor : public QObject, public MTest {
                         for (auto samples : {&paintSamples, &dragSamples, &playSamples}) std::sort(samples->begin(), samples->end());
                         qInfo("Performance %d notes, %s: snapshot %.2f ms, filter %.2f ms, batch selection %.2f ms, native commit %.2f ms; two-area paint P95 %.2f ms, drag P95 %.2f ms, locator paint P95 %.2f ms", all.size(), overview ? "overview" : "local", snapshot, filter, batch, commit, paintSamples[37], dragSamples[37], playSamples[37]);
                         }
+                  // Measure the new native score overlay path separately from MIDI canvases.
+                  QCheckBox* band = nullptr; for (auto check : editor->findChildren<QCheckBox*>()) if (check->text().contains(QString::fromUtf8("谱行参数带"))) band = check;
+                  QVERIFY(band); PerformanceSelection::apply(score, {all.front()}, all.front()); editor->selectionChanged(); band->setChecked(true); QTest::qWait(40);
+                  auto view = main->currentScoreView(); view->repaint(); QVector<double> overlaySamples;
+                  for (int frame = 0; frame < 40; ++frame) {
+                        QWheelEvent wheel(QPointF(150, 150), view->mapToGlobal(QPoint(150, 150)), QPoint(), QPoint(0, frame % 2 ? 120 : -120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+                        timer.start(); QApplication::sendEvent(view, &wheel); QApplication::processEvents(); overlaySamples.append(timer.nsecsElapsed() / 1e6);
+                        }
+                  std::sort(overlaySamples.begin(), overlaySamples.end()); qInfo("Performance overlay %d notes: native wheel/overlay repaint P95 %.2f ms, max %.2f ms", all.size(), overlaySamples[37], overlaySamples.back()); band->setChecked(false);
                   }
             }
       };

@@ -8,15 +8,13 @@
 #include <algorithm>
 #include <cmath>
 namespace Ms {
-namespace {
-PerformanceRange bounds(int kind)
-      { return kind == 0 ? PerformanceRange{1, 127} : (kind == 1 ? PerformanceRange{-127, 12600} : PerformanceRange{5, 999}); }
-}
+PerformanceRange PerformanceViewport::limits(int kind)
+      { return kind == 0 ? PerformanceRange{1, 127} : (kind == 1 ? PerformanceRange{-127, 12600} : (kind == 2 ? PerformanceRange{5, 999} : PerformanceRange{0, 127})); }
 void PerformanceViewport::zoomRange(int kind, double factor, double anchor)
       {
       if (kind == 3) return;
       auto& range = ranges[kind];
-      const auto limit = bounds(kind);
+      const auto limit = limits(kind);
       const double fraction = (anchor - range.minimum) / (range.maximum - range.minimum);
       const double span = qBound(kind == 2 ? 5.0 : 8.0, (range.maximum - range.minimum) / factor, limit.maximum - limit.minimum);
       range.minimum = qBound(limit.minimum, anchor - fraction * span, limit.maximum - span);
@@ -25,7 +23,7 @@ void PerformanceViewport::zoomRange(int kind, double factor, double anchor)
 void PerformanceViewport::panRange(int kind, double delta)
       {
       if (kind == 3) return;
-      auto& range = ranges[kind]; const auto limit = bounds(kind);
+      auto& range = ranges[kind]; const auto limit = limits(kind);
       const double span = range.maximum - range.minimum;
       range.minimum = qBound(limit.minimum, range.minimum + delta, limit.maximum - span);
       range.maximum = range.minimum + span;

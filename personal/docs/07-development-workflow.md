@@ -24,6 +24,7 @@
 
 ## 完成修改时需要同步什么
 
+- [personal/USER_GUIDE.md](../USER_GUIDE.md)：每次相关任务必须更新面向用户的累计说明，包括新增功能、入口／开关、操作、限制与版本／提交定位；不同于下方开发日志。
 - [personal/VERSION](../VERSION)：独立的个人维护版本，当前从 `0.1.0` 起步。向后兼容新功能递增 minor，小修复/文档调整递增 patch；重大不兼容再考虑 major。
 - [personal/CHANGELOG.md](../CHANGELOG.md)：日期、需求/行为、路径、数据/格式影响、验证结果、未验证项、基准 commit、本次提交主题和版本标签。
 - `01-architecture.md`：模块边界/新目录/CMake 目标变更时更新。

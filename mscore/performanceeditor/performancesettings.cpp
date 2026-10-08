@@ -15,10 +15,10 @@
 namespace Ms {
 PerformanceAppearance::PerformanceAppearance()
       {
-      colors = {{QColor("#26282b"), QColor("#303338"), QColor("#282b30"), QColor("#484d54"), QColor("#e0e4e9"), QColor("#ffffff"), QColor("#81e9ac"), QColor("#f0ad51"), QColor("#66badd"), QColor("#c49af0")}};
-      gradient = {{QColor("#4f80db"), QColor("#48bfa5"), QColor("#dab759"), QColor("#d66354")}};
-      voices = {{QColor("#70a4df"), QColor("#db9564"), QColor("#6bc795"), QColor("#ba91de")}};
-      staves = {{voices[0], voices[1], voices[2], voices[3], QColor("#ddba62"), QColor("#72c4c9"), QColor("#d783a9"), QColor("#97b576")}};
+      colors = {{QColor("#333333"), QColor("#464646"), QColor("#3b3b3b"), QColor("#626262"), QColor("#e5e5e5"), QColor("#ffffff"), QColor("#a4d39a"), QColor("#d2a874"), QColor("#99afba"), QColor("#b2a5bd")}};
+      gradient = {{QColor("#8194a6"), QColor("#94a987"), QColor("#b3ad83"), QColor("#bc958c")}};
+      voices = {{QColor("#819eaf"), QColor("#b69d86"), QColor("#96ac8f"), QColor("#a69bb5")}};
+      staves = {{voices[0], voices[1], voices[2], voices[3], QColor("#b2ac87"), QColor("#8faeb0"), QColor("#b294a3"), QColor("#a0ad8e")}};
       }
 QColor PerformanceAppearance::noteColor(int value, int track) const
       {
@@ -43,6 +43,15 @@ void PerformanceAppearance::load()
       for (int i = 0; i < 4; ++i) candidate[i] = settings.value(QString("stop%1").arg(i), stops[i]).toInt();
       if (candidate[0] == 1 && candidate[3] == 127 && candidate[0] < candidate[1] && candidate[1] < candidate[2] && candidate[2] < candidate[3]) stops = candidate;
       mode = qBound(0, settings.value("mode", 0).toInt(), 2);
+      // Upgrade only the complete previous factory palette; retain every custom palette.
+      const std::array<QColor, RoleCount> oldColors {{QColor("#26282b"), QColor("#303338"), QColor("#282b30"), QColor("#484d54"), QColor("#e0e4e9"), QColor("#ffffff"), QColor("#81e9ac"), QColor("#f0ad51"), QColor("#66badd"), QColor("#c49af0")}};
+      const std::array<QColor, 4> oldGradient {{QColor("#4f80db"), QColor("#48bfa5"), QColor("#dab759"), QColor("#d66354")}};
+      const std::array<QColor, 4> oldVoices {{QColor("#70a4df"), QColor("#db9564"), QColor("#6bc795"), QColor("#ba91de")}};
+      const std::array<QColor, 8> oldStaves {{oldVoices[0], oldVoices[1], oldVoices[2], oldVoices[3], QColor("#ddba62"), QColor("#72c4c9"), QColor("#d783a9"), QColor("#97b576")}};
+      if (colors == oldColors && gradient == oldGradient && voices == oldVoices && staves == oldStaves && stops == std::array<int, 4>{{1, 43, 85, 127}}) {
+            const int savedMode = mode; *this = PerformanceAppearance(); mode = savedMode; settings.endGroup(); save();
+            }
+
       }
 void PerformanceAppearance::save() const
       {

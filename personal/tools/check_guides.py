@@ -22,7 +22,7 @@ def main():
     links = 0
     anchors = 0
     documents = sorted(DOCS.glob("*.md")) + [
-        REPO / "AGENTS.md", PERSONAL / "CHANGELOG.md"
+        REPO / "AGENTS.md", PERSONAL / "CHANGELOG.md", PERSONAL / "USER_GUIDE.md"
     ]
     for document in documents:
         content = document.read_text(encoding="utf-8")
@@ -93,6 +93,10 @@ def main():
         errors.append(f"CHANGELOG.md: missing current version entry {version}")
     if f"personal-v{version}" not in changelog:
         errors.append(f"CHANGELOG.md: missing current version tag locator {version}")
+
+    user_guide = (PERSONAL / "USER_GUIDE.md").read_text(encoding="utf-8")
+    if f"**{version}**" not in user_guide or f"personal-v{version}" not in user_guide:
+        errors.append(f"USER_GUIDE.md: missing current user version/tag locator {version}")
 
     baseline = json.loads((DOCS / "baseline.json").read_text(encoding="utf-8"))
     if not re.fullmatch(r"[0-9a-f]{40}", baseline["source_commit"]):

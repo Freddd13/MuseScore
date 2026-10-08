@@ -14,6 +14,7 @@ struct PerformanceViewport {
       static constexpr int rightMargin = 14;
       double pixelsPerQuarter = 72, rowHeight = 12, topPitch = 72;
       std::array<PerformanceRange, 4> ranges {{{1, 127}, {-100, 100}, {5, 240}, {0, 127}}};
+      static PerformanceRange limits(int kind);
       void zoomRange(int kind, double factor, double anchor);
       void panRange(int kind, double delta);
       };

@@ -5,6 +5,8 @@
 #include <QTimer>
 #include <QVector>
 #include <QSet>
+#include <QRegion>
+#include <QTransform>
 #include "libmscore/mscoreview.h"
 #include "libmscore/score.h"
 #include "parameteredit.h"
@@ -58,6 +60,15 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       PerformanceCanvas *_noteCanvas = nullptr, *_ruler = nullptr;
       QSplitter* _splitter = nullptr;
       QScrollBar* _pitchScroll = nullptr;
+      QScrollBar* _valueScroll = nullptr;
+      QToolButton *_playButton = nullptr, *_auditionButton = nullptr;
+      QRegion _overlayDamage;
+      QTransform _overlayMatrix;
+      QPointF _overlayPointer;
+      bool _trackingOwned = false, _trackingBefore = false;
+      bool _overBand = false, _rangePanning = false, _noteGesture = false;
+      bool _cycleOnClick = false;
+      QVector<int> _pressedCandidates;
       QToolButton* _followButton = nullptr;
       PerformanceViewport _viewport;
       PerformanceAppearance _appearance;
@@ -87,7 +98,19 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       void paintBackground(QPainter&, PerformanceSurface);
       void paintForeground(QPainter&, PerformanceSurface);
       void buildGeometry();
-      QVector<int> hits(QPointF, bool parameter = false) const;
+      QVector<int> hits(QPointF, bool parameter = false, bool onScore = false) const;
+      void cycleHit(const QVector<int>&, int step = 1);
+      void audition(int index);
+      void auditionPitch(int pitch);
+      void togglePlayback(bool startOnly = false);
+      void locateSelection();
+      void zoomVertical(bool notes, double factor);
+      void syncValueScroll();
+      void applyAppearance();
+      void overlayViewChanged();
+      void invalidateOverlay();
+      void syncOverlayTracking();
+      bool overlayEvent(QEvent*);
       bool surfaceEvent(QObject*, QEvent*);
       void selectIndices(const QVector<int>&, Qt::KeyboardModifiers, bool preserveGroup = false);
       void selectVoices(int scope);

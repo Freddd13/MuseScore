@@ -89,6 +89,8 @@ rg -n 'QSKIP|add_test|subdirs|MTEST_LINK_MSCOREAPP' mtest
 
 0.8.0 和声区间：share/plugins/HarmonyAssistant/Timeline.js 是纯数值加权识别/人工范围，RangeEditor.qml 为手柄/精确 tick/独立历史，Preferences.js 配置单/多踏板与摘要/详情结果。attackTick 与踏板二分索引、私有 Harmony/QPicture 位于 scoreobserver.cpp；NotePreviewEntry 的字形等价与尺寸位于 notepreview.h；状态颜色优先级入口为 ScoreView::paint，单击接线 events.cpp。新回归在 tst_scoreobserver / tst_pluginhost，不修改音频、原生 P 键盘或选区框。
 
-## 演奏参数（0.9–0.10）
+## 演奏参数（0.9–0.11）
 
-独立演奏编辑器：`mscore/performanceeditor/performanceeditor.*`（快照/参数手势）、`performanceview.*`（共享视窗/区间索引/画布）、`performancepainting.cpp`（绘制）、`performanceinteraction.cpp`（选择/播放/交互）、`performanceselection.*`（原生选择桥）、`performancesettings.*`（外观）、`parameteredit.*`（原生 undo）、`libmscore/notevelocity.*`（百分比/基准）。入口在视图菜单；回归 `mtest/mscore/performanceeditor`。与原卷帘和检视器共享 Note 属性，使用原 TempoText/Pedal；见 [14](14-performance-editor.md)。
+独立演奏编辑器：`mscore/performanceeditor/performanceeditor.*`（快照/参数手势）、`performanceview.*`（共享视窗/区间索引/画布）、`performancepainting.cpp`（绘制）、`performanceinteraction.cpp`（选择/播放/交互）、`performanceoverlay.cpp`（谱面双向提示／浮层滚动重绘）、`performanceselection.*`（原生选择桥）、`performancesettings.*`（外观）、`parameteredit.*`（原生 undo）、`libmscore/notevelocity.*`（百分比/基准）。入口在视图菜单；回归 `mtest/mscore/performanceeditor`。与原卷帘和检视器共享 Note 属性，使用原 TempoText/Pedal；见 [14](14-performance-editor.md)。
+
+0.11：试听、直接定位／原生播放、重叠端点选择与轮换、独立纵向按钮／数值滚动条，操作入口见 [用户功能说明](../USER_GUIDE.md)。

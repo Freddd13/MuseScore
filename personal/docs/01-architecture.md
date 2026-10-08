@@ -87,6 +87,8 @@
 
 0.7.1 的自动时值开关由主窗口持有，注册进 Workspace 动作表，旧菜单恢复后在 `updateMenus()` 补齐；不扩展上游工作区文件格式。普通中日文回退属于 Qt 文字布局，与 ScoreText 的音乐字体回退不同；规则/诊断边界见 [13](13-rhythm-rules-and-font-fallback.md)。
 
-## 演奏编辑器（0.9–0.10）
+## 演奏编辑器（0.9–0.11）
 
 独立 `mscore/performanceeditor/` QWidget + MuseScoreView，通过主窗口选择/换谱和 ScoreView 屏幕绘制接线；属性事务与预览分离。`libmscore/notevelocity.*` 统一整数百分比转换；Score 的临时 tempo 批事务避免逐点重建。0.10 的视窗/画布/绘制/交互/显示设置/选择桥分别拆到模块文件，核心仅增加保留播放位置的原生批选 API。Seq 复用 getCurTick/心跳/链接，不改音频线程。详见 [14](14-performance-editor.md)。
+
+0.11 将谱面浮动层隔离在 `performanceoverlay.cpp`，仅监听已有视窗信号补重绘滚动副本；停播试听／正常播放复用原生 Seq/ScoreView 入口。播放音频回调与原卷帘内部实现不改。用户入口见 [用户功能说明](../USER_GUIDE.md)。
