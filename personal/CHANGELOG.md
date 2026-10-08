@@ -2,6 +2,24 @@
 
 个人版本记录本仓库的个人维护增量；应用上游版本另由 `config.cmake` 管理。历史源码提交尚未追溯归类，此处从首次建立指南开始记录，不代表此前没有个人改动。
 
+## 0.12.0 — 2026-10-08
+
+- 类型：单音滚轮力度细／粗调、Evolution 工具栏开关、启动／帮助 Kumo 分支身份；执行前两个个人仓库 git pull --ff-only，均已最新。
+- 交互：滚轮调力度首次关闭并记忆；指向音符块、力度柱、音旁手柄／谱行参数带滚轮每格 1，Shift 每格 8，按当前 MIDI／相对百分点轴；Alt 临时启用，原生音头始终需要 Alt，Ctrl 保留缩放。只改指向单音，不改既有多选／播放位置。小角度和像素滚轮累计，连续原位锁定同一端点，支持整步浮标和原完整提示。
+- 事务：performancewheel.cpp 内独立 300 ms 段计时／轴目标累积／开始前预览缓冲；停转一次原生提交和 Undo。Esc 取消本段，“取消预览”点击取消未提交段；改变目标／鼠标开始其他操作／模式切换先结束。停播、后台渲染、保存／关闭／切谱、外部内容改变与对象销毁沿用既有边界并清理计时／临时过滤器。播放中先暂存，不改当前播放流；保持 Note 原生存储类型和整数换算。自有力度事务核验原生 Undo 宏命令／目标后增量更新缓存，避免每次轮滚提交重建全曲事件；发现嵌套事务、其他属性或缺基准时完整刷新。
+- 宿主：上方 Evolution Other Options 工具栏首位添加自绘 SVG 音符块／力度柱／播放线按钮，复用 View 菜单原 QAction，checked／关闭面板同步；每次 populateAlternativeOperations 重建一次，旧工作区仍可见。没有新 Shortcut 命令、工具栏持久化格式或原卷帘修改。
+- 身份：personal/branding.cmake 从 VERSION 生成独立 personalbranding.h，CMAKE_CONFIGURE_DEPENDS 跟踪版本文件；启动画面版本区、帮助 → 关于、复制版本信息统一 Kumo branch / Freddd13 / v0.12.0 和个人 tag 链接。保留上游 3.7.0、原作者／版权与文件格式。两个仓库 AGENTS 加入每次更新保留作者和自动版本的规则，保留软件 AGENTS 的其他并行工作区修改。
+- 路径：mscore/performanceeditor/performancewheel.cpp 及其既有控制器／浮层 glue；mscore/musescore.cpp、musescore.qrc、data/icons/performance-editor.svg、mssplashscreen.cpp、musescoredialogs.cpp；CMakeLists.txt 仅 include personal branding。音频回调、渲染、选择核心、序列化与其他插件保持原语义。
+- 验证：x64 Release 主程序与四组测试构建、独立安装成功。tst_performanceeditor 常规 21、150% DPI 21，压力槽 opt-in 4，tst_note 11、tst_scoreobserver 16、tst_pluginhost 10 全部通过，0 失败／跳过。真实 Qt 验证细／粗调、半格累计、单音与组选择保持、端点降低不丢失、Esc／取消预览、Ctrl 缩放、原生手柄／音头、相对存储与保存边界、播放暂存、重启开关恢复；检查画布浮标、高 DPI、启动／关于截图与工具栏重建无重复。MIDI、检视器、Undo、分谱和持久化邻近回归保留。
+- 性能：本机 10080／50064 音（双谱表、四声部、持续音／密集和弦），全曲／局部各 40 帧。纯首次快照 45.32／303.69 ms；过滤 0.60／2.97、全量批选 89.75／825.17、全量原生提交 143.38／1027.63 ms。两区绘制全曲 P95 7.97／16.17，局部 9.91／10.96 ms；局部鼠标合并 1.72／1.83、定位及主窗口 15.85／16.22 ms。全曲定位 10.88／18.63 ms，50k 全曲超 16.7 ms 目标。
+- 滚轮性能：新增真实滚轮／两区预览重绘独立 40 帧 P95 5.18／2.51 ms，max 6.08／6.82 ms，实际预览与乐谱未提交状态有断言；原生谱面滚动＋浮层 P95 5.13／5.73 ms，max 5.61／5.89 ms。停转的一次单音原生提交＋缓存刷新另测 24.78／35.92 ms，不算高频预览帧；它仍有原生排版／宿主刷新成本。首轮 50k 全区提示／重绘 P95 26.80 ms 未达标，改为画布浮标和目标音／柱局部重绘后得到本次最终数据，没有沿用旧单音测试。
+- 部署：msvc.install_performance_0_12_x64/bin/MuseScore3Evo.exe；旧安装、音源和用户文件保留。同 SDK Qt5QmlModels／WorkerScript／WebSockets DLL 补齐；QtWebSockets QML 插件与 SDK 哈希相同，实际独立宿主验证 import QtWebSockets 1.1 且实例化关闭的 WebSocket，通过（无网络连接）。安装与最终构建 SHA256 同为 484a437303d9b19c8d53267c69418ad1ecf894c60badc79174a0150f0dbe4b10；隔离配置 --long-version 返回 0、上游版本仍 3.7.0；安装 HarmonyAssistant 原生宿主 smoke 返回 0、failures 空。
+- 维护：更新 VERSION、用户说明、01／04／05／06／07／14／README 和源码索引；两个 AGENTS 添加长期身份规则。本任务只挑选自己的 AGENTS 增补及用户说明改动，其他并行 MCP 说明仍在工作区。构建进程 _CL_=/Y- /MP2，不修改上游 PCH。日志在 msvc.build_harmony_release_x64：performance012-regression-final-build.log、performance012-release-final.log、performance012-install-final.log；performance012-run/final-regular.txt、high-dpi.txt、benchmark-final.txt；邻近回归 performance012-note／observer／pluginhost；安装验证 performance012-installed。
+- 边界：连续滚轮／局部交互达到本机 P95 ≤16.7 ms；停转单次提交 25–36 ms、50k 全量选择／提交仍为同步大事务。没有改音频回调／播放渲染／文件格式，未测真实声卡、长期复杂实谱和系统合成帧期限，不宣称所有场景零卡顿。
+- Git 父提交：36c3fa12adcd57ab69f479c93f27580e0d62fc0d。
+- Git 提交主题：feat(performance): add wheel velocity editing and Kumo branch identity。
+- 提交定位：personal-v0.12.0 标签指向本次提交；普通 push 3.x／tag，不强推。用户说明和开发日志分别维护。
+
 ## 0.11.0 — 2026-10-08
 
 - 类型：演奏编辑器的点选试听、定位播放、重叠音命中、独立纵向控制与谱面双向提示；新增累计用户功能说明。用户本次要求覆盖 0.10 的“不试听”默认，选音仍不定位、不改乐谱／Undo。
@@ -240,3 +258,11 @@
 - Git 提交主题：`docs(personal): establish AI architecture and development guides`。
 - 提交定位：同名版本标签 `personal-v0.1.0` 指向包含本条日志的提交，使用 `git rev-parse personal-v0.1.0` 获取完整 commit SHA；标签在提交完成后创建，避免提交内容引用自身 SHA 的循环问题。基准 SHA 已在上方记录。
 - 上游合并影响：仅新增个人目录与仓库内 AGENTS.md，无现有应用文件修改。
+
+
+## MCP 桥运行库部署 — 2026-10-08
+
+- MCP 分支 codex/musescore-evolution，提交 41aea0bf9c8337ba269582c9fee1d2a2ef33b053（Freddd13/mcp-musescore），桥版本 2.1.0。
+- 未修改 MuseScore 原生源码、版本或既有演奏编辑器任务；仅向 0.10/0.11 独立安装 bin 添加缺失 Qt5WebSockets.dll。SDK 与安装 Qt5Core SHA256 都为 8D2FF4CE9096DDCCC4F4CD62C2E41FC854CFD1B0D6E8D296645A7F5FD4AE565A；未覆盖已有 DLL。
+- 已同步 USER_GUIDE.md 的安装、入口、操作、限制与 MCP 提交定位。软件仓库其他任务已有未提交改动，保持原状，不在 MCP 提交中混入。
+- 17 项 Python/MCP/WebSocket/stdio 测试通过；0.10/0.11 隔离静音原生宿主验证插件加载、读谱、选区、批处理、撤销、速度；0.11 另核验实际速度图与音符写入。真实声卡、桌面长期交互未验收。完整实现与开发日志位于相邻 MCP 仓库 CHANGELOG_PERSONAL.md。

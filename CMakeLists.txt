@@ -799,6 +799,7 @@ endif (BUILD_CRASH_REPORTER)
 ##
 ## produce config.h file
 ##
+include(${PROJECT_SOURCE_DIR}/personal/branding.cmake)
 configure_file (
       ${PROJECT_SOURCE_DIR}/build/config.h.in
       ${PROJECT_BINARY_DIR}/config.h

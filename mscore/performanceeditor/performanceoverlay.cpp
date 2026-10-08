@@ -7,6 +7,7 @@
 #include <QCheckBox>
 #include <QToolTip>
 #include <QMouseEvent>
+#include <QWheelEvent>
 #include <QHelpEvent>
 #include <cmath>
 #include <algorithm>
@@ -40,6 +41,7 @@ void PerformanceEditor::overlayViewChanged()
       }
 bool PerformanceEditor::overlayEvent(QEvent* event)
       {
+      if (event->type() == QEvent::Wheel) { if (wheelVelocity(static_cast<QWheelEvent*>(event), false, true)) return true; finishWheel(); }
       if (_dirty || (!_handles->isChecked() && !_band->isChecked())) return false;
       if (event->type() == QEvent::Leave && !_dragging) { _overBand = false; updateHover(-1); invalidateOverlay(); }
       if (event->type() == QEvent::MouseMove && !_dragging) {
@@ -133,6 +135,8 @@ void PerformanceEditor::paintOverlay(QPainter& painter)
             if (_overBand) { painter.setPen(QPen(_appearance.colors[PerformanceAppearance::Text], 1, Qt::DotLine)); painter.drawLine(QPointF(_overlayPointer.x(), _scoreLane.top()), QPointF(_overlayPointer.x(), _scoreLane.bottom())); }
             painter.restore(); damage |= frame.toAlignedRect();
             }
+      paintWheelBadge(painter, _view);
+      if (_wheelIndex >= 0 && _wheelSurface == _view) damage |= wheelBadge(_view).adjusted(-2, -2, 2, 2).toAlignedRect();
       _overlayDamage = damage; _overlayMatrix = _view->matrix(); painter.restore();
       }
 }

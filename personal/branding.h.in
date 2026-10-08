@@ -1,0 +1,12 @@
+// Generated from personal/VERSION; retain upstream VERSION and score formats.
+#ifndef MS_PERSONALBRANDING_H
+#define MS_PERSONALBRANDING_H
+#include <QString>
+#define KUMO_PERSONAL_VERSION "@KUMO_PERSONAL_VERSION@"
+namespace Ms {
+inline QString personalBuildLabel()
+      { return QString::fromUtf8("Kumo branch · Freddd13 · v" KUMO_PERSONAL_VERSION); }
+inline QString personalReleaseUrl()
+      { return QStringLiteral("https://github.com/Freddd13/MuseScore/blob/personal-v" KUMO_PERSONAL_VERSION "/personal/USER_GUIDE.md"); }
+}
+#endif

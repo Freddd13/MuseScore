@@ -20,6 +20,7 @@
 #include "icons.h"
 #include "musescore.h"
 #include "musescoredialogs.h"
+#include "personalbranding.h"
 #include "preferences.h"
 #include "scoreview.h"
 
@@ -162,6 +163,9 @@ AboutBoxDialog::AboutBoxDialog()
                         );
       }
 
+      versionLabel->setText(versionLabel->text() + "\n" + personalBuildLabel());
+      versionLabel->setWordWrap(true);
+
       if (!revision.isEmpty())
             revisionLabel->setText(tr("Revision: %1").arg(QString("<a href=\"https://github.com/Jojo-Schmitz/musescore/commit/%1\">%1</a>").arg(revision)));
       else {
@@ -195,7 +199,7 @@ AboutBoxDialog::AboutBoxDialog()
                        "<a href=\"https://github.com/Jojo-Schmitz/MuseScore/wiki/Contribute\">", "</a>");
       visitAndDonateString += "\n\n";
 #endif
-      QString finalString = visitAndDonateString + tr("Copyright &copy; 1999-2026 MuseScore Limited and others.\nPublished under the %1GNU General Public License version 2%2.")
+      QString finalString = QString("%1<br/><a href=\"%2\">Personal branch / user features</a><br/><br/>").arg(personalBuildLabel().toHtmlEscaped(), personalReleaseUrl()) + visitAndDonateString + tr("Copyright &copy; 1999-2026 MuseScore Limited and others.\nPublished under the %1GNU General Public License version 2%2.")
                   .arg("<a href=\"https://www.gnu.org/licenses/old-licenses/gpl-2.0.html\">", "</a>");
       finalString.replace("\n", "<br/>");
       copyrightLabel->setText(QString("<span style=\"font-size:10pt;\">%1</span>").arg(finalString));
@@ -217,7 +221,7 @@ void AboutBoxDialog::copyRevisionToClipboard()
                   .arg(QSysInfo::WordSize)
                   .arg(VERSION, BUILD_NUMBER)
             + QString(revision.isEmpty() ? "" : ", revision: [%1](https://github.com/Jojo-Schmitz/MuseScore/commit/%1)")
-                  .arg(revision));
+                  .arg(revision) + "\n" + personalBuildLabel() + " · " + personalReleaseUrl());
       }
 
 //---------------------------------------------------------

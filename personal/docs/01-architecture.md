@@ -92,3 +92,6 @@
 独立 `mscore/performanceeditor/` QWidget + MuseScoreView，通过主窗口选择/换谱和 ScoreView 屏幕绘制接线；属性事务与预览分离。`libmscore/notevelocity.*` 统一整数百分比转换；Score 的临时 tempo 批事务避免逐点重建。0.10 的视窗/画布/绘制/交互/显示设置/选择桥分别拆到模块文件，核心仅增加保留播放位置的原生批选 API。Seq 复用 getCurTick/心跳/链接，不改音频线程。详见 [14](14-performance-editor.md)。
 
 0.11 将谱面浮动层隔离在 `performanceoverlay.cpp`，仅监听已有视窗信号补重绘滚动副本；停播试听／正常播放复用原生 Seq/ScoreView 入口。播放音频回调与原卷帘内部实现不改。用户入口见 [用户功能说明](../USER_GUIDE.md)。
+
+
+个人 0.12：演奏编辑器单音滚轮细／粗调入口在 `mscore/performanceeditor/performancewheel.cpp`，仍走原生属性及单次撤销；Evolution 顶部其他选项栏共享菜单开关。启动／关于身份由 `personal/branding.cmake` + `branding.h.in` 从 VERSION 生成，保留上游版本。交互见 [演奏编辑器](14-performance-editor.md)，更新要求见 [开发流程](07-development-workflow.md)。

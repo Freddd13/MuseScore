@@ -711,6 +711,15 @@ void MuseScore::populateAlternativeOperations()
 
       alternativeTools->clear();
 
+      // Personal panel entry survives workspace toolbar repopulation, sharing the
+      // View-menu action and its checked state. No new shortcut command is needed.
+      if (auto action = findChild<QAction*>("performance-editor")) {
+            auto button = new AccessibleToolButton(alternativeTools, action);
+            button->setObjectName("performance-editor-button");
+            alternativeTools->addWidget(button);
+            alternativeTools->addSeparator();
+            }
+
       for (const auto s : _alternativeEntries) {
             if (!*s)
                   alternativeTools->addSeparator();
@@ -1970,10 +1979,13 @@ MuseScore::MuseScore()
 
       auto performanceAction = new QAction(tr("演奏编辑器（力度 / 速度 / 踏板）"), this);
       performanceAction->setObjectName("performance-editor");
+      performanceAction->setIcon(QIcon(":/data/icons/performance-editor.svg"));
+      performanceAction->setToolTip(tr("演奏编辑器：力度、速度与踏板；面板内可开启音旁手柄和谱行参数带。"));
       performanceAction->setCheckable(true);
       Workspace::addActionAndString(performanceAction, "performance-editor");
       menuView->addAction(performanceAction);
       connect(performanceAction, &QAction::toggled, this, &MuseScore::showPerformanceEditor);
+      populateAlternativeOperations();
 
       a = getAction("toggle-scorecmp-tool");
       a->setCheckable(true);

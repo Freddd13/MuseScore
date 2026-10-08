@@ -18,6 +18,7 @@
 //=============================================================================
 
 #include "config.h"
+#include "personalbranding.h"
 #include "mssplashscreen.h"
 #include "musescore.h"
 
@@ -50,7 +51,7 @@ MsSplashScreen::MsSplashScreen()
    : QSplashScreen(QPixmap(designSize))
    , _bgImage(createBackgroundImage(width(), height(), MuseScore::unstable() ? unstableBuildGradientColors : stableBuildGradientColors))
    , _devBuildIconRenderer(QString(":/data/maintenance.svg"), this)
-   , _miscText(QString(tr("Version %1")).arg(VERSION) + "\nwww.musescore.org")
+   , _miscText(QString(tr("Version %1")).arg(VERSION) + "\n" + personalBuildLabel() + "\nwww.musescore.org")
 
    , _devBuildIconRect(scaleSvgRect(designDevBuildIconRect, _devBuildIconRenderer))
    , _devBuildTextRect(scaleRect(designDevBuildTextRect))

@@ -132,3 +132,12 @@ $env:PERFORMANCE_BENCHMARK='1'
 ## 0.11 交互回归补充
 
 同刻不同力度端点／重合轮换、数值匹配与轴平移、空白定位和移至选音、谱面双向悬浮和滚动损伤区域进入真实 Qt suite。Seq 子类仅在测试中记录原生 startNote 请求，仍执行原生定时试听；播放按钮／双击／空格实际走 NORMAL ↔ PLAY。不连接真实声卡。最终常规、高 DPI、压力与安装数据见 [更新日志](../CHANGELOG.md)。
+
+
+## 0.12 单音滚轮、个人身份与安装
+
+GUI suite 增加 wheelVelocityBurstAndScoreTargets、personalBrandingAndToolbarEntry；真实 Seq 槽覆盖播放中的轮滚暂存，跨进程配置槽覆盖滚轮开关。实际 Qt wheel 事件验证半格累计、细／粗调、单音、多选保持、降低端点锁定、Esc／取消按钮、Ctrl 缩放、原生音头／手柄、相对存储、flush，以及菜单／工具栏共享 QAction、反复重建一个按钮、About 版本等于 VERSION 和复制信息。检查启动、关于、轮滚画布浮标及 150% DPI 截图。
+
+压力槽在已有 10k／50k 全曲／局部和谱面滚动指标之外，另测 40 帧真实单音滚轮＋预览／两区重绘，断言高频事件没有原生提交；另单独测停转的一次单音原生提交＋缓存刷新。每次新性能优化必须重测，报告预览与原生提交，不能将后者归入预览帧或用旧数据代替。
+
+独立部署 0.12 到 msvc.install_performance_0_12_x64，保留旧安装。除了 QmlModels／WorkerScript，确保同 SDK Qt5WebSockets.dll 和 qml/QtWebSockets 可导入，避免已有 MCP 插件换程序后缺运行库；只验证 import／关闭的 WebSocket 类型，不启动外部桥。安装程序 SHA256 必须等于最终构建，实际插件宿主 smoke 与上游 --long-version 通过；品牌独立由 CMake 生成，与上游 VERSION 不同。

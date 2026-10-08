@@ -32,7 +32,7 @@
 - `source-map.tsv`：更新本次受影响的路径/符号/行号；不能只让行号通过而不审查描述。
 - `baseline.json`：它保存首次调查基准，不随日常 patch 重写为当前 HEAD；重大上游重新梳理时才连同 [08](08-baseline-and-limits.md) 更新基准。
 
-`personal/VERSION` 记录个人增量，与 `config.cmake` 的上游应用版本不同。本次只有材料新增，应用仍为 3.7.0。功能改动要在日志注明“上游基线 + 个人版本”；需要 About/安装包展示个人版本时再局部接入，不能静默改应用格式版本或声称现有 UI 已显示此版本。
+`personal/VERSION` 记录个人增量，与 `config.cmake` 的上游应用版本不同。应用上游版本仍为 3.7.0。个人 0.12 起，personal/branding.cmake 读取 VERSION 并生成构建目录的 personalbranding.h；启动画面、帮助 → 关于、复制版本信息共享 Kumo branch / Freddd13 / 个人版本及 tag 链接。每次更新保留此标识，修改 VERSION 会触发 CMake 重新配置。安装包与文件格式版本不跟随个人 minor 改动。真实 GUI 验证标识和工具栏共享开关；不要在 UI 中手写个人版本。
 
 ## 日志与 commit SHA 的记录方法
 

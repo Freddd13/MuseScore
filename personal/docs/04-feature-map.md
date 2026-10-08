@@ -94,3 +94,6 @@ rg -n 'QSKIP|add_test|subdirs|MTEST_LINK_MSCOREAPP' mtest
 独立演奏编辑器：`mscore/performanceeditor/performanceeditor.*`（快照/参数手势）、`performanceview.*`（共享视窗/区间索引/画布）、`performancepainting.cpp`（绘制）、`performanceinteraction.cpp`（选择/播放/交互）、`performanceoverlay.cpp`（谱面双向提示／浮层滚动重绘）、`performanceselection.*`（原生选择桥）、`performancesettings.*`（外观）、`parameteredit.*`（原生 undo）、`libmscore/notevelocity.*`（百分比/基准）。入口在视图菜单；回归 `mtest/mscore/performanceeditor`。与原卷帘和检视器共享 Note 属性，使用原 TempoText/Pedal；见 [14](14-performance-editor.md)。
 
 0.11：试听、直接定位／原生播放、重叠端点选择与轮换、独立纵向按钮／数值滚动条，操作入口见 [用户功能说明](../USER_GUIDE.md)。
+
+
+个人 0.12：演奏编辑器单音滚轮细／粗调入口在 `mscore/performanceeditor/performancewheel.cpp`，仍走原生属性及单次撤销；Evolution 顶部其他选项栏共享菜单开关。启动／关于身份由 `personal/branding.cmake` + `branding.h.in` 从 VERSION 生成，保留上游版本。交互见 [演奏编辑器](14-performance-editor.md)，更新要求见 [开发流程](07-development-workflow.md)。

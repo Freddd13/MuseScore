@@ -306,10 +306,12 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
             event->accept(); if (event->type() == QEvent::KeyPress) togglePlayback(); return true;
             }
       if (event->type() == QEvent::Show) { scheduleRefresh(); syncTransport(); syncOverlayTracking(); }
-      if (event->type() == QEvent::Hide) { cancelSurfaceGesture(); cancelGesture(); _playTimer.stop(); _playingNotes.clear(); invalidateOverlay(); syncOverlayTracking(); }
+      if (event->type() == QEvent::Hide) { finishWheel(); cancelSurfaceGesture(); cancelGesture(); _playTimer.stop(); _playingNotes.clear(); invalidateOverlay(); syncOverlayTracking(); }
       if (event->type() == QEvent::Leave && !_dragging && !_marquee) updateHover(-1);
       if (event->type() == QEvent::Wheel) {
-            auto wheel = static_cast<QWheelEvent*>(event); pauseFollow(); cancelSurfaceGesture(); cancelGesture();
+            auto wheel = static_cast<QWheelEvent*>(event);
+            if (!ruler && wheelVelocity(wheel, notes)) return true;
+            finishWheel(); pauseFollow(); cancelSurfaceGesture(); cancelGesture();
             const double factor = wheel->angleDelta().y() > 0 ? 1.2 : 1 / 1.2;
             if (wheel->modifiers() & Qt::ControlModifier) {
                   if ((wheel->modifiers() & Qt::ShiftModifier) || wheel->position().x() < PerformanceViewport::gutter) {

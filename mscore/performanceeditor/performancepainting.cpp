@@ -275,5 +275,6 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
             QRectF badge(qBound(0.0, _last.x() + 10, double(widget->width() - 88)), qBound(0.0, _last.y() - 25, double(widget->height() - 24)), 84, 22);
             painter.fillRect(badge, c[PerformanceAppearance::Background]); painter.setPen(c[PerformanceAppearance::Preview]); painter.drawText(badge, Qt::AlignCenter, value + (rangeKind() == 1 ? " %" : (rangeKind() == 2 ? " BPM" : "")));
             }
+      paintWheelBadge(painter, widget);
       }
 }

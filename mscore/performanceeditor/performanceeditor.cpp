@@ -92,6 +92,14 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _auditionButton = new QToolButton(this); _auditionButton->setObjectName("performanceAudition"); _auditionButton->setText(tr("试听")); _auditionButton->setCheckable(true);
       _auditionButton->setChecked(QSettings().value("performanceEditor/audition", true).toBool()); _auditionButton->setToolTip(tr("停播时点选音符／力度端点发声，不移动播放位置。"));
       connect(_auditionButton, &QToolButton::toggled, this, [](bool on) { QSettings().setValue("performanceEditor/audition", on); }); row->addWidget(_auditionButton, 0, row->count());
+      _wheelButton = new QToolButton(this); _wheelButton->setObjectName("performanceWheelVelocity");
+      _wheelButton->setText(tr("滚轮调力度")); _wheelButton->setCheckable(true);
+      _wheelButton->setChecked(QSettings().value("performanceEditor/wheelVelocity", false).toBool());
+      _wheelButton->setToolTip(tr("指向音符／力度柱／音旁手柄滚轮细调 1，Shift 粗调 8。Alt+滚轮临时调节；谱面音头需 Alt。Ctrl 仍缩放。只改指向的一个音，停转 300 ms 合并一次撤销，Esc 取消。"));
+      connect(_wheelButton, &QToolButton::toggled, this, [this](bool on) { finishWheel(); QSettings().setValue("performanceEditor/wheelVelocity", on); });
+      row->addWidget(_wheelButton, 0, row->count());
+      _wheelTimer.setParent(this); _wheelTimer.setSingleShot(true); _wheelTimer.setInterval(300); _wheelTimer.setObjectName("performanceWheelTimer");
+      connect(&_wheelTimer, &QTimer::timeout, this, [this] { finishWheel(); });
       auto second = new QGridLayout; _actionsRow = second;
       auto button = [this, second](const QString& label, auto callback) {
             auto result = new QPushButton(label, this); second->addWidget(result, second->count() / 6, second->count() % 6); connect(result, &QPushButton::clicked, this, callback); return result;
@@ -104,7 +112,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       button(tr("写入选中"), [this] { setSelectedValue(_number->value()); })->setObjectName("performanceWriteValue");
       button(tr("全曲"), [this] { fit(); });
       button(tr("选区"), [this] { fit(true); });
-      button(tr("取消预览"), [this] { cancelGesture(); _pending.clear(); status(); updateSurfaces(); if (_view) _view->update(); });
+      button(tr("取消预览"), [this] { cancelWheel(); cancelGesture(); _pending.clear(); status(); updateSurfaces(); if (_view) _view->update(); })->setObjectName("performanceCancelPreview");
       auto viewControls = new QToolButton(this); viewControls->setText(tr("视窗…")); viewControls->setPopupMode(QToolButton::InstantPopup);
       auto viewMenu = new QMenu(viewControls); viewControls->setMenu(viewMenu); second->addWidget(viewControls, second->count() / 6, second->count() % 6);
       auto viewAction = [this, viewMenu](const QString& label, auto callback) { auto action = viewMenu->addAction(label); connect(action, &QAction::triggered, this, callback); };
@@ -173,7 +181,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       connect(_scroll, &QScrollBar::valueChanged, this, [this] { if (!_automaticScroll) pauseFollow(); invalidateVisual(); });
       for (auto box : {_scope, _voice}) connect(box, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { cancelGesture(); rebuildFilter(); });
       for (auto box : {_axis, _parameter, _tool}) connect(box, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
-            cancelGesture();
+            finishWheel(); cancelGesture();
             const bool velocity = _parameter->currentIndex() == 0;
             _axis->setEnabled(velocity);
             findChild<QPushButton*>("performanceConvertRelative")->setEnabled(velocity);
@@ -219,7 +227,7 @@ PerformanceEditor::~PerformanceEditor()
       {
       invalidateOverlay();
       if (_view && _trackingOwned) _view->setMouseTracking(_trackingBefore || _view->noteEntryMode() || _view->fotoMode());
-      editors.removeAll(this);
+      finishWheel(false); editors.removeAll(this);
       if (_score) _score->removeViewer(this);
       }
 
@@ -228,7 +236,7 @@ void PerformanceEditor::setView(ScoreView* view)
       if (_view == view && _score == (view ? view->score() : nullptr)) return;
       Score* next = view ? view->score() : nullptr;
       if (_score && _score != next && hasPending()) flushPending();
-      cancelGesture();
+      finishWheel(false); cancelGesture();
       if (_score) _viewMemory.insert(_score, {_viewport, _scroll->value()});
       _playTimer.stop(); _playingNotes.clear(); _linkedIndex.clear(); cancelSurfaceGesture();
       for (auto connection : _transportConnections) disconnect(connection); _transportConnections.clear();
@@ -242,6 +250,7 @@ void PerformanceEditor::setView(ScoreView* view)
             _score->addViewer(this);
             _scoreDestroyed = connect(_score, &QObject::destroyed, this, [this] {
                   _playTimer.stop(); _intervals.clear(); _playingNotes.clear(); _linkedIndex.clear(); cancelSurfaceGesture();
+                  finishWheel(false);
                   _score = nullptr; _notes.clear(); _segments.clear(); _tempos.clear(); _pedals.clear();
                   _noteIndex.clear(); _layoutIndex.clear(); _pending.clear(); _selectedIndices.clear(); _systemIndices.clear(); _system = nullptr; status(); updateSurfaces();
                   });
@@ -283,7 +292,7 @@ void PerformanceEditor::refresh()
       if (live && !_notes.isEmpty()) { status(); return; }
       if (!live && seq && !seq->backgroundRenderingIdle()) { _refreshTimer.start(20); return; }
       const auto state = _score->masterScore()->state();
-      if (hasPending() && _state != state) { _pending.clear(); status(tr("乐谱已被其他操作修改，待提交预览已取消。")); }
+      if (hasPending() && _state != state) { finishWheel(false); _pending.clear(); status(tr("乐谱已被其他操作修改，待提交预览已取消。")); }
       if (_score->nstaves() == 0) return;
       if (!_dirty && _state == state) {
             if (_geometryDirty) {
@@ -427,7 +436,7 @@ void PerformanceEditor::onElementDestruction(Element* element)
             for (auto& segment : _segments) if (segment.system == element) segment.system = nullptr;
             }
       if (_noteIndex.contains(element)) {
-            cancelGesture(); cancelSurfaceGesture(); _pending.clear(); _playingNotes.clear(); _notes.clear(); _intervals.clear(); _linkedIndex.clear(); invalidateVisual(); _noteIndex.clear(); _layoutIndex.clear(); _selectedIndices.clear(); _systemIndices.clear(); _system = nullptr;
+            finishWheel(false); cancelGesture(); cancelSurfaceGesture(); _pending.clear(); _playingNotes.clear(); _notes.clear(); _intervals.clear(); _linkedIndex.clear(); invalidateVisual(); _noteIndex.clear(); _layoutIndex.clear(); _selectedIndices.clear(); _systemIndices.clear(); _system = nullptr;
             _segments.clear(); _systemSegments.clear();
             }
       bool matched = false;
@@ -487,7 +496,7 @@ void PerformanceEditor::setNoteValue(int index, double value, bool report)
 
 void PerformanceEditor::convertSelected(Note::ValueType type)
       {
-      pauseFollow();
+      finishWheel(); if (_dirty) refresh(); pauseFollow();
       if (_snapshotDegraded) { status(tr("模式转换需要停播后建立力度基准。")); return; }
       for (int index : selectedNotes()) {
             const auto& note = _notes[index];
@@ -500,7 +509,7 @@ void PerformanceEditor::convertSelected(Note::ValueType type)
 
 void PerformanceEditor::setSelectedValue(double value)
       {
-      pauseFollow();
+      finishWheel(); if (_dirty) refresh(); pauseFollow();
       if (_parameter->currentIndex() == 1 && _selectedTempoTick >= 0) {
             QString error;
             _committing = true;
@@ -514,22 +523,47 @@ void PerformanceEditor::setSelectedValue(double value)
 
 void PerformanceEditor::applyPending()
       {
-      if (_dragging || !_score || !hasPending()) { status(); return; }
+      if (_dragging || _wheelIndex >= 0 || !_score || !hasPending()) { status(); return; }
       if (_score->isPlaying() || (seq && seq->isPlaying())) { status(); return; }
       if (seq && !seq->backgroundRenderingIdle()) { _commitTimer.start(20); return; }
       if (_score->masterScore()->state() != _state) {
             _pending.clear(); _dirty = true; scheduleRefresh();
             status(tr("乐谱已被其他操作修改，待提交预览已取消。")); return;
             }
+      const auto edits = _pending;
+      const int undoIndex = _score->undoStack()->getCurIdx();
       _committing = true;
-      ParameterEdit::velocities(_score, _pending);
+      const bool changed = ParameterEdit::velocities(_score, edits);
       _pending.clear(); _committing = false;
-      _dirty = true; scheduleRefresh(); status();
+      // Velocity properties do not change timing, dynamics or event bases. Only
+      // reuse this snapshot when the completed native macro proves that no other
+      // property/command was added by a host or plugin callback. Undo, external
+      // edits and late playback snapshots still take the normal rebuild path.
+      bool reuse = changed && !_snapshotDegraded && !_notes.isEmpty()
+            && _score->undoStack()->getCurIdx() == undoIndex + 1;
+      auto macro = _score->undoStack()->last();
+      if (!macro) reuse = false;
+      QSet<ScoreElement*> targets;
+      for (auto i = edits.cbegin(); i != edits.cend(); ++i) {
+            targets.insert(i.key()); if (!_noteIndex.contains(i.key())) reuse = false;
+            }
+      if (reuse) for (auto command : macro->commands()) {
+            if (QString::fromLatin1(command->name()) != "ChangeProperty" || command->childCount()) { reuse = false; break; }
+            const auto change = static_cast<const ChangeProperty*>(command);
+            if (!targets.contains(change->getElement()) || (change->getId() != Pid::VELO_TYPE && change->getId() != Pid::VELO_OFFSET)) { reuse = false; break; }
+            }
+      if (reuse) {
+            for (auto i = edits.cbegin(); i != edits.cend(); ++i) {
+                  auto& cached = _notes[_noteIndex.value(i.key())]; cached.type = i.key()->veloType(); cached.raw = i.key()->veloOffset();
+                  }
+            _state = _score->masterScore()->state(); invalidateVisual();
+            }
+      _dirty = !reuse; scheduleRefresh(); status();
       }
 
 void PerformanceEditor::flushPending()
       {
-      cancelGesture();
+      finishWheel(false); cancelGesture();
       if (!hasPending()) return;
       if (seq) {
             seq->stopWait(); seq->waitForStoppedRendering();
@@ -785,6 +819,11 @@ void PerformanceEditor::cancelGesture()
 
 bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       {
+      if (_wheelIndex >= 0 && (event->type() == QEvent::KeyPress || event->type() == QEvent::ShortcutOverride)
+            && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
+            event->accept(); if (event->type() == QEvent::KeyPress) cancelWheel(); return true;
+            }
+      if (_wheelIndex >= 0 && event->type() == QEvent::MouseButtonPress) { if (object->objectName() == "performanceCancelPreview") cancelWheel(); else { finishWheel(); refresh(); } }
       if (surfaceEvent(object, event)) return true;
       if (_dragging && (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress)
             && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {

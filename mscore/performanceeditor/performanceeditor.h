@@ -12,6 +12,7 @@
 #include "parameteredit.h"
 #include "performanceview.h"
 #include "performancesettings.h"
+class QWheelEvent;
 class QGridLayout;
 class QSplitter;
 class QToolButton;
@@ -78,7 +79,19 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QVector<NoteGeometry> _noteGeometry;
       QSet<int> _playingNotes;
       QMultiHash<const Element*, int> _linkedIndex;
-      QTimer _playTimer, _moveTimer;
+      QTimer _playTimer, _moveTimer, _wheelTimer;
+      QToolButton* _wheelButton = nullptr;
+      int _wheelIndex = -1;
+      QPointF _wheelPoint;
+      QPointer<QWidget> _wheelSurface;
+      double _wheelValue = 0, _wheelRemainder = 0;
+      QMap<Note*, VelocityEdit> _wheelBefore;
+      bool wheelVelocity(QWheelEvent*, bool notes, bool onScore = false);
+      void finishWheel(bool commit = true);
+      void cancelWheel();
+      QRectF wheelBadge(QWidget*) const;
+      void paintWheelBadge(QPainter&, QWidget*) const;
+      void repaintWheelTarget(int);
       QPointF _queuedPoint;
       bool _moveQueued = false, _selecting = false, _marquee = false, _seeking = false;
       bool _following = true, _automaticScroll = false, _geometryDirty = false;

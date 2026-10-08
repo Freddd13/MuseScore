@@ -33,6 +33,16 @@
 
 `performanceoverlay.cpp` 隔离谱面浮动层：双向悬浮、原生选音端点强调、音名／谱表／声部／拍位／数值标题、播放线和鼠标线。只连接已有 viewRectChanged/scaleChanged；native QWidget::scroll 复制旧像素后，补重绘旧浮层及平移副本，连续滚轮事件累计损伤区域，不修改 ScoreView 滚动实现。旧默认整套配色自动升级为灰色，用户自定义配色保留，可显式恢复新默认。
 
+## 0.12 滚轮与宿主入口
+
+Evolution “其他选项”工具栏固定个人按钮复用 View 菜单的 QAction，populateAlternativeOperations 每次重建只添加一次，放在该栏首位，窄窗口优先显示；旧工作区也可见，无需扩展 Shortcut 表或改变原工具栏列表。图标是本地 SVG 音符块／力度柱／播放线。
+
+`performancewheel.cpp` 负责可开关单音滚轮、Alt 临时入口、Shift 8／普通 1 的轴单位步长；Ctrl 与横向滚轮不接管。原生音头仅 Alt，手柄／参数带／编辑器是显式编辑面。复用 noteEditable、hits、setNoteValue、_pending 与原生提交，没有另一份音乐数据。原生多选不变，滚轮仅当前目标；相对百分点和 MIDI 显示轴保持原存储类型及整数舍入。
+
+300 ms 单次计时器合并滚轮段；小角度和像素滚轮累积到整步，同一光标位置锁定初始目标，避免端点降低后丢失。_wheelValue 累积轴目标值，_wheelBefore 仅用于 Esc 回退当前段，不丢失此前播放预览。改变目标／鼠标按下／模式切换提交一次；flush、销毁、外部内容状态改变停止计时器并解除临时应用过滤器。播放／后台渲染沿用已有延迟提交，持续滚轮时 applyPending 不抢先提交。高频事件只预览，不生成播放事件。画布内 badge 浮标只重绘目标音、对应柱和浮标区域，避免 QLabel 每值变化引发全窗布局或平台 Tooltip 窗口刷新；谱面浮标加入已有损伤区域，结束时清除。自有力度提交仅在原生撤销宏确认为本次目标的 VELO_TYPE／VELO_OFFSET 且没有其他命令或嵌套事务时增量更新 raw／type 和内容状态；力度不改变演奏基准，不重新生成全曲事件。外部改谱、撤销、缺基准或不符宏均完整刷新，排版仍单独修复。源码和 GUI 回归在原独立模块与测试目标内。
+
+启动／帮助品牌在 [开发流程](07-development-workflow.md) 说明，与上游音乐模型无关。
+
 ## 数据与播放边界
 
 相对力度公式是 `base + base * offset / 100`，整数运算后截断到 1–127，不能改成加法偏移，也不能提前把基准截断。基准从音符自己的谱表、事件起点、演奏法和全局/谱内动态渲染方法得到。多次发声显示范围；不独立发声的隐藏、延音后续音和合并装饰音不提供直接编辑。整音属性仍作用于该音的所有演奏事件，不伪造独立事件力度。
@@ -62,6 +72,7 @@ TempoText 本来会反复 fixTicks；新增临时批事务，用成对 UndoComma
 | `performancepainting.cpp` | 音名/键条/真实小节拍位网格、参数轴、共享命中几何、状态配色 |
 | `performanceinteraction.cpp` | 声部过滤、框选/重叠候选、缩放、悬浮、播放线/跟随/定位 |
 | `performanceselection.*` / `Score::selectNoteList` | 不移动播放位置的原生批选与宿主通知 |
+| `performancewheel.cpp` | 单音滚轮段、细粗调、原生事务预览及生命周期 |
 | `performanceoverlay.cpp` | 谱面浮动层、双向悬浮、播放／鼠标线与滚动损伤修复 |
 | `performancesettings.*` | 独立外观设置与配色对话框 |
 | `beginGesture/moveGesture/finishGesture` | 屏幕预览、手势事务和单次提交 |
