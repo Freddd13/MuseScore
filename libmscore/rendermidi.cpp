@@ -1408,7 +1408,13 @@ void renderArpeggio(Chord *chord, QList<NoteEventList> & ell)
             for (int i = 0; i < chord->notes().size(); ++i) {
                   auto note = chord->notes()[i];
                   int rank = notes.indexOf(note);
-                  if (rank < 0) continue;
+                  if (rank < 0) {
+                        // collectNote sums the body of each tied continuation.
+                        // Keep that duration without participating in the roll;
+                        // collectNote already suppresses its separate Note-on.
+                        if (note->tieBack()) ell[i].append(NoteEvent(0, 0, 1000));
+                        continue;
+                        }
                   double ms = a->offsetMs() + interval * (a->timingMode() == 2 ? rank - notes.size() + 1 : rank);
                   double seconds = origin + ms / 1000.0;
                   // TempoMap's default negative-time extrapolation ignores tempo at zero.

@@ -21,6 +21,7 @@
 
 #include "libmscore/chord.h"
 #include "libmscore/arpeggio.h"
+#include "libmscore/tie.h"
 #include "libmscore/playbacktiming.h"
 #include "libmscore/note.h"
 #include "libmscore/tempotext.h"
@@ -67,6 +68,7 @@ class TestMidi : public QObject, public MTest
       void midi01();
       void timedArpeggio();
       void timedArpeggioSpanAndCap();
+      void timedArpeggioTies();
       void midi02();
       void midi03();
       void events_data();
@@ -591,6 +593,28 @@ void TestMidi::timedArpeggio()
       events.clear(); score->renderMidi(&events, false, false, state);
       QCOMPARE(chord->upNote()->playEvents().front().ontime(), 0);
       QVERIFY(chord->downNote()->playEvents().front().ontime() > 0);
+      }
+
+void TestMidi::timedArpeggioTies()
+      {
+      std::unique_ptr<MasterScore> score(readScore(DIR + "timed-arpeggio.mscx"));
+      auto first = toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(0));
+      auto segment = first->segment()->next(SegmentType::ChordRest);
+      auto rest = segment->element(0); segment->remove(rest); delete rest;
+      auto second = new Ms::Chord(*first); second->setParent(segment); segment->add(second);
+      auto tie = new Tie(score.get()); tie->setStartNote(first->downNote()); tie->setEndNote(second->downNote()); first->downNote()->add(tie);
+      for (auto chord : {first, second}) {
+            auto a = new Arpeggio(score.get()); a->setParent(chord); a->setTrack(0); a->setProperty(Pid::ARP_TIMING_MODE, 2); chord->add(a);
+            }
+      SynthesizerState state; EventMap events; score->renderMidi(&events, false, false, state);
+      int off = -1, repeated = 0;
+      for (const auto& event : events) {
+            if (event.second.note() == first->downNote() && !event.second.velo()) off = event.first;
+            if (event.second.note() == second->downNote() && event.second.velo()) ++repeated;
+            }
+      QCOMPARE(repeated, 0); QCOMPARE(off, 959);
+      QCOMPARE(second->downNote()->playEvents().size(), 1);
+      QCOMPARE(first->downNote()->tieFor(), tie); QCOMPARE(second->downNote()->tieBack(), tie);
       }
 
 void TestMidi::timedArpeggioSpanAndCap()

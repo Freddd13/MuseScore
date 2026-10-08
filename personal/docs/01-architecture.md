@@ -104,3 +104,5 @@
 ## 琶音时序与参数暂存（0.14.0）
 
 PlaybackTiming 是 libmscore 的局部助手，MidiRenderer 生成带 nominalTick 的原 NPlayEvent。Seq 仅消费准备好的提前窗口；导出采用同一时序。新检视器属性在播放中复用 PerformanceEditor 队列与保存边界；界面拖拽预览不修改音频回调。见 [15](15-piano-expression.md)。
+
+0.14.1：新琶音保留续接音的时长事件供 MIDI 延音链累加，续接音仍不参与展开、不重触发；见 [钢琴演奏扩展](15-piano-expression.md)。

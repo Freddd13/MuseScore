@@ -2,6 +2,17 @@
 
 个人版本记录本仓库的个人维护增量；应用上游版本另由 `config.cmake` 管理。历史源码提交尚未追溯归类，此处从首次建立指南开始记录，不代表此前没有个人改动。
 
+## 0.14.1 — 2026-10-08
+
+- 修复：新琶音排除延音续接音的重触发，但保留其单个原生 NoteEvent 时长用于 collectNote 累加延音链；不更改谱面、旧琶音、排序或对拍。
+- 复现：相邻四分和弦都带新琶音、低音有延音时，修复前 MIDI 结束 tick 479，正确值 959；新增 timedArpeggioTies 回归检查结束 tick、不重触发及原生 Tie 指针。
+- 验证：先在 0.14.0 复现 479/959 失败；修复后 MIDI 60/60、真实 Qt 宿主 24/24。并行任务期间仅跳过系统剪贴板写入检查（初次运行剪贴板占用失败）；关于页版本/作者、工具栏及全部播放/编辑检查保留。文档导航检查通过。
+- 安装：独立 msvc.install_piano_0_14_1_x64/bin/MuseScore3Evo.exe，--long-version 返回 0，构建/安装 SHA256 同为 cfbb5ec591b981282edb77711a2757490d6c30181b32dc93f42b96f229cdb058；旧安装/配置/音源保留。
+- 记录：忽略的构建目录下 piano014-tie-baseline-run/gui.txt、piano0141-midi-run/gui.txt、piano0141-gui-parallel-run/gui.txt、piano0141-release.log、piano0141-install.log、piano0141-installed/verification.json。
+- Git 父提交：7a6f9d5d5d0dba24d9d41ff809c5212fde25caf1。
+- Git 提交主题：fix(playback): retain tied durations in timed arpeggios。
+- 提交定位：personal-v0.14.1；验证后普通推送，保留并行 AGENTS.md/MCP 用户说明改动。
+
 ## 0.14.0 — 2026-10-08
 
 - 琶音：新增默认末音落正拍；检视器首音/末音/旧比率、65 ms 间隔、整体偏移、实际压缩间隔与预设入口。旧谱缺字段保留旧播放。跨谱表同声部统一排序，短和弦限制展开时长。

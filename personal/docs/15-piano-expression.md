@@ -35,3 +35,7 @@ InspectorBase 只对追加的个人 Pid 采用播放中暂存。PerformanceEdito
 - 测试使用隔离配置、无声合成器和真实 Seq，不连接声卡；不能代替真实音源的听音及设备性能验收。实际结果见个人 CHANGELOG 对应条目。
 
 专业依据：[Dorico 琶音开始/结束对拍](https://archive.steinberg.help/dorico_se/v5/en/Dorico_SE_5_Operation_Manual_en.pdf)。默认 65 ms 为本分支预设，可修改，不是普遍记谱规定。
+
+## 0.14.1 延音续接
+
+排除排序不等于清空续接音的所有事件：collectNote 通过续接音单个 NoteEvent 的 len 累加延音总时长。新琶音为 tieBack 保留 `NoteEvent(0, 0, 1000)` 的时长体；collectNote 原有 tieBack 规则阻止独立 Note-on。`timedArpeggioTies` 检查两个相邻四分和弦低音连接时结束 tick 959（修复前 479）、无续接重触发且 Tie 不变。
