@@ -168,6 +168,9 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       void refresh();
       void status(const QString& = QString());
       void updateSelection();
+      void refreshLayout();
+      void setOverlaySystem(System*);
+      System* systemAtTick(int) const;
       bool overlayAllowed() const;
       QRectF laneRect() const;
       double xForTick(int tick, bool onScore) const;

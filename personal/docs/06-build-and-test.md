@@ -141,3 +141,8 @@ GUI suite 增加 wheelVelocityBurstAndScoreTargets、personalBrandingAndToolbarE
 压力槽在已有 10k／50k 全曲／局部和谱面滚动指标之外，另测 40 帧真实单音滚轮＋预览／两区重绘，断言高频事件没有原生提交；另单独测停转的一次单音原生提交＋缓存刷新。每次新性能优化必须重测，报告预览与原生提交，不能将后者归入预览帧或用旧数据代替。
 
 独立部署 0.12 到 msvc.install_performance_0_12_x64，保留旧安装。除了 QmlModels／WorkerScript，确保同 SDK Qt5WebSockets.dll 和 qml/QtWebSockets 可导入，避免已有 MCP 插件换程序后缺运行库；只验证 import／关闭的 WebSocket 类型，不启动外部桥。安装程序 SHA256 必须等于最终构建，实际插件宿主 smoke 与上游 --long-version 通过；品牌独立由 CMake 生成，与上游 VERSION 不同。
+
+
+## 0.13.0 界面与谱行交互修复
+
+0.13 使用独立 msvc.install_performance_0_13_x64；真实 GUI 增加未选原生音头普通滚轮、Alt 导航不误改、末位按钮重建、MIDI 基线下空白像素、低力度匹配／缩放、紧凑谱带、背景定位保留选择，以及真实 Seq 播放中 doLayout 和跨系统休止播放线。常规、高 DPI、压力与邻近测试记录见 CHANGELOG。

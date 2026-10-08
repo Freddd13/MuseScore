@@ -45,6 +45,8 @@
 #include "libmscore/note.h"
 #include "libmscore/segment.h"
 #include "libmscore/measure.h"
+#include "libmscore/system.h"
+#include "libmscore/layoutbreak.h"
 #include "libmscore/dynamic.h"
 #include "libmscore/tempotext.h"
 #include "libmscore/pedal.h"
@@ -416,6 +418,11 @@ class TestPerformanceEditor : public QObject, public MTest {
                   box->button(QDialogButtonBox::RestoreDefaults)->click(); box->button(QDialogButtonBox::Ok)->click();
                   });
             QVERIFY(restored.edit(main)); PerformanceAppearance defaults; restored.load(); QCOMPARE(restored.colors[PerformanceAppearance::Background], defaults.colors[PerformanceAppearance::Background]); QCOMPARE(original->color(), native);
+            PerformanceAppearance previous;
+            previous.colors[0] = QColor("#333333"); previous.colors[1] = QColor("#464646"); previous.colors[2] = QColor("#3b3b3b"); previous.colors[3] = QColor("#626262");
+            previous.gradient = {{QColor("#8194a6"), QColor("#94a987"), QColor("#b3ad83"), QColor("#bc958c")}}; previous.save();
+            PerformanceAppearance migrated; migrated.load(); QCOMPARE(migrated.colors, defaults.colors); QCOMPARE(migrated.gradient, defaults.gradient);
+            previous.colors[0] = QColor("#123456"); previous.save(); migrated.load(); QCOMPARE(migrated.colors, previous.colors); QCOMPARE(migrated.gradient, previous.gradient); defaults.save();
             }
       void personalBrandingAndToolbarEntry()
             {
@@ -426,6 +433,7 @@ class TestPerformanceEditor : public QObject, public MTest {
                   main->populateAlternativeOperations();
                   auto buttons = toolbar->findChildren<QToolButton*>("performance-editor-button"); QCOMPARE(buttons.size(), 1);
                   QCOMPARE(buttons.front()->defaultAction(), action);
+                  QCOMPARE(toolbar->widgetForAction(toolbar->actions().back()), static_cast<QWidget*>(buttons.front()));
                   }
             auto button = toolbar->findChild<QToolButton*>("performance-editor-button"); QVERIFY(button);
             const bool wasOpen = action->isChecked(); button->click(); QCOMPARE(action->isChecked(), !wasOpen); button->click(); QCOMPARE(action->isChecked(), wasOpen);
@@ -473,10 +481,12 @@ class TestPerformanceEditor : public QObject, public MTest {
             const QPoint handle = (view->matrix().mapRect(note->canvasBoundingRect()).topRight() + QPointF(12, -12)).toPoint();
             const auto offset = view->matrix(); wheel(view, handle, 120, Qt::ShiftModifier); QTRY_COMPARE(note->veloOffset(), 38); QCOMPARE(view->matrix(), offset); QTest::qWait(40);
             const QPoint head = view->matrix().mapRect(note->canvasBoundingRect()).center().toPoint();
-            wheel(view, head, 120, Qt::AltModifier); QTRY_COMPARE(note->veloOffset(), 39); QCOMPARE(score->playPos().ticks(), 1440);
+            PerformanceSelection::apply(score, {}, nullptr); editor->selectionChanged();
+            wheel(view, head, 120); QTRY_COMPARE(note->veloOffset(), 39); QVERIFY(score->selection().isNone()); QCOMPARE(score->playPos().ticks(), 1440);
+            PerformanceSelection::apply(score, {note}, note); editor->selectionChanged();
             axis->setCurrentIndex(1); editor->convertSelected(Note::ValueType::OFFSET_VAL); QTest::qWait(80); const int raw = note->veloOffset();
-            wheel(view, head, 120, Qt::AltModifier); QTRY_COMPARE(note->veloOffset(), raw + 1); QCOMPARE(note->veloType(), Note::ValueType::OFFSET_VAL);
-            wheel(view, head, 120, Qt::AltModifier); QVERIFY(timer->isActive()); editor->flushPending(); QVERIFY(!timer->isActive()); QVERIFY(!editor->hasPending()); QCOMPARE(note->veloOffset(), raw + 2);
+            wheel(view, head, 120); QTRY_COMPARE(note->veloOffset(), raw + 1); QCOMPARE(note->veloType(), Note::ValueType::OFFSET_VAL);
+            wheel(view, head, 120); QVERIFY(timer->isActive()); editor->flushPending(); QVERIFY(!timer->isActive()); QVERIFY(!editor->hasPending()); QCOMPARE(note->veloOffset(), raw + 2);
             toggle->setChecked(false); for (auto check : editor->findChildren<QCheckBox*>()) check->setChecked(false); axis->setCurrentIndex(0);
             main->grab().save("performance-wheel-012.png");
             }
@@ -522,6 +532,42 @@ class TestPerformanceEditor : public QObject, public MTest {
             const QPoint blank(76 + (notes->width() - 90) / 2, 2); QTest::mouseClick(notes, Qt::LeftButton, Qt::NoModifier, blank); QVERIFY(std::abs(score->playPos().ticks() - 960) <= 4); QVERIFY(score->state() == navigationState);
             main->grab().save("performance-editor-011.png");
             }
+      void reaperVelocityBaselineAndCompactStrip()
+            {
+            auto main = Ms::mscore; auto score = main->readScore(QString(TESTROOT) + "/mtest/mscore/scoreobserver/piano.mscx"); QVERIFY(score);
+            main->setCurrentScoreView(main->appendScore(score)); auto editor = main->findChild<PerformanceEditor*>(); QTest::qWait(80);
+            auto note = noteAt(score); QVERIFY(ParameterEdit::velocities(score, {{note, {Note::ValueType::USER_VAL, 20}}})); QTest::qWait(80);
+            PerformanceSelection::apply(score, {note}, note); editor->selectionChanged(); editor->fit();
+            auto canvas = editor->findChild<QWidget*>("performanceParameterCanvas"); editor->findChild<QComboBox*>("performanceAxis")->setCurrentIndex(0);
+            QTest::mouseClick(editor->findChild<QToolButton*>("performanceRangeFit"), Qt::LeftButton);
+            const auto state = score->state(); PerformanceAppearance appearance;
+            const QImage image = canvas->grab().toImage(); const qreal dpr = image.devicePixelRatio();
+            // No time-grid, velocity stem or playhead beneath the legal MIDI baseline.
+            for (int x = 78; x < canvas->width() - 16; x += 13) QCOMPARE(image.pixelColor(qRound(x * dpr), qRound((canvas->height() - 8) * dpr)), appearance.colors[PerformanceAppearance::Background]);
+            PerformanceViewport viewport; viewport.zoomRange(0, 4, 20); QCOMPARE(viewport.ranges[0].minimum, 1.0); QVERIFY(viewport.ranges[0].maximum < 40);
+            QVERIFY(appearance.noteColor(60, 0).saturation() > 200); QVERIFY(appearance.noteColor(105, 0).green() > 200); QVERIFY(appearance.noteColor(105, 0).red() > 180);
+            auto view = main->currentScoreView(); for (auto toggle : editor->findChildren<QCheckBox*>()) toggle->setChecked(true); view->repaint();
+            auto system = note->chord()->measure()->system(); const int left = qMax(12, qRound(view->matrix().map(system->firstMeasure()->canvasPos()).x()));
+            const int right = qMin(view->width() - 12, qRound(view->matrix().map(system->lastMeasure()->canvasPos() + QPointF(system->lastMeasure()->width(), 0)).x()));
+            const QPoint blank(qMin(right - 8, left + 16), view->height() - 55);
+            QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, blank); QVERIFY(note->selected()); QVERIFY(score->state() == state);
+            view->repaint(); const QImage strip = view->grab().toImage();
+            view->grab().save("performance-strip-013.png");
+            QCOMPARE(strip.pixelColor(qRound((left + 8) * strip.devicePixelRatio()), qRound((view->height() - 24) * strip.devicePixelRatio())), QColor("#f1f2ef"));
+            // Losing native selection keeps the current strip and content visible.
+            PerformanceSelection::apply(score, {}, nullptr); editor->selectionChanged(); view->repaint();
+            auto toggle = editor->findChild<QToolButton*>("performanceWheelVelocity"); toggle->setChecked(true);
+            const QPoint head = view->matrix().mapRect(note->canvasBoundingRect()).center().toPoint();
+            QMouseEvent hover(QEvent::MouseMove, QPointF(head), Qt::NoButton, Qt::NoButton, Qt::NoModifier); QApplication::sendEvent(view, &hover);
+            QHelpEvent help(QEvent::ToolTip, head, view->mapToGlobal(head)); QApplication::sendEvent(view, &help); QVERIFY(QToolTip::text().contains(QString("MIDI %1").arg(note->ppitch()))); QToolTip::hideText();
+            const QPoint handle = (view->matrix().mapRect(note->canvasBoundingRect()).topRight() + QPointF(12, -12)).toPoint();
+            for (const QPoint point : {(head + handle) / 2, handle}) {
+                  QMouseEvent move(QEvent::MouseMove, QPointF(point), Qt::NoButton, Qt::NoButton, Qt::NoModifier); QApplication::sendEvent(view, &move);
+                  QHelpEvent tip(QEvent::ToolTip, point, view->mapToGlobal(point)); QApplication::sendEvent(view, &tip); QVERIFY(QToolTip::text().contains(QString("MIDI %1").arg(note->ppitch()))); QToolTip::hideText();
+                  }
+            QWheelEvent alt(head, view->mapToGlobal(head), QPoint(), QPoint(0, 120), Qt::NoButton, Qt::AltModifier, Qt::NoScrollPhase, false); QApplication::sendEvent(view, &alt); QVERIFY(!editor->hasPending()); QCOMPARE(note->veloOffset(), 20);
+            toggle->setChecked(false); main->grab().save("performance-reaper-013.png"); for (auto check : editor->findChildren<QCheckBox*>()) check->setChecked(false);
+            }
       void overlappingNotesCycleEveryVoice()
             {
             auto main = Ms::mscore; auto score = main->readScore(QString(TESTROOT) + "/mtest/mscore/scoreobserver/piano.mscx"); QVERIFY(score);
@@ -554,7 +600,7 @@ class TestPerformanceEditor : public QObject, public MTest {
             QWheelEvent wheel(QPointF(150, 150), view->mapToGlobal(QPoint(150, 150)), QPoint(), QPoint(0, -120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false); QApplication::sendEvent(view, &wheel); QApplication::processEvents();
             const QPoint delta(qRound(view->matrix().dx()) - oldOffset.x(), qRound(view->matrix().dy()) - oldOffset.y()); QVERIFY(!delta.isNull());
             // Both the old fixed strip and its scrolled copy must receive score repaints.
-            const QPoint band(80, view->height() - 120); QVERIFY(recorder.region.contains(band));
+            const QPoint band(qRound(view->matrix().map(note->chord()->measure()->system()->firstMeasure()->canvasPos()).x()) + 8, view->height() - 90); QVERIFY(recorder.region.contains(band));
             if (view->rect().contains(band + delta)) QVERIFY(recorder.region.contains(band + delta));
             view->removeEventFilter(&recorder); main->grab().save("performance-overlay-011.png");
             }
@@ -586,10 +632,15 @@ class TestPerformanceEditor : public QObject, public MTest {
       void realSequencerPlaybackAndLifecycle()
             {
             auto main = Ms::mscore; QVERIFY(main); QVERIFY(!Ms::seq);
+            // This slot creates its own transport-bound editor. Keep the host's
+            // unrelated editor from drawing a second overlay onto the same view.
+            for (auto check : main->findChild<PerformanceEditor*>()->findChildren<QCheckBox*>()) check->setChecked(false);
             getAction("toggle-piano")->setChecked(false); main->cmd(getAction("toggle-piano")); QVERIFY(main->pianoTools());
             const QByteArray xml("<museScore version=\"3.02\"><Score><Division>480</Division><Part><Staff id=\"1\"><StaffType group=\"pitched\"><name>stdNormal</name></StaffType></Staff><trackName>Piano</trackName><Instrument id=\"piano\"><instrumentId>keyboard.piano</instrumentId><Channel/></Instrument></Part><Staff id=\"1\"><Measure><voice><Clef><concertClefType>G</concertClefType></Clef><TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig><Chord><durationType>whole</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord></voice></Measure><Measure><voice><Rest><durationType>measure</durationType><duration>4/4</duration></Rest></voice><endRepeat>2</endRepeat></Measure><Measure><voice><TimeSig><sigN>3</sigN><sigD>8</sigD></TimeSig><Chord><durationType>quarter</durationType><dots>1</dots><Note><pitch>64</pitch><tpc>18</tpc></Note></Chord></voice></Measure></Staff></Score></museScore>");
             const QString path = _directory.path() + "/transport.mscx"; QFile file(path); QVERIFY(file.open(QIODevice::WriteOnly)); file.write(xml); file.close();
             auto score = main->readScore(path); QVERIFY(score); main->setCurrentScoreView(main->appendScore(score)); score->firstMeasure()->setRepeatStart(true); score->setExpandRepeats(true);
+            auto lineBreak = new LayoutBreak(score); lineBreak->setLayoutBreakType(LayoutBreak::LINE); lineBreak->setParent(score->firstMeasure()); score->firstMeasure()->add(lineBreak); score->doLayout();
+            QVERIFY(score->firstMeasure()->system() != score->lastMeasure()->system());
             MasterSynthesizer synth; MScore::sampleRate = 44100; synth.registerSynthesizer(new PerformanceSilentSynth); synth.setSampleRate(44100); synth.init();
             Ms::seq = new PerformanceAuditionSeq; auto sequence = static_cast<PerformanceAuditionSeq*>(Ms::seq);
             std::unique_ptr<Seq, std::function<void(Seq*)>> sequenceGuard(sequence, [](Seq* s) { s->stopWait(); s->waitForStoppedRendering(); s->setScoreView(nullptr); delete s; Ms::seq = nullptr; }); auto driver = new PerformanceTestDriver(sequence); sequence->setDriver(driver); sequence->setMasterSynthesizer(&synth); QVERIFY(sequence->init()); sequence->setScoreView(main->currentScoreView());
@@ -618,6 +669,12 @@ class TestPerformanceEditor : public QObject, public MTest {
                         };
                   int previous = lineX();
                   for (int i = 0; i < 5; ++i) { driver->pulse(); QTest::qWait(22); QTRY_VERIFY(lineX() > previous); previous = lineX(); }
+                  for (auto check : editor.findChildren<QCheckBox*>()) check->setChecked(true);
+                  auto scoreView = main->currentScoreView(); score->doLayout(); QTest::qWait(50); scoreView->repaint();
+                  const QImage liveStrip = scoreView->grab().toImage(); auto liveSystem = score->firstMeasure()->system();
+                  const int liveLeft = qMax(12, qRound(scoreView->matrix().map(liveSystem->firstMeasure()->canvasPos()).x()));
+                  scoreView->grab().save("performance-live-013.png");
+                  QCOMPARE(liveStrip.pixelColor(qRound((liveLeft + 8) * liveStrip.devicePixelRatio()), qRound((scoreView->height() - 24) * liveStrip.devicePixelRatio())), QColor("#f1f2ef"));
                   QVERIFY(beats.count() > 0); QCOMPARE(beats.last().at(0).toInt(), 0); // Long note: heartbeat event tick has not moved.
                   auto note = noteAt(score, 0); const int tick = sequence->getCurTick(); QVERIFY(PerformanceSelection::apply(score, {note}, note)); QCOMPARE(sequence->getCurTick(), tick);
                   PerformanceEditor late; late.resize(700, 600); late.setView(main->currentScoreView()); late.show(); QTest::qWait(60);
@@ -629,6 +686,13 @@ class TestPerformanceEditor : public QObject, public MTest {
                   QWheelEvent stagedWheel(lateHit, lateNotes->mapToGlobal(lateHit), QPoint(), QPoint(0, 120), Qt::NoButton, Qt::AltModifier, Qt::NoScrollPhase, false);
                   QApplication::sendEvent(lateNotes, &stagedWheel); QTest::qWait(320); QVERIFY(late.hasPending()); QCOMPARE(note->veloOffset(), 0);
                   sequence->seek(score->repeatList().tick2utick(1920)); driver->pulse(); QTest::qWait(25); const int restStart = lineX(); driver->pulse(); QTRY_VERIFY(lineX() > restStart);
+                  const QImage restStrip = scoreView->grab().toImage(); bool stripLine = false;
+                  for (int x = 12; x < scoreView->width() - 12; ++x) if (restStrip.pixelColor(qRound(x * restStrip.devicePixelRatio()), qRound((scoreView->height() - 40) * restStrip.devicePixelRatio())) == QColor("#4b7658")) { stripLine = true; break; }
+                  QVERIFY(stripLine); // Playback crossed a system while the selected first note stayed fixed.
+                  const auto restSystem = score->firstMeasure()->nextMeasure()->system();
+                  const int restRight = qRound(scoreView->matrix().map(restSystem->lastMeasure()->canvasPos() + QPointF(restSystem->lastMeasure()->width(), 0)).x());
+                  if (restRight + 10 < scoreView->width()) QVERIFY(restStrip.pixelColor(qRound((restRight + 10) * restStrip.devicePixelRatio()), qRound((scoreView->height() - 24) * restStrip.devicePixelRatio())) != QColor("#f1f2ef"));
+                  scoreView->grab().save("performance-rest-system-013.png");
                   // Second repeated occurrence maps back to the written first measure.
                   sequence->seek(3840); driver->pulse(); QTest::qWait(25); QVERIFY(score->repeatList().utick2tick(sequence->getCurTick()) < 480);
                   getAction("loop")->setChecked(true); score->setLoopInTick(Fraction::fromTicks(0)); score->setLoopOutTick(Fraction::fromTicks(1920));

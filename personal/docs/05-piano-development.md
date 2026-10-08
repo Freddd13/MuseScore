@@ -100,3 +100,8 @@
 
 
 个人 0.12：演奏编辑器单音滚轮细／粗调入口在 `mscore/performanceeditor/performancewheel.cpp`，仍走原生属性及单次撤销；Evolution 顶部其他选项栏共享菜单开关。启动／关于身份由 `personal/branding.cmake` + `branding.h.in` 从 VERSION 生成，保留上游版本。交互见 [演奏编辑器](14-performance-editor.md)，更新要求见 [开发流程](07-development-workflow.md)。
+
+
+## 0.13.0 界面与谱行交互修复
+
+小力度用“匹配值”或参数＋从 MIDI 1 基线放大；相对轴的合法负百分比保留。谱行参数带宽度按 first/lastMeasure 排版范围并夹到视口，56 px 高；背景点击定位、选音不丢，播放系统切换与休止指针独立于原生选音。

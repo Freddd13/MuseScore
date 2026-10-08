@@ -218,7 +218,7 @@ void PerformanceEditor::resetRange(bool dataRange)
                   const auto indices = _selectedIndices.isEmpty() ? _intervals.query(_scroll->value(), _scroll->value() + _scroll->pageStep()) : _selectedIndices;
                   for (int i : indices) if (noteEditable(_notes[i])) { low = qMin(low, noteValue(i)); high = qMax(high, noteValue(i)); }
                   }
-            if (low <= high) { const double pad = qMax(5.0, (high - low) * 0.1); range = {qMax(range.minimum, low - pad), qMin(range.maximum, high + pad)}; }
+            if (low <= high) { const double pad = qMax(5.0, (high - low) * 0.1); range = {rangeKind() == 0 ? 1.0 : qMax(range.minimum, low - pad), qMin(range.maximum, high + pad)}; }
             }
       _viewport.ranges[rangeKind()] = range; invalidateVisual();
       }
@@ -245,6 +245,10 @@ void PerformanceEditor::updatePlayhead()
             if (tick < _scroll->value() || tick > _scroll->value() + span * 0.85) {
                   _automaticScroll = true; _scroll->setValue(qMax(0, tick - int(span * 0.12))); _automaticScroll = false;
                   }
+            }
+      if (_band->isChecked() && !_geometryDirty && !_dirty) {
+            auto system = systemAtTick(tick);
+            if (system != _system && !_dragging && _wheelIndex < 0) { invalidateOverlay(); setOverlaySystem(system); if (_view) _view->update(); }
             }
       if (previous == tick) return;
       if (_view && _band->isChecked()) _view->update(_scoreLane.adjusted(-4, -24, 4, 4).toAlignedRect());

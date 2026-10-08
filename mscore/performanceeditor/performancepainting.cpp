@@ -65,9 +65,11 @@ void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface su
                   const double y = (_viewport.topPitch - pitch) * _viewport.rowHeight;
                   painter.fillRect(QRectF(0, y, widget->width() - PerformanceViewport::rightMargin, _viewport.rowHeight), c[blackKey(pitch) ? PerformanceAppearance::AccidentalRow : PerformanceAppearance::NaturalRow]);
                   painter.setPen(c[PerformanceAppearance::Grid]); painter.drawLine(QPointF(0, y), QPointF(widget->width() - PerformanceViewport::rightMargin, y));
-                  painter.fillRect(QRectF(0, y + 1, blackKey(pitch) ? 22 : 32, _viewport.rowHeight - 1), blackKey(pitch) ? QColor("#17191c") : QColor("#bec2c7"));
-                  if (_viewport.rowHeight >= 16 || pitch % 12 == 0) {
-                        painter.setPen(c[PerformanceAppearance::Text]); painter.drawText(QRectF(34, y, 40, _viewport.rowHeight), Qt::AlignVCenter, pitchName(pitch));
+                  painter.fillRect(QRectF(0, y + 1, PerformanceViewport::gutter - 1, _viewport.rowHeight - 1), QColor("#bcbcbc"));
+                  if (blackKey(pitch)) painter.fillRect(QRectF(0, y + 1, PerformanceViewport::gutter - 25, _viewport.rowHeight - 1), QColor("#303030"));
+                  if (_viewport.rowHeight >= 10 || pitch % 12 == 0) {
+                        painter.setPen(blackKey(pitch) ? QColor("#ededed") : QColor("#292929"));
+                        painter.drawText(QRectF(3, y, PerformanceViewport::gutter - 8, _viewport.rowHeight), Qt::AlignVCenter, pitchName(pitch));
                         }
                   }
             }
@@ -99,7 +101,7 @@ void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface su
                   if (tick > until) break;
                   const double x = xForTick(tick, false); const bool bar = tick == measure.from;
                   painter.setPen(QPen(c[PerformanceAppearance::Grid], bar ? 1.5 : 0.7, (tick - measure.from) % measure.beat ? Qt::DotLine : Qt::SolidLine));
-                  painter.drawLine(QPointF(x, 0), QPointF(x, widget->height()));
+                  painter.drawLine(QPointF(x, surface == PerformanceSurface::Parameter ? laneRect().top() : 0), QPointF(x, surface == PerformanceSurface::Parameter ? laneRect().bottom() : widget->height()));
                   if (surface == PerformanceSurface::Ruler && x - lastLabel >= 54) {
                         const int beat = (tick - measure.from) / measure.beat;
                         QString label = QString("%1.%2").arg(measure.bar + 1).arg(beat + 1);
@@ -112,8 +114,7 @@ void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface su
       }
 void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool onScore)
       {
-      painter.save(); painter.setClipRect(rect.adjusted(-2, -20, 2, 2), Qt::IntersectClip);
-      if (onScore) painter.fillRect(rect, _appearance.colors[PerformanceAppearance::Background]);
+      painter.save(); painter.setClipRect(rect.adjusted(-2, -3, 2, 0), Qt::IntersectClip);
       const int parameter = _parameter->currentIndex();
       if (parameter == 0) {
             const auto active = painter.clipBoundingRect().intersected(rect.adjusted(-8, -8, 8, 8));
@@ -123,8 +124,9 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
             // Identical native-time/value marks have identical pixels. Draw each style
             // once; keep every source note in the hit/selection/transaction indexes.
             QSet<QPair<QPair<int, int>, quint64>> marks;
-            QVector<QPair<double, double>> density;
-            if (dense) density.fill({rect.bottom(), rect.bottom()}, int(rect.width() / 2) + 1);
+            QVector<QPair<double, double>> density; QVector<QColor> densityColors;
+            const double baseline = qBound(rect.top(), yForValue(rangeKind() == 1 ? 0 : 1, rect), rect.bottom());
+            if (dense) { density.fill({rect.bottom(), rect.bottom()}, int(rect.width() / 2) + 1); densityColors.fill(_appearance.colors[PerformanceAppearance::Text], density.size()); }
             for (auto it = first; it != _notes.cend() && it->tick <= until; ++it) {
                   if (onScore && it->system != _system) continue;
                   const int index = int(it - _notes.cbegin());
@@ -134,6 +136,7 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
                   if (dense && !it->selected && index != _hover && !_playingNotes.contains(index) && !_pending.contains(it->note)) {
                         const int column = int((x - rect.left()) / 2);
                         if (column >= 0 && column < density.size()) {
+                              if (y < density[column].first) densityColors[column] = _appearance.noteColor(NoteVelocity::effective(it->base, it->type, it->raw), it->track);
                               density[column].first = qMin(density[column].first, y);
                               density[column].second = qMax(density[column].second == rect.bottom() ? y : density[column].second, y);
                               }
@@ -141,18 +144,20 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
                         }
                   const auto edit = _pending.value(it->note, {it->type, it->raw});
                   QColor color = it->base < 0 && edit.type == Note::ValueType::OFFSET_VAL && _appearance.mode == 0 ? _appearance.colors[PerformanceAppearance::Grid].lighter(130) : _appearance.noteColor(NoteVelocity::effective(it->base, edit.type, edit.raw), it->track);
+                  if (onScore) color = QColor::fromHsvF(color.hsvHueF(), color.hsvSaturationF() * 0.55, color.valueF() * 0.65);
                   color.setAlpha(!it->enabled ? 40 : (it->audible ? 230 : 70));
                   const auto mark = qMakePair(qMakePair(qRound(x * 256), qRound(y * 256)), (quint64(color.rgba()) << 2) | (it->selected ? 2 : 0) | (it->audible ? 1 : 0));
                   if (marks.contains(mark)) continue;
                   marks.insert(mark); painter.setPen(QPen(color, it->selected ? 2 : 1));
-                  painter.drawLine(QPointF(x, rect.bottom()), QPointF(x, y));
-                  painter.setBrush(it->audible ? QBrush(color) : Qt::NoBrush); painter.drawEllipse(QPointF(x, y), 3.5, 3.5);
+                  painter.drawLine(QPointF(x, baseline), QPointF(x, y));
+                  painter.setBrush(it->audible ? QBrush(color) : Qt::NoBrush); painter.drawEllipse(QPointF(x, y), onScore ? 2.5 : 2.0, onScore ? 2.5 : 2.0);
                   }
             if (dense) {
                   painter.setPen(QPen(_appearance.colors[PerformanceAppearance::Text], 1));
                   for (int i = 0; i < density.size(); ++i) if (density[i].first < rect.bottom()) {
                         const double x = rect.left() + i * 2;
-                        painter.drawLine(QPointF(x, rect.bottom()), QPointF(x, density[i].first));
+                        painter.setPen(QPen(densityColors[i], 1));
+                        painter.drawLine(QPointF(x, baseline), QPointF(x, density[i].first));
                         painter.drawLine(QPointF(x - 1, density[i].second), QPointF(x + 1, density[i].second));
                         }
                   }
@@ -268,7 +273,7 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
                   }
             }
       const int tick = _seeking ? _seekTick : _playTick;
-      if (tick >= 0) { painter.setPen(QPen(c[_seeking ? PerformanceAppearance::Preview : PerformanceAppearance::Playhead], 1.5)); const double x = xForTick(tick, false); painter.drawLine(QPointF(x, 0), QPointF(x, widget->height())); }
+      if (tick >= 0) { painter.setPen(QPen(c[_seeking ? PerformanceAppearance::Preview : PerformanceAppearance::Playhead], 1.5)); const double x = xForTick(tick, false); painter.drawLine(QPointF(x, surface == PerformanceSurface::Parameter ? laneRect().top() : 0), QPointF(x, surface == PerformanceSurface::Parameter ? laneRect().bottom() : widget->height())); }
       painter.restore();
       if (_dragging && ((surface == PerformanceSurface::Parameter && !_noteGesture) || (surface == PerformanceSurface::Notes && _noteGesture))) {
             const QString value = _parameter->currentIndex() == 0 && _anchor >= 0 ? QString::number(noteValue(_anchor), 'f', 0) : QString::number(valueForY(_last.y(), _gestureLane), 'f', 0);

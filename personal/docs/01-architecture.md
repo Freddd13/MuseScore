@@ -95,3 +95,8 @@
 
 
 个人 0.12：演奏编辑器单音滚轮细／粗调入口在 `mscore/performanceeditor/performancewheel.cpp`，仍走原生属性及单次撤销；Evolution 顶部其他选项栏共享菜单开关。启动／关于身份由 `personal/branding.cmake` + `branding.h.in` 从 VERSION 生成，保留上游版本。交互见 [演奏编辑器](14-performance-editor.md)，更新要求见 [开发流程](07-development-workflow.md)。
+
+
+## 0.13.0 界面与谱行交互修复
+
+界面与浮层继续隔离在 mscore/performanceeditor；只移动主窗口既有 QAction 工具栏插入位置。新增 refreshLayout / setOverlaySystem / systemAtTick 区分原生排版几何、谱行缓存和播放映射，播放中不生成事件、不读取可变力度基准。

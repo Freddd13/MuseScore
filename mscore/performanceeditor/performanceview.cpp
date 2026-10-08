@@ -17,7 +17,7 @@ void PerformanceViewport::zoomRange(int kind, double factor, double anchor)
       const auto limit = limits(kind);
       const double fraction = (anchor - range.minimum) / (range.maximum - range.minimum);
       const double span = qBound(kind == 2 ? 5.0 : 8.0, (range.maximum - range.minimum) / factor, limit.maximum - limit.minimum);
-      range.minimum = qBound(limit.minimum, anchor - fraction * span, limit.maximum - span);
+      range.minimum = kind == 0 ? limit.minimum : qBound(limit.minimum, anchor - fraction * span, limit.maximum - span);
       range.maximum = range.minimum + span;
       }
 void PerformanceViewport::panRange(int kind, double delta)

@@ -13,10 +13,18 @@
 #include <QMessageBox>
 #include <algorithm>
 namespace Ms {
+namespace {
+QColor hueBlend(const QColor& a, const QColor& b, double f)
+      {
+      return QColor::fromHsvF(a.hsvHueF() + (b.hsvHueF() - a.hsvHueF()) * f,
+            a.hsvSaturationF() + (b.hsvSaturationF() - a.hsvSaturationF()) * f,
+            a.valueF() + (b.valueF() - a.valueF()) * f);
+      }
+}
 PerformanceAppearance::PerformanceAppearance()
       {
-      colors = {{QColor("#333333"), QColor("#464646"), QColor("#3b3b3b"), QColor("#626262"), QColor("#e5e5e5"), QColor("#ffffff"), QColor("#a4d39a"), QColor("#d2a874"), QColor("#99afba"), QColor("#b2a5bd")}};
-      gradient = {{QColor("#8194a6"), QColor("#94a987"), QColor("#b3ad83"), QColor("#bc958c")}};
+      colors = {{QColor("#444444"), QColor("#494949"), QColor("#404040"), QColor("#343434"), QColor("#e5e5e5"), QColor("#ffffff"), QColor("#a4d39a"), QColor("#d2a874"), QColor("#99afba"), QColor("#b2a5bd")}};
+      gradient = {{QColor("#00b6ff"), QColor("#00dfc0"), QColor("#36ef00"), QColor("#ff2920")}};
       voices = {{QColor("#819eaf"), QColor("#b69d86"), QColor("#96ac8f"), QColor("#a69bb5")}};
       staves = {{voices[0], voices[1], voices[2], voices[3], QColor("#b2ac87"), QColor("#8faeb0"), QColor("#b294a3"), QColor("#a0ad8e")}};
       }
@@ -25,9 +33,21 @@ QColor PerformanceAppearance::noteColor(int value, int track) const
       if (mode == 1) return voices[track % 4];
       if (mode == 2) return staves[(track / 4) % 8];
       value = qBound(1, value, 127);
+      // Only 127 legal Note-on velocities: convert the factory hue ramp once.
+      // Public/custom nodes keep their original interpolation and are never cached stale.
+      static const PerformanceAppearance factory;
+      static const std::array<QColor, 128> factoryColors = [] {
+            std::array<QColor, 128> result;
+            for (int v = 1; v <= 127; ++v) for (int i = 1; i < 4; ++i) if (v <= factory.stops[i]) {
+                  result[v] = hueBlend(factory.gradient[i - 1], factory.gradient[i], double(v - factory.stops[i - 1]) / (factory.stops[i] - factory.stops[i - 1])); break;
+                  }
+            return result;
+            }();
+      if (gradient == factory.gradient && stops == factory.stops) return factoryColors[value];
       for (int i = 1; i < 4; ++i) if (value <= stops[i]) {
             const double f = qBound(0.0, double(value - stops[i - 1]) / qMax(1, stops[i] - stops[i - 1]), 1.0);
             auto mix = [f](int a, int b) { return qRound(a + (b - a) * f); };
+            if (gradient == factory.gradient) return hueBlend(gradient[i - 1], gradient[i], f);
             return QColor(mix(gradient[i - 1].red(), gradient[i].red()), mix(gradient[i - 1].green(), gradient[i].green()), mix(gradient[i - 1].blue(), gradient[i].blue()));
             }
       return gradient.back();
@@ -48,7 +68,11 @@ void PerformanceAppearance::load()
       const std::array<QColor, 4> oldGradient {{QColor("#4f80db"), QColor("#48bfa5"), QColor("#dab759"), QColor("#d66354")}};
       const std::array<QColor, 4> oldVoices {{QColor("#70a4df"), QColor("#db9564"), QColor("#6bc795"), QColor("#ba91de")}};
       const std::array<QColor, 8> oldStaves {{oldVoices[0], oldVoices[1], oldVoices[2], oldVoices[3], QColor("#ddba62"), QColor("#72c4c9"), QColor("#d783a9"), QColor("#97b576")}};
-      if (colors == oldColors && gradient == oldGradient && voices == oldVoices && staves == oldStaves && stops == std::array<int, 4>{{1, 43, 85, 127}}) {
+      const std::array<QColor, RoleCount> previousColors {{QColor("#333333"), QColor("#464646"), QColor("#3b3b3b"), QColor("#626262"), QColor("#e5e5e5"), QColor("#ffffff"), QColor("#a4d39a"), QColor("#d2a874"), QColor("#99afba"), QColor("#b2a5bd")}};
+      const std::array<QColor, 4> previousGradient {{QColor("#8194a6"), QColor("#94a987"), QColor("#b3ad83"), QColor("#bc958c")}};
+      const bool original = colors == oldColors && gradient == oldGradient && voices == oldVoices && staves == oldStaves;
+      const bool previous = colors == previousColors && gradient == previousGradient && voices == PerformanceAppearance().voices && staves == PerformanceAppearance().staves;
+      if ((original || previous) && stops == std::array<int, 4>{{1, 43, 85, 127}}) {
             const int savedMode = mode; *this = PerformanceAppearance(); mode = savedMode; settings.endGroup(); save();
             }
 

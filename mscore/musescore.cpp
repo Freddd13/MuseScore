@@ -711,15 +711,6 @@ void MuseScore::populateAlternativeOperations()
 
       alternativeTools->clear();
 
-      // Personal panel entry survives workspace toolbar repopulation, sharing the
-      // View-menu action and its checked state. No new shortcut command is needed.
-      if (auto action = findChild<QAction*>("performance-editor")) {
-            auto button = new AccessibleToolButton(alternativeTools, action);
-            button->setObjectName("performance-editor-button");
-            alternativeTools->addWidget(button);
-            alternativeTools->addSeparator();
-            }
-
       for (const auto s : _alternativeEntries) {
             if (!*s)
                   alternativeTools->addSeparator();
@@ -730,6 +721,14 @@ void MuseScore::populateAlternativeOperations()
                   w->setObjectName(s);
                   alternativeTools->addWidget(w);
                   }
+            }
+      // Personal panel entry survives workspace toolbar repopulation, sharing the
+      // View-menu action and its checked state. No new shortcut command is needed.
+      if (auto action = findChild<QAction*>("performance-editor")) {
+            alternativeTools->addSeparator();
+            auto button = new AccessibleToolButton(alternativeTools, action);
+            button->setObjectName("performance-editor-button");
+            alternativeTools->addWidget(button);
             }
       }
 

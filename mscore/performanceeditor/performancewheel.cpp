@@ -26,8 +26,8 @@ void PerformanceEditor::cancelWheel()
 bool PerformanceEditor::wheelVelocity(QWheelEvent* wheel, bool notes, bool onScore)
       {
       const auto modifiers = wheel->modifiers();
-      const bool temporary = modifiers & Qt::AltModifier;
-      if ((modifiers & Qt::ControlModifier) || (!_wheelButton->isChecked() && !temporary)
+      const bool temporary = !onScore && (modifiers & Qt::AltModifier);
+      if ((modifiers & Qt::ControlModifier) || (onScore && (modifiers & Qt::AltModifier)) || (!_wheelButton->isChecked() && !temporary)
             || !_score || _score->readOnly() || _dragging || _parameter->currentIndex() != 0) return false;
       // A new wheel event can arrive before the queued post-commit refresh.
       // Resolve that snapshot first instead of interpreting the event as scrolling.
@@ -40,8 +40,8 @@ bool PerformanceEditor::wheelVelocity(QWheelEvent* wheel, bool notes, bool onSco
       // the edited endpoint moves away. Moving to another note releases it.
       if (_wheelIndex >= 0 && _wheelSurface == surface && QLineF(point, _wheelPoint).length() <= 4) target = _wheelIndex;
       else if (onScore) {
-            // Ordinary notation scrolling never edits note heads. Require Alt,
-            // while enabled strip/handle targets are explicit editing surfaces.
+            // The explicit wheel mode edits native note heads without prior selection.
+            // Alt belongs to ScoreView navigation; score editing requires the mode.
             if (_band->isChecked() && _scoreLane.contains(point)) {
                   const auto candidates = hits(point, true, true); if (!candidates.isEmpty()) target = candidates.front();
                   }
@@ -49,7 +49,7 @@ bool PerformanceEditor::wheelVelocity(QWheelEvent* wheel, bool notes, bool onSco
                   auto candidates = _selectedIndices; if (_hover >= 0 && !candidates.contains(_hover)) candidates.append(_hover);
                   for (int i : candidates) if (QLineF(point, _view->matrix().mapRect(_notes[i].bounds).topRight() + QPointF(12, -12)).length() <= 9) { target = i; break; }
                   }
-            if (target < 0 && temporary) target = _noteIndex.value(_view->elementNear(_view->toLogical(point.toPoint())), -1);
+            if (target < 0 && (_wheelButton->isChecked() || temporary)) target = _noteIndex.value(_view->elementNear(_view->toLogical(point.toPoint())), -1);
             }
       else {
             buildGeometry(); const auto candidates = hits(point, !notes); if (!candidates.isEmpty()) target = candidates.front();

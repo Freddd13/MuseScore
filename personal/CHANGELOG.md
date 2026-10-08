@@ -2,6 +2,26 @@
 
 个人版本记录本仓库的个人维护增量；应用上游版本另由 `config.cmake` 管理。历史源码提交尚未追溯归类，此处从首次建立指南开始记录，不代表此前没有个人改动。
 
+## 0.13.0 — 2026-10-08
+
+- 类型：按用户提供的 REAPER 默认力度截图调整外观，并修复谱行带、原生音头滚轮和 MIDI 纵向显示。执行前 git pull --ff-only，个人 3.x 已最新；保留工作区 AGENTS / USER_GUIDE 的并行 MCP 修改。
+- 外观：灰色半音行／清晰网格，扩宽黑白键、默认行高可读音名；默认力度青蓝→青绿→亮绿→黄→红按 HSV 过渡，原自定义渐变仍按 RGB。音符与参数共用力度色，小圆端点／细柱，密集概览保留每列最高端点的颜色。仅完整 0.10 或 0.11–0.12 工厂色自动升级，自定义设置不覆盖。
+- MIDI 视窗：zoomRange(0) 从 1 基线放大，匹配值从 1 到数据上限加余量；显式数值平移仍限于 1–127。网格、柱线和参数播放线止于数据区基线。相对百分比允许减弱负值，独立轴／零线保留，不将相对值错误裁成 MIDI。
+- 谱行：宽度取真实首／末小节屏幕范围并夹到可见视口，柱区由 88 改为 56 px；浅灰底、细边框、低饱和度柱及独立播放／鼠标线。标题优先显示同谱行悬浮／选音的音名和数值；跨谱行选择不冒充当前音。背景点击在拖动工具下定位播放，保留原生选择与内容。
+- 稳定性：抽出 refreshLayout / setOverlaySystem / systemAtTick；播放中允许缓存排版几何与选择刷新，不生成播放事件、不访问可变力度基准。按连续记谱 tick 二分定位当前系统，仅跨系统切换缓存；处理长音、休止、重复回跳、原生 doLayout、System 销毁、滚动损伤与旧像素所有权。原生 hover 到未选音的手柄通道保持对象。
+- 滚轮：谱面显式开启“滚轮调力度”后直接命中未选音头，无需先选、无需手柄或 Alt；普通细调 1 / Shift 粗调 8，Alt 保留原生导航、Ctrl 保留缩放。编辑器画布 Alt 临时调节保留。原位端点锁定、300 ms 合并撤销、播放预览／停播提交、原存储与整数换算语义不变。
+- 入口：Evolution Other Options 工具栏演奏编辑器按钮移到最后，仍共享同一 View 菜单 QAction，重复重建无重复按钮。Kumo branch / Freddd13 / v0.13.0 启动及帮助标识自动从 VERSION 生成。
+- 代码边界：生产修改限于 mscore/performanceeditor 和 mscore/musescore.cpp 的工具栏位置；不改音频回调、播放渲染、原卷帘、乐谱格式或选择核心。补充真实 Qt GUI 与 Seq 回归，更新用户操作说明、结构／功能指南和源码索引。
+- 验证：最终 x64 Release 主程序与相关回归构建／独立安装成功；tst_performanceeditor 常规 22、150% DPI 22、压力 opt-in 4，tst_note 11、tst_scoreobserver 16、tst_pluginhost 10 全通过，0 失败／跳过。新增 GUI 检查未选音头普通滚轮、Alt 原生导航、hover 手柄通道、末位按钮重建、MIDI 基线下空白、独立低力度缩放／匹配、工厂色迁移与自定义保留、浅灰紧凑谱带、背景定位保留选音。真实 Seq 通过播放中 doLayout、跨系统休止指针与旧宽带像素清除、反复／循环／停止／隐藏；最终截图隔离同一视图的重复测试编辑器，生产单 dock 逻辑无变化。
+- 性能：本机 10080／50064 音、双谱表／四声部、长音／密集和弦；全曲与局部各 40 帧。纯首次快照 49.11／307.61 ms，外层切谱快照 116.31／345.63 ms 含请求的 100 ms Qt 等待，不当纯快照。过滤 0.46／1.93、全量批选 101.55／815.36、全量提交 144.53／1053.45 ms。两区绘制 P95 全曲 10.04／14.27、局部 12.04／11.54 ms；局部合并鼠标 1.74／1.86 ms（扣除 17 ms 请求等待）；局部定位／主窗口 15.18／15.69 ms，全曲 12.40／19.11 ms，50k 全曲定位仍超 16.7 ms 目标。
+- 新路径性能：谱面原生滚动＋浮层 P95 6.88／5.96 ms，max 8.02／7.30；滚轮力度预览＋两区绘制 P95 4.51／3.72 ms，max 5.88／6.60。停转单音原生提交／缓存刷新 26.30／32.36 ms 单独报告。首轮新 HSV 渐变 50k 全曲绘制 P95 19.14 ms，按 127 个合法 MIDI 力度一次缓存工厂渐变后最终为 14.27 ms；没有沿用旧版单音数据，也不以提交时间冒充高频帧。
+- 部署：msvc.install_performance_0_13_x64/bin/MuseScore3Evo.exe，旧安装和用户文件保留；补齐同 SDK Qt5QmlModels / WorkerScript / WebSockets，实际独立 HarmonyAssistant 宿主和 import QtWebSockets 1.1 / 关闭 WebSocket 实例 smoke 返回 0、failures 空；QtWebSockets 插件 / DLL 与 SDK 哈希一致。安装与构建 EXE SHA256 同为 c1e8fccd17797b39d9f7e787f6f40bce87271190e56530773f2dd95cd8d160e3；--long-version 返回 0，上游版本仍 3.7.0。
+- 日志：msvc.build_harmony_release_x64/performance013-regression-final-build.log、performance013-release-final.log、performance013-install-final.log；performance013-run/final-regular.txt、high-dpi.txt、benchmark-final.txt；邻近 performance013-note／observer／pluginhost，安装 smoke 与 verification.json 在 performance013-installed。最终 GUI 场景隔离另记 performance013-gui-final-build.log／performance013-gui-final.log。
+- 边界：局部交互、两区绘制和滚轮达到本机 P95 ≤16.7 ms；50k 全曲定位 19.11 ms、大批量选择约 815 ms／提交约 1053 ms、停转提交约 32 ms 仍有同步宿主成本。未验真实声卡、用户长期复杂实谱及系统合成帧期限，不宣称所有场景零卡顿。
+- Git 父提交：085dc86ee93ba53ce1b5d8650a6eb6c929b2d4f7。
+- Git 提交主题：fix(performance): align Reaper styling and stabilize score strip editing。
+- 提交定位：personal-v0.13.0 标签指向本次提交；核对最新 origin/3.x 后普通推送分支／tag，不强推。
+
 ## 0.12.0 — 2026-10-08
 
 - 类型：单音滚轮力度细／粗调、Evolution 工具栏开关、启动／帮助 Kumo 分支身份；执行前两个个人仓库 git pull --ff-only，均已最新。

@@ -95,8 +95,8 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _wheelButton = new QToolButton(this); _wheelButton->setObjectName("performanceWheelVelocity");
       _wheelButton->setText(tr("滚轮调力度")); _wheelButton->setCheckable(true);
       _wheelButton->setChecked(QSettings().value("performanceEditor/wheelVelocity", false).toBool());
-      _wheelButton->setToolTip(tr("指向音符／力度柱／音旁手柄滚轮细调 1，Shift 粗调 8。Alt+滚轮临时调节；谱面音头需 Alt。Ctrl 仍缩放。只改指向的一个音，停转 300 ms 合并一次撤销，Esc 取消。"));
-      connect(_wheelButton, &QToolButton::toggled, this, [this](bool on) { finishWheel(); QSettings().setValue("performanceEditor/wheelVelocity", on); });
+      _wheelButton->setToolTip(tr("指向音符／力度柱／音旁手柄滚轮细调 1，Shift 粗调 8。编辑器 Alt+滚轮临时调节；谱面开启此模式后直接指向未选音头。Alt 保留谱面移动，Ctrl 仍缩放。只改指向的一个音，停转 300 ms 合并一次撤销，Esc 取消。"));
+      connect(_wheelButton, &QToolButton::toggled, this, [this](bool on) { finishWheel(); QSettings().setValue("performanceEditor/wheelVelocity", on); syncOverlayTracking(); invalidateOverlay(); });
       row->addWidget(_wheelButton, 0, row->count());
       _wheelTimer.setParent(this); _wheelTimer.setSingleShot(true); _wheelTimer.setInterval(300); _wheelTimer.setObjectName("performanceWheelTimer");
       connect(&_wheelTimer, &QTimer::timeout, this, [this] { finishWheel(); });
@@ -136,7 +136,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       auto values = displayMenu->addAction(tr("音符内显示力度")); values->setCheckable(true); values->setChecked(QSettings().value("performanceEditor/showValues", false).toBool()); _showValues = values->isChecked();
       connect(values, &QAction::toggled, this, [this](bool on) { _showValues = on; QSettings().setValue("performanceEditor/showValues", on); updateSurfaces(); });
       connect(displayMenu->addAction(tr("编辑配色…")), &QAction::triggered, this, [this] { if (_appearance.edit(this)) { applyAppearance(); invalidateVisual(); if (_view) _view->update(); } });
-      connect(displayMenu->addAction(tr("REAPER 灰色默认")), &QAction::triggered, this, [this] { _appearance = PerformanceAppearance(); _appearance.save(); applyAppearance(); invalidateVisual(); if (_view) _view->update(); });
+      connect(displayMenu->addAction(tr("REAPER 默认力度色")), &QAction::triggered, this, [this] { _appearance = PerformanceAppearance(); _appearance.save(); applyAppearance(); invalidateVisual(); if (_view) _view->update(); });
       second->addWidget(appearance, second->count() / 6, second->count() % 6);
       _followButton = new QToolButton(this); _followButton->setText(tr("跟随播放")); _followButton->setToolTip(tr("手动浏览后暂停跟随；单击恢复，下一次开始播放也会恢复。")); _followButton->setCheckable(true); _followButton->setChecked(true);
       connect(_followButton, &QToolButton::clicked, this, [this] { _following = true; _followButton->setChecked(true); updatePlayhead(); });
@@ -289,18 +289,21 @@ void PerformanceEditor::refresh()
       // A late-opened panel may copy stable notation while playing, but must not
       // regenerate/read mutable playback events or velocity maps until stopped.
       const bool live = _score->isPlaying() || (seq && seq->isPlaying());
-      if (live && !_notes.isEmpty()) { status(); return; }
+      if (live && !_notes.isEmpty()) {
+            // Layout/selection are GUI data; never regenerate playback events here.
+            if (_score->masterScore()->state() == _state) {
+                  if (_geometryDirty) refreshLayout();
+                  _dirty = false; updateSelection();
+                  }
+            status(); return;
+            }
       if (!live && seq && !seq->backgroundRenderingIdle()) { _refreshTimer.start(20); return; }
       const auto state = _score->masterScore()->state();
       if (hasPending() && _state != state) { finishWheel(false); _pending.clear(); status(tr("乐谱已被其他操作修改，待提交预览已取消。")); }
       if (_score->nstaves() == 0) return;
       if (!_dirty && _state == state) {
             if (_geometryDirty) {
-                  _layoutIndex.clear();
-                  for (auto& note : _notes) { note.bounds = note.note->canvasBoundingRect(); note.system = note.note->chord()->measure()->system(); if (note.system) _layoutIndex.insert(note.system); }
-                  for (auto& segment : _segments) if (segment.segment) { segment.position = segment.segment->canvasPos(); segment.system = segment.segment->measure()->system(); }
-                  if (!_segments.isEmpty() && !_segments.back().segment && _score->lastMeasure()) { auto measure = _score->lastMeasure(); _segments.back().system = measure->system(); _segments.back().position = measure->canvasPos() + QPointF(measure->width(), 0); }
-                  _geometryDirty = false; invalidateVisual();
+                  refreshLayout();
                   }
             updateSelection(); return;
             }
@@ -397,6 +400,33 @@ void PerformanceEditor::updateSelection()
             if (element->isChordRest()) { _system = toChordRest(element)->measure()->system(); break; }
       if (!_system && _hover >= 0 && _hover < _notes.size()) _system = _notes[_hover].system;
       if (!_system && !_notes.isEmpty()) _system = _notes.front().system;
+      if (seq && seq->isPlaying() && seq->score() == _score->masterScore()) _system = systemAtTick(_playTick);
+      setOverlaySystem(_system);
+      if (_parameter->currentIndex() == 0 && !_selectedIndices.isEmpty()) {
+            QSignalBlocker blocker(_number); _number->setValue(noteValue(_selectedIndices.front()));
+            }
+      findChild<QPushButton*>("performanceConvertRelative")->setEnabled(_parameter->currentIndex() == 0 && !_snapshotDegraded);
+      findChild<QPushButton*>("performanceConvertAbsolute")->setEnabled(_parameter->currentIndex() == 0 && !_snapshotDegraded);
+      updateSurfaces(); status(); if (_view) _view->update();
+      }
+
+void PerformanceEditor::refreshLayout()
+      {
+      _layoutIndex.clear();
+      for (auto& note : _notes) { note.bounds = note.note->canvasBoundingRect(); note.system = note.note->chord()->measure()->system(); if (note.system) _layoutIndex.insert(note.system); }
+      for (auto& segment : _segments) if (segment.segment) { segment.position = segment.segment->canvasPos(); segment.system = segment.segment->measure()->system(); if (segment.system) _layoutIndex.insert(segment.system); }
+      if (!_segments.isEmpty() && !_segments.back().segment && _score->lastMeasure()) { auto measure = _score->lastMeasure(); _segments.back().system = measure->system(); _segments.back().position = measure->canvasPos() + QPointF(measure->width(), 0); }
+      _geometryDirty = false; invalidateVisual();
+      setOverlaySystem(systemAtTick(_playTick));
+      }
+System* PerformanceEditor::systemAtTick(int tick) const
+      {
+      auto next = std::upper_bound(_segments.cbegin(), _segments.cend(), tick, [](int t, const SegmentInfo& s) { return t < s.tick; });
+      return next == _segments.cbegin() ? (_segments.isEmpty() ? nullptr : _segments.front().system) : (next - 1)->system;
+      }
+void PerformanceEditor::setOverlaySystem(System* system)
+      {
+      _system = system; _systemIndices.clear();
       for (int i = 0; i < _notes.size(); ++i) if (_notes[i].system == _system) _systemIndices.append(i);
       _systemSegments.clear();
       for (const auto& segment : _segments) if (segment.system == _system) _systemSegments.append(segment);
@@ -405,12 +435,6 @@ void PerformanceEditor::updateSelection()
             if (last && _systemSegments.back().tick < last->endTick().ticks())
                   _systemSegments.append({last->endTick().ticks(), last->canvasPos() + QPointF(last->width(), 0), _system, _systemSegments.back().bpm});
             }
-      if (_parameter->currentIndex() == 0 && !_selectedIndices.isEmpty()) {
-            QSignalBlocker blocker(_number); _number->setValue(noteValue(_selectedIndices.front()));
-            }
-      findChild<QPushButton*>("performanceConvertRelative")->setEnabled(_parameter->currentIndex() == 0 && !_snapshotDegraded);
-      findChild<QPushButton*>("performanceConvertAbsolute")->setEnabled(_parameter->currentIndex() == 0 && !_snapshotDegraded);
-      updateSurfaces(); status(); if (_view) _view->update();
       }
 
 void PerformanceEditor::selectionChanged()
@@ -423,7 +447,6 @@ void PerformanceEditor::selectionChanged()
 void PerformanceEditor::layoutChanged()
       {
       if (!_committing) cancelGesture();
-      _system = nullptr; _systemSegments.clear();
       _geometryDirty = true; scheduleRefresh();
       }
 
