@@ -146,3 +146,7 @@ GUI suite 增加 wheelVelocityBurstAndScoreTargets、personalBrandingAndToolbarE
 ## 0.13.0 界面与谱行交互修复
 
 0.13 使用独立 msvc.install_performance_0_13_x64；真实 GUI 增加未选原生音头普通滚轮、Alt 导航不误改、末位按钮重建、MIDI 基线下空白像素、低力度匹配／缩放、紧凑谱带、背景定位保留选择，以及真实 Seq 播放中 doLayout 和跨系统休止播放线。常规、高 DPI、压力与邻近测试记录见 CHANGELOG。
+
+## 0.16 独立构建与交互验证
+
+并行任务存在时，本轮使用独立 `msvc.build_performance015_x64` 构建树，Windows JACK/ALSA/PulseAudio 关闭，保持已有 Qt 5.15.2 / VS2019 v142 依赖；过程级 `_CL_=/Y- /MP4` 不更改上游编译规则。安装到 `msvc.install_performance_0_16_x64`，保留所有旧安装。新增 `performance_controls_tests.inc` 复用真实宿主：谱带缩放隔离、谱表过滤、tip、实际 popup、速度节点、细分踏板及 native CC64/undo/跨小节重开；原 Seq 场景对比谱带开关下的原生视图偏移。常规／150% DPI／10k 与 50k 压力结果见 [更新日志](../CHANGELOG.md)。

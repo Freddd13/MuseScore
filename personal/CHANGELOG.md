@@ -2,6 +2,40 @@
 
 个人版本记录本仓库的个人维护增量；应用上游版本另由 `config.cmake` 管理。历史源码提交尚未追溯归类，此处从首次建立指南开始记录，不代表此前没有个人改动。
 
+## 0.16.0 — 2026-10-09
+
+- 谱行带：新增数字/单位/百分比零线、独立纵向视窗；刻度轴滚轮缩放、拖轴平移，−/+、↑/↓、匹配/全复位按钮。默认紧凑 48 px，显示菜单可改为 80/112/144；窄带标题省略，匹配按钮显示“适”。不通过缩放修改实际属性。
+- 配色/过滤：谱行带及手柄默认读取原生 MScore::selectColor 声部颜色，可关闭后继承编辑器配色；新增谱表多选，叠加当前乐器/谱表/全谱与声部筛选，保持原生选择，过滤外对象不参与编辑。详细音符 tip 可开关并记忆；渐变、试听、选音同步及拖动数值浮标保留。
+- 菜单/速度：显式 popup 背景/文字/选择色，修复灰色不可读项。速度默认节点模式，空白点按添加、上下拖节点改 BPM，数字框写入节点，明确操作提示；单节点速度保持到下一事件，铅笔/直线绘制后恢复后文速度。可见速度文字只有明确点中节点才解锁；无关 MIDI 轴在速度/踏板模式隐藏，时间尺继续定位播放。重复单击节点不制造修改/撤销。
+- 踏板：默认小节内 1/16 吸附，可选 1/32、1/64、1/128、自由 tick、原音符边界。CC64 127 在顶部、0 在底部，离开音符边界的起止点以菱形/虚线和精确 tick 提示区分；乐器共享踏板，不伪造声部独立或半踏板值。原生 Pedal 非音符端点插值、Spanner 起点保留前置上下文、终点不改回 CR 结束，现有 connector/location 保存真实 tick，不新建音符/休止/XML字段。
+- 导航/性能：编辑器不设置 ScoreView 偏移；真实 Seq 验证谱行带开关下相同原生换行导航 matrix，原生行为保留。关闭谱带后不再让旧命中矩形抢点击。CR 起止边界按谱表在快照缓存，绘制/拖动/悬浮 O(1) 查询，布局/过滤不重建播放事件。核心改动限 Pedal/Spanner/Score 写入对应路径，音频回调、播放渲染及原卷帘由上游/已提交0.15原逻辑处理。
+- 验证：最终 x64 Release 和测试构建、独立安装完成；真实 Qt 常规29、150% DPI29、压力4，原生 note11、scoreobserver16、pluginhost10、MIDI68，全部0失败/跳过。覆盖谱带缩放隔离、谱表过滤、提示/设置重启、实际菜单、速度节点、细分踏板布局/CC64/单撤销/曲首曲尾/跨小节重开/链接分谱，保留真实 Seq 长音/休止/反复/循环/生命周期和旧功能回归。并行任务仅避免系统剪贴板写入，启动/关于作者与版本仍验证；真实声卡长会话不以静音测试替代。
+- 性能：空闲窗口重新测试10080/50064音、双谱表/四声部/长音/密集和弦，全曲/局部40帧；具体快照、过滤、批选、提交、两区绘制/拖动/定位、谱带轴与原生滚动、滚轮预览独立数据见本条后的原始摘要。大量批选/提交单独报告，不计作高频帧；50k全曲概览定位仍超过16.7ms目标。数据不沿用旧版本，不把包含100ms等待的外层切谱时间当纯快照。
+- 部署：`msvc.install_performance_0_16_x64/bin/MuseScore3Evo.exe`，旧安装/配置/音源保留；Kumo branch / Freddd13 / v0.16.0 仍由 VERSION 自动生成。构建/安装 EXE SHA256同为 `ec780fbc5294c31a95338905942df578a0bcb3767d2dba073c5d59b50105b2d6`；--long-version返回0，上游版本3.7.0不改。实际插件宿主及 QtWebSockets import/关闭实例 smoke返回0、failures为空。细分/自由踏板请用0.16+继续编辑，旧安装互用可选音符边界模式。
+- 并行/记录：先拉取，继承0.15提交；独立构建 `msvc.build_performance015_x64`。发现复制保留旧mtime使MOC/渲染对象滞后，刷新0.15涉及CPP时间戳重新构建，最终68项完整MIDI及全部宿主回归通过，不修改该任务源码。共享测试仅提交本任务差异，AGENTS/MCP用户说明工作区改动保留。日志：build-final.log、tests-build.log、install-final.log；final-regular/gui.txt、final-high-dpi/gui.txt、final-benchmark/gui.txt、native-{note,observer,pluginhost,midi}/gui.txt、installed-check/verification.json及native-smoke.json、installed-websockets/native-smoke.json，均在上述忽略构建目录。
+- Git 父提交：f60d3df20200e6dddeb689a5627d1d0e53c2a67d。
+- Git 提交主题：feat(performance): add score strip precision controls and free pedal timing。
+- 提交定位：personal-v0.16.0；验证后普通推送，无强推。
+
+压力测量原始摘要（ms）：
+
+```text
+Ms::PerformanceEditor::refresh: Performance snapshot 10080 notes: 52.09 ms
+TestPerformanceEditor::largeScoreBenchmark: Performance 10080 notes, overview: snapshot 123.84 ms, filter 0.35 ms, batch selection 104.91 ms, native commit 168.05 ms; two-area paint P95 8.75 ms, drag P95 1.85 ms, locator paint P95 14.04 ms
+TestPerformanceEditor::largeScoreBenchmark: Performance 10080 notes, local: snapshot 123.84 ms, filter 0.35 ms, batch selection 104.91 ms, native commit 168.05 ms; two-area paint P95 10.81 ms, drag P95 1.91 ms, locator paint P95 15.56 ms
+TestPerformanceEditor::largeScoreBenchmark: Performance overlay 10080 notes: native wheel/overlay repaint P95 6.54 ms, max 6.90 ms
+TestPerformanceEditor::largeScoreBenchmark: Performance controls 10080 notes: staff filter 0.29 ms, score axis zoom/repaint P95 4.51 ms, max 5.27 ms
+TestPerformanceEditor::largeScoreBenchmark: Performance velocity wheel 10080 notes: preview/two-area repaint P95 2.68 ms, max 6.99 ms
+TestPerformanceEditor::largeScoreBenchmark: Performance velocity wheel 10080 notes: single native commit/cache refresh 26.76 ms
+Ms::PerformanceEditor::refresh: Performance snapshot 50064 notes: 343.93 ms
+TestPerformanceEditor::largeScoreBenchmark: Performance 50064 notes, overview: snapshot 385.14 ms, filter 2.12 ms, batch selection 924.92 ms, native commit 1208.47 ms; two-area paint P95 16.55 ms, drag P95 1.80 ms, locator paint P95 19.90 ms
+TestPerformanceEditor::largeScoreBenchmark: Performance 50064 notes, local: snapshot 385.14 ms, filter 2.12 ms, batch selection 924.92 ms, native commit 1208.47 ms; two-area paint P95 11.24 ms, drag P95 1.99 ms, locator paint P95 15.03 ms
+TestPerformanceEditor::largeScoreBenchmark: Performance overlay 50064 notes: native wheel/overlay repaint P95 6.49 ms, max 6.80 ms
+TestPerformanceEditor::largeScoreBenchmark: Performance controls 50064 notes: staff filter 1.37 ms, score axis zoom/repaint P95 4.08 ms, max 4.11 ms
+TestPerformanceEditor::largeScoreBenchmark: Performance velocity wheel 50064 notes: preview/two-area repaint P95 2.58 ms, max 3.40 ms
+TestPerformanceEditor::largeScoreBenchmark: Performance velocity wheel 50064 notes: single native commit/cache refresh 39.33 ms
+```
+
 ## 0.15.0 — 2026-10-09
 
 - 功能：新增无斜线快速拍前小音符预设，默认每音 65 ms，主音保持原拍点；检视器分开外观与原解释／拍前／拍上／拍后、毫秒／整组比例，实际整组最多为主音时值一半，拍前再限制为前一同声部音／休止起点间隔的一半，避免短前音的起奏被颠倒。数字、名称拖拽、Shift 精调、Esc、播放暂存和单次撤销复用 0.14 的控件及原生队列。

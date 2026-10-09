@@ -38,10 +38,10 @@ void PerformanceEditor::rebuildFilter()
       for (auto& note : _notes) {
             const bool oldScope = note.inScope, oldEnabled = note.enabled;
             note.inScope = _scope->currentIndex() == 2 || (_scope->currentIndex() == 0 ? note.part == part : note.track / VOICES == _contextTrack / VOICES);
-            note.enabled = note.inScope && (_voiceMask & (1 << (note.track % VOICES))) && (!_voice->currentIndex() || note.track % VOICES == _voice->currentIndex() - 1);
+            note.enabled = note.inScope && staffEnabled(note.track) && (_voiceMask & (1 << (note.track % VOICES))) && (!_voice->currentIndex() || note.track % VOICES == _voice->currentIndex() - 1);
             changed |= oldScope != note.inScope || oldEnabled != note.enabled;
             }
-      _hover = -1; updateSelection(); if (changed) invalidateVisual();
+      _hover = -1; updateSelection(); if (changed) { invalidateVisual(); invalidateOverlay(); }
       }
 void PerformanceEditor::selectIndices(const QVector<int>& indices, Qt::KeyboardModifiers modifiers, bool preserveGroup)
       {
@@ -62,6 +62,7 @@ void PerformanceEditor::selectIndices(const QVector<int>& indices, Qt::KeyboardM
       QList<Note*> list; list.reserve(chosen.size());
       for (const auto& note : _notes) if (chosen.contains(note.note)) list.append(note.note);
       _selecting = true; PerformanceSelection::apply(_score, list, focus); _selecting = false;
+      if (focus) _contextTrack = focus->track();
       updateSelection();
       }
 void PerformanceEditor::selectVoices(int scope)
@@ -88,12 +89,12 @@ QVector<int> PerformanceEditor::hits(QPointF point, bool parameter, bool onScore
             for (auto it = first; it != _notes.cend() && it->tick <= until; ++it) {
                   const int i = int(it - _notes.cbegin());
                   if (noteEditable(*it) && (!onScore || it->system == _system) && std::abs(xForTick(it->tick, onScore) - point.x()) < 7
-                        && point.y() >= qMax(lane.top(), yForValue(noteValue(i), lane)) - 7 && point.y() <= lane.bottom() + 5) result.append(i);
+                        && point.y() >= qMax(lane.top(), yForValue(noteValue(i), lane, onScore)) - 7 && point.y() <= lane.bottom() + 5) result.append(i);
                   }
             }
-      std::stable_sort(result.begin(), result.end(), [this, point, parameter, lane](int a, int b) {
+      std::stable_sort(result.begin(), result.end(), [this, point, parameter, lane, onScore](int a, int b) {
             if (parameter) {
-                  const int da = qRound(std::abs(yForValue(noteValue(a), lane) - point.y())), db = qRound(std::abs(yForValue(noteValue(b), lane) - point.y()));
+                  const int da = qRound(std::abs(yForValue(noteValue(a), lane, onScore) - point.y())), db = qRound(std::abs(yForValue(noteValue(b), lane, onScore) - point.y()));
                   if ((da <= 7) != (db <= 7)) return da <= 7;
                   if (da != db && (da <= 7 || db <= 7)) return da < db;
                   if (_notes[a].selected != _notes[b].selected) return _notes[a].selected;
@@ -182,7 +183,7 @@ void PerformanceEditor::syncValueScroll()
 void PerformanceEditor::applyAppearance()
       {
       setAttribute(Qt::WA_StyledBackground, true);
-      setStyleSheet(QString("QWidget#performanceEditor {background:%1;} QLabel,QCheckBox {color:%2;} QToolButton,QPushButton,QComboBox,QDoubleSpinBox {background:#484848;color:%2;border:1px solid #696969;border-radius:2px;padding:3px;} QToolButton:hover,QPushButton:hover {background:#595959;} QToolButton:checked {background:#626d5c;} QScrollBar {background:#303030;} QScrollBar::handle {background:#797979;min-height:12px;min-width:12px;} QScrollBar::add-line,QScrollBar::sub-line {width:0;height:0;} QScrollBar::add-page,QScrollBar::sub-page {background:#383838;} QScrollBar::handle:disabled {background:#454545;} QSplitter::handle {background:#686868;}").arg(_appearance.colors[PerformanceAppearance::Background].name(), _appearance.colors[PerformanceAppearance::Text].name()));
+      setStyleSheet(QString("QWidget#performanceEditor {background:%1;} QLabel,QCheckBox {color:%2;} QToolButton,QPushButton,QComboBox,QDoubleSpinBox {background:#484848;color:%2;border:1px solid #696969;border-radius:2px;padding:3px;} QComboBox QAbstractItemView {background:#484848;color:%2;selection-background-color:#687860;selection-color:#ffffff;} QComboBox QAbstractItemView::item {color:%2;min-height:22px;} QMenu {background:#484848;color:%2;border:1px solid #696969;} QMenu::item:selected {background:#687860;color:#ffffff;} QToolButton:hover,QPushButton:hover {background:#595959;} QToolButton:checked {background:#626d5c;} QScrollBar {background:#303030;} QScrollBar::handle {background:#797979;min-height:12px;min-width:12px;} QScrollBar::add-line,QScrollBar::sub-line {width:0;height:0;} QScrollBar::add-page,QScrollBar::sub-page {background:#383838;} QScrollBar::handle:disabled {background:#454545;} QSplitter::handle {background:#686868;}").arg(_appearance.colors[PerformanceAppearance::Background].name(), _appearance.colors[PerformanceAppearance::Text].name()));
       }
 QString PerformanceEditor::noteTooltip(int i) const
       {
@@ -337,7 +338,11 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
             }
       if (event->type() == QEvent::ToolTip) {
             auto help = static_cast<QHelpEvent*>(event); buildGeometry();
+            if (parameter && _parameter->currentIndex() && _score && laneRect().contains(help->pos())) {
+                  QToolTip::showText(help->globalPos(), parameterTooltip(help->pos(), false), _canvas); return true;
+                  }
             auto candidates = hits(help->pos(), parameter);
+            if (!_noteTips) { QToolTip::hideText(); return true; }
             if (!candidates.isEmpty()) QToolTip::showText(help->globalPos(), noteTooltip(candidates.front()), static_cast<QWidget*>(object));
             else if (notes && help->pos().x() < PerformanceViewport::gutter) {
                   const int pitch = qBound(0, int(std::ceil(_viewport.topPitch - help->pos().y() / _viewport.rowHeight)), 127);
@@ -403,10 +408,14 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
             }
       if (event->type() == QEvent::MouseButtonDblClick) {
             auto mouse = static_cast<QMouseEvent*>(event);
-            if (mouse->button() == Qt::LeftButton && mouse->x() >= PerformanceViewport::gutter) {
+            if (mouse->button() == Qt::LeftButton && mouse->x() >= PerformanceViewport::gutter && (!parameter || _parameter->currentIndex() == 0)) {
                   cancelSurfaceGesture(); cancelGesture(); buildGeometry(); const auto candidates = hits(mouse->pos(), parameter);
                   seek(candidates.isEmpty() ? tickForX(mouse->x(), false) : _notes[candidates.front()].tick); togglePlayback(true); return true;
                   }
+            }
+      if (event->type() == QEvent::MouseButtonPress && parameter && _parameter->currentIndex() != 0) {
+            auto mouse = static_cast<QMouseEvent*>(event);
+            if (mouse->button() == Qt::LeftButton && laneRect().contains(mouse->pos())) { beginGesture(mouse->pos(), laneRect(), false); if (_dragging) queueGesture(mouse->pos()); return true; }
             }
       if (event->type() == QEvent::MouseButtonRelease) {
             auto mouse = static_cast<QMouseEvent*>(event);

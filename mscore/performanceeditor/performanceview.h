@@ -15,7 +15,7 @@ struct PerformanceViewport {
       double pixelsPerQuarter = 72, rowHeight = 12, topPitch = 72;
       std::array<PerformanceRange, 4> ranges {{{1, 127}, {-100, 100}, {5, 240}, {0, 127}}};
       static PerformanceRange limits(int kind);
-      void zoomRange(int kind, double factor, double anchor);
+      void zoomRange(int kind, double factor, double anchor, bool keepBaseline = true);
       void panRange(int kind, double delta);
       };
 // Prefix maxima make long notes starting before the viewport discoverable.

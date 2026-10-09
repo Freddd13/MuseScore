@@ -81,3 +81,7 @@ git log --oneline --left-right HEAD...origin/3.x
 ## 0.13.0 界面与谱行交互修复
 
 0.13 发布仍先 git pull --ff-only、独立安装、更新累计 USER_GUIDE／开发日志／源码索引，Kumo 版本自动来自 VERSION。提交时只选择本任务修改；AGENTS 与 USER_GUIDE 的并行 MCP 内容保留在工作区，原安装保留。
+
+## 0.16 并行变更
+
+本轮演奏编辑器与钢琴演奏核心任务共用检出，使用独立构建树；只暂存本任务文件与共享测试入口中的对应行。USER_GUIDE 的既有 MCP 工作区段落保留且不纳入本任务提交。提交前复核最新版本、HEAD、上游远端和源码索引，继承另一任务已经完成的提交。Kumo/Freddd13 启动与关于身份仍从 personal/VERSION 自动生成。

@@ -112,3 +112,14 @@ Arpeggio 属性/原生读写 → PlaybackTiming 参与音/窗口 → renderArpeg
 ## 0.15 快速小音符
 
 新增预设 action 为 `fast-grace`，复用 `Score::setGraceNote` 和 APPOGGIATURA 外观。时序模型在 Chord / PlaybackTiming / createGraceNotesPlayEvents；检视器在 InspectorNote；回归在 tst_midi 的 timedGrace 系列及 grace_playback_tests.inc。旧长倚音入口保持，拍前／拍上／拍后与外观独立，操作见用户说明，设计见 [15](15-piano-expression.md)。
+
+## 0.16 谱行带与参数交互
+
+| 需求 | 实现 | 验证 |
+| --- | --- | --- |
+| 数字刻度／独立缩放／匹配 | performanceoverlay + performancecontrols + 独立 PerformanceViewport | 原生值、播放位置和编辑器纵轴不变 |
+| 声部配色／谱表过滤／提示开关 | 原生 selectColor + 缓存 note.enabled + performanceEditor 设置组 | 过滤保留原选择且不误改，真实菜单与重启 |
+| 速度点按／上下拖动 | begin/move/finishGesture + 原 TempoText 事务 | 方形节点保护、BPM 和一次撤销 |
+| 细分／自由踏板 | 缓存谱表 CR 边界、Pedal 原生 tick、linePos 与已有 location 写入 | 127 顶端、离音符标记、跨小节保存重开和 CC64 |
+
+用户入口见 [说明](../USER_GUIDE.md)，边界见 [演奏编辑器](14-performance-editor.md)。

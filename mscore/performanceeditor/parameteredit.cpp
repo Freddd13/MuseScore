@@ -121,17 +121,7 @@ bool pedal(Score* score, int track, int from, int until, Pedal* target, QString*
       if (!editable(score) || from < 0 || until <= from
             || track < 0 || track >= score->nstaves() * VOICES) return false;
       if (!score->lastMeasure() || until > score->lastMeasure()->endTick().ticks() || (target && (target->score() != score || target->track() != track))) return false;
-      auto start = score->tick2segment(Fraction::fromTicks(from), false, SegmentType::ChordRest);
-      bool startValid = false;
-      if (start) for (int voice = 0; voice < VOICES; ++voice) {
-            auto element = start->element((track / VOICES) * VOICES + voice);
-            if (element && element->isChordRest()) startValid = true;
-            }
-      auto end = score->findCRinStaff(Fraction::fromTicks(until), track / VOICES);
-      if (!startValid || !end || (end->tick() + end->actualTicks()).ticks() != until) {
-            if (error) *error = QObject::tr("踏板须吸附对应谱表的音符/休止边界。");
-            return false;
-            }
+      // Fine/free timing uses native spanner ticks, without synthetic chord/rest anchors.
       const Part* part = score->staff(track / VOICES)->part();
       for (const auto& pair : score->spannerMap().map()) {
             Spanner* span = pair.second;

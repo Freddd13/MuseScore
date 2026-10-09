@@ -2,6 +2,7 @@
 #include <QTemporaryDir>
 #include <QSettings>
 #include <QComboBox>
+#include <QAbstractItemView>
 #include <QCheckBox>
 #include <QDoubleSpinBox>
 #include <QScrollBar>
@@ -330,7 +331,7 @@ class TestPerformanceEditor : public QObject, public MTest {
             QVERIFY(score->tempo(Fraction::fromTicks(0)) != previousTempo);
             QCOMPARE(score->tempo(Fraction::fromTicks(1440)), previousTempo);
             parameter->setCurrentIndex(2); QTest::qWait(50);
-            const int pedalY = timeline->height() / 2;
+            const int pedalY = 18; // Full CC64 is at the top of its 0–127 lane.
             draw(QPoint(x(0), pedalY), QPoint(x(960), pedalY));
             Pedal* drawnPedal = nullptr;
             for (const auto& pair : score->spannerMap().map()) if (pair.second->isPedal()) drawnPedal = toPedal(pair.second);
@@ -698,6 +699,12 @@ class TestPerformanceEditor : public QObject, public MTest {
                   const QPoint lateHit(80, qRound((127 - latePitch->value() / 100.0 - note->ppitch()) * lateRow + lateRow / 2));
                   QWheelEvent stagedWheel(lateHit, lateNotes->mapToGlobal(lateHit), QPoint(), QPoint(0, 120), Qt::NoButton, Qt::AltModifier, Qt::NoScrollPhase, false);
                   QApplication::sendEvent(lateNotes, &stagedWheel); QTest::qWait(320); QVERIFY(late.hasPending()); QCOMPARE(note->veloOffset(), 0);
+                  // The overlay must leave native system-change navigation intact.
+                  QCheckBox* band = nullptr; for (auto check : editor.findChildren<QCheckBox*>()) if (check->text() == QString::fromUtf8("谱行参数带")) band = check;
+                  QVERIFY(band); const auto initialMatrix = scoreView->matrix();
+                  band->setChecked(false); scoreView->moveCursor(Fraction::fromTicks(1920)); const auto nativeMatrix = scoreView->matrix();
+                  scoreView->setOffset(initialMatrix.dx(), initialMatrix.dy()); band->setChecked(true); scoreView->moveCursor(Fraction::fromTicks(1920));
+                  QCOMPARE(scoreView->matrix(), nativeMatrix);
                   sequence->seek(score->repeatList().tick2utick(1920)); driver->pulse(); QTest::qWait(25); const int restStart = lineX(); driver->pulse(); QTRY_VERIFY(lineX() > restStart);
                   const QImage restStrip = scoreView->grab().toImage(); bool stripLine = false;
                   for (int x = 12; x < scoreView->width() - 12; ++x) if (restStrip.pixelColor(qRound(x * restStrip.devicePixelRatio()), qRound((scoreView->height() - 40) * restStrip.devicePixelRatio())) == QColor("#4b7658")) { stripLine = true; break; }
@@ -795,6 +802,13 @@ class TestPerformanceEditor : public QObject, public MTest {
             QVERIFY(looped); getAction("loop")->setChecked(false);
             sequence->stopWait(); sequence->waitForStoppedRendering(); QApplication::processEvents();
             }
+#ifdef Q_MOC_RUN
+      void finePedalNativeLayoutMidiUndoAndPersistence();
+      void scoreControlsTempoNodesFinePedalAndTips();
+      void finePedalLinkedExcerpt();
+#else
+#include "performance_controls_tests.inc"
+#endif
       void graceInspectorAndNativePreset();
       void graceRealSequencerPreRoll();
       void displaySettingsAcrossProcesses()
@@ -806,11 +820,11 @@ class TestPerformanceEditor : public QObject, public MTest {
                   PerformanceAppearance appearance;
                   if (mode == "write") {
                         appearance.mode = 2; appearance.colors[PerformanceAppearance::Background] = QColor("#123456"); appearance.gradient[1] = QColor("#234567"); appearance.stops[1] = 35; appearance.save();
-                        QSettings settings; settings.setValue("performanceEditor/wheelVelocity", true); settings.sync(); QCOMPARE(settings.status(), QSettings::NoError);
+                        QSettings settings; settings.setValue("performanceEditor/wheelVelocity", true); settings.setValue("performanceEditor/noteTooltips", false); settings.setValue("performanceEditor/scoreVoiceColors", false); settings.setValue("performanceEditor/bandHeight", 112); settings.setValue("performanceEditor/pedalGrid", 4); settings.sync(); QCOMPARE(settings.status(), QSettings::NoError);
                         }
                   else {
                         appearance.load(); QCOMPARE(appearance.mode, 2); QCOMPARE(appearance.colors[PerformanceAppearance::Background], QColor("#123456")); QCOMPARE(appearance.gradient[1], QColor("#234567")); QCOMPARE(appearance.stops[1], 35);
-                        PerformanceEditor editor; QVERIFY(editor.findChild<QToolButton*>("performanceWheelVelocity")->isChecked()); editor.resize(600, 520); editor.show(); QTest::qWait(25); auto canvas = editor.findChild<QWidget*>("performanceParameterCanvas"); QVERIFY(canvas);
+                        PerformanceEditor editor; QVERIFY(editor.findChild<QToolButton*>("performanceWheelVelocity")->isChecked()); QVERIFY(!editor.findChild<QAction*>("performanceNoteTooltips")->isChecked()); QVERIFY(!editor.findChild<QAction*>("performanceScoreVoiceColors")->isChecked()); QCOMPARE(editor.findChild<QComboBox*>("performancePedalGrid")->currentIndex(), 4); editor.resize(600, 520); editor.show(); QTest::qWait(25); auto canvas = editor.findChild<QWidget*>("performanceParameterCanvas"); QVERIFY(canvas);
                         const QImage rendered = canvas->grab().toImage(); QCOMPARE(rendered.pixelColor(10, rendered.height() - 3), QColor("#123456"));
                         }
                   return;
@@ -886,7 +900,20 @@ class TestPerformanceEditor : public QObject, public MTest {
                         QWheelEvent wheel(QPointF(150, 150), view->mapToGlobal(QPoint(150, 150)), QPoint(), QPoint(0, frame % 2 ? 120 : -120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
                         timer.start(); QApplication::sendEvent(view, &wheel); QApplication::processEvents(); overlaySamples.append(timer.nsecsElapsed() / 1e6);
                         }
-                  std::sort(overlaySamples.begin(), overlaySamples.end()); qInfo("Performance overlay %d notes: native wheel/overlay repaint P95 %.2f ms, max %.2f ms", all.size(), overlaySamples[37], overlaySamples.back()); band->setChecked(false);
+                  std::sort(overlaySamples.begin(), overlaySamples.end()); qInfo("Performance overlay %d notes: native wheel/overlay repaint P95 %.2f ms, max %.2f ms", all.size(), overlaySamples[37], overlaySamples.back());
+                  auto staffFilter = editor->findChild<QToolButton*>("performanceStaffFilter"); QVERIFY(staffFilter);
+                  QVERIFY(QMetaObject::invokeMethod(staffFilter->menu(), "aboutToShow", Qt::DirectConnection));
+                  auto staffAction = staffFilter->menu()->findChild<QAction*>("performanceStaff0"); QVERIFY(staffAction);
+                  timer.start(); staffAction->setChecked(false); const double staffFilterMs = timer.nsecsElapsed() / 1e6; staffAction->setChecked(true); view->repaint();
+                  QVector<double> axisSamples;
+                  const double axisLeft = qMax(56.0, view->matrix().map(all.front()->chord()->measure()->system()->firstMeasure()->canvasPos()).x());
+                  const QPoint axisPoint(qRound(axisLeft - 24), view->height() - 66);
+                  for (int frame = 0; frame < 40; ++frame) {
+                        QWheelEvent wheel(axisPoint, view->mapToGlobal(axisPoint), QPoint(), QPoint(0, frame % 2 ? 120 : -120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+                        timer.start(); QApplication::sendEvent(view, &wheel); QApplication::processEvents(); axisSamples.append(timer.nsecsElapsed() / 1e6);
+                        }
+                  std::sort(axisSamples.begin(), axisSamples.end());
+                  qInfo("Performance controls %d notes: staff filter %.2f ms, score axis zoom/repaint P95 %.2f ms, max %.2f ms", all.size(), staffFilterMs, axisSamples[37], axisSamples.back()); band->setChecked(false);
                   editor->fit(true); QTest::mouseClick(editor->findChild<QToolButton*>("performancePitchReset"), Qt::LeftButton);
                   auto pitch = notes->findChild<QScrollBar*>(); const double row = notes->height() * 100.0 / pitch->pageStep();
                   const QPoint hit(80, qRound((127 - pitch->value() / 100.0 - all.front()->ppitch()) * row + row / 2));

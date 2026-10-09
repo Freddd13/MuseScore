@@ -110,3 +110,7 @@ PlaybackTiming 是 libmscore 的局部助手，MidiRenderer 生成带 nominalTic
 ## 0.15 小音符时序扩展
 
 主 Chord 保存整组播放位置／单位／持续时间；小音符外观继续由 NoteType 表示。InspectorNote 经 propertyDelegate 修改主 Chord，使用原属性撤销及安全暂存。PlaybackTiming 与 rendermidi 在渲染阶段生成事件并缩短同声部前音，Seq 不新增曲线计算。入口及限制见 [15 钢琴扩展](15-piano-expression.md)。
+
+## 0.16 演奏编辑交互
+
+显示控制隔离在 `mscore/performanceeditor/performancecontrols.cpp`：谱行带独立数值视窗、原生声部色、谱表过滤、缓存音符边界和参数提示。播放换行只读取原生位置、更新自己的屏幕层，不设置 ScoreView 偏移。细分踏板复用原生 Fraction tick 和已有 connector/location 格式；核心仅补 Pedal 非音符端点插值及精确位置的写入，普通踏板、音频回调与 MIDI 渲染不改。

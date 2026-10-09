@@ -213,6 +213,27 @@ QVariant Pedal::propertyDefault(Pid propertyId) const
 
 QPointF Pedal::linePos(Grip grip, System** sys) const
       {
+      // Non-note controller timing keeps its native tick. Interpolate within the
+      // measure without creating notation anchors; ordinary note-bound pedals
+      // continue through the original hook/spacing rules below.
+      const Fraction endpoint = grip == Grip::START ? tick() : tick2();
+      auto anchor = toChordRest(grip == Grip::START ? startElement() : endElement());
+      const bool onBoundary = anchor && (grip == Grip::START ? anchor->tick() == endpoint
+            : anchor->tick() + anchor->actualTicks() == endpoint);
+      if (!onBoundary) {
+            Measure* m = score()->tick2measureMM(endpoint);
+            if (!m) { *sys = nullptr; return QPointF(); }
+            const Fraction local = endpoint - m->tick();
+            Fraction before(0, 1), after = m->ticks() * (m->isMMRest() ? m->mmRestCount() : 1);
+            qreal x0 = 0, x1 = m->width();
+            for (auto seg = m->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest)) {
+                  if (seg->rtick() > local) { after = seg->rtick(); x1 = seg->x(); break; }
+                  before = seg->rtick(); x0 = seg->x();
+                  }
+            *sys = m->system();
+            const double f = after == before ? 0 : double((local - before).ticks()) / (after - before).ticks();
+            return QPointF(m->pos().x() + x0 + (x1 - x0) * f, 0);
+            }
       qreal x = 0.0;
       qreal nhw = score()->noteHeadWidth();
       System* s = nullptr;

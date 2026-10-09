@@ -37,6 +37,7 @@
 #include <QScrollBar>
 #include <QDoubleSpinBox>
 #include <QMenu>
+#include <QToolTip>
 #include <algorithm>
 
 namespace Ms {
@@ -56,6 +57,9 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       {
       _score = nullptr;
       _appearance.load();
+      _noteTips = QSettings().value("performanceEditor/noteTooltips", true).toBool();
+      _scoreVoiceColors = QSettings().value("performanceEditor/scoreVoiceColors", true).toBool();
+      _bandHeight = qBound(48, QSettings().value("performanceEditor/bandHeight", 48).toInt(), 144);
       editors.append(this);
       setObjectName("performanceEditor");
       auto layout = new QVBoxLayout(this);
@@ -74,15 +78,23 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             auto action = voiceMenu->addAction(tr("声部 %1").arg(v + 1)); action->setCheckable(true); action->setChecked(true);
             connect(action, &QAction::toggled, this, [this, v](bool on) { cancelGesture(); _voiceMask = on ? _voiceMask | (1 << v) : _voiceMask & ~(1 << v); rebuildFilter(); });
             }
-      auto ghost = voiceMenu->addAction(tr("显示其他声部为淡色参考")); ghost->setCheckable(true); ghost->setChecked(true);
-      connect(ghost, &QAction::toggled, this, [this](bool on) { _ghostVoices = on; invalidateVisual(); });
+      auto ghost = voiceMenu->addAction(tr("显示过滤外音符为淡色参考")); ghost->setCheckable(true); ghost->setChecked(true);
+      connect(ghost, &QAction::toggled, this, [this](bool on) { _ghostVoices = on; invalidateVisual(); invalidateOverlay(); });
       voiceMenu->addSeparator();
       for (int scope = 0; scope < 3; ++scope) {
             auto action = voiceMenu->addAction(scope == 0 ? tr("选择这些声部：时间选区／当前视窗") : (scope == 1 ? tr("选择这些声部：当前视窗") : tr("选择这些声部：全曲")));
             connect(action, &QAction::triggered, this, [this, scope] { selectVoices(scope); });
             }
       row->addWidget(voiceButton, row->count() / 5, row->count() % 5);
+      auto staffButton = new QToolButton(this); staffButton->setText(tr("谱表…")); staffButton->setObjectName("performanceStaffFilter"); staffButton->setPopupMode(QToolButton::InstantPopup);
+      staffButton->setToolTip(tr("在上方的当前乐器／当前谱表／全谱范围内筛选谱表；过滤保留原选择，只限制新编辑。"));
+      _staffMenu = new QMenu(staffButton); staffButton->setMenu(_staffMenu); row->addWidget(staffButton, row->count() / 5, row->count() % 5);
+      connect(_staffMenu, &QMenu::aboutToShow, this, &PerformanceEditor::rebuildStaffMenu);
       _tool = combo({tr("拖动"), tr("铅笔"), tr("直线")}, "performanceTool");
+      _pedalGrid = combo({tr("踏板 1/16"), tr("踏板 1/32"), tr("踏板 1/64"), tr("踏板 1/128"), tr("踏板自由"), tr("踏板音符边界")}, "performancePedalGrid");
+      _pedalGrid->setCurrentIndex(qBound(0, QSettings().value("performanceEditor/pedalGrid", 0).toInt(), 5)); _pedalGrid->hide();
+      _pedalGrid->setToolTip(tr("按小节起点吸附细分；自由模式精确到 1 tick。不会添加音符或休止。"));
+      connect(_pedalGrid, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int value) { cancelGesture(); QSettings().setValue("performanceEditor/pedalGrid", value); });
       row->setAlignment(Qt::AlignLeft);
       layout->addLayout(row);
       _playButton = new QToolButton(this); _playButton->setObjectName("performancePlay"); _playButton->setText(tr("▶ 播放"));
@@ -131,7 +143,16 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       auto displayMenu = new QMenu(appearance); appearance->setMenu(displayMenu);
       for (int mode = 0; mode < 3; ++mode) {
             auto action = displayMenu->addAction(mode == 0 ? tr("按力度着色") : (mode == 1 ? tr("按声部着色") : tr("按谱表着色")));
-            connect(action, &QAction::triggered, this, [this, mode] { _appearance.mode = mode; _appearance.save(); invalidateVisual(); });
+            connect(action, &QAction::triggered, this, [this, mode] { _appearance.mode = mode; _appearance.save(); invalidateVisual(); invalidateOverlay(); });
+            }
+      auto tips = displayMenu->addAction(tr("显示音符详细悬浮提示")); tips->setObjectName("performanceNoteTooltips"); tips->setCheckable(true); tips->setChecked(_noteTips);
+      connect(tips, &QAction::toggled, this, [this](bool on) { _noteTips = on; QSettings().setValue("performanceEditor/noteTooltips", on); QToolTip::hideText(); });
+      auto scoreColors = displayMenu->addAction(tr("谱行带／手柄使用原生声部颜色")); scoreColors->setObjectName("performanceScoreVoiceColors"); scoreColors->setCheckable(true); scoreColors->setChecked(_scoreVoiceColors);
+      connect(scoreColors, &QAction::toggled, this, [this](bool on) { _scoreVoiceColors = on; QSettings().setValue("performanceEditor/scoreVoiceColors", on); invalidateOverlay(); });
+      auto heights = displayMenu->addMenu(tr("谱行带高度"));
+      for (int h : {48, 80, 112, 144}) {
+            auto action = heights->addAction(tr("%1 像素").arg(h)); action->setObjectName(QString("performanceBandHeight%1").arg(h));
+            connect(action, &QAction::triggered, this, [this, h] { cancelGesture(); invalidateOverlay(); _bandHeight = h; QSettings().setValue("performanceEditor/bandHeight", h); if (_view) _view->update(); });
             }
       auto values = displayMenu->addAction(tr("音符内显示力度")); values->setCheckable(true); values->setChecked(QSettings().value("performanceEditor/showValues", false).toBool()); _showValues = values->isChecked();
       connect(values, &QAction::toggled, this, [this](bool on) { _showValues = on; QSettings().setValue("performanceEditor/showValues", on); updateSurfaces(); });
@@ -163,6 +184,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       auto parameterArea = new QWidget(_splitter); auto areaLayout = new QVBoxLayout(parameterArea); areaLayout->setContentsMargins(0, 0, 0, 0); areaLayout->setSpacing(0);
       _ruler = new PerformanceCanvas(this, PerformanceSurface::Ruler); _ruler->installEventFilter(this); areaLayout->addWidget(_ruler);
       paneControls(areaLayout, false);
+      _parameterHint = new QLabel(this); _parameterHint->setObjectName("performanceParameterHint"); _parameterHint->setWordWrap(true); _parameterHint->hide(); areaLayout->addWidget(_parameterHint);
       _canvas = new PerformanceCanvas(this, PerformanceSurface::Parameter); _canvas->installEventFilter(this); areaLayout->addWidget(_canvas, 1);
       _valueScroll = new QScrollBar(Qt::Vertical, _canvas); _valueScroll->setObjectName("performanceValueScroll");
       connect(_valueScroll, &QScrollBar::valueChanged, this, [this](int position) {
@@ -180,13 +202,20 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       connect(&_commitTimer, &QTimer::timeout, this, &PerformanceEditor::applyPending);
       connect(_scroll, &QScrollBar::valueChanged, this, [this] { if (!_automaticScroll) pauseFollow(); invalidateVisual(); });
       for (auto box : {_scope, _voice}) connect(box, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { cancelGesture(); rebuildFilter(); });
+      connect(_parameter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { QSignalBlocker blocker(_tool); _tool->setCurrentIndex(0); });
       for (auto box : {_axis, _parameter, _tool}) connect(box, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
             finishWheel(); cancelGesture();
             const bool velocity = _parameter->currentIndex() == 0;
-            _axis->setEnabled(velocity);
+            _pedalGrid->setVisible(_parameter->currentIndex() == 2); _tool->setEnabled(_parameter->currentIndex() != 2);
+            _tool->setItemText(0, _parameter->currentIndex() == 1 ? tr("节点 · 点按添加") : tr("拖动"));
+            _parameterHint->setText(_parameter->currentIndex() == 1 ? tr("节点：空白点按添加，上下拖动改 BPM；点中原速度节点才会修改它。铅笔／直线：横向画速度。时间尺定位播放。")
+                  : (_parameter->currentIndex() == 2 ? tr("踏板按乐器共享。空白水平拖动建立区间，拖两端改时机。开=127（顶端），关=0；菱形表示非音符边界。时间尺定位播放。") : QString()));
+            _parameterHint->setVisible(!velocity);
+            _axis->setEnabled(velocity); _axis->setVisible(velocity);
             findChild<QPushButton*>("performanceConvertRelative")->setEnabled(velocity);
             findChild<QPushButton*>("performanceConvertAbsolute")->setEnabled(velocity);
             findChild<QPushButton*>("performanceWriteValue")->setEnabled(_parameter->currentIndex() != 2);
+            findChild<QPushButton*>("performanceWriteValue")->setText(velocity ? tr("写入选中") : tr("写入速度节点"));
             _number->setEnabled(_parameter->currentIndex() != 2);
             _number->setSuffix(velocity && _axis->currentIndex() ? " %" : QString());
             _number->setPrefix(_parameter->currentIndex() == 1 ? "BPM " : QString());
@@ -244,6 +273,9 @@ void PerformanceEditor::setView(ScoreView* view)
       if (_score) _score->removeViewer(this);
       disconnect(_scoreDestroyed);
       _view = view; _score = next;
+      for (auto& boundaries : _pedalBoundaries) boundaries.clear();
+      _selectedTempoTick = _tempoPointTick = _unlockedTempo = -1;
+      _excludedStaves.clear(); rebuildStaffMenu();
       _notes.clear(); _segments.clear(); _tempos.clear(); _pedals.clear(); _noteIndex.clear(); _layoutIndex.clear(); _selectedIndices.clear(); _systemIndices.clear();
       _system = nullptr; _hover = -1; _snapshotDegraded = false; _intervals.clear(); _measures.clear(); invalidateVisual();
       if (_score) {
@@ -310,6 +342,7 @@ void PerformanceEditor::refresh()
       if (_dragging) cancelGesture();
       cancelSurfaceGesture();
       _notes.clear(); _segments.clear(); _tempos.clear(); _pedals.clear(); _noteIndex.clear(); _layoutIndex.clear(); _intervals.clear(); _linkedIndex.clear();
+      for (auto& boundaries : _pedalBoundaries) boundaries.clear();
       QElapsedTimer snapshotTimer; snapshotTimer.start();
       if (!live) { _score->createPlayEvents(); _score->updateVelo(); }
       _snapshotDegraded = live;
@@ -334,7 +367,10 @@ void PerformanceEditor::refresh()
                         }
             for (int t = 0; t < _score->nstaves() * VOICES; ++t) {
                   Element* element = segment->element(t);
-                  if (!element || !element->isChord()) continue;
+                  if (!element || !element->isChordRest()) continue;
+                  auto cr = toChordRest(element);
+                  _pedalBoundaries[0][t / VOICES].insert(tick); _pedalBoundaries[1][t / VOICES].insert((cr->tick() + cr->actualTicks()).ticks());
+                  if (!element->isChord()) continue;
                   auto addChord = [this, tick, globalMethod, live](Chord* chord) {
                         for (Note* note : chord->notes()) {
                               const int index = _notes.size();
@@ -537,7 +573,7 @@ void PerformanceEditor::setSelectedValue(double value)
       if (_parameter->currentIndex() == 1 && _selectedTempoTick >= 0) {
             QString error;
             _committing = true;
-            ParameterEdit::tempos(_score, {{_selectedTempoTick, value}}, _selectedTempoTick, &error);
+            ParameterEdit::tempos(_score, {{_selectedTempoTick, value}}, _unlockedTempo, &error);
             _committing = false; _dirty = true; scheduleRefresh(); status(error); return;
             }
       if (_parameter->currentIndex() != 0) { status(tr("先单击速度节点再写入 BPM；踏板请拖动端点。")); return; }
@@ -673,6 +709,14 @@ int PerformanceEditor::tickForX(double x, bool onScore) const
 
 int PerformanceEditor::snap(int tick, bool end) const
       {
+      const int mode = _pedalGrid->currentIndex();
+      if (mode < 5) {
+            if (mode == 4) return qBound(0, tick, _endTick);
+            const int step = DIVISION / (4 << mode);
+            auto m = std::upper_bound(_measures.cbegin(), _measures.cend(), tick, [](int t, const MeasureInfo& info) { return t < info.from; });
+            const int start = m == _measures.cbegin() ? 0 : (m - 1)->from;
+            return qBound(start, start + qRound(double(tick - start) / step) * step, m == _measures.cbegin() ? _endTick : (m - 1)->until);
+            }
       const auto& grid = end ? _pedalEnds : _pedalStarts;
       if (grid.isEmpty()) return 0;
       auto next = std::lower_bound(grid.cbegin(), grid.cend(), tick);
@@ -682,14 +726,14 @@ int PerformanceEditor::snap(int tick, bool end) const
       return tick - *previous < *next - tick ? *previous : *next;
       }
 
-double PerformanceEditor::valueForY(double y, const QRectF& rect) const
+double PerformanceEditor::valueForY(double y, const QRectF& rect, bool onScore) const
       {
-      const auto range = _viewport.ranges[rangeKind()];
+      const auto range = (onScore ? _scoreViewport : _viewport).ranges[rangeKind()];
       return qBound(range.minimum, range.minimum + (rect.bottom() - y) * (range.maximum - range.minimum) / rect.height(), range.maximum);
       }
-double PerformanceEditor::yForValue(double value, const QRectF& rect) const
+double PerformanceEditor::yForValue(double value, const QRectF& rect, bool onScore) const
       {
-      const auto range = _viewport.ranges[rangeKind()];
+      const auto range = (onScore ? _scoreViewport : _viewport).ranges[rangeKind()];
       return rect.bottom() - (value - range.minimum) * rect.height() / (range.maximum - range.minimum);
       }
 
@@ -712,7 +756,7 @@ void PerformanceEditor::beginGesture(QPointF point, QRectF rect, bool onScore, i
                   const int i = int(it - _notes.cbegin());
                   const auto& note = *it;
                   if (!noteEditable(note) || (onScore && note.system != _system)) continue;
-                  const QPointF center(xForTick(note.tick, onScore), yForValue(noteValue(i), rect));
+                  const QPointF center(xForTick(note.tick, onScore), yForValue(noteValue(i), rect, onScore));
                   const double d = QLineF(point, center).length();
                   if (noteEditable(note) && d < distance) { distance = d; _anchor = i; }
                   }
@@ -725,14 +769,15 @@ void PerformanceEditor::beginGesture(QPointF point, QRectF rect, bool onScore, i
                   }
             }
       else if (_parameter->currentIndex() == 1) {
+            _tempoPointTick = nearestSegment(tickForX(point.x(), onScore));
             for (const auto& tempo : _tempos)
-                  if (QLineF(point, QPointF(xForTick(tempo.tick, onScore), yForValue(tempo.bpm, rect))).length() < 10) _unlockedTempo = tempo.tick;
+                  if (QLineF(point, QPointF(xForTick(tempo.tick, onScore), yForValue(tempo.bpm, rect, onScore))).length() < 10) { _unlockedTempo = tempo.tick; _tempoOriginalBpm = tempo.bpm; }
             }
       else {
             _pedalTarget = nullptr;
             _pedalFrom = _pedalUntil = tickForX(point.x(), onScore);
             for (const auto& pedal : _pedals) {
-                  if (std::abs(point.y() - rect.center().y()) > 14) continue;
+                  if (!pedalVisible(pedal) || std::abs(point.y() - yForValue(127, rect, onScore)) > 14) continue;
                   if (std::abs(point.x() - xForTick(pedal.from, onScore)) < 10 || std::abs(point.x() - xForTick(pedal.until, onScore)) < 10) {
                         _pedalTarget = pedal.pedal; _pedalFrom = pedal.from; _pedalUntil = pedal.until;
                         _pedalEnd = std::abs(point.x() - xForTick(pedal.until, onScore)) < std::abs(point.x() - xForTick(pedal.from, onScore));
@@ -741,23 +786,18 @@ void PerformanceEditor::beginGesture(QPointF point, QRectF rect, bool onScore, i
                   }
             }
       if (_parameter->currentIndex() == 2) {
-            _pedalTrack = _pedalTarget ? _pedalTarget->track() : _score->staffIdx(_score->staff(_contextTrack / VOICES)->part()) * VOICES;
+            _pedalTrack = _pedalTarget ? _pedalTarget->track() : (_contextTrack / VOICES) * VOICES;
             _pedalStarts.clear(); _pedalEnds.clear();
-            const int staffTrack = (_pedalTrack / VOICES) * VOICES;
-            for (auto segment = _score->firstSegment(SegmentType::ChordRest); segment; segment = segment->next1(SegmentType::ChordRest))
-                  for (int voice = 0; voice < VOICES; ++voice) {
-                        auto element = segment->element(staffTrack + voice);
-                        if (!element || !element->isChordRest()) continue;
-                        auto cr = toChordRest(element);
-                        _pedalStarts.append(cr->tick().ticks()); _pedalEnds.append((cr->tick() + cr->actualTicks()).ticks());
-                        }
+            if (!staffEnabled(_pedalTrack)) { _dragging = false; status(tr("当前谱表已被过滤；请启用它或在谱面选中目标谱表。")); return; }
+            _pedalStarts = _pedalBoundaries[0].value(_pedalTrack / VOICES).values().toVector();
+            _pedalEnds = _pedalBoundaries[1].value(_pedalTrack / VOICES).values().toVector();
             for (auto grid : {&_pedalStarts, &_pedalEnds}) {
                   std::sort(grid->begin(), grid->end()); grid->erase(std::unique(grid->begin(), grid->end()), grid->end());
                   }
             if (!_pedalTarget) { _pedalFrom = snap(_pedalFrom); _pedalUntil = snap(_pedalUntil, true); }
             }
       if (_parameter->currentIndex() == 1) {
-            _selectedTempoTick = _unlockedTempo;
+            _selectedTempoTick = _unlockedTempo >= 0 ? _unlockedTempo : _tempoPointTick;
             for (const auto& tempo : _tempos) if (tempo.tick == _selectedTempoTick) {
                   QSignalBlocker blocker(_number); _number->setValue(tempo.bpm); break;
                   }
@@ -785,8 +825,8 @@ void PerformanceEditor::moveGesture(QPointF point)
                   }
             }
       else if (_offsetDrag) {
-            const auto range = _viewport.ranges[rangeKind()];
-            const double delta = _noteGesture ? (_press.y() - point.y()) * (range.maximum - range.minimum) / qMax(1.0, _gestureLane.height()) : valueForY(point.y(), _gestureLane) - valueForY(_press.y(), _gestureLane);
+            const auto range = (_scoreGesture ? _scoreViewport : _viewport).ranges[rangeKind()];
+            const double delta = _noteGesture ? (_press.y() - point.y()) * (range.maximum - range.minimum) / qMax(1.0, _gestureLane.height()) : valueForY(point.y(), _gestureLane, _scoreGesture) - valueForY(_press.y(), _gestureLane, _scoreGesture);
             for (int index : _dragTargets) setNoteValue(index, _dragOriginal.value(index) + delta, false);
             }
       else {
@@ -794,7 +834,7 @@ void PerformanceEditor::moveGesture(QPointF point)
             const QPointF start = line ? _press : _last;
             if (line) { _pending = _gestureBefore; _tempoDraft.clear(); }
             int from = tickForX(start.x(), _scoreGesture), until = tickForX(point.x(), _scoreGesture);
-            double v0 = valueForY(start.y(), _gestureLane), v1 = valueForY(point.y(), _gestureLane);
+            double v0 = valueForY(start.y(), _gestureLane, _scoreGesture), v1 = valueForY(point.y(), _gestureLane, _scoreGesture);
             if (until < from) { std::swap(from, until); std::swap(v0, v1); }
             auto value = [from, until, v0, v1](int tick) { return until == from ? v1 : v0 + (v1 - v0) * (tick - from) / (until - from); };
             if (_parameter->currentIndex() == 0) {
@@ -804,7 +844,12 @@ void PerformanceEditor::moveGesture(QPointF point)
                         if ((!selected || it->selected) && (!_scoreGesture || it->system == _system)) setNoteValue(int(it - _notes.cbegin()), value(it->tick), false);
                   }
             else {
-                  if (_unlockedTempo >= 0 && _tool->currentIndex() == 0) _tempoDraft[_unlockedTempo] = v1;
+                  if (_tool->currentIndex() == 0 && _selectedTempoTick >= 0) {
+                        bool locked = false;
+                        for (const auto& t : _tempos) if (t.tick == _selectedTempoTick && t.visible && t.tick != _unlockedTempo) locked = true;
+                        if (!locked) _tempoDraft[_selectedTempoTick] = _unlockedTempo >= 0
+                              ? qBound(5.0, _tempoOriginalBpm + valueForY(point.y(), _gestureLane, _scoreGesture) - valueForY(_press.y(), _gestureLane, _scoreGesture), 999.0) : v1;
+                        }
                   else {
                         auto first = std::lower_bound(_segments.cbegin(), _segments.cend(), from, [](const SegmentInfo& s, int t) { return s.tick < t; });
                         for (auto it = first; it != _segments.cend() && it->tick <= until; ++it)
@@ -822,6 +867,8 @@ void PerformanceEditor::moveGesture(QPointF point)
             if (_anchor >= 0) setNoteValue(_anchor, noteValue(_anchor)); else status();
             }
       if (qEnvironmentVariableIsSet("PERFORMANCE_BENCHMARK")) qInfo("Performance gesture %d editable targets: %.2f ms", _selectedIndices.size(), gestureTimer.nsecsElapsed() / 1e6);
+      if (_parameter->currentIndex() == 1) status(tr("预览 %1 BPM · 松开写入，Esc 取消").arg(_tempoDraft.value(_selectedTempoTick, valueForY(point.y(), _gestureLane, _scoreGesture)), 0, 'f', 2));
+      else if (_parameter->currentIndex() == 2) status(tr("踏板 %1 → %2 ticks · %3 · 松开写入，Esc 取消").arg(_pedalFrom).arg(_pedalUntil).arg(_pedalGrid->currentText()));
       _last = point; updateSurfaces(); if (_view) _view->update();
       }
 
@@ -836,25 +883,27 @@ void PerformanceEditor::finishGesture()
       else {
             QString error;
             _committing = true;
+            bool changed = false;
             if (_parameter->currentIndex() == 1) {
-                  if (_unlockedTempo < 0 && !_tempoDraft.isEmpty()) {
+                  if (_unlockedTempo < 0 && _tool->currentIndex() != 0 && !_tempoDraft.isEmpty()) {
                         const int end = _tempoDraft.lastKey();
                         for (const auto& segment : _segments) if (segment.tick > end && segment.tick < _endTick) {
                               _tempoDraft[segment.tick] = segment.bpm; break;
                               }
                         }
-                  ParameterEdit::tempos(_score, _tempoDraft, _unlockedTempo, &error);
+                  changed = ParameterEdit::tempos(_score, _tempoDraft, _unlockedTempo, &error);
                   }
             else {
-                  ParameterEdit::pedal(_score, _pedalTrack, _pedalFrom, _pedalUntil, _pedalTarget, &error);
+                  changed = ParameterEdit::pedal(_score, _pedalTrack, _pedalFrom, _pedalUntil, _pedalTarget, &error);
                   }
-            _committing = false; _tempoDraft.clear(); _dirty = true; scheduleRefresh(); status(error);
+            _committing = false; _tempoDraft.clear(); if (changed) { _dirty = true; scheduleRefresh(); } else { updateSurfaces(); if (_view) _view->update(); } status(error);
             }
       _gestureBefore.clear();
       }
 
 void PerformanceEditor::cancelGesture()
       {
+      if (_scoreRangePanning) { _scoreRangePanning = false; qApp->removeEventFilter(this); if (_view) { _view->releaseMouse(); _view->unsetCursor(); } }
       _moveTimer.stop(); _moveQueued = false;
       if (!_dragging) return;
       _pending = _gestureBefore; _gestureBefore.clear(); _tempoDraft.clear(); _dragging = false; qApp->removeEventFilter(this);
@@ -863,6 +912,10 @@ void PerformanceEditor::cancelGesture()
 
 bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       {
+      if (_scoreRangePanning && (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress)
+            && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
+            event->accept(); if (event->type() == QEvent::KeyPress) cancelGesture(); return true;
+            }
       if (_wheelIndex >= 0 && (event->type() == QEvent::KeyPress || event->type() == QEvent::ShortcutOverride)
             && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
             event->accept(); if (event->type() == QEvent::KeyPress) cancelWheel(); return true;

@@ -1289,6 +1289,10 @@ void Score::writeSegments(XmlWriter& xml, int strack, int etrack,
             spanners.push_back(s);
             }
 
+      QSet<int> nativeControllerTicks;
+      if (std::any_of(spanners.cbegin(), spanners.cend(), [](const Spanner* s) { return s->isPedal(); }))
+            for (auto segment = sseg; segment && segment != eseg; segment = segment->next1())
+                  if (segment->enabled() && segment->isChordRestType()) nativeControllerTicks.insert(segment->tick().ticks());
       int lastTrackWritten = strack - 1; // for counting necessary <voice> tags
       for (int track = strack; track < etrack; ++track) {
             if (!xml.canWriteVoice(track))
@@ -1299,6 +1303,26 @@ void Score::writeSegments(XmlWriter& xml, int strack, int etrack,
             bool timeSigWritten = false; // for forceTimeSig
             bool crWritten = false;      // for forceTimeSig
             bool keySigWritten = false;  // for forceTimeSig
+
+            // Pedal controllers may fall between chord/rest segments. Write their
+            // existing connector/location representation at the exact native tick;
+            // no empty notation segments or new score-format fields are needed.
+            for (Spanner* s : spanners) if (s->isPedal()) {
+                  for (bool ending : {false, true}) {
+                        const Fraction point = ending ? s->tick2() : s->tick();
+                        if ((ending ? s->effectiveTrack2() : s->track()) != track
+                              || point < sseg->tick() || point >= endTick
+                              || nativeControllerTicks.contains(point.ticks())
+                              || (clip && (ending ? s->tick() < sseg->tick() : s->tick2() > endTick))) continue;
+                        voiceTagWritten |= writeVoiceMove(xml, sseg, startTick, track, &lastTrackWritten);
+                        Location current = Location::absolute(), destination = Location::absolute();
+                        current.setFrac(xml.curTick()); current.setTrack(track);
+                        destination.setFrac(point); destination.setTrack(track);
+                        destination.toRelative(current); destination.write(xml); xml.setCurTick(point);
+                        if (ending) s->writeSpannerEnd(xml, sseg, track, point);
+                        else s->writeSpannerStart(xml, sseg, track, point);
+                        }
+                  }
 
             for (Segment* segment = sseg; segment && segment != eseg; segment = segment->next1()) {
                   if (!segment->enabled())

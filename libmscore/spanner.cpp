@@ -609,6 +609,14 @@ void Spanner::computeStartElement()
                                     }
                               }
                         }
+                  if (!_startElement && isPedal()) {
+                        // Controller timing can be between notes. Keep a preceding
+                        // notation context for native spanner validation/editing;
+                        // Pedal::linePos and serialization still use the exact tick.
+                        for (auto previous = score()->tick2leftSegment(tick(), true); previous && !_startElement; previous = previous->prev1(SegmentType::ChordRest))
+                              for (int t = strack; t < etrack; ++t)
+                                    if (previous->element(t)) { _startElement = previous->element(t); break; }
+                        }
                   }
                   break;
 
@@ -670,7 +678,9 @@ void Spanner::computeEndElement()
                         return;
                         }
 
-                  if (!endCR()->measure()->isMMRest()) {
+                  // Pedal endpoints are controller times, including positions between
+                  // notation anchors. Keep their native tick instead of snapping to a CR.
+                  if (!isPedal() && !endCR()->measure()->isMMRest()) {
                         ChordRest* cr = endCR();
                         Fraction nticks = cr->tick() + cr->actualTicks() - _tick;
                         if ((_ticks - nticks).isNotZero()) {
@@ -1445,11 +1455,11 @@ SpannerWriter::SpannerWriter(XmlWriter& xml, const Element* current, const Spann
    : ConnectorInfoWriter(xml, current, sp, track, frac)
       {
       const bool clipboardmode = xml.clipboardmode();
-      if (!sp->startElement() || !sp->endElement()) {
+      if ((!sp->startElement() || !sp->endElement()) && !sp->isPedal()) {
             qDebug("SpannerWriter: spanner (%s) doesn't have an endpoint!", sp->name());
             return;
             }
-      if (current->isMeasure() || current->isSegment() || (sp->startElement()->type() != current->type())) {
+      if (current->isMeasure() || current->isSegment() || !sp->startElement() || !sp->endElement() || (sp->startElement()->type() != current->type())) {
             // (The latter is the hairpins' case, for example, though they are
             // covered by the other checks too.)
             // We cannot determine position of the spanner from its start/end

@@ -106,28 +106,28 @@ text-font-fallback	libmscore/textbase.cpp	QFont TextFragment::font(	851	ScoreTex
 music-text-fallback	libmscore/sym.cpp	const char* ScoreFont::fallbackTextFont()	7156	Bravura Text fallback; not CJK title fallback	-
 harmony-regions	share/plugins/HarmonyAssistant/Timeline.js	function createBuilder	47	Numeric interval builder and manual overlays	mtest/mscore/scoreobserver
 harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName:""harmonyRangeEditor"""	7	Range handles, ticks and independent history	mtest/mscore/pluginhost
-演奏界面	mscore/performanceeditor/performanceeditor.cpp	PerformanceEditor::PerformanceEditor	55	独立停靠参数面板	mtest/mscore/performanceeditor
-演奏快照	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::refresh()	285	内容快照/独立布局修复/原生选择同步	mtest/mscore/performanceeditor
-谱面演奏编辑	mscore/performanceeditor/performanceoverlay.cpp	void PerformanceEditor::paintOverlay	93	谱面浮动带/双向音符提示/播放和鼠标线	mtest/mscore/performanceeditor
-演奏手势	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::beginGesture	699	预览/一次 undo	mtest/mscore/performanceeditor
-播放预览提交	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::applyPending	548	渲染空闲提交与外部改谱保护	mtest/mscore/performanceeditor
+演奏界面	mscore/performanceeditor/performanceeditor.cpp	PerformanceEditor::PerformanceEditor	56	独立停靠参数面板	mtest/mscore/performanceeditor
+演奏快照	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::refresh()	317	内容快照/独立布局修复/原生选择同步	mtest/mscore/performanceeditor
+谱面演奏编辑	mscore/performanceeditor/performanceoverlay.cpp	void PerformanceEditor::paintOverlay	121	谱面浮动带/双向音符提示/播放和鼠标线	mtest/mscore/performanceeditor
+演奏手势	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::beginGesture	743	预览/一次 undo	mtest/mscore/performanceeditor
+播放预览提交	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::applyPending	584	渲染空闲提交与外部改谱保护	mtest/mscore/performanceeditor
 力度事务	mscore/performanceeditor/parameteredit.cpp	bool velocities(	35	原生 Note 属性事务	mtest/mscore/performanceeditor
 速度事务	mscore/performanceeditor/parameteredit.cpp	bool tempos(	53	TempoText 批编辑与可见标记保护	mtest/mscore/performanceeditor
 踏板事务	mscore/performanceeditor/parameteredit.cpp	bool pedal(	119	原生区间与同 Part 重叠校验	mtest/mscore/performanceeditor
 逐音力度基准	libmscore/notevelocity.cpp	int referenceBase(	19	逐谱表/事件/演奏法基准	mtest/mscore/performanceeditor
 速度重建边界	libmscore/score.cpp	void Score::beginTempoEdit()	416	撤销/重做批量重建	mtest/mscore/performanceeditor
-播放同步	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::updatePlayhead	235	Seq当前时刻/反复映射/稳定滚页	mtest/mscore/performanceeditor
+播放同步	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::updatePlayhead	236	Seq当前时刻/反复映射/稳定滚页	mtest/mscore/performanceeditor
 演奏筛选选择	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::selectIndices	46	原生批选/框选/过滤与重入保护	mtest/mscore/performanceeditor
-演奏绘制	mscore/performanceeditor/performancepainting.cpp	void PerformanceEditor::paintForeground	219	识音/参数着色/发声与预览描边	mtest/mscore/performanceeditor
+演奏绘制	mscore/performanceeditor/performancepainting.cpp	void PerformanceEditor::paintForeground	234	识音/参数着色/发声与预览描边	mtest/mscore/performanceeditor
 演奏网格	mscore/performanceeditor/performancepainting.cpp	void PerformanceEditor::paintBackground	58	原生小节拍位/半音键条/参数数字	mtest/mscore/performanceeditor
 持续音查询	mscore/performanceeditor/performanceview.cpp	QVector<int> PerformanceIntervalIndex::query	38	分音高前缀最大结束时刻区间查询	mtest/mscore/performanceeditor
 演奏配色	mscore/performanceeditor/performancesettings.cpp	bool PerformanceAppearance::edit	88	独立颜色设置/渐变节点/重启恢复	mtest/mscore/performanceeditor
 演奏选择桥	mscore/performanceeditor/performanceselection.cpp	bool PerformanceSelection::apply	7	一次宿主通知/保留播放位置	mtest/mscore/performanceeditor
 原生批选	libmscore/score.cpp	bool Score::selectNoteList	3392	预验证/去重/输入上下文/不定位播放	mtest/mscore/performanceeditor
-浮层滚动	mscore/performanceeditor/performanceoverlay.cpp	void PerformanceEditor::overlayViewChanged	30	旧固定浮层及滚动像素副本的损伤重绘	mtest/mscore/performanceeditor
-演奏试听	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::audition(int	119	停播实音/保存力度原生定时试听	mtest/mscore/performanceeditor
-演奏播放入口	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::togglePlayback	142	原生播放状态/明确定位入口	mtest/mscore/performanceeditor
-独立纵向视窗	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::zoomVertical	154	音高/参数各自缩放/滚动条同步	mtest/mscore/performanceeditor
+浮层滚动	mscore/performanceeditor/performanceoverlay.cpp	void PerformanceEditor::overlayViewChanged	32	旧固定浮层及滚动像素副本的损伤重绘	mtest/mscore/performanceeditor
+演奏试听	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::audition(int	120	停播实音/保存力度原生定时试听	mtest/mscore/performanceeditor
+演奏播放入口	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::togglePlayback	143	原生播放状态/明确定位入口	mtest/mscore/performanceeditor
+独立纵向视窗	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::zoomVertical	155	音高/参数各自缩放/滚动条同步	mtest/mscore/performanceeditor
 滚轮力度	mscore/performanceeditor/performancewheel.cpp	bool PerformanceEditor::wheelVelocity	26	单音细粗调/端点锁定/临时模式与原生预览	mtest/mscore/performanceeditor
 滚轮撤销段	mscore/performanceeditor/performancewheel.cpp	void PerformanceEditor::finishWheel	13	300ms合并/生命周期与一次提交	mtest/mscore/performanceeditor
 个人工具栏	mscore/musescore.cpp	void MuseScore::populateAlternativeOperations	707	Evolution其他选项栏复用演奏编辑器QAction	mtest/mscore/performanceeditor
@@ -135,14 +135,18 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 个人帮助标识	mscore/musescoredialogs.cpp	AboutBoxDialog::AboutBoxDialog()	144	关于/复制版本/个人标签链接	mtest/mscore/performanceeditor
 个人版本生成	personal/branding.cmake	file(STRINGS	3	单一VERSION源/独立生成头/自动重配置	mtest/mscore/performanceeditor
 滚轮浮标	mscore/performanceeditor/performancewheel.cpp	void PerformanceEditor::paintWheelBadge	86	画布内数值/局部损伤重绘	mtest/mscore/performanceeditor
-排版几何刷新	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::refreshLayout	413	播放中只更新GUI几何/不重建音频事件	mtest/mscore/performanceeditor
-谱行缓存切换	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::setOverlaySystem	427	跨谱行一次重建/原生选择独立	mtest/mscore/performanceeditor
-播放谱行定位	mscore/performanceeditor/performanceeditor.cpp	System* PerformanceEditor::systemAtTick	422	记谱tick二分定位/休止与反复	mtest/mscore/performanceeditor
+排版几何刷新	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::refreshLayout	449	播放中只更新GUI几何/不重建音频事件	mtest/mscore/performanceeditor
+谱行缓存切换	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::setOverlaySystem	463	跨谱行一次重建/原生选择独立	mtest/mscore/performanceeditor
+播放谱行定位	mscore/performanceeditor/performanceeditor.cpp	System* PerformanceEditor::systemAtTick	458	记谱tick二分定位/休止与反复	mtest/mscore/performanceeditor
 琶音时序	libmscore/playbacktiming.cpp	Arpeggio* arpeggio(	18	跨谱表参与音和提前窗口	mtest/libmscore/midi/tst_midi.cpp
 琶音检视器	mscore/inspector/inspectorArpeggio.cpp	void InspectorArpeggio::postInit()	65	实际间隔与旧比率提示	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
-参数暂存	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::queueProperty(	610	播放中暂存/停播和保存提交	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
+参数暂存	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::queueProperty(	646	播放中暂存/停播和保存提交	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
 琶音延音回归	mtest/libmscore/midi/tst_midi.cpp	void TestMidi::timedArpeggioTies()	832	防止续接时长丢失/不重触发	mtest/libmscore/midi/tst_midi.cpp
 小音符时序	libmscore/playbacktiming.cpp	double graceSpanMs(	83	速度图与整组上限	mtest/libmscore/midi/tst_midi.cpp
 倚音播放解释	libmscore/rendermidi.cpp	void Score::createGraceNotesPlayEvents(	2200	旧融合与新位置解释	mtest/libmscore/midi/tst_midi.cpp
 小音符检视器	mscore/inspector/inspectorNote.cpp	void InspectorNote::postInit()	212	外观/时间分离及实际时间	mtest/libmscore/midi/tst_midi.cpp
 小音符反复回归	mtest/libmscore/midi/tst_midi.cpp	void TestMidi::timedGraceRepeatJump()	652	按实际跳转缩短同声部前音	mtest/libmscore/midi/tst_midi.cpp
+谱行精调	mscore/performanceeditor/performancecontrols.cpp	void PerformanceEditor::scoreRangeControl	55	独立谱带范围/缓存筛选/原生声部色	mtest/mscore/performanceeditor
+自由踏板布局	libmscore/pedal.cpp	QPointF Pedal::linePos	214	非音符端点插值/普通踏板原规则	mtest/mscore/performanceeditor
+自由踏板保存	libmscore/scorefile.cpp	QSet<int> nativeControllerTicks	1292	已有location精确保存/无新字段	mtest/mscore/performanceeditor
+参数交互回归	mtest/mscore/performanceeditor/performance_controls_tests.inc	void finePedalNativeLayoutMidiUndoAndPersistence	2	真实CC64/undo/跨小节保存/菜单与节点	mtest/mscore/performanceeditor

@@ -10,14 +10,14 @@
 namespace Ms {
 PerformanceRange PerformanceViewport::limits(int kind)
       { return kind == 0 ? PerformanceRange{1, 127} : (kind == 1 ? PerformanceRange{-127, 12600} : (kind == 2 ? PerformanceRange{5, 999} : PerformanceRange{0, 127})); }
-void PerformanceViewport::zoomRange(int kind, double factor, double anchor)
+void PerformanceViewport::zoomRange(int kind, double factor, double anchor, bool keepBaseline)
       {
       if (kind == 3) return;
       auto& range = ranges[kind];
       const auto limit = limits(kind);
       const double fraction = (anchor - range.minimum) / (range.maximum - range.minimum);
       const double span = qBound(kind == 2 ? 5.0 : 8.0, (range.maximum - range.minimum) / factor, limit.maximum - limit.minimum);
-      range.minimum = kind == 0 ? limit.minimum : qBound(limit.minimum, anchor - fraction * span, limit.maximum - span);
+      range.minimum = kind == 0 && keepBaseline ? limit.minimum : qBound(limit.minimum, anchor - fraction * span, limit.maximum - span);
       range.maximum = range.minimum + span;
       }
 void PerformanceViewport::panRange(int kind, double delta)
