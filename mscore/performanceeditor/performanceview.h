@@ -4,14 +4,22 @@
 #include <QWidget>
 #include <QPixmap>
 #include <QVector>
+#include <QPolygonF>
 #include <array>
 namespace Ms {
 class PerformanceEditor;
 enum class PerformanceSurface { Notes, Ruler, Parameter };
+// White key fronts are equal; their necks and black keys follow semitone rows.
+struct PerformanceKeyboard {
+      static bool isBlack(int pitch);
+      static QPolygonF shape(int pitch, double topPitch, double rowHeight, double width);
+      static int pitchAt(QPointF point, double topPitch, double rowHeight, double width);
+      };
 struct PerformanceRange { double minimum, maximum; };
 struct PerformanceViewport {
       static constexpr int gutter = 76;
       static constexpr int rightMargin = 14;
+      static constexpr int parameterPadding = 6;
       double pixelsPerQuarter = 72, rowHeight = 12, topPitch = 72;
       std::array<PerformanceRange, 4> ranges {{{1, 127}, {-100, 100}, {5, 240}, {0, 127}}};
       static PerformanceRange limits(int kind);

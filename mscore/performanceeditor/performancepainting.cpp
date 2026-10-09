@@ -10,7 +10,6 @@
 #include <algorithm>
 namespace Ms {
 namespace {
-bool blackKey(int pitch) { const int key = pitch % 12; return key == 1 || key == 3 || key == 6 || key == 8 || key == 10; }
 QString pitchName(int pitch)
       {
       static const char* names[] = {"C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"};
@@ -61,28 +60,34 @@ void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface su
       QWidget* widget = surface == PerformanceSurface::Notes ? static_cast<QWidget*>(_noteCanvas) : (surface == PerformanceSurface::Ruler ? static_cast<QWidget*>(_ruler) : _canvas);
       painter.fillRect(widget->rect(), c[PerformanceAppearance::Background]);
       if (surface == PerformanceSurface::Notes) {
-            for (int pitch = qMax(0, int(_viewport.topPitch - widget->height() / _viewport.rowHeight)); pitch <= qMin(127, int(std::ceil(_viewport.topPitch))); ++pitch) {
+            const int low = qMax(0, int(_viewport.topPitch - widget->height() / _viewport.rowHeight) - 2);
+            const int high = qMin(127, int(std::ceil(_viewport.topPitch)) + 2);
+            for (int pitch = low; pitch <= high; ++pitch) {
                   const double y = (_viewport.topPitch - pitch) * _viewport.rowHeight;
-                  painter.fillRect(QRectF(0, y, widget->width() - PerformanceViewport::rightMargin, _viewport.rowHeight), c[blackKey(pitch) ? PerformanceAppearance::AccidentalRow : PerformanceAppearance::NaturalRow]);
-                  painter.setPen(c[PerformanceAppearance::Grid]); painter.drawLine(QPointF(0, y), QPointF(widget->width() - PerformanceViewport::rightMargin, y));
-                  painter.fillRect(QRectF(0, y + 1, PerformanceViewport::gutter - 1, _viewport.rowHeight - 1), QColor("#bcbcbc"));
-                  if (blackKey(pitch)) painter.fillRect(QRectF(0, y + 1, PerformanceViewport::gutter - 25, _viewport.rowHeight - 1), QColor("#303030"));
-                  if (_viewport.rowHeight >= 10 || pitch % 12 == 0) {
-                        painter.setPen(blackKey(pitch) ? QColor("#ededed") : QColor("#292929"));
-                        painter.drawText(QRectF(3, y, PerformanceViewport::gutter - 8, _viewport.rowHeight), Qt::AlignVCenter, pitchName(pitch));
+                  painter.fillRect(QRectF(PerformanceViewport::gutter, y, widget->width() - PerformanceViewport::gutter - PerformanceViewport::rightMargin, _viewport.rowHeight), c[PerformanceKeyboard::isBlack(pitch) ? PerformanceAppearance::AccidentalRow : PerformanceAppearance::NaturalRow]);
+                  painter.setPen(c[PerformanceAppearance::Grid]); painter.drawLine(QPointF(PerformanceViewport::gutter, y), QPointF(widget->width() - PerformanceViewport::rightMargin, y));
+                  }
+            painter.save(); painter.setClipRect(QRectF(0, 0, PerformanceViewport::gutter, widget->height()));
+            for (bool black : {false, true}) for (int pitch = low; pitch <= high; ++pitch) {
+                  if (PerformanceKeyboard::isBlack(pitch) != black) continue;
+                  painter.setPen(QPen(QColor("#6c6c6c"), 1)); painter.setBrush(QColor(black ? "#303030" : "#bcbcbc"));
+                  painter.drawPolygon(PerformanceKeyboard::shape(pitch, _viewport.topPitch, _viewport.rowHeight, PerformanceViewport::gutter));
+                  if (_keyboardNames && (_viewport.rowHeight >= 10 || pitch % 12 == 0)) {
+                        painter.setPen(black ? QColor("#ededed") : QColor("#292929"));
+                        const double y = (_viewport.topPitch - pitch) * _viewport.rowHeight;
+                        painter.drawText(QRectF(PerformanceViewport::gutter * .34 + 3, y, PerformanceViewport::gutter * .66 - 5, _viewport.rowHeight), Qt::AlignVCenter, pitchName(pitch));
                         }
                   }
+            painter.restore();
             }
       if (surface == PerformanceSurface::Parameter) {
             const auto range = _viewport.ranges[rangeKind()]; const QRectF lane = laneRect();
-            painter.setPen(c[PerformanceAppearance::Text]);
-            painter.drawText(4, 13, rangeKind() == 2 ? "♩ BPM" : (rangeKind() == 3 ? "CC64" : (rangeKind() == 1 ? "%" : "MIDI")));
             const int divisions = rangeKind() == 3 ? 1 : 4;
             for (int i = 0; i <= divisions; ++i) {
                   const double value = range.minimum + (range.maximum - range.minimum) * i / divisions;
                   const double y = yForValue(value, lane);
                   painter.setPen(c[PerformanceAppearance::Grid]); painter.drawLine(QPointF(lane.left(), y), QPointF(lane.right(), y));
-                  painter.setPen(c[PerformanceAppearance::Text]); painter.drawText(QRectF(1, y - 8, PerformanceViewport::gutter - 8, 16), Qt::AlignRight | Qt::AlignVCenter, rangeKind() == 3 ? (i == 0 ? tr("关 0") : tr("开 127")) : QString::number(value, 'f', 0));
+                  painter.setPen(c[PerformanceAppearance::Text]); painter.drawText(QRectF(1, qBound(0.0, y - 8, widget->height() - 16.0), PerformanceViewport::gutter - 8, 16), Qt::AlignRight | Qt::AlignVCenter, rangeKind() == 3 ? (i == 0 ? tr("关 0") : tr("开 127")) : QString::number(value, 'f', 0));
                   }
             if (range.minimum <= 0 && range.maximum >= 0) {
                   painter.setPen(QPen(c[PerformanceAppearance::Text], 1, Qt::DashLine)); painter.drawLine(QPointF(lane.left(), yForValue(0, lane)), QPointF(lane.right(), yForValue(0, lane)));

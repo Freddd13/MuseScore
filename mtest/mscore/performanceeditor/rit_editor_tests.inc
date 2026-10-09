@@ -35,7 +35,7 @@ void TestPerformanceEditor::ritInspectorAndCurveGestures()
       QTest::qWait(80); editor->fit(); QTest::mouseClick(editor->findChild<QToolButton*>("performanceRangeReset"),Qt::LeftButton); QTest::qWait(40);
       auto canvas=editor->findChild<QWidget*>("performanceParameterCanvas"); QVERIFY(canvas);
       auto x=[&](int tick){return qRound(76+(canvas->width()-90)*tick/3840.0);};
-      auto y=[&](double bpm){return qRound(canvas->height()-18-(bpm-5)*(canvas->height()-36)/994.0);};
+      auto y=[&](double bpm){return qRound(canvas->height()-6-(bpm-5)*(canvas->height()-12)/994.0);};
       QPoint endpoint(x(1920),y(96)),moved=endpoint+QPoint(0,-8); int index=score->undoStack()->getCurIdx();
       QTest::mousePress(canvas,Qt::LeftButton,Qt::NoModifier,endpoint); QMouseEvent motion(QEvent::MouseMove,moved,Qt::NoButton,Qt::LeftButton,Qt::NoModifier); QApplication::sendEvent(canvas,&motion);
       QTest::qWait(30); QCOMPARE(line->ritTarget(),80.0); QTest::mouseRelease(canvas,Qt::LeftButton,Qt::NoModifier,moved); QTest::qWait(60);

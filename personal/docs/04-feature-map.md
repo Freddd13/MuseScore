@@ -91,6 +91,8 @@ rg -n 'QSKIP|add_test|subdirs|MTEST_LINK_MSCOREAPP' mtest
 
 ## 演奏参数（0.9–0.11）
 
+0.18.1：键盘正确白键轮廓／半音右端和键形命中在 `performanceview.*`；“显示… → 键盘显示音名”开关与紧凑参数区在 `performanceeditor.cpp`，绘制在 `performancepainting.cpp`。−／+／适／全移至时间尺左侧，三参数共享更多有效高度；真实宿主验收在 `performance_controls_tests.inc`，设置重启回归在 `tst_performanceeditor.cpp`。
+
 独立演奏编辑器：`mscore/performanceeditor/performanceeditor.*`（快照/参数手势）、`performanceview.*`（共享视窗/区间索引/画布）、`performancepainting.cpp`（绘制）、`performanceinteraction.cpp`（选择/播放/交互）、`performanceoverlay.cpp`（谱面双向提示／浮层滚动重绘）、`performanceselection.*`（原生选择桥）、`performancesettings.*`（外观）、`parameteredit.*`（原生 undo）、`libmscore/notevelocity.*`（百分比/基准）。入口在视图菜单；回归 `mtest/mscore/performanceeditor`。与原卷帘和检视器共享 Note 属性，使用原 TempoText/Pedal；见 [14](14-performance-editor.md)。
 
 0.11：试听、直接定位／原生播放、重叠端点选择与轮换、独立纵向按钮／数值滚动条，操作入口见 [用户功能说明](../USER_GUIDE.md)。

@@ -133,6 +133,8 @@ $env:PERFORMANCE_BENCHMARK='1'
 
 同刻不同力度端点／重合轮换、数值匹配与轴平移、空白定位和移至选音、谱面双向悬浮和滚动损伤区域进入真实 Qt suite。Seq 子类仅在测试中记录原生 startNote 请求，仍执行原生定时试听；播放按钮／双击／空格实际走 NORMAL ↔ PLAY。不连接真实声卡。最终常规、高 DPI、压力与安装数据见 [更新日志](../CHANGELOG.md)。
 
+0.18.1 键盘／紧凑参数区验证：先以独立 Git worktree 继承已发布 0.18，然后编译自己的编辑器修改；共享文件不在两项任务同时写入。当前 VS 生成器的排除测试目标在各自子目录；如果根目录 `cmake --build ... --target tst_performanceeditor` 找不到 `.vcxproj`，用 MSBuild 调用 `mtest/mscore/performanceeditor/tst_performanceeditor.vcxproj`，指定 Release/x64。同理可构建 `mtest/libmscore/midi/tst_midi.vcxproj`。测试 EXE 暂放本次独立安装的 bin 并在自己的验证目录运行，复用安装资源而不复制多套 runtime；结束后删除测试 EXE，仅保留报告／截图和正式程序。临时 worktree 的 dependencies 是指向原 SDK 的 junction，清理时只移除此链接，再移除自己的 worktree，禁止递归删除原 dependencies。
+
 
 ## 0.12 单音滚轮、个人身份与安装
 

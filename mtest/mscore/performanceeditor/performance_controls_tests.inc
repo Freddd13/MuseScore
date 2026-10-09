@@ -1,4 +1,57 @@
 // Included in TestPerformanceEditor: exercise the native host, not a UI mock.
+      void keyboardContoursAndCompactParameterLayout()
+            {
+            // Validate every right-hand semitone row, also at fractional scroll positions.
+            for (double row : {2.0, 12.0, 36.0}) for (double top : {127.0, 127.37}) for (int pitch = 0; pitch <= 127; ++pitch) {
+                  const QPointF point(70, (top - pitch) * row + row / 2);
+                  QCOMPARE(PerformanceKeyboard::pitchAt(point, top, row, 76), pitch);
+                  QVERIFY(PerformanceKeyboard::shape(pitch, top, row, 76).containsPoint(point, Qt::OddEvenFill));
+                  }
+            QCOMPARE(PerformanceKeyboard::pitchAt(QPointF(70, 138), 72, 12, 76), 61);
+            QCOMPARE(PerformanceKeyboard::pitchAt(QPointF(5, 138), 72, 12, 76), 60);
+            auto main = Ms::mscore; QVERIFY(main);
+            auto score = main->readScore(QString(TESTROOT) + "/mtest/mscore/scoreobserver/piano.mscx"); QVERIFY(score);
+            main->setCurrentScoreView(main->appendScore(score)); main->resize(1280, 1000); main->show();
+            auto editor = main->performanceEditor(); editor->show();
+            auto parameter = editor->findChild<QComboBox*>("performanceParameter"); parameter->setCurrentIndex(0);
+            editor->findChild<QComboBox*>("performanceTool")->setCurrentIndex(0);
+            editor->findChild<QComboBox*>("performanceScope")->setCurrentIndex(2);
+            editor->findChild<QComboBox*>("performanceAxis")->setCurrentIndex(0);
+            auto note = noteAt(score, 480, 0); QVERIFY(note);
+            QVERIFY(PerformanceSelection::apply(score, {note}, note)); editor->selectionChanged(); editor->setSelectedValue(64); editor->fit(); QTest::qWait(80);
+            auto notes = editor->findChild<QWidget*>("performanceNoteCanvas"); auto lane = editor->findChild<QWidget*>("performanceParameterCanvas");
+            auto ruler = editor->findChild<QWidget*>("performanceRuler"); auto names = editor->findChild<QAction*>("performanceKeyboardNames"); QVERIFY(names);
+            const auto content = score->state(); const int undo = score->undoStack()->getCurIdx(); const auto position = score->playPos();
+            names->setChecked(true); QTest::qWait(15); const auto labeled = notes->grab().toImage();
+            names->setChecked(false); QTest::qWait(15); const auto plain = notes->grab().toImage();
+            const int keyboardWidth = qRound(76 * plain.devicePixelRatio());
+            QVERIFY(labeled.copy(0, 0, keyboardWidth, labeled.height()) != plain.copy(0, 0, keyboardWidth, plain.height()));
+            QCOMPARE(labeled.copy(keyboardWidth, 0, labeled.width() - keyboardWidth, labeled.height()), plain.copy(keyboardWidth, 0, plain.width() - keyboardWidth, plain.height()));
+            QVERIFY(score->state() == content); QCOMPARE(score->undoStack()->getCurIdx(), undo); QCOMPARE(score->playPos(), position);
+            names->setChecked(true);
+            for (int mode : {0, 1, 2}) {
+                  parameter->setCurrentIndex(mode); QTest::qWait(30);
+                  QCOMPARE(lane->width(), notes->width());
+                  QVERIFY(lane->mapTo(editor, QPoint()).y() - ruler->mapTo(editor, QPoint(0, ruler->height())).y() <= 1);
+                  QVERIFY(!editor->findChild<QLabel*>("performanceParameterHint")->isVisible());
+                  for (const char* name : {"performanceConvertRelative", "performanceConvertAbsolute"})
+                        QCOMPARE(editor->findChild<QPushButton*>(name)->isVisible(), mode == 0);
+                  QCOMPARE(editor->findChild<QDoubleSpinBox*>("performanceValue")->isVisible(), mode != 2);
+                  QCOMPARE(editor->findChild<QPushButton*>("performanceWriteValue")->isVisible(), mode != 2);
+                  for (const char* control : {"performanceRangeOut", "performanceRangeIn", "performanceRangeFit", "performanceRangeReset"}) {
+                        auto button = editor->findChild<QToolButton*>(control); QVERIFY(button); QVERIFY(button->isVisible());
+                        QVERIFY(button->mapTo(ruler, QPoint()).x() + button->width() <= 76);
+                        }
+                  editor->grab().save(QString("performance-compact-lane-%1.png").arg(mode));
+                  }
+            parameter->setCurrentIndex(0); QTest::mouseClick(editor->findChild<QToolButton*>("performanceRangeReset"), Qt::LeftButton); QTest::qWait(20);
+            auto scroll = editor->findChild<QScrollBar*>(QString(), Qt::FindDirectChildrenOnly); QVERIFY(scroll);
+            const int x = 76 + qRound((480 - scroll->value()) * (lane->width() - 90.0) / scroll->pageStep());
+            const int y = qRound(lane->height() - 6 - 63 * (lane->height() - 12) / 126.0);
+            QTest::mousePress(lane, Qt::LeftButton, Qt::NoModifier, QPoint(x, y));
+            QTest::mouseRelease(lane, Qt::LeftButton, Qt::NoModifier, QPoint(x, 6)); QTest::qWait(30);
+            QVERIFY(note->customizeVelocity(NoteVelocity::referenceBase(note)) >= 126);
+            }
       void finePedalNativeLayoutMidiUndoAndPersistence()
             {
             std::unique_ptr<MasterScore> score(fixture()); QVERIFY(score);
@@ -95,7 +148,7 @@
             parameter->setCurrentIndex(1); tool->setCurrentIndex(0); editor->fit(); QTest::qWait(30);
             auto scroll = editor->findChild<QScrollBar*>(QString(), Qt::FindDirectChildrenOnly); QVERIFY(scroll);
             auto x = [&](int tick) { return 76 + qRound((tick - scroll->value()) * (timeline->width() - 90.0) / scroll->pageStep()); };
-            const int y = 18 + qRound((240 - 100) * (timeline->height() - 36) / 235.0);
+            const int y = 6 + qRound((240 - 100) * (timeline->height() - 12) / 235.0);
             QTest::mouseClick(timeline, Qt::LeftButton, Qt::NoModifier, QPoint(x(480), y)); QTest::qWait(50);
             QVERIFY(std::abs(score->tempo(Fraction::fromTicks(480)) * 60 - 100) < 2);
             const auto oldTempo = score->tempo(Fraction::fromTicks(480));
@@ -115,9 +168,9 @@
             QCOMPARE(pedal->tick().ticks() % 30, 0); QCOMPARE(pedal->tick2().ticks() % 30, 0);
             const QImage pedalImage = timeline->grab().toImage(); const double dpr = pedalImage.devicePixelRatio();
             auto pixel = [&](int y) { return pedalImage.pixelColor(qRound(x(900) * dpr), qRound(y * dpr)); };
-            const QColor bg = pixel(8);
+            const QColor bg = pixel(2);
             auto difference = [&](QColor color) { return std::abs(color.red() - bg.red()) + std::abs(color.green() - bg.green()) + std::abs(color.blue() - bg.blue()); };
-            QVERIFY(difference(pixel(18)) > difference(pixel(timeline->height() / 2)) + 20);
+            QVERIFY(difference(pixel(6)) > difference(pixel(timeline->height() / 2)) + 20);
             timeline->grab().save("performance-fine-pedal-016.png"); editor->grab().save("performance-editor-016.png"); view->grab().save("performance-score-pedal-016.png");
             parameter->setCurrentIndex(0); grid->setCurrentIndex(0); editor->findChild<QAction*>("performanceBandHeight48")->trigger();
             }

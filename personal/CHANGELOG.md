@@ -2,6 +2,19 @@
 
 个人版本记录本仓库的个人维护增量；应用上游版本另由 `config.cmake` 管理。历史源码提交尚未追溯归类，此处从首次建立指南开始记录，不代表此前没有个人改动。
 
+## 0.18.1 — 2026-10-09
+
+- 界面：修正钢琴键盘黑白键交叉轮廓，白键前端等高、网格侧各半音等高；键形用于点击试听和悬浮识音。“显示… → 键盘显示音名”可关闭文字，重启恢复，不影响音符块音名或乐谱。
+- 布局：参数区 −/+／适／全移入时间尺左侧 gutter；删除占高度的重复单位标题，速度／踏板说明改成下拉框与时间尺的悬浮提示。绘图区上下留白由18缩为6像素，刻度上／下限仍在画布内；工具栏只按可见控件排宽并保持顺序，速度／踏板隐藏不可用的力度转换，踏板隐藏不适用的数值／写入速度节点控件。
+- 范围：修改仅限 mscore/performanceeditor 的键形、画布、交互与布局，以及相应测试／指南；keyboardNames 是独立显示设置，不添加乐谱字段，不改原生属性、音频回调、MIDI 渲染或原卷帘。继承已发布0.18的 rit./a tempo，更新其手柄坐标测试；tempocurves 已统一通过 laneRect 及 yForValue，不需另改模型。
+- 验证：最终独立 x64 Release 与安装通过；安装运行库下真实 Qt 常规35/35、150% DPI35/35、10k/50k压力4/4、原生 MIDI74/74，均0失败/跳过。覆盖128音键形命中、音名像素隔离／跨进程恢复、三参数／窄窗口布局、上下限拖拽及0.18 rit./a tempo回归；人工检查常规／高DPI／窄窗口截图和 Kumo branch/Freddd13/v0.18.1 启动／关于标识。实际插件宿主／安装 HarmonyAssistant 与 QtWebSockets import/未连接实例通过，failures为空，不访问用户设置或系统剪贴板；未进行真实声卡长播放。
+- 性能：本次新测10080／50064音的概览／局部40帧。10k快照116.56ms、过滤0.53ms、批选107.02ms、原生提交180.64ms；概览／局部两区绘制P95 8.14／11.79ms、拖动1.71／1.49ms、定位绘制14.37／16.76ms。50k快照403.19ms、过滤2.35ms、批选915.00ms、提交1207.84ms；两区绘制16.37／12.46ms、拖动2.01／1.83ms、定位绘制22.96／18.18ms。50k谱带原生滚动7.45ms、轴缩放3.88ms、力度滚轮预览4.76ms，单次滚轮提交／缓存刷新39.16ms；批选／提交单独报告，定位绘制未全达16.7ms目标。并行环境单机观察值，完整原始报告保留，不沿用上一版数据。
+- 部署：msvc.install_performance_0_18_1_x64/bin/MuseScore3Evo.exe；构建／安装 SHA256同为 fd143f435cf8fda3248f6bc4c0aa3ebb5023e866fdbc6cc331a8ba1385f17fd2，--long-version返回0。补齐同SDK QmlModels／WorkerScript／WebSockets DLL。小量构建／安装日志、regular/high-dpi/benchmark/midi、native-host、结果JSON及截图在该安装的 verification；清理结果另存 cleanup-record.json。
+- 隔离：本任务使用 msvc.performance-layout-source Git worktree 和内部 msvc.build_layout_x64；安装到 msvc.install_performance_0_18_1_x64，保留旧安装。最终仅清理本任务检出、构建与临时测试EXE，保留小量报告／截图，不动用户和其他任务目录。作者标识仍从 VERSION 自动生成，用户 AGENTS/MCP 工作区改动不纳入提交。
+- Git 父提交：ba0308e8f2a2ad2b78badfbd28c01e9b10bc869c（继承0.18发布059ddd720fc4e54a8f0f9879f78f38de970daca0及字体试用说明）。
+- Git 提交主题：fix(performance): correct keyboard contours and reclaim parameter lane space。
+- 提交定位：personal-v0.18.1；验证后普通推送，不强推。
+
 ## 0.18.0 — 2026-10-09
 
 - 功能：原生系统文字线扩展为可播放 rit.，默认终速为起速80%、线性、结束保持；a tempo 恢复最近渐变前速度，可选 Tempo primo 或指定 BPM。旧普通文字线与速度文字缺字段保持原解释。

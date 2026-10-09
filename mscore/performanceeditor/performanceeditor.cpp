@@ -59,6 +59,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _score = nullptr;
       _appearance.load();
       _noteTips = QSettings().value("performanceEditor/noteTooltips", true).toBool();
+      _keyboardNames = QSettings().value("performanceEditor/keyboardNames", true).toBool();
       _scoreVoiceColors = QSettings().value("performanceEditor/scoreVoiceColors", true).toBool();
       _bandHeight = qBound(48, QSettings().value("performanceEditor/bandHeight", 48).toInt(), 144);
       editors.append(this);
@@ -148,6 +149,8 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             }
       auto tips = displayMenu->addAction(tr("显示音符详细悬浮提示")); tips->setObjectName("performanceNoteTooltips"); tips->setCheckable(true); tips->setChecked(_noteTips);
       connect(tips, &QAction::toggled, this, [this](bool on) { _noteTips = on; QSettings().setValue("performanceEditor/noteTooltips", on); QToolTip::hideText(); });
+      auto keyNames = displayMenu->addAction(tr("键盘显示音名")); keyNames->setObjectName("performanceKeyboardNames"); keyNames->setCheckable(true); keyNames->setChecked(_keyboardNames);
+      connect(keyNames, &QAction::toggled, this, [this](bool on) { _keyboardNames = on; QSettings().setValue("performanceEditor/keyboardNames", on); invalidateVisual(); });
       auto scoreColors = displayMenu->addAction(tr("谱行带／手柄使用原生声部颜色")); scoreColors->setObjectName("performanceScoreVoiceColors"); scoreColors->setCheckable(true); scoreColors->setChecked(_scoreVoiceColors);
       connect(scoreColors, &QAction::toggled, this, [this](bool on) { _scoreVoiceColors = on; QSettings().setValue("performanceEditor/scoreVoiceColors", on); invalidateOverlay(); });
       auto heights = displayMenu->addMenu(tr("谱行带高度"));
@@ -168,14 +171,17 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _splitter = new QSplitter(Qt::Vertical, this); _splitter->setChildrenCollapsible(false);
       auto noteArea = new QWidget(_splitter); auto noteLayout = new QVBoxLayout(noteArea); noteLayout->setContentsMargins(0, 0, 0, 0); noteLayout->setSpacing(0);
       auto paneControls = [this](QVBoxLayout* parent, bool notes) {
-            auto row = new QHBoxLayout; row->setContentsMargins(3, 0, 3, 0); row->setSpacing(3); row->addWidget(new QLabel(notes ? tr("音高") : tr("数值范围")));
-            auto add = [this, row](const QString& text, const QString& tip, const QString& name, auto callback) { auto button = new QToolButton; button->setText(text); button->setToolTip(tip); button->setObjectName(name); connect(button, &QToolButton::clicked, this, callback); row->addWidget(button); };
+            QWidget* controls = nullptr;
+            auto row = new QHBoxLayout; row->setContentsMargins(notes ? 3 : 1, 0, notes ? 3 : 1, 0); row->setSpacing(notes ? 3 : 0);
+            if (notes) row->addWidget(new QLabel(tr("音高")));
+            else { controls = new QWidget(_ruler); controls->setObjectName("performanceRangeControls"); controls->setGeometry(0, 0, PerformanceViewport::gutter, _ruler->height()); controls->setLayout(row); }
+            auto add = [this, row, notes](const QString& text, const QString& tip, const QString& name, auto callback) { auto button = new QToolButton; button->setText(text); button->setToolTip(tip); button->setObjectName(name); if (!notes) { button->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred); button->setStyleSheet("QToolButton { padding: 0px; margin: 0px; }"); } connect(button, &QToolButton::clicked, this, callback); row->addWidget(button); };
             const QString prefix = notes ? "performancePitch" : "performanceRange";
             add("−", tr("只缩小本区纵向视窗，不改变音符属性"), prefix + "Out", [this, notes] { zoomVertical(notes, 1 / 1.4); });
             add("+", tr("只放大本区纵向视窗，围绕当前选音／数值"), prefix + "In", [this, notes] { zoomVertical(notes, 1.4); });
-            add(notes ? tr("音域") : tr("匹配值"), notes ? tr("显示乐器音域") : tr("放大到选中音的数值范围；没有选音时匹配当前视窗"), prefix + "Fit", [this, notes] { if (notes) centerPitch(false, true); else resetRange(true); });
-            add(notes ? tr("选音") : tr("全范围"), notes ? tr("保持行高，音高区居中选音") : tr("恢复完整数值范围"), prefix + "Reset", [this, notes] { if (notes) centerPitch(true); else resetRange(false); });
-            row->addStretch(); parent->addLayout(row);
+            add(notes ? tr("音域") : tr("适"), notes ? tr("显示乐器音域") : tr("匹配值：放大到选中音的数值范围；没有选音时匹配当前视窗"), prefix + "Fit", [this, notes] { if (notes) centerPitch(false, true); else resetRange(true); });
+            add(notes ? tr("选音") : tr("全"), notes ? tr("保持行高，音高区居中选音") : tr("恢复完整数值范围"), prefix + "Reset", [this, notes] { if (notes) centerPitch(true); else resetRange(false); });
+            if (notes) { row->addStretch(); parent->addLayout(row); }
             };
       paneControls(noteLayout, true);
       _noteCanvas = new PerformanceCanvas(this, PerformanceSurface::Notes); _noteCanvas->installEventFilter(this); noteLayout->addWidget(_noteCanvas, 1);
@@ -185,7 +191,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       auto parameterArea = new QWidget(_splitter); auto areaLayout = new QVBoxLayout(parameterArea); areaLayout->setContentsMargins(0, 0, 0, 0); areaLayout->setSpacing(0);
       _ruler = new PerformanceCanvas(this, PerformanceSurface::Ruler); _ruler->installEventFilter(this); areaLayout->addWidget(_ruler);
       paneControls(areaLayout, false);
-      _parameterHint = new QLabel(this); _parameterHint->setObjectName("performanceParameterHint"); _parameterHint->setWordWrap(true); _parameterHint->hide(); areaLayout->addWidget(_parameterHint);
+      _parameterHint = new QLabel(this); _parameterHint->setObjectName("performanceParameterHint"); _parameterHint->hide();
       _canvas = new PerformanceCanvas(this, PerformanceSurface::Parameter); _canvas->installEventFilter(this); areaLayout->addWidget(_canvas, 1);
       _valueScroll = new QScrollBar(Qt::Vertical, _canvas); _valueScroll->setObjectName("performanceValueScroll");
       connect(_valueScroll, &QScrollBar::valueChanged, this, [this](int position) {
@@ -211,19 +217,23 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             _tool->setItemText(0, _parameter->currentIndex() == 1 ? tr("节点 · 点按添加") : tr("拖动"));
             _parameterHint->setText(_parameter->currentIndex() == 1 ? tr("节点：空白点按添加，上下拖动改 BPM。rit.：拖首尾圆点或曲率菱形，右键解除关联后可自由画速度。时间尺定位播放。")
                   : (_parameter->currentIndex() == 2 ? tr("踏板按乐器共享。空白水平拖动建立区间，拖两端改时机。开=127（顶端），关=0；菱形表示非音符边界。时间尺定位播放。") : QString()));
-            _parameterHint->setVisible(!velocity);
+            _parameterHint->hide();
+            _parameter->setToolTip(_parameterHint->text()); _tool->setToolTip(_parameterHint->text()); _ruler->setToolTip(_parameterHint->text());
             _axis->setEnabled(velocity); _axis->setVisible(velocity);
-            findChild<QPushButton*>("performanceConvertRelative")->setEnabled(velocity);
-            findChild<QPushButton*>("performanceConvertAbsolute")->setEnabled(velocity);
+            for (const char* name : {"performanceConvertRelative", "performanceConvertAbsolute"}) {
+                  auto button = findChild<QPushButton*>(name); button->setEnabled(velocity); button->setVisible(velocity);
+                  }
             findChild<QPushButton*>("performanceWriteValue")->setEnabled(_parameter->currentIndex() != 2);
+            findChild<QPushButton*>("performanceWriteValue")->setVisible(_parameter->currentIndex() != 2);
             findChild<QPushButton*>("performanceWriteValue")->setText(velocity ? tr("写入选中") : tr("写入速度节点"));
             _number->setEnabled(_parameter->currentIndex() != 2);
+            _number->setVisible(_parameter->currentIndex() != 2);
             _number->setSuffix(velocity && _axis->currentIndex() ? " %" : QString());
             _number->setPrefix(_parameter->currentIndex() == 1 ? "BPM " : QString());
             _number->setRange(velocity ? (_axis->currentIndex() ? NoteVelocity::minOffset : 1) : 5,
                   velocity ? (_axis->currentIndex() ? NoteVelocity::maxOffset : 127) : 999);
             _number->setDecimals(velocity ? 0 : 2);
-            updateSelection(); status(); invalidateVisual(); if (_view) _view->update();
+            resizeEvent(nullptr); updateSelection(); status(); invalidateVisual(); if (_view) _view->update();
             });
       for (auto box : {_handles, _band}) connect(box, &QCheckBox::toggled, this, [this] { cancelGesture(); syncOverlayTracking(); if (_view) _view->update(); });
       if (seq) {
@@ -241,15 +251,18 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
 
 void PerformanceEditor::resizeEvent(QResizeEvent*)
       {
+      int bar = 0;
       for (auto grid : {_topRow, _actionsRow}) {
+            auto& widgets = _toolbarWidgets[bar++];
             if (!grid) continue;
-            QVector<QWidget*> widgets;
-            while (auto item = grid->takeAt(0)) { if (item->widget()) widgets.append(item->widget()); delete item; }
+            const bool rememberOrder = widgets.isEmpty();
+            while (auto item = grid->takeAt(0)) { if (rememberOrder && item->widget()) widgets.append(item->widget()); delete item; }
             int cellWidth = 1;
-            for (auto widget : widgets) cellWidth = qMax(cellWidth, widget->minimumSizeHint().width());
+            for (auto widget : widgets) if (!widget->isHidden()) cellWidth = qMax(cellWidth, widget->minimumSizeHint().width());
             const int spacing = qMax(6, grid->horizontalSpacing());
             const int columns = qBound(1, (width() - 12 + spacing) / (cellWidth + spacing), widgets.size());
-            for (int i = 0; i < widgets.size(); ++i) grid->addWidget(widgets[i], i / columns, i % columns);
+            int cell = 0;
+            for (auto widget : widgets) if (!widget->isHidden()) { grid->addWidget(widget, cell / columns, cell % columns); ++cell; }
             }
       }
 
@@ -688,7 +701,7 @@ bool PerformanceEditor::overlayAllowed() const
             && !_view->editMode() && !_view->noteEntryMode();
       }
 
-QRectF PerformanceEditor::laneRect() const { return QRectF(PerformanceViewport::gutter, 18, qMax(10, _canvas->width() - PerformanceViewport::gutter - PerformanceViewport::rightMargin), qMax(30, _canvas->height() - 36)); }
+QRectF PerformanceEditor::laneRect() const { return QRectF(PerformanceViewport::gutter, PerformanceViewport::parameterPadding, qMax(10, _canvas->width() - PerformanceViewport::gutter - PerformanceViewport::rightMargin), qMax(30, _canvas->height() - 2 * PerformanceViewport::parameterPadding)); }
 
 double PerformanceEditor::xForTick(int tick, bool onScore) const
       {

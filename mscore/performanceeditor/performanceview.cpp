@@ -8,6 +8,32 @@
 #include <algorithm>
 #include <cmath>
 namespace Ms {
+bool PerformanceKeyboard::isBlack(int pitch)
+      { const int key = pitch % 12; return key == 1 || key == 3 || key == 6 || key == 8 || key == 10; }
+QPolygonF PerformanceKeyboard::shape(int pitch, double topPitch, double rowHeight, double width)
+      {
+      const double y = (topPitch - pitch) * rowHeight;
+      const double shoulder = width * .34, right = width - 1;
+      if (isBlack(pitch)) return QPolygonF(QRectF(shoulder, y, right - shoulder, rowHeight));
+      static const int naturalIndex[] = {0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6};
+      const int octave = pitch / 12, key = naturalIndex[pitch % 12];
+      const double frontTop = (topPitch - octave * 12 - (key + 1) * 12.0 / 7 + 1) * rowHeight;
+      const double frontBottom = frontTop + rowHeight * 12.0 / 7;
+      QPolygonF outline;
+      outline << QPointF(0, frontTop) << QPointF(shoulder, frontTop)
+            << QPointF(shoulder, y) << QPointF(right, y) << QPointF(right, y + rowHeight)
+            << QPointF(shoulder, y + rowHeight) << QPointF(shoulder, frontBottom) << QPointF(0, frontBottom);
+      return outline;
+      }
+int PerformanceKeyboard::pitchAt(QPointF point, double topPitch, double rowHeight, double width)
+      {
+      if (point.x() < 0 || point.x() >= width) return -1;
+      // At the right edge every key is precisely one pitch row high.
+      if (point.x() >= width * .34) { const int pitch = int(std::ceil(topPitch - point.y() / rowHeight)); return pitch >= 0 && pitch <= 127 ? pitch : -1; }
+      for (int pitch = 0; pitch <= 127; ++pitch)
+            if (!isBlack(pitch) && shape(pitch, topPitch, rowHeight, width).containsPoint(point, Qt::OddEvenFill)) return pitch;
+      return -1;
+      }
 PerformanceRange PerformanceViewport::limits(int kind)
       { return kind == 0 ? PerformanceRange{1, 127} : (kind == 1 ? PerformanceRange{-127, 12600} : (kind == 2 ? PerformanceRange{5, 999} : PerformanceRange{0, 127})); }
 void PerformanceViewport::zoomRange(int kind, double factor, double anchor, bool keepBaseline)

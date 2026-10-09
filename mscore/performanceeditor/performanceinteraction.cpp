@@ -347,7 +347,8 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
             if (!_noteTips) { QToolTip::hideText(); return true; }
             if (!candidates.isEmpty()) QToolTip::showText(help->globalPos(), noteTooltip(candidates.front()), static_cast<QWidget*>(object));
             else if (notes && help->pos().x() < PerformanceViewport::gutter) {
-                  const int pitch = qBound(0, int(std::ceil(_viewport.topPitch - help->pos().y() / _viewport.rowHeight)), 127);
+                  const int pitch = PerformanceKeyboard::pitchAt(help->pos(), _viewport.topPitch, _viewport.rowHeight, PerformanceViewport::gutter);
+                  if (pitch < 0) { QToolTip::hideText(); return true; }
                   static const char* names[] = {"C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"};
                   QToolTip::showText(help->globalPos(), tr("实音 %1%2 · MIDI %3").arg(QString::fromUtf8(names[pitch % 12])).arg(pitch / 12 - 1).arg(pitch), _noteCanvas);
                   }
@@ -382,7 +383,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
                         menu.exec(mouse->globalPos()); return true;
                         }
                   if (mouse->button() != Qt::LeftButton) return false;
-                  if (notes && mouse->x() < 32) { auditionPitch(qBound(0, int(std::ceil(_viewport.topPitch - mouse->y() / _viewport.rowHeight)), 127)); return true; }
+                  if (notes && mouse->x() < PerformanceViewport::gutter) { const int pitch = PerformanceKeyboard::pitchAt(mouse->pos(), _viewport.topPitch, _viewport.rowHeight, PerformanceViewport::gutter); if (pitch >= 0) auditionPitch(pitch); return true; }
                   if (mouse->modifiers() & Qt::AltModifier && !candidates.isEmpty() && parameter) { cycleHit(candidates); return true; }
                   if (notes) {
                         pauseFollow();

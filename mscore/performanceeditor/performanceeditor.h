@@ -131,7 +131,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QPointF _queuedPoint;
       bool _moveQueued = false, _selecting = false, _marquee = false, _seeking = false;
       bool _following = true, _automaticScroll = false, _geometryDirty = false;
-      bool _ghostVoices = true, _showValues = false, _snapshotDegraded = false;
+      bool _ghostVoices = true, _showValues = false, _keyboardNames = true, _snapshotDegraded = false;
       int _voiceMask = 15, _playTick = -1, _seekTick = -1;
       QPointF _marqueeStart, _marqueeEnd;
       Qt::KeyboardModifiers _selectionModifiers;
@@ -184,6 +184,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QDoubleSpinBox* _number;
       QScrollBar* _scroll = nullptr;
       QGridLayout *_topRow = nullptr, *_actionsRow = nullptr;
+      std::array<QVector<QWidget*>, 2> _toolbarWidgets;
       QTimer _refreshTimer, _commitTimer;
       ScoreContentState _state;
       bool _fitOnRefresh = true, _dirty = true, _committing = false, _dragging = false, _scoreGesture = false, _offsetDrag = false;

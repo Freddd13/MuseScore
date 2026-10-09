@@ -98,6 +98,14 @@ TempoText 本来会反复 fixTicks；新增临时批事务，用成对 UndoComma
 
 `performancecontrols.cpp` 分离过滤、谱带范围与参数提示；谱行带拥有独立 PerformanceViewport，默认 48 px，可设 48–144 px。轴缩放可锚定当前值、轴拖动平移，按钮 −/+、↑/↓、匹配/全对应独立显示范围，不改变原生属性。谱带／手柄默认读取 MScore::selectColor，关闭后继承编辑器配色。声部掩码与 excludedStaves 只更新 enabled 缓存，不重建播放事件、不清空原选择。noteTooltips、scoreVoiceColors、bandHeight、pedalGrid 使用独立设置组。popup 显式设置背景、文字与选择颜色。
 
+## 0.18.1 键形与参数可用空间
+
+`performanceview.*` 的 PerformanceKeyboard 将等高白键前端连接到半音行的窄部，黑键位于网格侧；右边每个音的高度始终为 rowHeight。绘制、键盘悬浮和试听共享此几何规则，不能用左侧白键前端的 y 直接猜 MIDI 半音。白键、黑键分两遍描边，静态背景缓存继续生效；常规音符几何、时间映射和原生数据不变。
+
+`performanceEditor/keyboardNames` 默认为 true，通过“显示… → 键盘显示音名”持久化；切换仅使背景缓存失效，不生成音乐事件或 Undo。参数区按钮嵌入时间尺的左侧 gutter，不覆盖时间定位区。独立按钮行、单位标题行和参数说明行不再占用绘图区；说明保留在参数／工具／尺的 tooltip。laneRect 上下各留 parameterPadding=6 px，端点、命中与拖动仍共享同一矩形。刻度文字夹在画布内，保证 1／127、0／127 和 BPM 上下限可读。工具栏记忆原控件顺序，只用可见控件计算行宽；隐藏对象仍保留以复用原信号和功能。
+
+真实 Qt 用例 keyboardContoursAndCompactParameterLayout 覆盖全部 MIDI 音高在不同缩放／小数滚动下的右端命中、黑键处左侧白键命中、音名开关只改变键盘像素、不改选择/播放/Undo、三参数布局、模式适用控件可见性和顶端可拖到127；跨进程设置用例检查开关恢复。速度／踏板隐藏力度转换，踏板隐藏数值／速度写入，状态和对象仍保留便于切回模式；常规、高 DPI 及合入 0.18 后的结果以更新日志为准。
+
 速度默认节点操作；点空白选择最近既有 CR tick，点真实节点才设置 unlockedTempo。单点不插入恢复节点，连续绘线仍恢复后文速度。数字写入沿用该显式解锁条件，原可见速度文字继续保护。
 
 踏板纵轴固定 CC64 0/127，开值在顶端；fine/free 直接保存原 Fraction tick。快照收集各谱表 CR 起止集合，拖动、悬浮和绘制 O(1) 查询边界。非音符端点菱形／虚线和提示区分真实时机。核心补丁限于 Pedal::linePos 的非音符位置插值、Score::writeSegments 对 detached Pedal 的既有 connector/location 输出和 computeStartElement 为细分踏板保留前置原生音符上下文、computeEndElement 保留原始控制器终点、SpannerWriter 允许 Pedal 按真实 tick 写入；不新增 XML 字段、不改播放渲染或音频回调。跨小节 roundtrip/MIDI/undo 专门测试，旧踏板继续按原规则写入和布局。
