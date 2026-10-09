@@ -155,3 +155,13 @@
 范围内已有速度节点或重叠渐变时会拒绝添加。明确选择 **替换该范围速度** 才会移除内部速度标记及整条重叠渐变，范围两端标记保留。此操作可一次撤销，跨范围的原渐变会整条移除，不能把它理解为只擦掉重叠部分。
 
 选中 a tempo 的检视器可切换 **恢复最近渐变前速度**、**Tempo primo（全曲起速）**、**指定 BPM**。显示文字与播放语义分开，不必从文字拼写猜测行为。拍前琶音、小音符、音序器和音频/MIDI 导出共同使用派生速度图，原生 MSCX/MSCZ 保存扩展属性，其他版本重新保存可能丢失它们。
+
+## Kumo Engrave 符头试验（字体 0.1.0，2026-10-09）
+
+独立字体源码在相邻 `mcp-musescore` 仓库 `fonts/kumo-engrave/`，提交 `6dbde84df3afe023f96d79aa5b09e0b72a0ef94a`。这是 OFL Finale Maestro 的完整字库衍生原型，当前只独立设计三个常规符头；用户确认按 Chaconne Ex 公开样本的视觉方向推进，主候选为 **Kumo Engrave JP**。没有提取商业字体，也没有更改本体源码、内置字库或软件个人版本号。
+
+1. 构建／解压字体包，把 `jp/Kumo Engrave JP` 完整子文件夹复制到 **偏好设置 → 路径 → Score Fonts／乐谱字体** 的私有目录；OTF／JSON 与文件夹同名。重启 Evolution，不必安装到 Windows 全局字体目录。
+2. 打开原谱的独立副本，在 **格式 → 样式 → 乐谱** 选择音乐符号字体 `Kumo Engrave JP`，音乐 Text 保持内置 **Finale Maestro Text**，第一轮关闭自动采用推荐样式。字体试用不依赖 MCP 或 skill；字体更新只需成对更新 OTF／JSON 并重启，不用重配 MCP。
+3. 0.17 原生 Windows 隔离试验验证基础覆盖／全部字宽保留、Control 与原版全页像素相同、用户谱各候选均9页。所有源 PDF／MSCZ 只读并核验哈希；普通接杆锚点保留，实际轮廓、cutout 与分叉锚点按版本维护，字体可能改变局部避让。
+
+限制：配套改名 Text 虽可注册，Maestro Text 缺 `dynamicMezzo` 码位，内置家族的 Qt 回退规则不随改名继承，mf／mp 等可能变化，因此暂不推荐改名 Text。谱号、变音、休止、力度等仍是 Maestro 基础字形；打印和完整审美验收尚未完成。安装、恢复、可重复构建、版本及原生证据见字体目录 `README.md`、`CHANGELOG.md`、`DESIGN_BRIEF.md`、`VERIFICATION.md` 和 MCP 仓库 `docs/FONT_PLAN.md`。净书与字体分别推进，不应同时改字形和页面参数后把结果全部归因于字体。
