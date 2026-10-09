@@ -376,6 +376,8 @@ static constexpr PropertyMetaData propertyList[] = {
       { Pid::ENVELOPE_END, P_TYPE::REAL, true, "envelopeEnd", "final generated velocity percent" },
       { Pid::ENVELOPE_CURVE, P_TYPE::REAL, true, "envelopeCurve", "generated velocity curve" },
       { Pid::ENVELOPE_ALTERNATE, P_TYPE::REAL, true, "envelopeAlternate", "alternate note reduction in percentage points" },
+      { Pid::FREE_SLUR_MODE, P_TYPE::BOOL, true, "freeSlurMode", "free slur curve" },
+      { Pid::FREE_SLUR_NODES, P_TYPE::STRING, true, "freeSlurNodes", "free slur time nodes" },
       { Pid::END,                       P_TYPE::INT,            false, "++end++",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "<invalid property>")                            }
       };
 

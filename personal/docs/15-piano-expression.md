@@ -81,3 +81,13 @@ NoteEvent 的 velocityFactor 默认1、velocitySourceIndex 默认−1，是准�
 envelopepreview.cpp 仅在停播快照时采样每次发声基准及因子、过滤双音各自源，并合并相邻相同项。generatedVelocityRange 从缓存和当前预览属性计算实际范围；绘制／试听／提示不重新生成事件，音频回调不计算曲线或分配包络数据。保存值轴继续用定制前事件因子；范围旁标区分实际发声。不增加逐次事件绘制编辑。
 
 envelope_playback_tests.inc 覆盖旧值、相对／绝对、柔和／渐强／渐弱／曲率、双音独立定制／不发声／不同音数、完整延音／差异和自定义边界、非法值、克隆／Undo／实际分谱、MSCX／MSCZ与分块、128小节8192攻击。envelope_editor_tests.inc 用真实Qt检视器验证预设单Undo、数字、Shift拖动、Esc、播放暂存、单震音／颤音段／短颤音、缓存范围以及真实Seq逐次力度／中途起播／循环。实际最终结果见版本日志。
+
+## 0.20.0 自由圆滑线
+
+freeslur.*扩展Slur／SlurSegment，FREE_SLUR_MODE=false和FREE_SLUR_NODES="[]"为旧缺字段默认。JSON数组每项[position,dx,dy,tx,ty]，position严格(0,1)、位移±100sp、导数修正±400sp、有限数、相邻间隔至少1e-5、上限32节点和16KiB，规范化排序。全部参数linked，复制／原生读写保留。普通线和延音线路径不改。
+
+每个System以slur tick跨度和小节边界分配节点，边界节点归下一行；局部时间比例映射到原生Bezier的t，不绑定屏幕X。节点位移和导数修正乘sp，相邻节点共享导数，重构分段三次曲线；宽度3t(1−t)保留原渐尖外观，点／虚线使用现有画笔。shape分段采样并留线宽边界，bbox及PDF/SVG继续原Slur绘制。手动节点时跳过原自动抬高／避碰，端点定位保留。
+
+动态gripsCount=6+3*n，最多102适配signed-char Grip；gripsPositions自行生成，不能调用使用固定_ups数组的基类循环。ScoreView更新仅对SlurSegment同步动态数目；额外键盘快捷键只在中间手柄生效。节点拖动根对象直接预览，endEditDrag恢复旧值后根undoChangeProperty一次提交以传播分谱；取消恢复旧值。不能把新属性push进段的旧ElementEditData，因为段links不是根Slur链接。
+
+FreeSlurInspector模式复用原生属性映射，节点编辑将整份规范化JSON通过PerformanceEditor安全队列提交；数字名称复用ScrubPropertyLabel。多选只改模式，节点单选；待提交期间保留面板草稿以免后续数字覆盖。freeslur_tests.inc检查模型／实际Qt编辑、重排／读写／分谱／MIDI不变／导出，实际结果见版本日志。

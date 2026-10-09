@@ -423,10 +423,13 @@ class Inspector : public QDockWidget {
 //   InspectorSlurTie
 //---------------------------------------------------------
 
+class FreeSlurInspector;
 class InspectorSlurTie : public InspectorElementBase {
       Q_OBJECT
 
       Ui::InspectorSlur s;
+      FreeSlurInspector* _freeCurve = nullptr;
+      void postInit() override;
 
    public:
       InspectorSlurTie(QWidget* parent);

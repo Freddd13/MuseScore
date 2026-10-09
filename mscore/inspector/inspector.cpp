@@ -14,6 +14,7 @@
 #include <QPushButton>
 #include "scrubproperty.h"
 #include "envelopeinspector.h"
+#include "freeslurinspector.h"
 #include "../performanceeditor/performanceeditor.h"
 
 #include "musescore.h"
@@ -1443,13 +1444,19 @@ InspectorSlurTie::InspectorSlurTie(QWidget* parent)
       if (sameTypes)
             s.title->setText(el->isSlurSegment() ? tr("Slur") : tr("Tie"));
 
-      const std::vector<InspectorItem> iiList = {
+      std::vector<InspectorItem> iiList = {
             { Pid::LINE_TYPE,       0, s.lineType,      s.resetLineType      },
             { Pid::SLUR_DIRECTION,  0, s.slurDirection, s.resetSlurDirection }
             };
+      if (sameTypes && el->isSlurSegment()) {
+            _freeCurve=new FreeSlurInspector(s.panel,inspector);
+            iiList.push_back({Pid::FREE_SLUR_MODE,0,_freeCurve->mode,nullptr});
+            }
       const std::vector<InspectorPanel> ppList = { { s.title, s.panel } };
       mapSignals(iiList, ppList);
       }
+
+void InspectorSlurTie::postInit() { if(_freeCurve) _freeCurve->sync(); }
 
 //---------------------------------------------------------
 //   InspectorEmpty

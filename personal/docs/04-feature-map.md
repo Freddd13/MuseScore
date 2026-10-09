@@ -131,3 +131,5 @@ Arpeggio 属性/原生读写 → PlaybackTiming 参与音/窗口 → renderArpeg
 | rit./a tempo（0.18） | `textline.*`、`tempotext.*`、`tempoexpression.*` | `parameteredit.*`、`tempocurves.cpp`、文字线/速度检视器、添加→文本 | `rit_playback_tests.inc`、`rit_editor_tests.inc` |
 
 | 震音／颤音力度包络（0.19） | `playbackenvelope.*`、`notevelocity.*`、`rendermidi.cpp` | `envelopeinspector.h`、`envelopepreview.cpp` | `envelope_playback_tests.inc`、`envelope_editor_tests.inc` |
+
+| 自由圆滑线（0.20） | `slur.*`、`freeslur.*` | `freeslurinspector.h`、ScoreView局部手柄／键盘入口 | `freeslur_tests.inc` |

@@ -14,6 +14,7 @@
 #define __SLUR_H__
 
 #include "slurtie.h"
+#include "freeslur.h"
 
 namespace Ms {
 
@@ -27,6 +28,13 @@ class SlurSegment final : public SlurTieSegment {
    protected:
       qreal _extraHeight = 0.0;
       void changeAnchor(EditData&, Element*) override;
+      QVector<QLineF> gripAnchorLines(Grip) const override;
+      struct FreeGrips { int index; QPointF point,left,right; double leftScale,rightScale; };
+      QVector<FreeGrips> _freeGrips;
+      QString _freeDragOriginal;
+      bool _freeDragging = false;
+      bool computeFreeBezier(QPointF);
+      bool editFreeNode(EditData&);
 
    public:
       SlurSegment(Score* s) : SlurTieSegment(s) {}
@@ -45,6 +53,17 @@ class SlurSegment final : public SlurTieSegment {
       Slur* slur() const { return toSlur(spanner()); }
 
       void computeBezier(QPointF so = QPointF()) override;
+      int gripsCount() const override;
+      std::vector<QPointF> gripsPositions(const EditData& = EditData()) const override;
+      void startEditDrag(EditData&) override;
+      void editDrag(EditData&) override;
+      void endEditDrag(EditData&) override;
+      void endEdit(EditData&) override;
+      void drawEditMode(QPainter*,EditData&) override;
+      Element* propertyDelegate(Pid) override;
+      QVariant getProperty(Pid) const override;
+      QVariant propertyDefault(Pid) const override;
+      bool setProperty(Pid,const QVariant&) override;
       };
 
 //---------------------------------------------------------
@@ -54,6 +73,9 @@ class SlurSegment final : public SlurTieSegment {
 class Slur final : public SlurTie {
 
       void slurPosChord(SlurPos*);
+      bool _freeMode = false;
+      QVector<FreeSlurNode> _freeNodes;
+      QString _freeData = "[]";
 
    public:
       Slur(Score* = 0);
@@ -77,8 +99,13 @@ class Slur final : public SlurTie {
       const SlurSegment* segmentAt(int n) const { return toSlurSegment(Spanner::segmentAt(n));   }
 
       SlurTieSegment* newSlurTieSegment() override { return new SlurSegment(score()); }
+      void reset() override;
+      bool freeMode() const { return _freeMode; }
+      const QVector<FreeSlurNode>& freeNodes() const { return _freeNodes; }
+      QVariant getProperty(Pid) const override;
+      QVariant propertyDefault(Pid) const override;
+      bool setProperty(Pid,const QVariant&) override;
       };
 
 }     // namespace Ms
 #endif
-

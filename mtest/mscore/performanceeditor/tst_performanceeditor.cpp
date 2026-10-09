@@ -36,6 +36,7 @@
 #include "libmscore/articulation.h"
 #include "libmscore/tremolo.h"
 #include "libmscore/trill.h"
+#include "libmscore/slur.h"
 #include "libmscore/playbackenvelope.h"
 #include "mscore/inspector/inspectorTrill.h"
 #include "libmscore/textline.h"
@@ -824,6 +825,8 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "performance_controls_tests.inc"
 #endif
       void accentInspectorAndNativeDefault();
+      void freeSlurModelAndReflow();
+      void freeSlurInspectorAndGrips();
       void envelopeInspectorAndPreview();
       void envelopeRealSequencer();
       void ritNativeCommandsAndConflicts();
@@ -957,6 +960,7 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "grace_playback_tests.inc"
 #include "accent_inspector_tests.inc"
 #include "envelope_editor_tests.inc"
+#include "freeslur_tests.inc"
 #include "rit_editor_tests.inc"
 QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"

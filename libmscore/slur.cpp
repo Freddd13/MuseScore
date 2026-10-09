@@ -98,6 +98,12 @@ bool SlurSegment::edit(EditData& ed)
       {
       Slur* sl = slur();
 
+      if(int(ed.curGrip)>=int(Grip::GRIPS)) {
+            if(editFreeNode(ed)) return true;
+            if(int(ed.curGrip)>=gripsCount()) ed.curGrip=Grip::DRAG;
+            else if(ed.key!=Qt::Key_X) return false; // arrow keys move the node, not its note anchor
+            }
+
       if (ed.key == Qt::Key_X) {
             sl->undoChangeProperty(Pid::SLUR_DIRECTION, QVariant::fromValue<Direction>(sl->up() ? Direction::DOWN : Direction::UP));
             sl->layout();
@@ -244,6 +250,7 @@ void SlurSegment::changeAnchor(EditData& ed, Element* element)
 
 void SlurSegment::computeBezier(QPointF p6o)
       {
+      _freeGrips.clear();
       qreal _spatium  = spatium();
       qreal shoulderW;              // height as fraction of slur-length
       qreal shoulderH;
@@ -356,6 +363,8 @@ void SlurSegment::computeBezier(QPointF p6o)
       ups(Grip::DRAG).p     = t.map(p5);
       ups(Grip::SHOULDER).p = t.map(p6);
 
+      if(computeFreeBezier(t.map(QPointF(0,w))-t.map(QPointF()))) return;
+
       _shape.clear();
       QPointF start = pp1;
       int nbShapes  = 32;  // (pp2.x() - pp1.x()) / _spatium;
@@ -390,7 +399,7 @@ void SlurSegment::layoutSegment(const QPointF& p1, const QPointF& p2)
 
       computeBezier();
 
-      if (autoplace() && system()) {
+      if (autoplace() && system() && !(slur()->freeMode() && !slur()->freeNodes().isEmpty())) {
             bool up = slur()->up();
             Segment* ls = system()->lastMeasure()->last();
             Segment* fs = system()->firstMeasure()->first();
@@ -459,6 +468,7 @@ void SlurSegment::layoutSegment(const QPointF& p1, const QPointF& p2)
 
 bool SlurSegment::isEdited() const
       {
+      if(slur()->freeMode() && !slur()->freeNodes().isEmpty()) return true;
       for (int i = 0; i < int(Grip::GRIPS); ++i) {
             if (!_ups[i].off.isNull())
                   return true;
@@ -469,6 +479,7 @@ bool SlurSegment::isEdited() const
 Slur::Slur(const Slur& s)
    : SlurTie(s)
       {
+      _freeMode=s._freeMode; _freeNodes=s._freeNodes; _freeData=s._freeData;
       }
 
 //---------------------------------------------------------
@@ -964,6 +975,8 @@ void Slur::write(XmlWriter& xml) const
       if (!xml.canWrite(this))
             return;
       xml.stag(this);
+      writeProperty(xml,Pid::FREE_SLUR_MODE);
+      writeProperty(xml,Pid::FREE_SLUR_NODES);
       SlurTie::writeProperties(xml);
       xml.etag();
       }
@@ -974,6 +987,8 @@ void Slur::write(XmlWriter& xml) const
 
 bool Slur::readProperties(XmlReader& e)
       {
+      if(e.name()==propertyName(Pid::FREE_SLUR_MODE)) {readProperty(e,Pid::FREE_SLUR_MODE);return true;}
+      if(e.name()==propertyName(Pid::FREE_SLUR_NODES)) {readProperty(e,Pid::FREE_SLUR_NODES);return true;}
       return SlurTie::readProperties(e);
       }
 
@@ -1301,4 +1316,3 @@ void Slur::setTrack(int n)
             ss->setTrack(n);
       }
 }
-

@@ -45,6 +45,12 @@ void ScoreView::updateGrips()
       qreal h   = 8.0 / _matrix.m22();
       QRectF r(-w*.5, -h*.5, w, h);
 
+      // Intermediate slur nodes may be added or removed during editing.
+      if (editData.element->isSlurSegment()) {
+            editData.grips = editData.element->gripsCount();
+            if (int(editData.curGrip) >= editData.grips)
+                  editData.curGrip = Grip::DRAG;
+            }
       editData.grip.resize(editData.grips);
 
       if (editData.grips) {

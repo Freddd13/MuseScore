@@ -10,6 +10,7 @@
 //  the file LICENCE.GPL
 //=============================================================================
 
+#include <limits>
 #include "fotomode.h"
 #include "musescore.h"
 #include "scoreview.h"
@@ -65,6 +66,20 @@ bool ScoreView::event(QEvent* event)
             case QEvent::ShortcutOverride: {
                   QKeyEvent* ke = static_cast<QKeyEvent*>(event);
                   switch (ke->key()) {
+                        case Qt::Key_Escape:
+                              if (state == ViewState::DRAG_EDIT && editData.element && editData.element->isSlurSegment()
+                                 && int(editData.curGrip) >= int(Grip::GRIPS)) {
+                                    ke->accept(); return true;
+                                    }
+                              break;
+                        case Qt::Key_Delete:
+                        case Qt::Key_Backspace:
+                        case Qt::Key_Home:
+                              if (editMode() && editData.element && editData.element->isSlurSegment()
+                                 && int(editData.curGrip) >= int(Grip::GRIPS)) {
+                                    ke->accept(); return true;
+                                    }
+                              break;
                         case Qt::Key_Left:
                         case Qt::Key_Right:
                         case Qt::Key_Up:
@@ -518,14 +533,22 @@ void ScoreView::mousePressEvent(QMouseEvent* ev)
                   case ViewState::EDIT:
                   case ViewState::FOTO: {
                         const qreal a = editData.grip[0].width() * 0.5;
+                        // Free nodes can overlap the original shoulder handle. Prefer the
+                        // closest handle (the node on a tie) only for these extended slurs.
+                        const bool freeSlur = editData.element->isSlurSegment() && editData.grips > int(Grip::GRIPS);
+                        qreal nearest = std::numeric_limits<qreal>::max();
                         for (int i = 0; i < editData.grips; ++i) {
                               if (editData.grip[i].adjusted(-a, -a, a, a).contains(editData.startMove)) {
+                                    const qreal distance = QLineF(editData.grip[i].center(),editData.startMove).length();
+                                    if (freeSlur && distance > nearest) continue;
+                                    nearest = distance;
                                     editData.curGrip = Grip(i);
-                                    updateGrips();
-                                    score()->update();
                                     gripFound = true;
-                                    break;
+                                    if (!freeSlur) break;
                                     }
+                              }
+                        if (gripFound) {
+                              updateGrips(); score()->update();
                               }
 
                         if (!gripFound)
@@ -836,6 +859,12 @@ void ScoreView::keyPressEvent(QKeyEvent* ev)
       editData.modifiers = ev->modifiers();
       editData.s         = ev->text();
 
+      // Cancel an intermediate-node preview inside the active mouse transaction.
+      if (state == ViewState::DRAG_EDIT && ev->key() == Qt::Key_Escape
+         && editData.element && editData.element->isSlurSegment()
+         && int(editData.curGrip) >= int(Grip::GRIPS)) {
+            editData.element->edit(editData); updateGrips(); score()->update(); return;
+            }
       if (state != ViewState::EDIT) {
             const bool shiftModifier = ev->modifiers() & Qt::ShiftModifier;
             if (hasEditGrips() && !(shiftModifier && ev->key() == Qt::Key_Backtab)) {
@@ -1036,7 +1065,7 @@ void ScoreView::contextMenuEvent(QContextMenuEvent* ev)
                   // select(ev);
                   }
             if (seq)
-                  seq->stopNotes();       // stop now because we don’t get a mouseRelease event
+                  seq->stopNotes();       // stop now because we don閳ユ獩 get a mouseRelease event
             objectPopup(gp, e);
             }
       else {
@@ -1272,4 +1301,3 @@ void ScoreView::inputMethodEvent(QInputMethodEvent* event)
       }
 
 }    // namespace Ms
-

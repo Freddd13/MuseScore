@@ -384,6 +384,8 @@ enum class Pid : short {
       ENVELOPE_END,
       ENVELOPE_CURVE,
       ENVELOPE_ALTERNATE,
+      FREE_SLUR_MODE,
+      FREE_SLUR_NODES,
       END
       };
 

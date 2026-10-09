@@ -6,7 +6,7 @@ topic	path	symbol	line	role	tests
 主窗口更新	mscore/musescore.cpp	void MuseScore::endCmd(bool undoRedo)	6919	UI与插件结束通知	-
 快捷键	mscore/shortcut.cpp	Shortcut::getShortcut(	4420	命令注册与查询	-
 视图命令	mscore/scoreview.cpp	void ScoreView::cmd(const char* s)	2247	视图本地命令表	-
-事件与输入模式	mscore/events.cpp	void ScoreView::changeState(ViewState s)	1132	交互状态切换	-
+事件与输入模式	mscore/events.cpp	void ScoreView::changeState(ViewState s)	1161	交互状态切换	-
 核心命令	libmscore/cmd.cpp	void Score::cmd(const QAction* a, EditData& ed)	4501	核心命令分发	mtest/libmscore/tools
 编辑事务开始	libmscore/cmd.cpp	void Score::startCmd()	200	开启用户撤销单元	mtest/libmscore/readwriteundoreset
 编辑事务结束	libmscore/cmd.cpp	void Score::endCmd(bool rollback)	240	布局及状态同步	mtest/libmscore/readwriteundoreset
@@ -151,7 +151,7 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 自由踏板保存	libmscore/scorefile.cpp	QSet<int> nativeControllerTicks	1294	已有location精确保存/无新字段	mtest/mscore/performanceeditor
 参数交互回归	mtest/mscore/performanceeditor/performance_controls_tests.inc	void finePedalNativeLayoutMidiUndoAndPersistence	55	真实CC64/undo/跨小节保存/菜单与节点	mtest/mscore/performanceeditor
 重音倍率	libmscore/articulation.cpp	qreal Articulation::velocityMultiplier	655	播放器/编辑器共用及旧谱默认	mtest/libmscore/midi/accent_playback_tests.inc
-重音检视器	mscore/inspector/inspector.cpp	void InspectorArticulation::postInit	820	数字/拖拽与原值/轻预设	mtest/mscore/performanceeditor/accent_inspector_tests.inc
+重音检视器	mscore/inspector/inspector.cpp	void InspectorArticulation::postInit	821	数字/拖拽与原值/轻预设	mtest/mscore/performanceeditor/accent_inspector_tests.inc
 重音分谱回归	mtest/libmscore/midi/accent_playback_tests.inc	void TestMidi::accentLinkedParts	1	关联分谱与主谱一次撤销	mtest/libmscore/midi/accent_playback_tests.inc
 速度表达	libmscore/tempoexpression.cpp	void rebuild(Score* input)	87	批量派生、积分和恢复语义	mtest/libmscore/midi/rit_playback_tests.inc
 速度曲线写入	mscore/performanceeditor/parameteredit.cpp	bool tempoCurve(	126	范围冲突保护和明确替换	mtest/mscore/performanceeditor/rit_editor_tests.inc
@@ -164,3 +164,7 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 生成震音包络	libmscore/rendermidi.cpp	static void applyGeneratedEnvelope	1367	全范围生成事件、双音来源	mtest/libmscore/midi/envelope_playback_tests.inc
 包络检视器	mscore/inspector/envelopeinspector.h	inline std::vector<InspectorItem> envelopeInspectorControls	17	数字／名称拖拽、单事务预设	mtest/mscore/performanceeditor/envelope_editor_tests.inc
 实际发声范围	mscore/performanceeditor/envelopepreview.cpp	void PerformanceEditor::cacheGeneratedVelocity	7	停播缓存、双音按源、范围和预览	mtest/mscore/performanceeditor/envelope_editor_tests.inc
+自由曲线校验	libmscore/freeslur.cpp	bool decode	15	有限参数／规范化节点	mtest/mscore/performanceeditor/freeslur_tests.inc
+分段自由圆滑线	libmscore/freeslur.cpp	bool SlurSegment::computeFreeBezier	85	相对时间分配／共同导数／原生渐尖路径	mtest/mscore/performanceeditor/freeslur_tests.inc
+自由曲线拖动	libmscore/freeslur.cpp	void SlurSegment::endEditDrag	174	根属性一次Undo／分谱传播	mtest/mscore/performanceeditor/freeslur_tests.inc
+自由曲线检视器	mscore/inspector/freeslurinspector.h	class FreeSlurInspector	13	数字／名称拖动／安全队列	mtest/mscore/performanceeditor/freeslur_tests.inc
