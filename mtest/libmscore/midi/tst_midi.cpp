@@ -34,6 +34,10 @@
 #include "libmscore/note.h"
 #include "libmscore/tempotext.h"
 #include "libmscore/tempo.h"
+#include "libmscore/textline.h"
+#include "libmscore/tempoexpression.h"
+#include "libmscore/repeatlist.h"
+#include "libmscore/fermata.h"
 #include <memory>
 #include <QTemporaryDir>
 #include "libmscore/durationtype.h"
@@ -76,6 +80,9 @@ class TestMidi : public QObject, public MTest
    private slots:
       void initTestCase();
       void midi01();
+      void ritCurveTimingAndLayout();
+      void ritRestoreAndFermata();
+      void ritConflictPersistenceAndParts();
       void accentVelocityPlaybackAndBase();
       void accentPresetsCloneUndoAndPersistence();
       void accentLinkedParts();
@@ -955,6 +962,7 @@ void TestMidi::midiExportTestRef(const QString& file)
       }
 
 #include "accent_playback_tests.inc"
+#include "rit_playback_tests.inc"
 QTEST_MAIN(TestMidi)
 
 #include "tst_midi.moc"

@@ -2304,6 +2304,18 @@ Shortcut Shortcut::_sc[] = {
 //         ,ShortcutFlags::A_CMD
          },
       {
+         MsWidget::SCORE_TAB, STATE_NORMAL, "add-rit-curve",
+         QT_TRANSLATE_NOOP("action","添加可播放 rit."), QT_TRANSLATE_NOOP("action","对选中范围添加渐变速度")
+         },
+      {
+         MsWidget::SCORE_TAB, STATE_NORMAL, "replace-rit-range",
+         QT_TRANSLATE_NOOP("action","替换范围速度为 rit."), QT_TRANSLATE_NOOP("action","明确移除范围内速度标记及重叠渐变，再添加 rit.")
+         },
+      {
+         MsWidget::SCORE_TAB, STATE_NORMAL, "add-a-tempo",
+         QT_TRANSLATE_NOOP("action","添加 a tempo"), QT_TRANSLATE_NOOP("action","恢复最近一次渐变开始前的速度")
+         },
+      {
          MsWidget::SCORE_TAB,
          STATE_NORMAL | STATE_NOTE_ENTRY,
          "tempo",

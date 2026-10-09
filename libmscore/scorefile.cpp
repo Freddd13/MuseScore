@@ -27,6 +27,7 @@
 #include "part.h"
 #include "rest.h"
 #include "score.h"
+#include "textline.h"
 #include "scoreOrder.h"
 #include "segment.h"
 #include "sig.h"
@@ -1289,8 +1290,9 @@ void Score::writeSegments(XmlWriter& xml, int strack, int etrack,
             spanners.push_back(s);
             }
 
+      const auto exactRange = [](const Spanner* s) { return s->isPedal() || (s->isTextLine() && toTextLine(s)->ritEnabled()); };
       QSet<int> nativeControllerTicks;
-      if (std::any_of(spanners.cbegin(), spanners.cend(), [](const Spanner* s) { return s->isPedal(); }))
+      if (std::any_of(spanners.cbegin(), spanners.cend(), exactRange))
             for (auto segment = sseg; segment && segment != eseg; segment = segment->next1())
                   if (segment->enabled() && segment->isChordRestType()) nativeControllerTicks.insert(segment->tick().ticks());
       int lastTrackWritten = strack - 1; // for counting necessary <voice> tags
@@ -1307,7 +1309,7 @@ void Score::writeSegments(XmlWriter& xml, int strack, int etrack,
             // Pedal controllers may fall between chord/rest segments. Write their
             // existing connector/location representation at the exact native tick;
             // no empty notation segments or new score-format fields are needed.
-            for (Spanner* s : spanners) if (s->isPedal()) {
+            for (Spanner* s : spanners) if (exactRange(s)) {
                   for (bool ending : {false, true}) {
                         const Fraction point = ending ? s->tick2() : s->tick();
                         if ((ending ? s->effectiveTrack2() : s->track()) != track

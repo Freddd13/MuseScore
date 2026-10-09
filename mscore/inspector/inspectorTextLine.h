@@ -26,11 +26,12 @@ class InspectorTextLine : public InspectorTextLineBase {
       Q_OBJECT
 
       Ui::InspectorTextLine ttl;
+      QLabel* _ritStatus;
 
    public:
       InspectorTextLine(QWidget* parent);
+      void postInit() override;
       };
 
 } // namespace Ms
 #endif
-

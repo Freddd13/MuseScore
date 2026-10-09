@@ -16,6 +16,11 @@
 #include "system.h"
 #include "textline.h"
 #include "undo.h"
+#include "tempoexpression.h"
+#include "measure.h"
+#include "segment.h"
+#include <cmath>
+#include <algorithm>
 
 namespace Ms {
 
@@ -102,7 +107,7 @@ TextLineSegment::TextLineSegment(Spanner* sp, Score* s, bool system)
 
 Element* TextLineSegment::propertyDelegate(Pid pid)
       {
-      if (pid == Pid::SYSTEM_FLAG)
+      if (pid == Pid::SYSTEM_FLAG || pid == Pid::RIT_MODE || pid == Pid::RIT_PLAY || pid == Pid::RIT_TARGET_MODE || pid == Pid::RIT_TARGET || pid == Pid::RIT_CURVE || pid == Pid::RIT_START_BPM)
             return static_cast<TextLine*>(spanner());
       return TextLineBaseSegment::propertyDelegate(pid);
       }
@@ -151,7 +156,7 @@ TextLine::TextLine(Score* s, bool system)
       }
 
 TextLine::TextLine(const TextLine& tl)
-   : TextLineBase(tl)
+   : TextLineBase(tl), _ritMode(tl._ritMode), _ritPlay(tl._ritPlay), _ritTargetMode(tl._ritTargetMode), _ritTarget(tl._ritTarget), _ritCurve(tl._ritCurve), _ritStartBpm(tl._ritStartBpm)
       {
       }
 
@@ -180,6 +185,7 @@ void TextLine::write(XmlWriter& xml) const
       else
             xml.stag(this);
       // other styled properties are included in TextLineBase pids list
+      for (auto pid : {Pid::RIT_MODE, Pid::RIT_PLAY, Pid::RIT_TARGET_MODE, Pid::RIT_TARGET, Pid::RIT_CURVE, Pid::RIT_START_BPM}) writeProperty(xml, pid);
       writeProperty(xml, Pid::PLACEMENT);
       writeProperty(xml, Pid::OFFSET);
       TextLineBase::writeProperties(xml);
@@ -201,6 +207,26 @@ void TextLine::read(XmlReader& e)
 //---------------------------------------------------------
 //   createLineSegment
 //---------------------------------------------------------
+
+bool TextLine::readProperties(XmlReader& e)
+      {
+      for (auto pid : {Pid::RIT_MODE, Pid::RIT_PLAY, Pid::RIT_TARGET_MODE, Pid::RIT_TARGET, Pid::RIT_CURVE, Pid::RIT_START_BPM})
+            if (e.name() == propertyName(pid)) { readProperty(e, pid); return true; }
+      return TextLineBase::readProperties(e);
+      }
+
+QVariant TextLine::getProperty(Pid id) const
+      {
+      switch (id) {
+            case Pid::RIT_MODE: return _ritMode;
+            case Pid::RIT_PLAY: return _ritPlay;
+            case Pid::RIT_TARGET_MODE: return _ritTargetMode;
+            case Pid::RIT_TARGET: return _ritTarget;
+            case Pid::RIT_CURVE: return _ritCurve;
+            case Pid::RIT_START_BPM: return _ritStartBpm;
+            default: return TextLineBase::getProperty(id);
+            }
+      }
 
 LineSegment* TextLine::createLineSegment()
       {
@@ -271,6 +297,12 @@ Sid TextLine::getPropertyStyle(Pid pid) const
 QVariant TextLine::propertyDefault(Pid propertyId) const
       {
       switch (propertyId) {
+            case Pid::RIT_MODE: return false;
+            case Pid::RIT_PLAY: return false;
+            case Pid::RIT_TARGET_MODE: return 0;
+            case Pid::RIT_TARGET: return 80.0;
+            case Pid::RIT_CURVE: return 1.0;
+            case Pid::RIT_START_BPM: return 0.0;
             case Pid::PLACEMENT:
                   if (systemFlag())
                         return score()->styleV(Sid::textLinePlacement);
@@ -307,15 +339,64 @@ QVariant TextLine::propertyDefault(Pid propertyId) const
 
 bool TextLine::setProperty(Pid id, const QVariant& v)
       {
+      if (((id == Pid::RIT_PLAY && _ritMode) || (id == Pid::RIT_MODE && _ritPlay)) && v.toBool() && score()) {
+            const auto& spanners = score()->spannerMap().map();
+            const bool registered = std::any_of(spanners.begin(), spanners.end(), [this](const auto& item) { return item.second == this; });
+            if (registered && !TempoExpression::conflict(score(), tick().ticks(), tick2().ticks(), this).isEmpty()) return false;
+            }
       switch (id) {
+            case Pid::RIT_MODE: _ritMode = v.toBool(); break;
+            case Pid::RIT_PLAY: _ritPlay = v.toBool(); break;
+            case Pid::RIT_START_BPM:
+                  if (!std::isfinite(v.toDouble()) || v.toDouble() < 0 || v.toDouble() > 999 || (v.toDouble() > 0 && v.toDouble() < 5)) return false;
+                  _ritStartBpm = v.toDouble(); break;
+            case Pid::RIT_TARGET_MODE:
+                  if (v.toInt() < 0 || v.toInt() > 1) return false;
+                  _ritTargetMode = v.toInt(); break;
+            case Pid::RIT_TARGET:
+                  if (!std::isfinite(v.toDouble()) || v.toDouble() < 1 || v.toDouble() > 999) return false;
+                  _ritTarget = v.toDouble(); break;
+            case Pid::RIT_CURVE:
+                  if (!std::isfinite(v.toDouble()) || v.toDouble() < 0.1 || v.toDouble() > 8) return false;
+                  _ritCurve = v.toDouble(); break;
             case Pid::PLACEMENT:
                   setPlacement(Placement(v.toInt()));
                   break;
             default:
-                  return TextLineBase::setProperty(id, v);
+                  if (!TextLineBase::setProperty(id, v)) return false;
+                  break;
             }
       triggerLayout();
+      if (score() && (id == Pid::RIT_MODE || id == Pid::RIT_PLAY || ritPlay())) {
+            const auto& spanners = score()->spannerMap().map();
+            bool registered = std::any_of(spanners.begin(), spanners.end(), [this](const auto& item) { return item.second == this; });
+            if (registered) {
+                  score()->masterScore()->_tempoExpressionsPresent = true;
+                  score()->requestTempoMapRebuild(); score()->setPlaylistDirty();
+                  }
+            }
       return true;
+      }
+
+// Exact tempo-curve endpoints use notation only as a layout context, like
+// native pedal controllers. Disabling playback keeps the saved curve range.
+QPointF TextLine::linePos(Grip grip, System** system) const
+      {
+      if (!ritEnabled()) return TextLineBase::linePos(grip, system);
+      const Fraction point = grip == Grip::START ? tick() : tick2();
+      Measure* measure = score()->tick2measureMM(point);
+      if (!measure && score()->lastMeasure() && point == score()->lastMeasure()->endTick()) measure = score()->lastMeasure();
+      if (!measure) { *system = nullptr; return {}; }
+      const Fraction local = point - measure->tick();
+      Fraction before(0,1), after = measure->ticks() * (measure->isMMRest() ? measure->mmRestCount() : 1);
+      qreal x0 = 0, x1 = measure->width();
+      for (auto segment = measure->first(SegmentType::ChordRest); segment; segment = segment->next(SegmentType::ChordRest)) {
+            if (segment->rtick() > local) { after = segment->rtick(); x1 = segment->x(); break; }
+            before = segment->rtick(); x0 = segment->x();
+            }
+      *system = measure->system();
+      const qreal fraction = after > before ? qreal((local - before).ticks()) / (after - before).ticks() : 0;
+      return QPointF(measure->pos().x() + x0 + (x1 - x0) * fraction, 0);
       }
 
 //---------------------------------------------------------
@@ -343,6 +424,7 @@ void TextLine::undoChangeProperty(Pid id, const QVariant& v, PropertyFlags ps)
 
 SpannerSegment* TextLine::layoutSystem(System* system)
       {
+      if (ritPlay()) score()->masterScore()->_tempoExpressionsPresent = true;
       TextLineSegment* tls = toTextLineSegment(TextLineBase::layoutSystem(system));
 
       if (tls->spanner()) {
@@ -358,4 +440,3 @@ SpannerSegment* TextLine::layoutSystem(System* system)
       }
 
 }     // namespace Ms
-

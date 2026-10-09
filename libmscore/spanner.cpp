@@ -19,6 +19,7 @@
 #include "musescoreCore.h"
 #include "part.h"
 #include "score.h"
+#include "textline.h"
 #include "segment.h"
 #include "spanner.h"
 #include "staff.h"
@@ -609,7 +610,7 @@ void Spanner::computeStartElement()
                                     }
                               }
                         }
-                  if (!_startElement && isPedal()) {
+                  if (!_startElement && (isPedal() || (isTextLine() && toTextLine(this)->ritEnabled()))) {
                         // Controller timing can be between notes. Keep a preceding
                         // notation context for native spanner validation/editing;
                         // Pedal::linePos and serialization still use the exact tick.
@@ -680,7 +681,7 @@ void Spanner::computeEndElement()
 
                   // Pedal endpoints are controller times, including positions between
                   // notation anchors. Keep their native tick instead of snapping to a CR.
-                  if (!isPedal() && !endCR()->measure()->isMMRest()) {
+                  if (!(isPedal() || (isTextLine() && toTextLine(this)->ritEnabled())) && !endCR()->measure()->isMMRest()) {
                         ChordRest* cr = endCR();
                         Fraction nticks = cr->tick() + cr->actualTicks() - _tick;
                         if ((_ticks - nticks).isNotZero()) {
@@ -1455,7 +1456,7 @@ SpannerWriter::SpannerWriter(XmlWriter& xml, const Element* current, const Spann
    : ConnectorInfoWriter(xml, current, sp, track, frac)
       {
       const bool clipboardmode = xml.clipboardmode();
-      if ((!sp->startElement() || !sp->endElement()) && !sp->isPedal()) {
+      if ((!sp->startElement() || !sp->endElement()) && !(sp->isPedal() || (sp->isTextLine() && toTextLine(sp)->ritEnabled()))) {
             qDebug("SpannerWriter: spanner (%s) doesn't have an endpoint!", sp->name());
             return;
             }

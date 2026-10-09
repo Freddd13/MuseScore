@@ -11,6 +11,8 @@
 //=============================================================================
 
 #include <limits>
+#include <algorithm>
+#include "segment.h"
 
 #include "measure.h"
 #include "musescoreCore.h"
@@ -67,6 +69,7 @@ void TempoText::write(XmlWriter& xml) const
       xml.setRealNumberPrecision(previousPrecision);
       if (_followText)
             xml.tag("followText", _followText);
+      writeProperty(xml, Pid::TEMPO_RESTORE_MODE);
       TextBase::writeProperties(xml);
       xml.etag();
       }
@@ -81,6 +84,8 @@ void TempoText::read(XmlReader& e)
             const QStringRef& tag(e.name());
             if (tag == "tempo")
                   setTempo(e.readDouble());
+            else if (tag == "tempoRestoreMode")
+                  readProperty(e, Pid::TEMPO_RESTORE_MODE);
             else if (tag == "followText")
                   _followText = e.readInt();
             else if (!TextBase::readProperties(e))
@@ -375,6 +380,7 @@ void TempoText::undoSetFollowText(bool v)
 QVariant TempoText::getProperty(Pid propertyId) const
       {
       switch (propertyId) {
+            case Pid::TEMPO_RESTORE_MODE: return _restoreMode;
             case Pid::TEMPO:
                   return _tempo;
             case Pid::TEMPO_FOLLOW_TEXT:
@@ -391,6 +397,13 @@ QVariant TempoText::getProperty(Pid propertyId) const
 bool TempoText::setProperty(Pid propertyId, const QVariant& v)
       {
       switch (propertyId) {
+            case Pid::TEMPO_RESTORE_MODE:
+                  if (v.toInt() < 0 || v.toInt() > 3) return false;
+                  _restoreMode = v.toInt();
+                  if (parent() && parent()->isSegment() && std::find(segment()->annotations().begin(), segment()->annotations().end(), this) != segment()->annotations().end()) {
+                        score()->masterScore()->_tempoExpressionsPresent = true; updateScore();
+                        }
+                  break;
             case Pid::TEMPO:
                   setTempo(v.toDouble());
                   score()->setTempo(segment(), _tempo);
@@ -415,6 +428,7 @@ bool TempoText::setProperty(Pid propertyId, const QVariant& v)
 QVariant TempoText::propertyDefault(Pid id) const
       {
       switch(id) {
+            case Pid::TEMPO_RESTORE_MODE: return 0;
             case Pid::SUB_STYLE:
                   return int(Tid::TEMPO);
             case Pid::TEMPO:
@@ -510,4 +524,3 @@ QString TempoText::accessibleInfo() const
       }
 
 }
-

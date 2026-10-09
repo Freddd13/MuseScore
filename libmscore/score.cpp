@@ -64,6 +64,8 @@
 #include "system.h"
 #include "tempo.h"
 #include "tempotext.h"
+#include "textline.h"
+#include "tempoexpression.h"
 #include "text.h"
 #include "tie.h"
 #include "tiemap.h"
@@ -467,6 +469,7 @@ void Score::fixTicks()
       // Now done in getNextMeasure(), do we keep?
       if (tempomap()->empty())
             tempomap()->setTempo(0, _defaultTempo);
+      if (isMaster()) TempoExpression::rebuild(this);
       }
 
 //---------------------------------------------------------
@@ -528,6 +531,7 @@ void Score::rebuildTempoAndTimeSigMaps(Measure* measure)
                               stretch = qMax(stretch, toFermata(e)->timeStretch());
                         else if (e->isTempoText()) {
                               TempoText* tt = toTempoText(e);
+                              if (tt->restoreMode()) _tempoExpressionsPresent = true;
                               if (tt->isRelative())
                                     tt->updateRelative();
                               setTempo(tt->segment(), tt->tempo());
@@ -1371,6 +1375,9 @@ void Score::addElement(Element* element)
                   if (et == ElementType::TEXTLINE && spanner->anchor() == Spanner::Anchor::NOTE)
                         break;
                   addSpanner(spanner);
+                  if (spanner->isTextLine() && toTextLine(spanner)->ritEnabled()) {
+                        requestTempoMapRebuild(); setPlaylistDirty();
+                        }
                   for (SpannerSegment* ss : spanner->spannerSegments()) {
                         if (ss->system())
                               ss->system()->add(ss);
@@ -1542,6 +1549,9 @@ void Score::removeElement(Element* element)
                         break;
                   spanner->triggerLayout();
                   removeSpanner(spanner);
+                  if (spanner->isTextLine() && toTextLine(spanner)->ritEnabled()) {
+                        requestTempoMapRebuild(); setPlaylistDirty();
+                        }
                   }
                   break;
 
@@ -4307,6 +4317,7 @@ void Score::appendMeasures(int n)
 void Score::addSpanner(Spanner* s)
       {
       _spanner.addSpanner(s);
+      if (s->isTextLine() && toTextLine(s)->ritEnabled()) masterScore()->_tempoExpressionsPresent = true;
       }
 
 //---------------------------------------------------------

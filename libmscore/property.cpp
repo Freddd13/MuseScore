@@ -364,6 +364,13 @@ static constexpr PropertyMetaData propertyList[] = {
       { Pid::GRACE_APPEARANCE, P_TYPE::INT, true, "graceAppearance", "grace appearance" },
       { Pid::ARTIC_VELOCITY_MODE, P_TYPE::BOOL, true, "articVelocityMode", "custom articulation velocity" },
       { Pid::ARTIC_VELOCITY_PERCENT, P_TYPE::REAL, true, "articVelocityPercent", "articulation velocity (%)" },
+      { Pid::RIT_MODE, P_TYPE::BOOL, true, "ritMode", "tempo curve identity" },
+      { Pid::RIT_PLAY, P_TYPE::BOOL, true, "ritPlay", "tempo curve playback" },
+      { Pid::RIT_TARGET_MODE, P_TYPE::INT, true, "ritTargetMode", "tempo curve target unit" },
+      { Pid::RIT_TARGET, P_TYPE::REAL, true, "ritTarget", "tempo curve target" },
+      { Pid::RIT_CURVE, P_TYPE::REAL, true, "ritCurve", "tempo curve shape" },
+      { Pid::RIT_START_BPM, P_TYPE::REAL, true, "ritStartBpm", "tempo curve initial override" },
+      { Pid::TEMPO_RESTORE_MODE, P_TYPE::INT, true, "tempoRestoreMode", "restore tempo" },
       { Pid::END,                       P_TYPE::INT,            false, "++end++",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "<invalid property>")                            }
       };
 
@@ -943,4 +950,3 @@ QString propertyToString(Pid id, QVariant value, bool mscx)
       return QString();
       }
 }
-

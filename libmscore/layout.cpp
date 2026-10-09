@@ -22,6 +22,7 @@
 #include "clef.h"
 #include "element.h"
 #include "fermata.h"
+#include "tempoexpression.h"
 #include "fingering.h"
 #include "glissando.h"
 #include "hairpin.h"
@@ -5286,6 +5287,12 @@ class CmdStateLocker {
 void Score::doLayoutRange(const Fraction& st, const Fraction& et)
       {
       CmdStateLocker cmdStateLocker(this);
+      // Original partial layout rebuilds ordinary markers per measure. Reapply
+      // derived curves once after it finishes, including linear-layout exits.
+      struct TempoCurveRefresh {
+            Score* score;
+            ~TempoCurveRefresh() { if (score->isMaster()) TempoExpression::rebuild(score); }
+            } tempoCurveRefresh {this};
       LayoutContext lc(this);
 
       Fraction stick(st);

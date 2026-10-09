@@ -372,6 +372,13 @@ enum class Pid : short {
       GRACE_APPEARANCE,
       ARTIC_VELOCITY_MODE,
       ARTIC_VELOCITY_PERCENT,
+      RIT_MODE,
+      RIT_PLAY,
+      RIT_TARGET_MODE,
+      RIT_TARGET,
+      RIT_CURVE,
+      RIT_START_BPM,
+      TEMPO_RESTORE_MODE,
       END
       };
 

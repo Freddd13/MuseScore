@@ -48,20 +48,39 @@ class TextLine final : public TextLineBase {
 
       Sid getTextLinePos(bool above) const;
       Sid getPropertyStyle(Pid) const override;
+      bool _ritMode = false;
+      bool _ritPlay = false;
+      int _ritTargetMode = 0; // 0 percentage, 1 BPM
+      double _ritTarget = 80.0;
+      double _ritCurve = 1.0;
+      double _ritStartBpm = 0.0; // zero follows the preceding tempo
+      double _ritDerivedStart = 2.0; // transient display cache, not a score property
 
    public:
+      using TextLineBase::undoChangeProperty;
+      bool ritPlay() const { return _ritMode && _ritPlay && systemFlag(); }
+      bool ritEnabled() const { return _ritMode; }
+      int ritTargetMode() const { return _ritTargetMode; }
+      double ritTarget() const { return _ritTarget; }
+      double ritCurve() const { return _ritCurve; }
+      double ritStartBpm() const { return _ritStartBpm; }
+      double ritDerivedStart() const { return _ritDerivedStart; }
+      void setRitDerivedStart(double value) { _ritDerivedStart = value; }
       TextLine(Score* s, bool system=false);
       TextLine(const TextLine&);
       ~TextLine() {}
 
       virtual void undoChangeProperty(Pid id, const QVariant&, PropertyFlags ps) override;
       virtual SpannerSegment* layoutSystem(System*) override;
+      QPointF linePos(Grip, System**) const override;
 
       TextLine* clone() const override   { return new TextLine(*this); }
       ElementType type() const override  { return ElementType::TEXTLINE; }
 
       void write(XmlWriter&) const override;
       void read(XmlReader&) override;
+      bool readProperties(XmlReader&) override;
+      QVariant getProperty(Pid) const override;
 
       void initStyle();
 
@@ -72,4 +91,3 @@ class TextLine final : public TextLineBase {
 
 }     // namespace Ms
 #endif
-

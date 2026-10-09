@@ -34,6 +34,10 @@
 #include "mscore/inspector/inspector.h"
 #include "mscore/palette/palettetree.h"
 #include "libmscore/articulation.h"
+#include "libmscore/textline.h"
+#include "libmscore/tempoexpression.h"
+#include "libmscore/tempo.h"
+#include "mscore/inspector/inspectorTextLine.h"
 #include "mscore/inspector/inspectorArpeggio.h"
 #include "libmscore/arpeggio.h"
 #include <QElapsedTimer>
@@ -44,6 +48,7 @@
 #include "mtest/testutils.h"
 #include "mscore/performanceeditor/performanceeditor.h"
 #include "mscore/musescore.h"
+#include "mscore/musescoredialogs.h"
 #include "mscore/scoreview.h"
 #include "libmscore/chord.h"
 #include "libmscore/excerpt.h"
@@ -813,6 +818,10 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "performance_controls_tests.inc"
 #endif
       void accentInspectorAndNativeDefault();
+      void ritNativeCommandsAndConflicts();
+      void ritInspectorAndCurveGestures();
+      void ritRealSequencerTiming();
+      void ritLongCurveBenchmark();
       void graceInspectorAndNativePreset();
       void graceRealSequencerPreRoll();
       void displaySettingsAcrossProcesses()
@@ -938,5 +947,6 @@ class TestPerformanceEditor : public QObject, public MTest {
       };
 #include "grace_playback_tests.inc"
 #include "accent_inspector_tests.inc"
+#include "rit_editor_tests.inc"
 QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"

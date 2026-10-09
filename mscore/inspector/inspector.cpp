@@ -53,6 +53,7 @@
 
 #include "libmscore/accidental.h"
 #include "libmscore/articulation.h"
+#include "libmscore/tempotext.h"
 #include "libmscore/beam.h"
 #include "libmscore/breath.h"
 #include "libmscore/chord.h"
@@ -1291,8 +1292,13 @@ InspectorTempoText::InspectorTempoText(QWidget* parent)
    : InspectorTextBase(parent)
       {
       tt.setupUi(addWidget());
-
+      auto grid = qobject_cast<QGridLayout*>(tt.panel->layout());
+      _restoreMode = new QComboBox(tt.panel); _restoreMode->setObjectName("tempoRestoreMode");
+      _restoreMode->addItems({tr("普通速度"), tr("a tempo：恢复上次渐变前"), tr("Tempo primo：恢复曲首"), tr("恢复到指定 BPM")});
+      int row = grid->rowCount(); grid->addWidget(new QLabel(tr("速度语义"), tt.panel), row, 0); grid->addWidget(_restoreMode, row, 1, 1, 2);
+      _restoreStatus = new QLabel(tt.panel); _restoreStatus->setWordWrap(true); grid->addWidget(_restoreStatus, grid->rowCount(), 0, 1, 3);
       const std::vector<InspectorItem> il = {
+            { Pid::TEMPO_RESTORE_MODE, 0, _restoreMode, nullptr },
             { Pid::TEMPO,             0, tt.tempo,       tt.resetTempo       },
             { Pid::TEMPO_FOLLOW_TEXT, 0, tt.followText,  tt.resetFollowText  },
             { Pid::SUB_STYLE,         0, tt.style,       tt.resetStyle       },
@@ -1314,9 +1320,13 @@ InspectorTempoText::InspectorTempoText(QWidget* parent)
 void InspectorTempoText::postInit()
       {
       bool followText = tt.followText->isChecked();
-      //tt.resetFollowText->setDisabled(followText);
-      tt.tempo->setDisabled(followText);
-      tt.resetTempo->setDisabled(followText || tt.tempo->value() == 120.0);  // a default of 120 BPM is assumed all over the place
+      const int mode = _restoreMode->currentIndex();
+      tt.followText->setEnabled(mode == 0);
+      tt.tempo->setDisabled(mode ? mode != 3 : followText);
+      tt.resetTempo->setDisabled(tt.tempo->isEnabled() == false || tt.tempo->value() == 120.0);
+      auto text = toTempoText(inspector->element());
+      _restoreStatus->setText(mode ? tr("实际恢复速度：%1 BPM。语义与显示文字分开；可自行编辑 a tempo / Tempo primo 的文字。")
+            .arg(text->score()->tempo(text->tick()) * 60, 0, 'f', 2) : QString());
       }
 
 //---------------------------------------------------------

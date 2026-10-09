@@ -2,7 +2,7 @@
 
 ## 状态和边界
 
-0.14.0 为琶音对拍及通用参数交互，0.14.1 修复延音续接；0.15.0 增加快速小音符播放解释。0.17.0 增加可调轻重音；rit./a tempo、震音力度包络、自由圆滑线和分手折线仍是后续批次；不能把计划当作已实现功能。
+0.14.0 为琶音对拍及通用参数交互，0.14.1 修复延音续接；0.15.0 增加快速小音符播放解释。0.17.0 增加可调轻重音；0.18.0 实现 rit./a tempo；震音力度包络、自由圆滑线和分手折线仍是后续批次；不能把计划当作已实现功能。
 
 旧谱缺少个人属性时沿用上游行为。新增交互入口写入显式属性，复制与导入不批量改谱。个人属性属于原生 MSCX/MSCZ；其他版本重新保存可能删除扩展字段。
 
@@ -59,3 +59,13 @@ InspectorBase 只对追加的个人 Pid 采用播放中暂存。PerformanceEdito
 InspectorArticulation 复用 scrubproperty 和 queueProperty；原生输入一次事务，播放暂存安全提交，取消自定义恢复原乐器，显式按钮应用 115%。普通重音在音符绝对力度前计算；NoteVelocity 的基准与 collectNote 一样先限幅，避免 400% 后减半时显示与发声不一致。后续重复事件包络尚未实现。
 
 模型测试 `accent_playback_tests.inc` 检查旧/新倍率、相对/绝对、限幅、关闭发声、组合/^、原生命令、克隆/Undo、关联分谱和 MSCX/MSCZ。真实 Qt `accent_inspector_tests.inc` 检查数字、名称拖动/Shift/Esc、暂存、预设、内置调色板及 MIME 保留。实际结果见版本日志。
+
+## 0.18.0 派生速度表达
+
+TextLine 的 RIT_MODE 明确类型，RIT_PLAY 控制发声，均缺字段 false。参数 linked；targetMode=0 百分比/1 BPM，target默认80，curve .1–8，startBpm=0 随前/5–999显式。TempoText 的 TEMPO_RESTORE_MODE=0 旧文字、1最近渐变前、2曲首、3指定，不从显示字符串推断。SLine普通布局不动；仅已配置 rit. 扩展 Spanner/Scorefile 的既有精确踏板端点，TextLine::linePos 按原生时间在小节CR横向坐标插值。
+
+tempoexpression.cpp 在 fixTicks 和完整/局部布局结束批量重建派生 TempoMap；_tempoExpressionsPresent 是旧谱快速旁路缓存，不是存储字段。边界事件顺序为渐变结束→原速度文字→渐变开始；恢复保存最近渐变开始前速度，指定起速不覆盖这份恢复值。冲突曲线跳过派生并在UI说明；手绘不修改关联范围。暂停和原Fermata stretch沿用，relativeTempo在TempoMap积分后统一作用。准备时数值积分求每区间调和速度，单次 normalize，单tick以上区间按前缀误差细化；音频回调继续只查旧速度图。
+
+ParameterEdit::{tempoCurve,restoreTempo,editTempoCurve,detachTempoCurve} 为菜单、检视器及编辑器公共写入入口。先验证范围/值/冲突，再一次原生Undo；显式replace才移除整条重叠曲线与内部标记，边界保留。自由绘制保护关联区，恢复语义标记也按受保护原节点处理。tempocurves.cpp 缓存同一派生图，起终/曲率手柄预览不写谱，实际提交属性；屏幕像素采样限制绘制量，不减少播放节点。数字焦点随参数切换清理，销毁/换谱清理对象指针。
+
+rit_playback_tests.inc 检查积分/前缀、局部重排幂等、精确非CR端点与关播放、暂停/Fermata/相对速度、恢复/指定起速、重复、冲突、克隆、真实分谱、MSCX/MSCZ。rit_editor_tests.inc 检查原生命令、冲突/替换、检视器、手柄预览/Undo/Esc/数字以及真实Seq事件时间/中途起播/循环。实际结果和部署hash见版本日志；后续包络/圆滑线/分手仍未交付。

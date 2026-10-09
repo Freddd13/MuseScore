@@ -177,6 +177,7 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
             const int from = tickForX(rect.left(), onScore), until = tickForX(rect.right(), onScore);
             auto first = std::lower_bound(_segments.cbegin(), _segments.cend(), from, [](const SegmentInfo& s, int t) { return s.tick < t; });
             if (first != _segments.cbegin()) --first;
+            if (!paintTempoCurves(painter, rect, onScore)) {
             const SegmentInfo* previous = nullptr;
             for (auto it = first; it != _segments.cend(); ++it) {
                   const auto& segment = *it;
@@ -191,6 +192,7 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
                   previous = &segment;
                   if (segment.tick > until) break;
                   }
+            }
             for (const auto& tempo : _tempos) {
                   const double x = xForTick(tempo.tick, onScore), y = yForValue(_tempoDraft.value(tempo.tick, tempo.bpm), rect, onScore);
                   if (onScore && (tempo.tick < tickForX(rect.left(), true) || tempo.tick > tickForX(rect.right(), true))) continue;

@@ -341,6 +341,8 @@ class InspectorTempoText : public InspectorTextBase {
       Q_OBJECT
 
       Ui::InspectorTempoText tt;
+      QComboBox* _restoreMode;
+      QLabel* _restoreStatus;
 
    public:
       InspectorTempoText(QWidget* parent);

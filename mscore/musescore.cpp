@@ -132,6 +132,7 @@
 #include "libmscore/synthesizerstate.h"
 #include "libmscore/system.h"
 #include "libmscore/tempo.h"
+#include "performanceeditor/parameteredit.h"
 #include "libmscore/undo.h"
 #include "libmscore/utils.h"
 #include "libmscore/volta.h"
@@ -2168,6 +2169,7 @@ MuseScore::MuseScore()
       menuAddText->addAction(getAction("nashville-number-text"));
       menuAddText->addAction(getAction("figured-bass"));
       menuAddText->addAction(getAction("tempo"));
+      for (const auto& name : {"add-rit-curve", "replace-rit-range", "add-a-tempo"}) menuAddText->addAction(getAction(name));
       menuAdd->addMenu(menuAddText);
 
       menuAddLines = new QMenu();
@@ -7338,6 +7340,18 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
       else if (cmd == "mark-irregular") {
             cs->setMarkIrregularMeasures(a->isChecked());
             cs->update();
+            }
+      else if (cmd == "add-rit-curve" || cmd == "replace-rit-range" || cmd == "add-a-tempo") {
+            QString error;
+            if (cmd == "add-a-tempo") {
+                  auto cr = cs->selection().firstChordRest();
+                  if (cr) ParameterEdit::restoreTempo(cs, cr->tick().ticks(), &error);
+                  else error = tr("先选中目标音符或休止。");
+                  }
+            else if (cs->selection().isRange())
+                  ParameterEdit::tempoCurve(cs, cs->selection().tickStart().ticks(), cs->selection().tickEnd().ticks(), nullptr, cmd == "replace-rit-range", &error);
+            else error = tr("先选择一段连续范围，再添加 rit.。");
+            showMessage(error, 8000);
             }
       else if (cmd == "tempo")
             addTempo();

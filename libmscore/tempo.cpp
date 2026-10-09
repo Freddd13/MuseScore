@@ -62,6 +62,12 @@ void TempoMap::setTempo(int tick, qreal tempo)
 //   TempoMap::normalize
 //---------------------------------------------------------
 
+void TempoMap::replaceEvents(const std::map<int, TEvent>& events)
+      {
+      std::map<int, TEvent>::operator=(events);
+      normalize();
+      }
+
 void TempoMap::normalize()
       {
       qreal time  = 0;

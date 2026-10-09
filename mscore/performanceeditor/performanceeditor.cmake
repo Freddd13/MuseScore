@@ -14,4 +14,5 @@ set(PERFORMANCEEDITOR_SRC
       ${CMAKE_CURRENT_LIST_DIR}/performancewheel.cpp
       ${CMAKE_CURRENT_LIST_DIR}/performanceinteraction.cpp
       ${CMAKE_CURRENT_LIST_DIR}/performancecontrols.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/tempocurves.cpp
       )

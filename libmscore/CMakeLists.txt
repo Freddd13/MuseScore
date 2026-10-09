@@ -18,6 +18,7 @@ endif (APPLE)
 
 add_library (libmscore STATIC
       playbacktiming.cpp playbacktiming.h
+      tempoexpression.cpp tempoexpression.h
       ${INCS}
 
       types.h accidental.h ambitus.h arpeggio.h articulation.h audio.h bagpembell.h barline.h beam.h bend.h

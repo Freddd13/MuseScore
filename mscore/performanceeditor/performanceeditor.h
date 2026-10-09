@@ -28,6 +28,7 @@ class ScoreView;
 class Segment;
 class System;
 class TempoText;
+class TextLine;
 class PerformanceCanvas;
 class PerformanceEditor : public QWidget, public MuseScoreView {
       Q_OBJECT
@@ -53,6 +54,20 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QVector<NoteInfo> _notes;
       QVector<SegmentInfo> _segments, _systemSegments;
       QVector<TempoInfo> _tempos;
+      struct TempoCurveInfo { TextLine* line = nullptr; int from = 0, until = 0; double start = 120, target = 96, shape = 1; };
+      struct TempoPlotPoint { int tick; double bpm; bool ramp; bool end = false; };
+      QVector<TempoCurveInfo> _tempoCurves;
+      QVector<TempoPlotPoint> _tempoPlot;
+      int _curveIndex = -1, _curveGrip = -1;
+      TextLine* _selectedCurve = nullptr;
+      TempoCurveInfo _curveDraft;
+      void refreshTempoCurves();
+      bool beginTempoCurve(QPointF, const QRectF&, bool);
+      void moveTempoCurve(QPointF);
+      bool finishTempoCurve(QString*);
+      bool paintTempoCurves(QPainter&, const QRectF&, bool);
+      bool tempoCurveMenu(QPointF, bool);
+      bool setTempoCurveNumber(double);
       QVector<PedalInfo> _pedals;
       QHash<const Element*, int> _noteIndex;
       QSet<const Element*> _layoutIndex;

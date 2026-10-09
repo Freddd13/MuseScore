@@ -311,6 +311,8 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
             event->accept(); if (event->type() == QEvent::KeyPress) togglePlayback(); return true;
             }
       if (event->type() == QEvent::Show) { scheduleRefresh(); syncTransport(); syncOverlayTracking(); }
+      if (event->type() == QEvent::MouseButtonPress && parameter && static_cast<QMouseEvent*>(event)->button() == Qt::RightButton
+            && tempoCurveMenu(static_cast<QMouseEvent*>(event)->pos(), false)) return true;
       if (event->type() == QEvent::Hide) { finishWheel(); cancelSurfaceGesture(); cancelGesture(); _playTimer.stop(); _playingNotes.clear(); invalidateOverlay(); syncOverlayTracking(); }
       if (event->type() == QEvent::Leave && !_dragging && !_marquee) updateHover(-1);
       if (event->type() == QEvent::Wheel) {

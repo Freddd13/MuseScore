@@ -19,6 +19,7 @@
 #include "libmscore/pedal.h"
 #include "libmscore/spanner.h"
 #include "libmscore/tempotext.h"
+#include "libmscore/textline.h"
 #include "libmscore/synthesizerstate.h"
 #include "libmscore/select.h"
 #include <QPainter>
@@ -204,11 +205,11 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       for (auto box : {_scope, _voice}) connect(box, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { cancelGesture(); rebuildFilter(); });
       connect(_parameter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { QSignalBlocker blocker(_tool); _tool->setCurrentIndex(0); });
       for (auto box : {_axis, _parameter, _tool}) connect(box, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
-            finishWheel(); cancelGesture();
+            finishWheel(); cancelGesture(); _selectedCurve = nullptr; _curveIndex = -1;
             const bool velocity = _parameter->currentIndex() == 0;
             _pedalGrid->setVisible(_parameter->currentIndex() == 2); _tool->setEnabled(_parameter->currentIndex() != 2);
             _tool->setItemText(0, _parameter->currentIndex() == 1 ? tr("节点 · 点按添加") : tr("拖动"));
-            _parameterHint->setText(_parameter->currentIndex() == 1 ? tr("节点：空白点按添加，上下拖动改 BPM；点中原速度节点才会修改它。铅笔／直线：横向画速度。时间尺定位播放。")
+            _parameterHint->setText(_parameter->currentIndex() == 1 ? tr("节点：空白点按添加，上下拖动改 BPM。rit.：拖首尾圆点或曲率菱形，右键解除关联后可自由画速度。时间尺定位播放。")
                   : (_parameter->currentIndex() == 2 ? tr("踏板按乐器共享。空白水平拖动建立区间，拖两端改时机。开=127（顶端），关=0；菱形表示非音符边界。时间尺定位播放。") : QString()));
             _parameterHint->setVisible(!velocity);
             _axis->setEnabled(velocity); _axis->setVisible(velocity);
@@ -275,6 +276,7 @@ void PerformanceEditor::setView(ScoreView* view)
       _view = view; _score = next;
       for (auto& boundaries : _pedalBoundaries) boundaries.clear();
       _selectedTempoTick = _tempoPointTick = _unlockedTempo = -1;
+      _tempoCurves.clear(); _tempoPlot.clear(); _selectedCurve = nullptr; _curveIndex = -1;
       _excludedStaves.clear(); rebuildStaffMenu();
       _notes.clear(); _segments.clear(); _tempos.clear(); _pedals.clear(); _noteIndex.clear(); _layoutIndex.clear(); _selectedIndices.clear(); _systemIndices.clear();
       _system = nullptr; _hover = -1; _snapshotDegraded = false; _intervals.clear(); _measures.clear(); invalidateVisual();
@@ -283,6 +285,7 @@ void PerformanceEditor::setView(ScoreView* view)
             _scoreDestroyed = connect(_score, &QObject::destroyed, this, [this] {
                   _playTimer.stop(); _intervals.clear(); _playingNotes.clear(); _linkedIndex.clear(); cancelSurfaceGesture();
                   finishWheel(false);
+                  _tempoCurves.clear(); _tempoPlot.clear(); _selectedCurve = nullptr; _curveIndex = -1;
                   _score = nullptr; _notes.clear(); _segments.clear(); _tempos.clear(); _pedals.clear();
                   _noteIndex.clear(); _layoutIndex.clear(); _pending.clear(); _propertyPending.clear(); _selectedIndices.clear(); _systemIndices.clear(); _system = nullptr; status(); updateSurfaces();
                   });
@@ -362,7 +365,7 @@ void PerformanceEditor::refresh()
             for (Element* annotation : segment->annotations())
                   if (annotation->isTempoText()) {
                         auto text = toTempoText(annotation);
-                        _tempos.append({text, tick, text->tempo() * 60.0, text->visible()});
+                        _tempos.append({text, tick, text->restoreMode() ? _score->tempo(text->tick()) * 60 : text->tempo() * 60.0, text->visible()});
                         _tempoMax = qMax(_tempoMax, text->tempo() * 60.0);
                         }
             for (int t = 0; t < _score->nstaves() * VOICES; ++t) {
@@ -411,6 +414,7 @@ void PerformanceEditor::refresh()
             auto measure = _score->lastMeasure();
             _segments.append({_endTick, measure->canvasPos() + QPointF(measure->width(), 0), measure->system(), _segments.back().bpm});
             }
+      refreshTempoCurves();
       _hover = -1;
       _state = state; _dirty = false; _geometryDirty = false;
       rebuildFilter(); invalidateVisual();
@@ -505,6 +509,10 @@ void PerformanceEditor::onElementDestruction(Element* element)
       if (!matched && !_notes.isEmpty()) return;
       _tempos.erase(std::remove_if(_tempos.begin(), _tempos.end(), [element](const TempoInfo& t) { return t.text == element; }), _tempos.end());
       _pedals.erase(std::remove_if(_pedals.begin(), _pedals.end(), [element](const PedalInfo& p) { return p.pedal == element; }), _pedals.end());
+      if (_selectedCurve == element) _selectedCurve = nullptr;
+      if (std::any_of(_tempoCurves.cbegin(), _tempoCurves.cend(), [element](const TempoCurveInfo& curve) { return curve.line == element; })) {
+            cancelGesture(); _tempoCurves.clear(); _tempoPlot.clear(); _dirty = true; scheduleRefresh();
+            }
       if (_pedalTarget == element) { cancelGesture(); _pedalTarget = nullptr; }
       _dirty = true; invalidateVisual();
       }
@@ -570,6 +578,7 @@ void PerformanceEditor::convertSelected(Note::ValueType type)
 void PerformanceEditor::setSelectedValue(double value)
       {
       finishWheel(); if (_dirty) refresh(); pauseFollow();
+      if (_parameter->currentIndex() == 1 && setTempoCurveNumber(value)) return;
       if (_parameter->currentIndex() == 1 && _selectedTempoTick >= 0) {
             QString error;
             _committing = true;
@@ -769,6 +778,7 @@ void PerformanceEditor::beginGesture(QPointF point, QRectF rect, bool onScore, i
                   }
             }
       else if (_parameter->currentIndex() == 1) {
+            if (beginTempoCurve(point, rect, onScore)) { if (!_dragging) return; }
             _tempoPointTick = nearestSegment(tickForX(point.x(), onScore));
             for (const auto& tempo : _tempos)
                   if (QLineF(point, QPointF(xForTick(tempo.tick, onScore), yForValue(tempo.bpm, rect, onScore))).length() < 10) { _unlockedTempo = tempo.tick; _tempoOriginalBpm = tempo.bpm; }
@@ -796,7 +806,7 @@ void PerformanceEditor::beginGesture(QPointF point, QRectF rect, bool onScore, i
                   }
             if (!_pedalTarget) { _pedalFrom = snap(_pedalFrom); _pedalUntil = snap(_pedalUntil, true); }
             }
-      if (_parameter->currentIndex() == 1) {
+      if (_parameter->currentIndex() == 1 && _curveIndex < 0) {
             _selectedTempoTick = _unlockedTempo >= 0 ? _unlockedTempo : _tempoPointTick;
             for (const auto& tempo : _tempos) if (tempo.tick == _selectedTempoTick) {
                   QSignalBlocker blocker(_number); _number->setValue(tempo.bpm); break;
@@ -813,7 +823,8 @@ void PerformanceEditor::moveGesture(QPointF point)
       {
       if (!_dragging) return;
       QElapsedTimer gestureTimer; gestureTimer.start();
-      if (_parameter->currentIndex() == 2) {
+      if (_curveIndex >= 0) moveTempoCurve(point);
+      else if (_parameter->currentIndex() == 2) {
             const int tick = tickForX(point.x(), _scoreGesture);
             if (_pedalTarget) {
                   if (_pedalEnd) { const int end = snap(tick, true); if (end > _pedalFrom) _pedalUntil = end; }
@@ -867,7 +878,7 @@ void PerformanceEditor::moveGesture(QPointF point)
             if (_anchor >= 0) setNoteValue(_anchor, noteValue(_anchor)); else status();
             }
       if (qEnvironmentVariableIsSet("PERFORMANCE_BENCHMARK")) qInfo("Performance gesture %d editable targets: %.2f ms", _selectedIndices.size(), gestureTimer.nsecsElapsed() / 1e6);
-      if (_parameter->currentIndex() == 1) status(tr("预览 %1 BPM · 松开写入，Esc 取消").arg(_tempoDraft.value(_selectedTempoTick, valueForY(point.y(), _gestureLane, _scoreGesture)), 0, 'f', 2));
+      if (_parameter->currentIndex() == 1 && _curveIndex < 0) status(tr("预览 %1 BPM · 松开写入，Esc 取消").arg(_tempoDraft.value(_selectedTempoTick, valueForY(point.y(), _gestureLane, _scoreGesture)), 0, 'f', 2));
       else if (_parameter->currentIndex() == 2) status(tr("踏板 %1 → %2 ticks · %3 · 松开写入，Esc 取消").arg(_pedalFrom).arg(_pedalUntil).arg(_pedalGrid->currentText()));
       _last = point; updateSurfaces(); if (_view) _view->update();
       }
@@ -884,7 +895,8 @@ void PerformanceEditor::finishGesture()
             QString error;
             _committing = true;
             bool changed = false;
-            if (_parameter->currentIndex() == 1) {
+            if (_curveIndex >= 0) changed = finishTempoCurve(&error);
+            else if (_parameter->currentIndex() == 1) {
                   if (_unlockedTempo < 0 && _tool->currentIndex() != 0 && !_tempoDraft.isEmpty()) {
                         const int end = _tempoDraft.lastKey();
                         for (const auto& segment : _segments) if (segment.tick > end && segment.tick < _endTick) {
@@ -906,6 +918,11 @@ void PerformanceEditor::cancelGesture()
       if (_scoreRangePanning) { _scoreRangePanning = false; qApp->removeEventFilter(this); if (_view) { _view->releaseMouse(); _view->unsetCursor(); } }
       _moveTimer.stop(); _moveQueued = false;
       if (!_dragging) return;
+      if (_curveIndex >= 0 && _curveIndex < _tempoCurves.size()) {
+            const auto& original = _tempoCurves[_curveIndex]; QSignalBlocker blocker(_number);
+            _number->setValue(_curveGrip == 2 ? original.shape : _curveGrip ? original.target : original.start);
+            }
+      _curveIndex = -1;
       _pending = _gestureBefore; _gestureBefore.clear(); _tempoDraft.clear(); _dragging = false; qApp->removeEventFilter(this);
       if (_view) _view->releaseMouse(); if (_canvas) _canvas->releaseMouse(); if (_noteCanvas) _noteCanvas->releaseMouse();
       }

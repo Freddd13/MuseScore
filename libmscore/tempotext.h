@@ -31,6 +31,7 @@ class TempoText final : public TextBase  {
       bool _followText;       // parse text to determine tempo
       qreal _relative;
       bool _isRelative;
+      int _restoreMode = 0; // 0 ordinary, 1 previous ramp, 2 primo, 3 specified BPM
 
       void updateScore();
       void updateTempo();
@@ -49,10 +50,12 @@ class TempoText final : public TextBase  {
       Segment* segment() const   { return toSegment(parent()); }
       Measure* measure() const   { return toMeasure(parent()->parent()); }
 
+      int restoreMode() const { return _restoreMode; }
       qreal tempo() const        { return _tempo;      }
       void setTempo(qreal v);
       void undoSetTempo(qreal v);
       bool isRelative()          { return _isRelative; }
+      qreal relativeTempo() const { return _relative; }
       void setRelative(qreal v)  { _isRelative = true; _relative = v; }
 
       bool followText() const    { return _followText; }

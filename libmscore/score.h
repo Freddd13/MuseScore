@@ -865,6 +865,7 @@ class Score : public QObject, public ScoreElement {
       // A local undo batch may defer only tempo-marker rebuild requests.
       int _tempoEditDepth = 0;
       bool _tempoRebuildPending = false;
+      bool _tempoExpressionsPresent = false;
       void beginTempoEdit();
       void endTempoEdit();
       void requestTempoMapRebuild();

@@ -116,3 +116,5 @@ PlaybackTiming 是 libmscore 的局部助手，MidiRenderer 生成带 nominalTic
 显示控制隔离在 `mscore/performanceeditor/performancecontrols.cpp`：谱行带独立数值视窗、原生声部色、谱表过滤、缓存音符边界和参数提示。播放换行只读取原生位置、更新自己的屏幕层，不设置 ScoreView 偏移。细分踏板复用原生 Fraction tick 和已有 connector/location 格式；核心仅补 Pedal 非音符端点插值及精确位置的写入，普通踏板、音频回调与 MIDI 渲染不改。
 
 0.17 重音属性限于 Articulation；播放器和编辑器共同使用 velocityMultiplier，检视器复用参数暂存，缺字段旧行为。详见 [15](15-piano-expression.md)。
+
+0.18 rit./a tempo 复用 TextLine/TempoText，TempoExpression 批量派生原 TempoMap；精确端点扩展已有踏板接线，旧对象旁路。详见 [15](15-piano-expression.md)。

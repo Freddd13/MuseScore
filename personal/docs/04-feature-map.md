@@ -125,3 +125,5 @@ Arpeggio 属性/原生读写 → PlaybackTiming 参与音/窗口 → renderArpeg
 用户入口见 [说明](../USER_GUIDE.md)，边界见 [演奏编辑器](14-performance-editor.md)。
 
 | 可调轻重音（0.17） | `libmscore/articulation.*`、`notevelocity.cpp`、`rendermidi.cpp` | `cmd.cpp`、`mscore/menus.cpp`、`inspector/inspector.*` | `accent_playback_tests.inc`、`accent_inspector_tests.inc` |
+
+| rit./a tempo（0.18） | `textline.*`、`tempotext.*`、`tempoexpression.*` | `parameteredit.*`、`tempocurves.cpp`、文字线/速度检视器、添加→文本 | `rit_playback_tests.inc`、`rit_editor_tests.inc` |
