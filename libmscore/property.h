@@ -370,6 +370,8 @@ enum class Pid : short {
       GRACE_DURATION_MODE,
       GRACE_DURATION,
       GRACE_APPEARANCE,
+      ARTIC_VELOCITY_MODE,
+      ARTIC_VELOCITY_PERCENT,
       END
       };
 

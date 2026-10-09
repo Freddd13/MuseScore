@@ -362,6 +362,8 @@ static constexpr PropertyMetaData propertyList[] = {
       { Pid::GRACE_DURATION_MODE, P_TYPE::INT, true, "graceDurationMode", "grace duration unit" },
       { Pid::GRACE_DURATION, P_TYPE::REAL, true, "graceDuration", "grace duration" },
       { Pid::GRACE_APPEARANCE, P_TYPE::INT, true, "graceAppearance", "grace appearance" },
+      { Pid::ARTIC_VELOCITY_MODE, P_TYPE::BOOL, true, "articVelocityMode", "custom articulation velocity" },
+      { Pid::ARTIC_VELOCITY_PERCENT, P_TYPE::REAL, true, "articVelocityPercent", "articulation velocity (%)" },
       { Pid::END,                       P_TYPE::INT,            false, "++end++",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "<invalid property>")                            }
       };
 

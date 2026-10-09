@@ -123,3 +123,5 @@ Arpeggio 属性/原生读写 → PlaybackTiming 参与音/窗口 → renderArpeg
 | 细分／自由踏板 | 缓存谱表 CR 边界、Pedal 原生 tick、linePos 与已有 location 写入 | 127 顶端、离音符标记、跨小节保存重开和 CC64 |
 
 用户入口见 [说明](../USER_GUIDE.md)，边界见 [演奏编辑器](14-performance-editor.md)。
+
+| 可调轻重音（0.17） | `libmscore/articulation.*`、`notevelocity.cpp`、`rendermidi.cpp` | `cmd.cpp`、`mscore/menus.cpp`、`inspector/inspector.*` | `accent_playback_tests.inc`、`accent_inspector_tests.inc` |

@@ -11,6 +11,9 @@
 //=============================================================================
 
 #include <QStackedWidget>
+#include <QPushButton>
+#include "scrubproperty.h"
+#include "../performanceeditor/performanceeditor.h"
 
 #include "musescore.h"
 #include "scoreview.h"
@@ -761,7 +764,29 @@ InspectorArticulation::InspectorArticulation(QWidget* parent)
       if (sameTypes)
             ar.title->setText(el->isOrnament() ? tr("Ornament") : tr("Articulation"));
 
+      auto velocityPanel = new QWidget(ar.panel);
+      ar.panel->layout()->addWidget(velocityPanel);
+      auto velocityLayout = new QGridLayout(velocityPanel);
+      _velocityMode = new QCheckBox(tr("自定义力度倍率"), velocityPanel);
+      _velocityMode->setObjectName("articVelocityMode");
+      _velocityMode->setToolTip(tr("关闭后使用乐器原倍率；音符的绝对力度仍优先。"));
+      velocityLayout->addWidget(_velocityMode, 0, 0, 1, 3);
+      auto velocityItem = scrubProperty(velocityPanel, tr("力度倍率"), Pid::ARTIC_VELOCITY_PERCENT, 1, 400, 1, " %");
+      _velocityPercent = qobject_cast<QDoubleSpinBox*>(velocityItem.w);
+      _lightAccentPreset = new QPushButton(tr("应用轻重音预设（115%）"), velocityPanel);
+      _lightAccentPreset->setObjectName("articLightPreset");
+      velocityLayout->addWidget(_lightAccentPreset, velocityLayout->rowCount(), 0, 1, 3);
+      connect(_lightAccentPreset, &QPushButton::clicked, this, [this]() {
+            auto editor = mscore->performanceEditor();
+            for (auto element : *inspector->el()) if (element->isArticulation() && toArticulation(element)->hasLightAccentPreset()) {
+                  editor->queueProperty(element, Pid::ARTIC_VELOCITY_MODE, true);
+                  editor->queueProperty(element, Pid::ARTIC_VELOCITY_PERCENT, 115.0);
+                  }
+            });
+
       const std::vector<InspectorItem> iiList = {
+            velocityItem,
+            { Pid::ARTIC_VELOCITY_MODE, 0, _velocityMode, nullptr },
             { Pid::ARTICULATION_ANCHOR, 0, ar.anchor,           ar.resetAnchor           },
             { Pid::DIRECTION,           0, ar.direction,        ar.resetDirection        },
             { Pid::TIME_STRETCH,        0, ar.timeStretch,      ar.resetTimeStretch      },
@@ -790,6 +815,14 @@ void InspectorArticulation::propertiesClicked()
 //---------------------------------------------------------
 //   setElement
 //---------------------------------------------------------
+
+void InspectorArticulation::postInit()
+      {
+      bool light = false;
+      for (auto element : *inspector->el()) if (element->isArticulation() && toArticulation(element)->hasLightAccentPreset()) light = true;
+      _lightAccentPreset->setEnabled(light);
+      _velocityPercent->setEnabled(_velocityMode->isChecked() && ar.playArticulation->isChecked());
+      }
 
 void InspectorArticulation::setElement()
       {

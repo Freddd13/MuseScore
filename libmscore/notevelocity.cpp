@@ -13,7 +13,7 @@ int playbackBase(const Note* note, int tick, qreal multiplier, bool fixedMax)
       {
       int value = fixedMax ? 127 : note->staff()->velocities().val(Fraction::fromTicks(tick));
       value *= multiplier; // Match the renderer's integer truncation before customization.
-      return value; // Clip only after applying the note offset, as collectNote does.
+      return qBound(1, value, 127); // collectNote clips its base before note customization.
       }
 
 int referenceBase(const Note* note, int globalMethod, int eventIndex)
@@ -26,7 +26,7 @@ int referenceBase(const Note* note, int globalMethod, int eventIndex)
       Instrument* instrument = chord->part()->instrument(chord->tick());
       qreal multiplier = 1;
       for (const Articulation* articulation : chord->articulations())
-            if (articulation->playArticulation()) multiplier *= instrument->getVelocityMultiplier(articulation->articulationName());
+            if (articulation->playArticulation()) multiplier *= articulation->velocityMultiplier(instrument);
       int method = note->score()->synthesizerState().method();
       if (method < 0) method = globalMethod < 0 ? 1 : globalMethod;
       return playbackBase(note, tick, multiplier, method == 2 && instrument->singleNoteDynamics());

@@ -800,7 +800,7 @@ void MidiRenderer::collectMeasureEventsSimple(EventMap* events, Measure const * 
                   qreal veloMultiplier = 1;
                   for (Articulation*& a : chord->articulations()) {
                         if (a->playArticulation()) {
-                              veloMultiplier *= instr->getVelocityMultiplier(a->articulationName());
+                              veloMultiplier *= a->velocityMultiplier(instr);
                               }
                         }
 
@@ -893,7 +893,7 @@ void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure const *
                   qreal veloMultiplier = 1;
                   for (Articulation*& a : chord->articulations()) {
                         if (a->playArticulation()) {
-                              veloMultiplier *= instr->getVelocityMultiplier(a->articulationName());
+                              veloMultiplier *= a->velocityMultiplier(instr);
                               }
                         }
 
@@ -1078,7 +1078,7 @@ void Score::updateVelo()
                               qreal veloMultiplier = 1;
                               for (Articulation*& a : chord->articulations()) {
                                     if (a->playArticulation()) {
-                                          veloMultiplier *= instr->getVelocityMultiplier(a->articulationName());
+                                          veloMultiplier *= a->velocityMultiplier(instr);
                                           }
                                     }
 

@@ -20,6 +20,13 @@
 #include "audio/exports/exportmidi.h"
 
 #include "libmscore/chord.h"
+#include "libmscore/articulation.h"
+#include "libmscore/instrument.h"
+#include "libmscore/part.h"
+#include "libmscore/staff.h"
+#include "libmscore/notevelocity.h"
+#include "libmscore/excerpt.h"
+#include <limits>
 #include "libmscore/arpeggio.h"
 #include "libmscore/tie.h"
 #include "libmscore/tremolo.h"
@@ -69,6 +76,9 @@ class TestMidi : public QObject, public MTest
    private slots:
       void initTestCase();
       void midi01();
+      void accentVelocityPlaybackAndBase();
+      void accentPresetsCloneUndoAndPersistence();
+      void accentLinkedParts();
       void timedArpeggio();
       void timedArpeggioSpanAndCap();
       void timedArpeggioTies();
@@ -944,6 +954,7 @@ void TestMidi::midiExportTestRef(const QString& file)
       delete score;
       }
 
+#include "accent_playback_tests.inc"
 QTEST_MAIN(TestMidi)
 
 #include "tst_midi.moc"

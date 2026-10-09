@@ -1766,6 +1766,7 @@ void Score::addArticulation(SymId attr)
                         }
                   Articulation* na = new Articulation(this);
                   na->setSymId(attr);
+                  na->applyLightAccentPreset();
                   if (addArticulation(el, na)) {
                         ++numAdded;
                         }

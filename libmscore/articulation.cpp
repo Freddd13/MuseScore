@@ -11,6 +11,8 @@
 //=============================================================================
 
 #include "articulation.h"
+#include "instrument.h"
+#include <cmath>
 #include "score.h"
 #include "chordrest.h"
 #include "system.h"
@@ -154,6 +156,10 @@ bool Articulation::readProperties(XmlReader& e)
             readProperty(e, Pid::DIRECTION);
       else if ( tag == "ornamentStyle")
             readProperty(e, Pid::ORNAMENT_STYLE);
+      else if (tag == "articVelocityMode")
+            readProperty(e, Pid::ARTIC_VELOCITY_MODE);
+      else if (tag == "articVelocityPercent")
+            readProperty(e, Pid::ARTIC_VELOCITY_PERCENT);
       else if ( tag == "play")
             setPlayArticulation(e.readBool());
       else if (tag == "offset") {
@@ -183,6 +189,8 @@ void Articulation::write(XmlWriter& xml) const
       writeProperty(xml, Pid::DIRECTION);
       xml.tag("subtype", Sym::id2name(_symId));
       writeProperty(xml, Pid::PLAY);
+      writeProperty(xml, Pid::ARTIC_VELOCITY_MODE);
+      writeProperty(xml, Pid::ARTIC_VELOCITY_PERCENT);
       writeProperty(xml, Pid::ORNAMENT_STYLE);
       for (const StyledProperty& spp : *styledProperties())
             writeProperty(xml, spp.pid);
@@ -314,6 +322,8 @@ QVariant Articulation::getProperty(Pid propertyId) const
             case Pid::ARTICULATION_ANCHOR: return int(anchor());
             case Pid::ORNAMENT_STYLE:      return int(ornamentStyle());
             case Pid::PLAY:                return playArticulation();
+            case Pid::ARTIC_VELOCITY_MODE: return _velocityMode;
+            case Pid::ARTIC_VELOCITY_PERCENT: return _velocityPercent;
             default:
                   return Element::getProperty(propertyId);
             }
@@ -326,6 +336,13 @@ QVariant Articulation::getProperty(Pid propertyId) const
 bool Articulation::setProperty(Pid propertyId, const QVariant& v)
       {
       switch (propertyId) {
+            case Pid::ARTIC_VELOCITY_MODE:
+                  _velocityMode = v.toBool();
+                  break;
+            case Pid::ARTIC_VELOCITY_PERCENT:
+                  if (!std::isfinite(v.toDouble()) || v.toDouble() < 1 || v.toDouble() > 400) return false;
+                  _velocityPercent = v.toDouble();
+                  break;
             case Pid::SYMBOL:
                   setSymId(v.value<SymId>());
                   break;
@@ -355,6 +372,8 @@ bool Articulation::setProperty(Pid propertyId, const QVariant& v)
 QVariant Articulation::propertyDefault(Pid propertyId) const
       {
       switch (propertyId) {
+            case Pid::ARTIC_VELOCITY_MODE: return false;
+            case Pid::ARTIC_VELOCITY_PERCENT: return 115.0;
             case Pid::DIRECTION:
                   return QVariant::fromValue<Direction>(Direction::AUTO);
 
@@ -609,6 +628,25 @@ bool Articulation::isAccent() const
       {
       return _symId == SymId::articAccentAbove          || _symId == SymId::articAccentBelow
           || _symId == SymId::articAccentStaccatoAbove  || _symId == SymId::articAccentStaccatoBelow;
+      }
+
+bool Articulation::hasLightAccentPreset() const
+      {
+      return isAccent() || _symId == SymId::articTenutoAccentAbove || _symId == SymId::articTenutoAccentBelow
+            || _symId == SymId::articSoftAccentAbove || _symId == SymId::articSoftAccentBelow
+            || _symId == SymId::articSoftAccentStaccatoAbove || _symId == SymId::articSoftAccentStaccatoBelow
+            || _symId == SymId::articSoftAccentTenutoAbove || _symId == SymId::articSoftAccentTenutoBelow
+            || _symId == SymId::articSoftAccentTenutoStaccatoAbove || _symId == SymId::articSoftAccentTenutoStaccatoBelow;
+      }
+
+void Articulation::applyLightAccentPreset()
+      {
+      if (hasLightAccentPreset()) { _velocityMode = true; _velocityPercent = 115.0; }
+      }
+
+qreal Articulation::velocityMultiplier(Instrument* instrument) const
+      {
+      return _velocityMode ? _velocityPercent / 100.0 : instrument->getVelocityMultiplier(articulationName());
       }
 
 bool Articulation::isMarcato() const

@@ -148,6 +148,10 @@ class InspectorHBox : public InspectorBase {
 class InspectorArticulation : public InspectorElementBase {
       Q_OBJECT
       Ui::InspectorArticulation ar;
+      QCheckBox* _velocityMode;
+      QDoubleSpinBox* _velocityPercent;
+      QPushButton* _lightAccentPreset;
+      void postInit() override;
 
    private slots:
       void propertiesClicked();

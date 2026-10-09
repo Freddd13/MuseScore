@@ -2,7 +2,7 @@
 
 ## 状态和边界
 
-0.14.0 为琶音对拍及通用参数交互，0.14.1 修复延音续接；0.15.0 增加快速小音符播放解释。可调重音、rit./a tempo、震音力度包络、自由圆滑线和分手折线仍是后续批次；不能把计划当作已实现功能。
+0.14.0 为琶音对拍及通用参数交互，0.14.1 修复延音续接；0.15.0 增加快速小音符播放解释。0.17.0 增加可调轻重音；rit./a tempo、震音力度包络、自由圆滑线和分手折线仍是后续批次；不能把计划当作已实现功能。
 
 旧谱缺少个人属性时沿用上游行为。新增交互入口写入显式属性，复制与导入不批量改谱。个人属性属于原生 MSCX/MSCZ；其他版本重新保存可能删除扩展字段。
 
@@ -51,3 +51,11 @@ InspectorBase 只对追加的个人 Pid 采用播放中暂存。PerformanceEdito
 `collectNote` 仅缩短同声部紧邻的自动前音（沿延音链寻找其最后片段）；不修改乐谱时值、NoteEvent 保存值、其他声部或用户事件；延音链任一片段有用户事件时不裁剪。拍上／拍后把自动生成的震音／滑音事件放入主音窗口，外部延音保留结束点。`canBreakChunk` 复用琶音的提前窗口合块规则。起播、循环、MIDI 和音频统一走 0.14 的预备时间助手；没有给谱面插入时值或小节。
 
 模型入口为 `timedGracePositions`、`timedGracePrecedingAndCustom`、`timedGracePersistence`、`timedGraceRepeatJump`、`timedGraceMergedTrill`、`timedGraceGeneratedEvents`、`timedGraceTiedContinuations`、`timedGraceShortPredecessor`；真实 Qt 入口单独放在 `grace_playback_tests.inc`，测试名称拖拽、Shift、Esc、播放暂存、原生预设、单次撤销和真实 Seq 的曲首／中途拍前发声。结果以更新日志实际记录为准。
+
+## 0.17.0 重音倍率
+
+`Articulation::velocityMultiplier` 为渲染和 NoteVelocity 的共同入口。`ARTIC_VELOCITY_MODE` 缺字段 false，取乐器原倍率；true 取 `ARTIC_VELOCITY_PERCENT`（有限 1–400）。两属性 linked，默认参数 115；读取不应用新预设。`Score::addArticulation` 与内置 Articulations 调色板在新建时对普通 > 组合调用 `applyLightAccentPreset`，不重写全局乐器文件或通用 drop/import。
+
+InspectorArticulation 复用 scrubproperty 和 queueProperty；原生输入一次事务，播放暂存安全提交，取消自定义恢复原乐器，显式按钮应用 115%。普通重音在音符绝对力度前计算；NoteVelocity 的基准与 collectNote 一样先限幅，避免 400% 后减半时显示与发声不一致。后续重复事件包络尚未实现。
+
+模型测试 `accent_playback_tests.inc` 检查旧/新倍率、相对/绝对、限幅、关闭发声、组合/^、原生命令、克隆/Undo、关联分谱和 MSCX/MSCZ。真实 Qt `accent_inspector_tests.inc` 检查数字、名称拖动/Shift/Esc、暂存、预设、内置调色板及 MIME 保留。实际结果见版本日志。

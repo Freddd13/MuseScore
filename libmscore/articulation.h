@@ -25,6 +25,7 @@ class Segment;
 class Measure;
 class System;
 class Page;
+class Instrument;
 
 //---------------------------------------------------------
 //   ArticulationInfo
@@ -64,6 +65,8 @@ class Articulation final : public Element {
       bool _up;
       MScore::OrnamentStyle _ornamentStyle;     // for use in ornaments such as trill
       bool _playArticulation;
+      bool _velocityMode = false; // Missing fields retain the instrument setting.
+      double _velocityPercent = 115.0;
 
       void draw(QPainter*) const override;
 
@@ -138,6 +141,9 @@ class Articulation final : public Element {
       bool isTenuto() const;
       bool isStaccato() const;
       bool isAccent() const;
+      bool hasLightAccentPreset() const;
+      void applyLightAccentPreset();
+      qreal velocityMultiplier(Instrument*) const;
       bool isMarcato() const;
       bool isLuteFingering() const;
       bool isOrnament() const;

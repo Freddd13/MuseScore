@@ -965,6 +965,7 @@ PalettePanel* MuseScore::newArticulationsPalettePanel()
             };
       for (auto i : art) {
             Articulation* s = new Articulation(i, gscore);
+            s->applyLightAccentPreset();
             sp->append(s, s->userName());
             }
       Bend* bend = new Bend(gscore);
