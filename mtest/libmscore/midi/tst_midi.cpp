@@ -30,6 +30,10 @@
 #include "libmscore/arpeggio.h"
 #include "libmscore/tie.h"
 #include "libmscore/tremolo.h"
+#include "libmscore/trill.h"
+#include "libmscore/playbackenvelope.h"
+#include "libmscore/rendermidi.h"
+#include <QElapsedTimer>
 #include "libmscore/playbacktiming.h"
 #include "libmscore/note.h"
 #include "libmscore/tempotext.h"
@@ -80,6 +84,11 @@ class TestMidi : public QObject, public MTest
    private slots:
       void initTestCase();
       void midi01();
+      void envelopeSingleAndTies();
+      void envelopeDoubleAndCustom();
+      void envelopeTrillAndPersistence();
+      void envelopeLinkedParts();
+      void envelopeChunkAndDensity();
       void ritCurveTimingAndLayout();
       void ritRestoreAndFermata();
       void ritConflictPersistenceAndParts();
@@ -963,6 +972,7 @@ void TestMidi::midiExportTestRef(const QString& file)
 
 #include "accent_playback_tests.inc"
 #include "rit_playback_tests.inc"
+#include "envelope_playback_tests.inc"
 QTEST_MAIN(TestMidi)
 
 #include "tst_midi.moc"

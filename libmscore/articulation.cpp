@@ -130,6 +130,7 @@ extern SymId oldArticulationNames2SymId(const QString&);
 bool Articulation::readProperties(XmlReader& e)
       {
       const QStringRef& tag(e.name());
+      if (PlaybackEnvelope::read(this,e)) return true;
 
       if (tag == "subtype") {
             QString s = e.readElementText();
@@ -184,6 +185,7 @@ void Articulation::write(XmlWriter& xml) const
       if (!xml.canWrite(this))
             return;
       xml.stag(this);
+      PlaybackEnvelope::write(this, xml);
       if (!_channelName.isEmpty())
             xml.tagE(QString("channel name=\"%1\"").arg(_channelName));
       writeProperty(xml, Pid::DIRECTION);
@@ -316,6 +318,7 @@ QVector<QLineF> Articulation::dragAnchorLines() const
 
 QVariant Articulation::getProperty(Pid propertyId) const
       {
+      if (PlaybackEnvelope::handles(propertyId)) return _envelope.property(propertyId);
       switch (propertyId) {
             case Pid::SYMBOL:              return QVariant::fromValue(_symId);
             case Pid::DIRECTION:           return QVariant::fromValue<Direction>(direction());
@@ -335,6 +338,10 @@ QVariant Articulation::getProperty(Pid propertyId) const
 
 bool Articulation::setProperty(Pid propertyId, const QVariant& v)
       {
+      if (PlaybackEnvelope::handles(propertyId)) {
+            if (!_envelope.setProperty(propertyId, v)) return false;
+            triggerLayout(); if (score()) score()->setPlaylistDirty(); return true;
+            }
       switch (propertyId) {
             case Pid::ARTIC_VELOCITY_MODE:
                   _velocityMode = v.toBool();
@@ -371,6 +378,7 @@ bool Articulation::setProperty(Pid propertyId, const QVariant& v)
 
 QVariant Articulation::propertyDefault(Pid propertyId) const
       {
+      if (PlaybackEnvelope::handles(propertyId)) return _envelope.defaultProperty(propertyId);
       switch (propertyId) {
             case Pid::ARTIC_VELOCITY_MODE: return false;
             case Pid::ARTIC_VELOCITY_PERCENT: return 115.0;

@@ -371,6 +371,11 @@ static constexpr PropertyMetaData propertyList[] = {
       { Pid::RIT_CURVE, P_TYPE::REAL, true, "ritCurve", "tempo curve shape" },
       { Pid::RIT_START_BPM, P_TYPE::REAL, true, "ritStartBpm", "tempo curve initial override" },
       { Pid::TEMPO_RESTORE_MODE, P_TYPE::INT, true, "tempoRestoreMode", "restore tempo" },
+      { Pid::ENVELOPE_MODE, P_TYPE::INT, true, "envelopeMode", "generated velocity envelope" },
+      { Pid::ENVELOPE_START, P_TYPE::REAL, true, "envelopeStart", "initial generated velocity percent" },
+      { Pid::ENVELOPE_END, P_TYPE::REAL, true, "envelopeEnd", "final generated velocity percent" },
+      { Pid::ENVELOPE_CURVE, P_TYPE::REAL, true, "envelopeCurve", "generated velocity curve" },
+      { Pid::ENVELOPE_ALTERNATE, P_TYPE::REAL, true, "envelopeAlternate", "alternate note reduction in percentage points" },
       { Pid::END,                       P_TYPE::INT,            false, "++end++",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "<invalid property>")                            }
       };
 

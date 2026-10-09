@@ -15,6 +15,8 @@
 
 #include "line.h"
 
+#include "playbackenvelope.h"
+
 namespace Ms {
 
 class Trill;
@@ -61,6 +63,7 @@ class TrillSegment final : public LineSegment {
 //---------------------------------------------------------
 
 class Trill final : public SLine {
+      PlaybackEnvelope _envelope{true};
       Sid getPropertyStyle(Pid) const override;
 
    public:
@@ -75,6 +78,11 @@ class Trill final : public SLine {
       bool _playArticulation;
 
    public:
+      const PlaybackEnvelope& playbackEnvelope() const { return _envelope; }
+      void applyEnvelopePreset(int mode) {
+            const auto values=PlaybackEnvelope::preset(mode,true);
+            for (auto i=values.cbegin();i!=values.cend();++i) _envelope.setProperty(i.key(),i.value());
+            }
       Trill(Score* s);
       ~Trill();
 

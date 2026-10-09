@@ -2,7 +2,7 @@
 
 ## 状态和边界
 
-0.14.0 为琶音对拍及通用参数交互，0.14.1 修复延音续接；0.15.0 增加快速小音符播放解释。0.17.0 增加可调轻重音；0.18.0 实现 rit./a tempo；震音力度包络、自由圆滑线和分手折线仍是后续批次；不能把计划当作已实现功能。
+0.14.0 为琶音对拍及通用参数交互，0.14.1 修复延音续接；0.15.0 增加快速小音符播放解释。0.17.0 增加可调轻重音；0.18.0 实现 rit./a tempo；0.19.0 实现震音／颤音力度包络；自由圆滑线和分手折线仍是后续批次；不能把计划当作已实现功能。
 
 旧谱缺少个人属性时沿用上游行为。新增交互入口写入显式属性，复制与导入不批量改谱。个人属性属于原生 MSCX/MSCZ；其他版本重新保存可能删除扩展字段。
 
@@ -69,3 +69,15 @@ tempoexpression.cpp 在 fixTicks 和完整/局部布局结束批量重建派生 
 ParameterEdit::{tempoCurve,restoreTempo,editTempoCurve,detachTempoCurve} 为菜单、检视器及编辑器公共写入入口。先验证范围/值/冲突，再一次原生Undo；显式replace才移除整条重叠曲线与内部标记，边界保留。自由绘制保护关联区，恢复语义标记也按受保护原节点处理。tempocurves.cpp 缓存同一派生图，起终/曲率手柄预览不写谱，实际提交属性；屏幕像素采样限制绘制量，不减少播放节点。数字焦点随参数切换清理，销毁/换谱清理对象指针。
 
 rit_playback_tests.inc 检查积分/前缀、局部重排幂等、精确非CR端点与关播放、暂停/Fermata/相对速度、恢复/指定起速、重复、冲突、克隆、真实分谱、MSCX/MSCZ。rit_editor_tests.inc 检查原生命令、冲突/替换、检视器、手柄预览/Undo/Esc/数字以及真实Seq事件时间/中途起播/循环。实际结果和部署hash见版本日志；后续包络/圆滑线/分手仍未交付。
+
+## 0.19.0 生成事件力度包络
+
+PlaybackEnvelope 是 Tremolo、Trill 和符合条件的 Articulation 的小型共用值对象。ENVELOPE_MODE=0缺字段旧值，1柔和、2渐强、3渐弱、4自定义；START/END 1–400%，CURVE .1–8，ALTERNATE −100–100百分点，均 linked、有限值校验。新建内置菜单／调色板调用显式preset，不改构造／读取／复制默认；非颤音奏法不显示包络。预设多属性由检视器一次 queueProperty 事务写入，不能在 setProperty 内暗改其余字段以破坏Undo。
+
+NoteEvent 的 velocityFactor 默认1、velocitySourceIndex 默认−1，是准备阶段派生数据，读入重置、不写XML。用户自定义事件在 eventFactor/eventSource 一律忽略这两项。renderTremolo/renderChordArticulation复用旧音高和重复算法，生成事件后按完整范围赋因子；新单音震音贯穿匹配参数的自动延音链，差异／User作为边界。新根在原生段上收集，不再从旧根递归重复收集；新包络跨小节不分渲染块，保证中途定位仍看到既有完整事件。
+
+双音震音仍把双方事件放在第一和弦的事件表，新 sourceIndex 对应第二和弦实际 Note。NPlayEvent 保留实际发声音符，同时 noteEventOwner/index 保留原表身份；基准、奏法、定制力度和播放开关来自真实源，nominalTick仍按原表定位。NoteVelocity::eventVelocity 统一对 customizeVelocity 后的值乘因子、四舍五入、限幅1–127。旧mode0事件因子1、源−1，保持上游输出；全局乐器定义和音符保存力度不改。
+
+envelopepreview.cpp 仅在停播快照时采样每次发声基准及因子、过滤双音各自源，并合并相邻相同项。generatedVelocityRange 从缓存和当前预览属性计算实际范围；绘制／试听／提示不重新生成事件，音频回调不计算曲线或分配包络数据。保存值轴继续用定制前事件因子；范围旁标区分实际发声。不增加逐次事件绘制编辑。
+
+envelope_playback_tests.inc 覆盖旧值、相对／绝对、柔和／渐强／渐弱／曲率、双音独立定制／不发声／不同音数、完整延音／差异和自定义边界、非法值、克隆／Undo／实际分谱、MSCX／MSCZ与分块、128小节8192攻击。envelope_editor_tests.inc 用真实Qt检视器验证预设单Undo、数字、Shift拖动、Esc、播放暂存、单震音／颤音段／短颤音、缓存范围以及真实Seq逐次力度／中途起播／循环。实际最终结果见版本日志。

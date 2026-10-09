@@ -12,6 +12,7 @@
 
 #ifndef __NOTEEVENT_H__
 #define __NOTEEVENT_H__
+#include <QtGlobal>
 
 namespace Ms {
 
@@ -25,6 +26,8 @@ class XmlReader;
 class NoteEvent {
       int _pitch;   // relative pitch to note pitch
       int _ontime;  // one unit is 1/1000 of nominal note len
+      double _velocityFactor = 1; // derived, omitted from native custom events
+      int _velocitySourceIndex = -1; // partner note index, never a stored pointer
       int _len;     // one unit is 1/1000 of nominal note len
 
    public:
@@ -40,6 +43,10 @@ class NoteEvent {
       int ontime() const     { return _ontime; }
       int offtime() const    { return _ontime + _len; }
       int len() const        { return _len; }
+      double velocityFactor() const { return _velocityFactor; }
+      void setVelocityFactor(double value) { _velocityFactor = value; }
+      int velocitySourceIndex() const { return _velocitySourceIndex; }
+      void setVelocitySourceIndex(int value) { _velocitySourceIndex = value; }
       void setPitch(int v)   { _pitch = v; }
       void setOntime(int v)  { _ontime = v; }
       void setLen(int v)     { _len = v;    }

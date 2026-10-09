@@ -1767,6 +1767,7 @@ void Score::addArticulation(SymId attr)
                   Articulation* na = new Articulation(this);
                   na->setSymId(attr);
                   na->applyLightAccentPreset();
+                  if (na->hasTrillEnvelope()) na->applyEnvelopePreset(1);
                   if (addArticulation(el, na)) {
                         ++numAdded;
                         }

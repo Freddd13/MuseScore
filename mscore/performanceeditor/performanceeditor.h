@@ -33,6 +33,7 @@ class PerformanceCanvas;
 class PerformanceEditor : public QWidget, public MuseScoreView {
       Q_OBJECT
       friend class PerformanceCanvas;
+      struct GeneratedVelocity { int base; double factor; };
       struct NoteInfo {
             Note* note;
             int tick, end, track, pitch, base, raw, baseMin, baseMax;
@@ -43,7 +44,10 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
             QString name, instrument, written, position, duration;
             const Part* part = nullptr;
             bool inScope = true, enabled = true;
+            QVector<GeneratedVelocity> generatedVelocities;
             };
+      void cacheGeneratedVelocity(NoteInfo&, int);
+      QPair<int,int> generatedVelocityRange(const NoteInfo&, Note::ValueType, int) const;
       struct SegmentInfo { int tick; QPointF position; System* system; double bpm; Segment* segment = nullptr; };
       struct MeasureInfo { int from, until, bar, beat; };
       QVector<MeasureInfo> _measures;
@@ -237,6 +241,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       void selectionChanged();
       void convertSelected(Note::ValueType);
       void setSelectedValue(double);
+      QPair<int,int> actualVelocityRange(const Note*) const;
       void fit(bool selection = false);
       bool hasPending() const { return !_pending.isEmpty() || !_propertyPending.isEmpty(); }
       void queueProperty(Element*, Pid, const QVariant&);

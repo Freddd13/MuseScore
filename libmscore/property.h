@@ -379,6 +379,11 @@ enum class Pid : short {
       RIT_CURVE,
       RIT_START_BPM,
       TEMPO_RESTORE_MODE,
+      ENVELOPE_MODE,
+      ENVELOPE_START,
+      ENVELOPE_END,
+      ENVELOPE_CURVE,
+      ENVELOPE_ALTERNATE,
       END
       };
 

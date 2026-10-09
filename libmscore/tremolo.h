@@ -16,6 +16,8 @@
 #include "durationtype.h"
 #include "symbol.h"
 
+#include "playbackenvelope.h"
+
 namespace Ms {
 
 class Chord;
@@ -37,6 +39,7 @@ enum class TremoloStyle : signed char {
 //---------------------------------------------------------
 
 class Tremolo final : public Element {
+      PlaybackEnvelope _envelope;
       TremoloType _tremoloType { TremoloType::R8 };
       Chord* _chord1 { nullptr };
       Chord* _chord2 { nullptr };
@@ -52,6 +55,11 @@ class Tremolo final : public Element {
       void layoutTwoNotesTremolo(qreal x, qreal y, qreal h, qreal spatium);
 
    public:
+      const PlaybackEnvelope& playbackEnvelope() const { return _envelope; }
+      void applyEnvelopePreset(int mode) {
+            const auto values=PlaybackEnvelope::preset(mode,false);
+            for (auto i=values.cbegin();i!=values.cend();++i) _envelope.setProperty(i.key(),i.value());
+            }
       Tremolo(Score*);
       Tremolo(const Tremolo&);
       Tremolo &operator=(const Tremolo&) = delete;

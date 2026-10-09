@@ -39,7 +39,11 @@ inline int offsetFor(int base, int velocity)
 
 // Must be called on the GUI thread while rendering is idle, after updateVelo().
 int referenceBase(const Note*, int globalMethod = 1, int eventIndex = 0);
+int referenceBaseAt(const Note*, int tick, int globalMethod = 1);
 int playbackBase(const Note*, int tick, qreal articulationMultiplier, bool fixedMax);
+
+inline int eventVelocity(int customized, double factor)
+      { return qBound(1, int(std::lround(customized * factor)), 127); }
 
 inline int converted(const Note* note, Note::ValueType target, int base)
       {

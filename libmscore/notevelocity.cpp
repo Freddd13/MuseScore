@@ -23,6 +23,13 @@ int referenceBase(const Note* note, int globalMethod, int eventIndex)
       int tick = chord->tick().ticks();
       if (!note->playEvents().empty())
             tick += chord->actualTicks().ticks() * note->playEvents().at(qBound(0, eventIndex, note->playEvents().size() - 1)).ontime() / 1000;
+      return referenceBaseAt(note,tick,globalMethod);
+      }
+
+int referenceBaseAt(const Note* note, int tick, int globalMethod)
+      {
+      const Chord* chord=note->chord();
+      if (chord->isGrace()) chord=toChord(chord->parent());
       Instrument* instrument = chord->part()->instrument(chord->tick());
       qreal multiplier = 1;
       for (const Articulation* articulation : chord->articulations())

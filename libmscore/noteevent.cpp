@@ -21,6 +21,7 @@ namespace Ms {
 
 void NoteEvent::read(XmlReader& e)
       {
+      _velocityFactor = 1; _velocitySourceIndex = -1;
       while (e.readNextStartElement()) {
             const QStringRef& tag(e.name());
             if (tag == "pitch")
@@ -62,7 +63,7 @@ NoteEventList::NoteEventList()
 
 bool NoteEvent::operator==(const NoteEvent& e) const
       {
-      return (e._pitch == _pitch) && (e._ontime == _ontime) && (e._len == _len);
+      return (e._pitch == _pitch) && (e._ontime == _ontime) && (e._len == _len) && e._velocityFactor == _velocityFactor && e._velocitySourceIndex == _velocitySourceIndex;
       }
 
 }

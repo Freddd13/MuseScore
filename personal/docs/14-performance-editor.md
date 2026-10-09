@@ -111,3 +111,5 @@ TempoText 本来会反复 fixTicks；新增临时批事务，用成对 UndoComma
 踏板纵轴固定 CC64 0/127，开值在顶端；fine/free 直接保存原 Fraction tick。快照收集各谱表 CR 起止集合，拖动、悬浮和绘制 O(1) 查询边界。非音符端点菱形／虚线和提示区分真实时机。核心补丁限于 Pedal::linePos 的非音符位置插值、Score::writeSegments 对 detached Pedal 的既有 connector/location 输出和 computeStartElement 为细分踏板保留前置原生音符上下文、computeEndElement 保留原始控制器终点、SpannerWriter 允许 Pedal 按真实 tick 写入；不新增 XML 字段、不改播放渲染或音频回调。跨小节 roundtrip/MIDI/undo 专门测试，旧踏板继续按原规则写入和布局。
 
 谱行切换只更新屏幕缓存；真实 Seq 回归比较开关谱带时同一原生 moveCursor 的视图 matrix，禁止编辑器自行改变谱面默认导航。
+
+0.19 生成事件包络不改保存值轴。停播快照缓存实际事件基准／倍率，双音震音分音符取源；提示、绝对轴选择范围旁标、试听和数值预览统一 NoteVelocity。详见 [15](15-piano-expression.md)。

@@ -409,6 +409,7 @@ void PerformanceEditor::refresh()
                                     cached.baseMin = qMin(cached.baseMin, base); cached.baseMax = qMax(cached.baseMax, base);
                                     }
                               if (note->veloType() == Note::ValueType::OFFSET_VAL) _relativeMax = qMax(_relativeMax, note->veloOffset());
+                              if (!live) cacheGeneratedVelocity(cached,globalMethod);
                               }
                         };
                   Chord* chord = toChord(element);
@@ -569,7 +570,9 @@ void PerformanceEditor::setNoteValue(int index, double value, bool report)
       if (!report) return;
       if (note.base < 0) { status(tr("预览 %1%2 · 实际 MIDI 基准待停播；原生属性尚未提交。 ").arg(stored).arg(type == Note::ValueType::OFFSET_VAL ? " %" : " MIDI")); return; }
       const int actual = NoteVelocity::effective(note.base, type, stored);
-      const QString range = note.baseMin != note.baseMax ? tr(" · 多次发声范围 %1–%2").arg(NoteVelocity::effective(note.baseMin, type, stored)).arg(NoteVelocity::effective(note.baseMax, type, stored)) : QString();
+      const auto actualRange=generatedVelocityRange(note,type,stored);
+      const QString range = actualRange.first != actualRange.second || !note.generatedVelocities.isEmpty()
+            ? tr(" · 实际发声 MIDI %1–%2").arg(actualRange.first).arg(actualRange.second) : QString();
       status(tr("音高 %1 · 基准 %2 · 保存 %3%4 · MIDI %5%6")
             .arg(note.pitch).arg(note.base).arg(stored).arg(type == Note::ValueType::OFFSET_VAL ? "%" : "")
             .arg(actual).arg((!_axis->currentIndex() && actual != raw ? tr("（整数百分比舍入：目标 %1）").arg(raw) : QString()) + range));

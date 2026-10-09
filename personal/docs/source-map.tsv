@@ -7,7 +7,7 @@ topic	path	symbol	line	role	tests
 快捷键	mscore/shortcut.cpp	Shortcut::getShortcut(	4420	命令注册与查询	-
 视图命令	mscore/scoreview.cpp	void ScoreView::cmd(const char* s)	2247	视图本地命令表	-
 事件与输入模式	mscore/events.cpp	void ScoreView::changeState(ViewState s)	1132	交互状态切换	-
-核心命令	libmscore/cmd.cpp	void Score::cmd(const QAction* a, EditData& ed)	4500	核心命令分发	mtest/libmscore/tools
+核心命令	libmscore/cmd.cpp	void Score::cmd(const QAction* a, EditData& ed)	4501	核心命令分发	mtest/libmscore/tools
 编辑事务开始	libmscore/cmd.cpp	void Score::startCmd()	200	开启用户撤销单元	mtest/libmscore/readwriteundoreset
 编辑事务结束	libmscore/cmd.cpp	void Score::endCmd(bool rollback)	240	布局及状态同步	mtest/libmscore/readwriteundoreset
 撤销栈	libmscore/undo.cpp	void UndoStack::push(UndoCommand* cmd, EditData* ed)	277	记录并执行undo命令	mtest/libmscore/readwriteundoreset
@@ -21,7 +21,7 @@ MasterScore模型	libmscore/score.h	class MasterScore :	1301	总谱共享状态�
 时间精度	libmscore/fraction.h	static Fraction fromTicks(	239	整型tick到Fraction	-
 时间单位	libmscore/mscore.h	static constexpr int DIVISION	95	PPQ常量	-
 音符模型	libmscore/note.h	class Note final	255	音高拼写与播放事件	mtest/libmscore/note
-播放事件单位	libmscore/noteevent.h	class NoteEvent {	25	千分之一音符时值	-
+播放事件单位	libmscore/noteevent.h	class NoteEvent {	26	千分之一音符时值	-
 选择	libmscore/select.h	class Selection {	147	列表与范围选择	mtest/libmscore/selectionfilter
 输入状态	libmscore/input.h	class InputState {	42	输入目标及节奏上下文	-
 跨时间元素	libmscore/spanner.h	class Spanner :	123	起止锚点与视觉分段	mtest/libmscore/spanners
@@ -58,9 +58,9 @@ MIDI左右手拆分	importexport/midiimport/importmidi_lrhand.h	void splitIntoLe
 起音参数	mscore/pianoroll/pianolevelsfilter.cpp	void PianoLevelFilterOnTime::setValue(	72	ChangeNoteEvent	-
 主窗口键盘	mscore/pianotools.cpp	PianoTools::PianoTools(	463	独立虚拟钢琴	-
 实时MIDI输入	mscore/musescore.cpp	void MuseScore::midiNoteReceived(	3774	硬件与UI输入转发	-
-生成播放事件	libmscore/rendermidi.cpp	void Score::createPlayEvents(Chord* chord)	2343	Auto/User事件策略	mtest/libmscore/midi
-播放MIDI渲染	libmscore/rendermidi.cpp	void MidiRenderer::renderScore(	2492	分块渲染	mtest/libmscore/midi
-踏板播放	libmscore/rendermidi.cpp	void MidiRenderer::renderSpanners(	1149	踏板控制器及跨时元素	mtest/libmscore/spanners
+生成播放事件	libmscore/rendermidi.cpp	void Score::createPlayEvents(Chord* chord)	2433	Auto/User事件策略	mtest/libmscore/midi
+播放MIDI渲染	libmscore/rendermidi.cpp	void MidiRenderer::renderScore(	2582	分块渲染	mtest/libmscore/midi
+踏板播放	libmscore/rendermidi.cpp	void MidiRenderer::renderSpanners(	1166	踏板控制器及跨时元素	mtest/libmscore/spanners
 播放事件收集	mscore/seq.cpp	void Seq::collectEvents(int utick)	1514	缓存与异步结果	-
 音频回调	mscore/seq.cpp	void Seq::process(unsigned framesPerPeriod, float* buffer)	1111	实时事件调度与合成	-
 播放界面心跳	mscore/seq.cpp	void Seq::heartBeatTimeout()	2587	输入消息与显示同步	-
@@ -109,16 +109,16 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 演奏界面	mscore/performanceeditor/performanceeditor.cpp	PerformanceEditor::PerformanceEditor	57	独立停靠参数面板	mtest/mscore/performanceeditor
 演奏快照	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::refresh()	333	内容快照/独立布局修复/原生选择同步	mtest/mscore/performanceeditor
 谱面演奏编辑	mscore/performanceeditor/performanceoverlay.cpp	void PerformanceEditor::paintOverlay	121	谱面浮动带/双向音符提示/播放和鼠标线	mtest/mscore/performanceeditor
-演奏手势	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::beginGesture	765	预览/一次 undo	mtest/mscore/performanceeditor
-播放预览提交	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::applyPending	606	渲染空闲提交与外部改谱保护	mtest/mscore/performanceeditor
+演奏手势	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::beginGesture	768	预览/一次 undo	mtest/mscore/performanceeditor
+播放预览提交	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::applyPending	609	渲染空闲提交与外部改谱保护	mtest/mscore/performanceeditor
 力度事务	mscore/performanceeditor/parameteredit.cpp	bool velocities(	37	原生 Note 属性事务	mtest/mscore/performanceeditor
 速度事务	mscore/performanceeditor/parameteredit.cpp	bool tempos(	55	TempoText 批编辑与可见标记保护	mtest/mscore/performanceeditor
 踏板事务	mscore/performanceeditor/parameteredit.cpp	bool pedal(	210	原生区间与同 Part 重叠校验	mtest/mscore/performanceeditor
 逐音力度基准	libmscore/notevelocity.cpp	int referenceBase(	19	逐谱表/事件/演奏法基准	mtest/mscore/performanceeditor
 速度重建边界	libmscore/score.cpp	void Score::beginTempoEdit()	418	撤销/重做批量重建	mtest/mscore/performanceeditor
-播放同步	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::updatePlayhead	236	Seq当前时刻/反复映射/稳定滚页	mtest/mscore/performanceeditor
+播放同步	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::updatePlayhead	242	Seq当前时刻/反复映射/稳定滚页	mtest/mscore/performanceeditor
 演奏筛选选择	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::selectIndices	46	原生批选/框选/过滤与重入保护	mtest/mscore/performanceeditor
-演奏绘制	mscore/performanceeditor/performancepainting.cpp	void PerformanceEditor::paintForeground	241	识音/参数着色/发声与预览描边	mtest/mscore/performanceeditor
+演奏绘制	mscore/performanceeditor/performancepainting.cpp	void PerformanceEditor::paintForeground	248	识音/参数着色/发声与预览描边	mtest/mscore/performanceeditor
 演奏网格	mscore/performanceeditor/performancepainting.cpp	void PerformanceEditor::paintBackground	57	原生小节拍位/半音键条/参数数字	mtest/mscore/performanceeditor
 持续音查询	mscore/performanceeditor/performanceview.cpp	QVector<int> PerformanceIntervalIndex::query	64	分音高前缀最大结束时刻区间查询	mtest/mscore/performanceeditor
 演奏配色	mscore/performanceeditor/performancesettings.cpp	bool PerformanceAppearance::edit	88	独立颜色设置/渐变节点/重启恢复	mtest/mscore/performanceeditor
@@ -126,8 +126,8 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 原生批选	libmscore/score.cpp	bool Score::selectNoteList	3402	预验证/去重/输入上下文/不定位播放	mtest/mscore/performanceeditor
 浮层滚动	mscore/performanceeditor/performanceoverlay.cpp	void PerformanceEditor::overlayViewChanged	32	旧固定浮层及滚动像素副本的损伤重绘	mtest/mscore/performanceeditor
 演奏试听	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::audition(int	120	停播实音/保存力度原生定时试听	mtest/mscore/performanceeditor
-演奏播放入口	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::togglePlayback	143	原生播放状态/明确定位入口	mtest/mscore/performanceeditor
-独立纵向视窗	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::zoomVertical	155	音高/参数各自缩放/滚动条同步	mtest/mscore/performanceeditor
+演奏播放入口	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::togglePlayback	145	原生播放状态/明确定位入口	mtest/mscore/performanceeditor
+独立纵向视窗	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::zoomVertical	157	音高/参数各自缩放/滚动条同步	mtest/mscore/performanceeditor
 滚轮力度	mscore/performanceeditor/performancewheel.cpp	bool PerformanceEditor::wheelVelocity	26	单音细粗调/端点锁定/临时模式与原生预览	mtest/mscore/performanceeditor
 滚轮撤销段	mscore/performanceeditor/performancewheel.cpp	void PerformanceEditor::finishWheel	13	300ms合并/生命周期与一次提交	mtest/mscore/performanceeditor
 个人工具栏	mscore/musescore.cpp	void MuseScore::populateAlternativeOperations	708	Evolution其他选项栏复用演奏编辑器QAction	mtest/mscore/performanceeditor
@@ -135,22 +135,22 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 个人帮助标识	mscore/musescoredialogs.cpp	AboutBoxDialog::AboutBoxDialog()	144	关于/复制版本/个人标签链接	mtest/mscore/performanceeditor
 个人版本生成	personal/branding.cmake	file(STRINGS	3	单一VERSION源/独立生成头/自动重配置	mtest/mscore/performanceeditor
 滚轮浮标	mscore/performanceeditor/performancewheel.cpp	void PerformanceEditor::paintWheelBadge	86	画布内数值/局部损伤重绘	mtest/mscore/performanceeditor
-排版几何刷新	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::refreshLayout	466	播放中只更新GUI几何/不重建音频事件	mtest/mscore/performanceeditor
-谱行缓存切换	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::setOverlaySystem	480	跨谱行一次重建/原生选择独立	mtest/mscore/performanceeditor
-播放谱行定位	mscore/performanceeditor/performanceeditor.cpp	System* PerformanceEditor::systemAtTick	475	记谱tick二分定位/休止与反复	mtest/mscore/performanceeditor
+排版几何刷新	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::refreshLayout	467	播放中只更新GUI几何/不重建音频事件	mtest/mscore/performanceeditor
+谱行缓存切换	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::setOverlaySystem	481	跨谱行一次重建/原生选择独立	mtest/mscore/performanceeditor
+播放谱行定位	mscore/performanceeditor/performanceeditor.cpp	System* PerformanceEditor::systemAtTick	476	记谱tick二分定位/休止与反复	mtest/mscore/performanceeditor
 琶音时序	libmscore/playbacktiming.cpp	Arpeggio* arpeggio(	18	跨谱表参与音和提前窗口	mtest/libmscore/midi/tst_midi.cpp
 琶音检视器	mscore/inspector/inspectorArpeggio.cpp	void InspectorArpeggio::postInit()	65	实际间隔与旧比率提示	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
-参数暂存	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::queueProperty(	668	播放中暂存/停播和保存提交	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
-琶音延音回归	mtest/libmscore/midi/tst_midi.cpp	void TestMidi::timedArpeggioTies()	849	防止续接时长丢失/不重触发	mtest/libmscore/midi/tst_midi.cpp
+参数暂存	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::queueProperty(	671	播放中暂存/停播和保存提交	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
+琶音延音回归	mtest/libmscore/midi/tst_midi.cpp	void TestMidi::timedArpeggioTies()	858	防止续接时长丢失/不重触发	mtest/libmscore/midi/tst_midi.cpp
 小音符时序	libmscore/playbacktiming.cpp	double graceSpanMs(	83	速度图与整组上限	mtest/libmscore/midi/tst_midi.cpp
-倚音播放解释	libmscore/rendermidi.cpp	void Score::createGraceNotesPlayEvents(	2200	旧融合与新位置解释	mtest/libmscore/midi/tst_midi.cpp
+倚音播放解释	libmscore/rendermidi.cpp	void Score::createGraceNotesPlayEvents(	2290	旧融合与新位置解释	mtest/libmscore/midi/tst_midi.cpp
 小音符检视器	mscore/inspector/inspectorNote.cpp	void InspectorNote::postInit()	212	外观/时间分离及实际时间	mtest/libmscore/midi/tst_midi.cpp
-小音符反复回归	mtest/libmscore/midi/tst_midi.cpp	void TestMidi::timedGraceRepeatJump()	669	按实际跳转缩短同声部前音	mtest/libmscore/midi/tst_midi.cpp
+小音符反复回归	mtest/libmscore/midi/tst_midi.cpp	void TestMidi::timedGraceRepeatJump()	678	按实际跳转缩短同声部前音	mtest/libmscore/midi/tst_midi.cpp
 谱行精调	mscore/performanceeditor/performancecontrols.cpp	void PerformanceEditor::scoreRangeControl	55	独立谱带范围/缓存筛选/原生声部色	mtest/mscore/performanceeditor
 自由踏板布局	libmscore/pedal.cpp	QPointF Pedal::linePos	214	非音符端点插值/普通踏板原规则	mtest/mscore/performanceeditor
 自由踏板保存	libmscore/scorefile.cpp	QSet<int> nativeControllerTicks	1294	已有location精确保存/无新字段	mtest/mscore/performanceeditor
 参数交互回归	mtest/mscore/performanceeditor/performance_controls_tests.inc	void finePedalNativeLayoutMidiUndoAndPersistence	55	真实CC64/undo/跨小节保存/菜单与节点	mtest/mscore/performanceeditor
-重音倍率	libmscore/articulation.cpp	qreal Articulation::velocityMultiplier	647	播放器/编辑器共用及旧谱默认	mtest/libmscore/midi/accent_playback_tests.inc
+重音倍率	libmscore/articulation.cpp	qreal Articulation::velocityMultiplier	655	播放器/编辑器共用及旧谱默认	mtest/libmscore/midi/accent_playback_tests.inc
 重音检视器	mscore/inspector/inspector.cpp	void InspectorArticulation::postInit	820	数字/拖拽与原值/轻预设	mtest/mscore/performanceeditor/accent_inspector_tests.inc
 重音分谱回归	mtest/libmscore/midi/accent_playback_tests.inc	void TestMidi::accentLinkedParts	1	关联分谱与主谱一次撤销	mtest/libmscore/midi/accent_playback_tests.inc
 速度表达	libmscore/tempoexpression.cpp	void rebuild(Score* input)	87	批量派生、积分和恢复语义	mtest/libmscore/midi/rit_playback_tests.inc
@@ -159,4 +159,8 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 速度表达检视器	mscore/inspector/inspectorTextLine.cpp	void InspectorTextLine::postInit	65	类型/播放、数字/拖动	mtest/mscore/performanceeditor/rit_editor_tests.inc
 演奏键形	mscore/performanceeditor/performanceview.cpp	QPolygonF PerformanceKeyboard::shape	13	等高白键前端/半音行窄部和黑键轮廓	mtest/mscore/performanceeditor
 演奏键盘命中	mscore/performanceeditor/performanceview.cpp	int PerformanceKeyboard::pitchAt	28	键形共享规则的悬浮识音和原生试听命中	mtest/mscore/performanceeditor
-参数可用区域	mscore/performanceeditor/performanceeditor.cpp	QRectF PerformanceEditor::laneRect()	704	参数绘制/拖拽统一有效范围和端点留白	mtest/mscore/performanceeditor
+参数可用区域	mscore/performanceeditor/performanceeditor.cpp	QRectF PerformanceEditor::laneRect()	707	参数绘制/拖拽统一有效范围和端点留白	mtest/mscore/performanceeditor
+力度包络	libmscore/playbackenvelope.cpp	double PlaybackEnvelope::factor	43	共用参数、旧值和逐次倍率	mtest/libmscore/midi/envelope_playback_tests.inc
+生成震音包络	libmscore/rendermidi.cpp	static void applyGeneratedEnvelope	1367	全范围生成事件、双音来源	mtest/libmscore/midi/envelope_playback_tests.inc
+包络检视器	mscore/inspector/envelopeinspector.h	inline std::vector<InspectorItem> envelopeInspectorControls	17	数字／名称拖拽、单事务预设	mtest/mscore/performanceeditor/envelope_editor_tests.inc
+实际发声范围	mscore/performanceeditor/envelopepreview.cpp	void PerformanceEditor::cacheGeneratedVelocity	7	停播缓存、双音按源、范围和预览	mtest/mscore/performanceeditor/envelope_editor_tests.inc

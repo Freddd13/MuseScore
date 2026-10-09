@@ -120,3 +120,5 @@ PlaybackTiming 是 libmscore 的局部助手，MidiRenderer 生成带 nominalTic
 0.17 重音属性限于 Articulation；播放器和编辑器共同使用 velocityMultiplier，检视器复用参数暂存，缺字段旧行为。详见 [15](15-piano-expression.md)。
 
 0.18 rit./a tempo 复用 TextLine/TempoText，TempoExpression 批量派生原 TempoMap；精确端点扩展已有踏板接线，旧对象旁路。详见 [15](15-piano-expression.md)。
+
+0.19 PlaybackEnvelope 复用震音／颤音生成器，NoteEvent缓存派生倍率及双音来源，NoteVelocity统一播放器／导出／试听／编辑器计算；音频回调只读既有事件。详见 [15](15-piano-expression.md)。

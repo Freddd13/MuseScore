@@ -157,6 +157,13 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
                   marks.insert(mark); painter.setPen(QPen(color, it->selected ? 2 : 1));
                   painter.drawLine(QPointF(x, baseline), QPointF(x, y));
                   painter.setBrush(it->audible ? QBrush(color) : Qt::NoBrush); painter.drawEllipse(QPointF(x, y), onScore ? 2.5 : 2.0, onScore ? 2.5 : 2.0);
+                  if (!_axis->currentIndex() && !it->generatedVelocities.isEmpty() && (it->selected || index==_hover)) {
+                        const auto range=generatedVelocityRange(*it,edit.type,edit.raw);
+                        const double low=yForValue(range.first,rect,onScore),high=yForValue(range.second,rect,onScore);
+                        painter.setPen(QPen(color.lighter(140),1,Qt::DashLine)); painter.drawLine(QPointF(x+4,low),QPointF(x+4,high));
+                        painter.drawLine(QPointF(x+2,low),QPointF(x+6,low)); painter.drawLine(QPointF(x+2,high),QPointF(x+6,high));
+                        if(!onScore) painter.drawText(QPointF(x+8,high+12),QString("%1–%2").arg(range.first).arg(range.second));
+                        }
                   }
             if (dense) {
                   painter.setPen(QPen(_appearance.colors[PerformanceAppearance::Text], 1));

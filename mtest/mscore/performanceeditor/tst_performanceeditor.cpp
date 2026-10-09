@@ -34,6 +34,10 @@
 #include "mscore/inspector/inspector.h"
 #include "mscore/palette/palettetree.h"
 #include "libmscore/articulation.h"
+#include "libmscore/tremolo.h"
+#include "libmscore/trill.h"
+#include "libmscore/playbackenvelope.h"
+#include "mscore/inspector/inspectorTrill.h"
 #include "libmscore/textline.h"
 #include "libmscore/tempoexpression.h"
 #include "libmscore/tempo.h"
@@ -103,8 +107,9 @@ class PerformanceRecordingSynth : public PerformanceSilentSynth {
       unsigned frames = 0;
       QVector<unsigned> onFrames;
       QVector<int> onPitches;
+      QVector<int> onVelocities;
       void process(unsigned n, float*, float*, float*) override { frames += n; }
-      void play(const PlayEvent& event) override { if (event.type() == ME_NOTEON && event.velo()) { onFrames.append(frames); onPitches.append(event.pitch()); } }
+      void play(const PlayEvent& event) override { if (event.type() == ME_NOTEON && event.velo()) { onFrames.append(frames); onPitches.append(event.pitch()); onVelocities.append(event.velo()); } }
 };
 class PerformanceTestDriver : public Driver {
       Transport _state = Transport::STOP;
@@ -819,6 +824,8 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "performance_controls_tests.inc"
 #endif
       void accentInspectorAndNativeDefault();
+      void envelopeInspectorAndPreview();
+      void envelopeRealSequencer();
       void ritNativeCommandsAndConflicts();
       void ritInspectorAndCurveGestures();
       void ritRealSequencerTiming();
@@ -949,6 +956,7 @@ class TestPerformanceEditor : public QObject, public MTest {
       };
 #include "grace_playback_tests.inc"
 #include "accent_inspector_tests.inc"
+#include "envelope_editor_tests.inc"
 #include "rit_editor_tests.inc"
 QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"

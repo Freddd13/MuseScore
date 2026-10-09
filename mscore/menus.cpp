@@ -848,6 +848,7 @@ PalettePanel* MuseScore::newTremoloPalettePanel()
       for (int i = int(TremoloType::R8); i <= int(TremoloType::C256); ++i) {
             Tremolo* tremolo = new Tremolo(gscore);
             tremolo->setTremoloType(TremoloType(i));
+            if (!tremolo->isBuzzRoll()) tremolo->applyEnvelopePreset(1);
             sp->append(tremolo, tremolo->subtypeName());
             }
 
@@ -966,6 +967,7 @@ PalettePanel* MuseScore::newArticulationsPalettePanel()
       for (auto i : art) {
             Articulation* s = new Articulation(i, gscore);
             s->applyLightAccentPreset();
+            if (s->hasTrillEnvelope()) s->applyEnvelopePreset(1);
             sp->append(s, s->userName());
             }
       Bend* bend = new Bend(gscore);
@@ -1476,6 +1478,7 @@ PalettePanel* MuseScore::newLinesPalettePanel()
       for (int i = 0; i < trillTableSize(); i++) {
             Trill* trill = new Trill(gscore);
             trill->setTrillType(trillTable[i].type);
+            trill->applyEnvelopePreset(1);
             trill->setLen(w);
             sp->append(trill, trillTable[i].userName);
             }

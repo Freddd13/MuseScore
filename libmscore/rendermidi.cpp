@@ -34,6 +34,8 @@
 #include "navigate.h"
 #include "note.h"
 #include "noteevent.h"
+#include "notevelocity.h"
+#include "playbackenvelope.h"
 #include "part.h"
 #include "rendermidi.h"
 #include "repeat.h"
@@ -261,11 +263,12 @@ static void playNote(EventMap* events,
                      int velo,
                      int onTime,
                      int offTime,
-                     int staffIdx)
+                     int staffIdx,
+                     double eventFactor)
       {
       if (!note->play())
             return;
-      velo = note->customizeVelocity(velo);
+      velo = NoteVelocity::eventVelocity(note->customizeVelocity(velo), eventFactor);
       NPlayEvent ev(ME_NOTEON, channel, pitch, velo);
       ev.setOriginatingStaff(staffIdx);
       ev.setTuning(note->tuning());
@@ -354,6 +357,10 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                         tieLen += (n->chord()->actualTicks().ticks() * (nel[0].len())) / 1000;
                         }
                   else {
+                        // A new envelope root is collected at its own segment. Recursing
+                        // here would emit it twice when settings delimit a tie chain.
+                        if (n->chord()->playEventType()==PlayEventType::Auto && n->chord()->tremolo()
+                              && n->chord()->tremolo()->playbackEnvelope().mode()) break;
                         // recurse
                         collectNote(events, channel, n, velocityMultiplier, tickOffset, staff, config);
                         break;
@@ -444,9 +451,18 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                   }
 
             velo *= velocityMultiplier;
+            const auto source = PlaybackEnvelope::eventSource(note,e);
+            if (source != note) {
+                  if (!source->play() || source->hidden()) continue;
+                  qreal multiplier=1;
+                  auto instrument=source->part()->instrument(source->chord()->tick());
+                  for (const auto articulation:source->chord()->articulations())
+                        if (articulation->playArticulation()) multiplier *= articulation->velocityMultiplier(instrument);
+                  velo=NoteVelocity::playbackBase(source,on-tickOffset,multiplier,config.useSND && config.method==DynamicsRenderMethod::FIXED_MAX);
+                  }
 
             playNote(events,
-                     note,
+                     source,
                      note,
                      i,
                      channel,
@@ -454,7 +470,8 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                      qBound(1, velo, 127),
                      on,
                      off,
-                     staffIdx);
+                     source->staffIdx(),
+                     PlaybackEnvelope::eventFactor(note,e));
             }
 
       // Single-note dynamics
@@ -1317,6 +1334,53 @@ const Drumset* getDrumset(const Chord* chord)
 //   renderTremolo
 //---------------------------------------------------------
 
+// Automatic tremolos can span a complete tie chain. Custom event objects
+// and explicitly different tremolo settings delimit that span.
+static bool matchingEnvelopeTremolo(const Tremolo* a, const Tremolo* b)
+      { return b && !b->twoNotes() && a->tremoloType()==b->tremoloType() && a->playbackEnvelope()==b->playbackEnvelope(); }
+static const Note* envelopeTremoloRoot(const Note* note)
+      {
+      const Note* root=note; const Tremolo* wanted=nullptr;
+      for (auto current=note; current;) {
+            if (current->chord()->playEventType()!=PlayEventType::Auto) break;
+            if (auto tremolo=current->chord()->tremolo()) {
+                  if (tremolo->twoNotes() || !tremolo->playbackEnvelope().mode() || (wanted && !matchingEnvelopeTremolo(wanted,tremolo))) break;
+                  wanted=tremolo; root=current;
+                  }
+            auto previous=current->tieBack() ? current->tieBack()->startNote() : nullptr;
+            if (!previous || previous->chord()->tick()>=current->chord()->tick()) break;
+            current=previous;
+            }
+      return root;
+      }
+static int envelopeTremoloEnd(const Note* root)
+      {
+      auto last=root; const auto tremolo=root->chord()->tremolo();
+      while (last->tieFor() && last->tieFor()->endNote()) {
+            auto next=last->tieFor()->endNote();
+            if (next->chord()->tick()<=last->chord()->tick() || next->chord()->playEventType()!=PlayEventType::Auto) break;
+            if (next->chord()->tremolo() && !matchingEnvelopeTremolo(tremolo,next->chord()->tremolo())) break;
+            last=next;
+            }
+      return last->chord()->endTick().ticks();
+      }
+static void applyGeneratedEnvelope(NoteEventList& events, const Note* note, const PlaybackEnvelope& envelope, int from, int until, bool tremolo)
+      {
+      if (!envelope.mode() || note->chord()->playEventType()!=PlayEventType::Auto || events.isEmpty()) return;
+      const int duration=note->chord()->actualTicks().ticks();
+      int spacing=until-from;
+      for (int i=1;i<events.size();++i) {
+            const int distance=qint64(duration)*(events[i].ontime()-events[i-1].ontime())/1000;
+            if (distance>0) spacing=qMin(spacing,distance);
+            }
+      const int range=qMax(1,until-from-qMax(1,spacing));
+      for (auto& event:events) {
+            const qint64 on=note->chord()->tick().ticks()+qint64(duration)*event.ontime()/1000;
+            const bool alternate=tremolo ? event.velocitySourceIndex()>=0 : event.pitch()!=0;
+            event.setVelocityFactor(envelope.factor(double(on-from)/range,on<=from,alternate));
+            }
+      }
+
 void renderTremolo(Chord* chord, QList<NoteEventList>& ell)
       {
       Segment* seg = chord->segment();
@@ -1386,6 +1450,8 @@ void renderTremolo(Chord* chord, QList<NoteEventList>& ell)
                               for (int i = 0; i < n; ++i) {
                                     events->append(NoteEvent(0, l * i * 2, l));
                                     events->append(NoteEvent(dpitch, l * i * 2 + l, l));
+                                    if (tremolo->playbackEnvelope().mode() && c2->playEventType()==PlayEventType::Auto)
+                                          events->last().setVelocitySourceIndex(k);
                                     }
                               }
                         else if (k < notes) {
@@ -1399,8 +1465,11 @@ void renderTremolo(Chord* chord, QList<NoteEventList>& ell)
                               int p1 = chord->notes()[0]->pitch();
                               int p2 = c2->notes()[k]->pitch();
                               int dpitch = p2-p1;
-                              for (int i = 0; i < n; ++i)
+                              for (int i = 0; i < n; ++i) {
                                     events->append(NoteEvent(dpitch, l * i * 2 + l, l));
+                                    if (tremolo->playbackEnvelope().mode() && c2->playEventType()==PlayEventType::Auto)
+                                          events->last().setVelocitySourceIndex(k);
+                                    }
                               }
                         }
                   }
@@ -1422,8 +1491,24 @@ void renderTremolo(Chord* chord, QList<NoteEventList>& ell)
             for (int k = 0; k < notes; ++k) {
                   NoteEventList* events = &(ell)[k];
                   events->clear();
-                  for (int i = 0; i < n; ++i)
+                  if (tremolo->playbackEnvelope().mode() && chord->playEventType()==PlayEventType::Auto) {
+                        const int duration=chord->actualTicks().ticks();
+                        const int spacing=qMax(1,int(qint64(duration)*t/chord->ticks().ticks()));
+                        const int count=qMax(1,(envelopeTremoloEnd(chord->notes()[k])-chord->tick().ticks())/spacing);
+                        for (int i=0;i<count;++i) events->append(NoteEvent(0,qint64(i)*spacing*1000/duration,qint64(spacing)*1000/duration));
+                        }
+                  else for (int i = 0; i < n; ++i)
                         events->append(NoteEvent(0, l * i, l));
+                  }
+            }
+      if (tremolo->playbackEnvelope().mode() && chord->playEventType()==PlayEventType::Auto
+            && (!tremolo->twoNotes() || (tremolo->chord2() && tremolo->chord2()->playEventType()==PlayEventType::Auto))) {
+            for (int k=0;k<notes;++k) {
+                  auto note=chord->notes()[k];
+                  auto root=envelopeTremoloRoot(note);
+                  const int from=tremolo->twoNotes() ? chord->tick().ticks() : root->chord()->tick().ticks();
+                  const int until=tremolo->twoNotes() ? tremolo->chord2()->endTick().ticks() : envelopeTremoloEnd(root);
+                  applyGeneratedEnvelope(ell[k],note,tremolo->playbackEnvelope(),from,until,true);
                   }
             }
       }
@@ -2079,7 +2164,8 @@ void renderChordArticulation(Chord* chord, QList<NoteEventList> & ell, int & gat
             if (noteHasGlissando(note))
                   renderGlissando(events, note);
             else if (chord->staff()->isPitchedStaff(chord->tick())  && (trill = findFirstTrill(chord)) != nullptr) {
-                  renderNoteArticulation(events, note, false, trill->trillType(), trill->ornamentStyle());
+                  if (renderNoteArticulation(events, note, false, trill->trillType(), trill->ornamentStyle()))
+                        applyGeneratedEnvelope(*events,note,trill->playbackEnvelope(),trill->tick().ticks(),trill->tick2().ticks(),false);
                   }
             else {
                   for (Articulation*& a : chord->articulations()) {
@@ -2087,6 +2173,8 @@ void renderChordArticulation(Chord* chord, QList<NoteEventList> & ell, int & gat
                               continue;
                         if (!renderNoteArticulation(events, note, false, a->symId(), a->ornamentStyle()))
                               instr->updateGateTime(&gateTime, channel, a->articulationName());
+                        else if (a->hasTrillEnvelope())
+                              applyGeneratedEnvelope(*events,note,a->playbackEnvelope(),chord->tick().ticks(),chord->tick().ticks()+totalTiedNoteTicks(note),false);
                         }
                   }
             }
@@ -2098,6 +2186,8 @@ void renderChordArticulation(Chord* chord, QList<NoteEventList> & ell, int & gat
 
 static bool shouldRenderNote(Note* n)
       {
+      const auto root=envelopeTremoloRoot(n);
+      if (root!=n && root->chord()->tremolo() && envelopeTremoloEnd(root)>n->chord()->tick().ticks()) return false;
       while (n->tieBack() && n != n->tieBack()->startNote()) {
             n = n->tieBack()->startNote();
             if (findFirstTrill(n->chord()))
@@ -2620,7 +2710,21 @@ bool MidiRenderer::canBreakChunk(const Measure* last)
             const Spanner* sp = interval.value;
             if (sp->isHairpin() && sp->tick2().ticks() > endTick)
                   return false;
+            if (sp->isTrill() && toTrill(sp)->playbackEnvelope().mode() && sp->tick2().ticks()>endTick)
+                  return false;
             }
+
+      // Keep a generated envelope and all of its tied continuations together.
+      // Seeking into the chunk then sees the same precomputed event factors.
+      for (auto segment=last->first(SegmentType::ChordRest);segment;segment=segment->next(SegmentType::ChordRest))
+            for (int track=0;track<score->nstaves()*VOICES;++track) {
+                  auto element=segment->element(track); if(!element || !element->isChord()) continue;
+                  for (auto note:toChord(element)->notes()) {
+                        auto root=envelopeTremoloRoot(note);
+                        if (root->chord()->tremolo() && !root->chord()->tremolo()->twoNotes()
+                              && root->chord()->tremolo()->playbackEnvelope().mode() && envelopeTremoloEnd(root)>endTick) return false;
+                        }
+                  }
 
       // Repeat measures rely on the previous measure
       // being properly rendered, disallow breaking

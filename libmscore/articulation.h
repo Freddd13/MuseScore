@@ -18,6 +18,8 @@
 #include "mscore.h"
 #include "sym.h"
 
+#include "playbackenvelope.h"
+
 namespace Ms {
 
 class ChordRest;
@@ -56,6 +58,7 @@ constexpr bool operator& (ArticulationShowIn a1, ArticulationShowIn a2) {
 //---------------------------------------------------------
 
 class Articulation final : public Element {
+      PlaybackEnvelope _envelope{true};
       SymId _symId;
       Direction _direction;
       QString _channelName;
@@ -78,6 +81,11 @@ class Articulation final : public Element {
       static AnchorGroup anchorGroup(SymId);
 
    public:
+      const PlaybackEnvelope& playbackEnvelope() const { return _envelope; }
+      void applyEnvelopePreset(int mode) {
+            const auto values=PlaybackEnvelope::preset(mode,true);
+            for (auto i=values.cbegin();i!=values.cend();++i) _envelope.setProperty(i.key(),i.value());
+            }
       Articulation(Score*);
       Articulation(SymId, Score*);
       Articulation(const Articulation&) = default;
@@ -142,6 +150,7 @@ class Articulation final : public Element {
       bool isStaccato() const;
       bool isAccent() const;
       bool hasLightAccentPreset() const;
+      bool hasTrillEnvelope() const { return symId() == SymId::ornamentTrill || symId() == SymId::ornamentShortTrill; }
       void applyLightAccentPreset();
       qreal velocityMultiplier(Instrument*) const;
       bool isMarcato() const;

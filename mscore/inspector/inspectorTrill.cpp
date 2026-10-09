@@ -11,6 +11,7 @@
 //=============================================================================
 
 #include "inspectorTrill.h"
+#include "envelopeinspector.h"
 #include "libmscore/trill.h"
 
 namespace Ms {
@@ -24,18 +25,22 @@ InspectorTrill::InspectorTrill(QWidget* parent)
       {
       t.setupUi(addWidget());
 
-      const std::vector<InspectorItem> iiList = {
+      std::vector<InspectorItem> iiList = {
             { Pid::TRILL_TYPE,     0, t.trillType,        t.resetTrillType        },
             { Pid::PLACEMENT,      0, t.placement,        t.resetPlacement        },
             { Pid::ORNAMENT_STYLE, 0, t.ornamentStyle,    t.resetOrnamentStyle    },
             { Pid::PLAY,           0, t.playArticulation, t.resetPlayArticulation }
             };
+      const auto envelopeItems=envelopeInspectorControls(t.panel,inspector);
+      iiList.insert(iiList.end(),envelopeItems.begin(),envelopeItems.end());
       const std::vector<InspectorPanel> ppList = {
             { t.title, t.panel }
             };
 
       mapSignals(iiList, ppList);
       }
+
+void InspectorTrill::postInit() { syncEnvelopeInspector(t.panel,inspector); }
 
 //---------------------------------------------------------
 //   setElement

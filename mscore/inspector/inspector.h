@@ -328,6 +328,7 @@ class InspectorTremolo : public InspectorElementBase {
 
    public:
       InspectorTremolo(QWidget* parent);
+      void postInit() override;
 #if 0 // not needed currently
       virtual void setElement() override;
 #endif

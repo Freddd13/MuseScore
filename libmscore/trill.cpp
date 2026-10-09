@@ -233,6 +233,7 @@ Element* TrillSegment::drop(EditData& data)
 
 Element* TrillSegment::propertyDelegate(Pid pid)
       {
+      if (PlaybackEnvelope::handles(pid)) return spanner();
       switch (pid) {
             case Pid::ORNAMENT_STYLE:
             case Pid::PLACEMENT:
@@ -364,6 +365,7 @@ void Trill::write(XmlWriter& xml) const
       if (!xml.canWrite(this))
             return;
       xml.stag(this);
+      PlaybackEnvelope::write(this, xml);
       xml.tag("subtype", trillTypeName());
       writeProperty(xml, Pid::PLAY);
       writeProperty(xml, Pid::ORNAMENT_STYLE);
@@ -384,7 +386,9 @@ void Trill::read(XmlReader& e)
 
       while (e.readNextStartElement()) {
             const QStringRef& tag(e.name());
-            if (tag == "subtype")
+            if (PlaybackEnvelope::read(this,e))
+                  ;
+            else if (tag == "subtype")
                   setTrillType(e.readElementText());
             else if (tag == "Accidental") {
                   _accidental = new Accidental(score());
@@ -473,6 +477,7 @@ void Trill::scanElements(void* data, void (*func)(void*, Element*), bool all)
 
 QVariant Trill::getProperty(Pid propertyId) const
       {
+      if (PlaybackEnvelope::handles(propertyId)) return _envelope.property(propertyId);
       switch(propertyId) {
             case Pid::TRILL_TYPE:
                   return int(trillType());
@@ -492,6 +497,10 @@ QVariant Trill::getProperty(Pid propertyId) const
 
 bool Trill::setProperty(Pid propertyId, const QVariant& val)
       {
+      if (PlaybackEnvelope::handles(propertyId)) {
+            if (!_envelope.setProperty(propertyId, val)) return false;
+            triggerLayout(); if (score()) score()->setPlaylistDirty(); return true;
+            }
       switch(propertyId) {
             case Pid::TRILL_TYPE:
                   setTrillType(Type(val.toInt()));
@@ -517,6 +526,7 @@ bool Trill::setProperty(Pid propertyId, const QVariant& val)
 
 QVariant Trill::propertyDefault(Pid propertyId) const
       {
+      if (PlaybackEnvelope::handles(propertyId)) return _envelope.defaultProperty(propertyId);
       switch (propertyId) {
             case Pid::TRILL_TYPE:
                   return 0;

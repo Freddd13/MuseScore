@@ -64,6 +64,7 @@ Tremolo::Tremolo(const Tremolo& t)
       _chord1       = t.chord1();
       _chord2       = t.chord2();
       _durationType = t._durationType;
+      _envelope = t._envelope;
       }
 
 //---------------------------------------------------------
@@ -550,6 +551,7 @@ void Tremolo::write(XmlWriter& xml) const
       if (!xml.canWrite(this))
             return;
       xml.stag(this);
+      PlaybackEnvelope::write(this, xml);
       writeProperty(xml, Pid::TREMOLO_TYPE);
       writeProperty(xml, Pid::TREMOLO_STYLE);
       Element::writeProperties(xml);
@@ -564,7 +566,9 @@ void Tremolo::read(XmlReader& e)
       {
       while (e.readNextStartElement()) {
             const QStringRef& tag(e.name());
-            if (tag == "subtype")
+            if (PlaybackEnvelope::read(this,e))
+                  ;
+            else if (tag == "subtype")
                   setTremoloType(e.readElementText());
             // Style needs special handling other than readStyledProperty()
             // to avoid calling customStyleApplicable() in setProperty(),
@@ -714,6 +718,7 @@ bool Tremolo::customStyleApplicable() const
 
 QVariant Tremolo::getProperty(Pid propertyId) const
       {
+      if (PlaybackEnvelope::handles(propertyId)) return _envelope.property(propertyId);
       switch (propertyId) {
             case Pid::TREMOLO_TYPE:
                   return int(_tremoloType);
@@ -731,6 +736,10 @@ QVariant Tremolo::getProperty(Pid propertyId) const
 
 bool Tremolo::setProperty(Pid propertyId, const QVariant& val)
       {
+      if (PlaybackEnvelope::handles(propertyId)) {
+            if (!_envelope.setProperty(propertyId, val)) return false;
+            triggerLayout(); if (score()) score()->setPlaylistDirty(); return true;
+            }
       switch (propertyId) {
             case Pid::TREMOLO_TYPE:
                   setTremoloType(TremoloType(val.toInt()));
@@ -752,6 +761,7 @@ bool Tremolo::setProperty(Pid propertyId, const QVariant& val)
 
 QVariant Tremolo::propertyDefault(Pid propertyId) const 
       {
+      if (PlaybackEnvelope::handles(propertyId)) return _envelope.defaultProperty(propertyId);
       switch (propertyId) {
             case Pid::TREMOLO_STYLE:
                   return score()->styleI(Sid::tremoloStyle);

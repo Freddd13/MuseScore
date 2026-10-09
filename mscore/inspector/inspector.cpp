@@ -13,6 +13,7 @@
 #include <QStackedWidget>
 #include <QPushButton>
 #include "scrubproperty.h"
+#include "envelopeinspector.h"
 #include "../performanceeditor/performanceeditor.h"
 
 #include "musescore.h"
@@ -417,10 +418,7 @@ void Inspector::update(Score* s)
                               ie = new InspectorBend(this);
                               break;
                         case ElementType::TREMOLO:
-                              if (toTremolo(element())->customStyleApplicable())
-                                    ie = new InspectorTremolo(this);
-                              else
-                                    ie = new InspectorElement(this);
+                              ie = new InspectorTremolo(this);
                               break;
                         case ElementType::TREMOLOBAR:
                               ie = new InspectorTremoloBar(this);
@@ -785,7 +783,7 @@ InspectorArticulation::InspectorArticulation(QWidget* parent)
                   }
             });
 
-      const std::vector<InspectorItem> iiList = {
+      std::vector<InspectorItem> iiList = {
             velocityItem,
             { Pid::ARTIC_VELOCITY_MODE, 0, _velocityMode, nullptr },
             { Pid::ARTICULATION_ANCHOR, 0, ar.anchor,           ar.resetAnchor           },
@@ -794,6 +792,8 @@ InspectorArticulation::InspectorArticulation(QWidget* parent)
             { Pid::ORNAMENT_STYLE,      0, ar.ornamentStyle,    ar.resetOrnamentStyle    },
             { Pid::PLAY,                0, ar.playArticulation, ar.resetPlayArticulation }
             };
+      const auto envelopeItems=envelopeInspectorControls(ar.panel,inspector);
+      iiList.insert(iiList.end(),envelopeItems.begin(),envelopeItems.end());
       const std::vector<InspectorPanel> ppList = { { ar.title, ar.panel } };
       mapSignals(iiList, ppList);
       connect(ar.properties, SIGNAL(clicked()), SLOT(propertiesClicked()));
@@ -819,6 +819,7 @@ void InspectorArticulation::propertiesClicked()
 
 void InspectorArticulation::postInit()
       {
+      syncEnvelopeInspector(ar.panel,inspector);
       bool light = false;
       for (auto element : *inspector->el()) if (element->isArticulation() && toArticulation(element)->hasLightAccentPreset()) light = true;
       _lightAccentPreset->setEnabled(light);
@@ -1207,12 +1208,22 @@ InspectorTremolo::InspectorTremolo(QWidget* parent)
       {
       g.setupUi(addWidget());
 
-      const std::vector<InspectorItem> iiList = {
+      std::vector<InspectorItem> iiList = {
             { Pid::TREMOLO_STYLE, 0, g.style, g.resetStyle }
             };
+      const auto envelopeItems=envelopeInspectorControls(g.panel,inspector);
+      iiList.insert(iiList.end(),envelopeItems.begin(),envelopeItems.end());
       const std::vector<InspectorPanel> ppList = { { g.title, g.panel } };
 
       mapSignals(iiList, ppList);
+      }
+
+void InspectorTremolo::postInit()
+      {
+      bool style=true;
+      for(auto element:*inspector->el()) style &= toTremolo(element)->customStyleApplicable();
+      g.labelStyle->setVisible(style); g.style->setVisible(style); g.resetStyle->setVisible(style);
+      syncEnvelopeInspector(g.panel,inspector);
       }
 
 #if 0 // not needed currently

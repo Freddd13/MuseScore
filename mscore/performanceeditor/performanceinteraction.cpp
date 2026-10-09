@@ -127,7 +127,9 @@ void PerformanceEditor::audition(int index)
             if (linked->isNote() && linked->score() == _score->masterScore()) { master = toNote(linked); break; }
       const auto instrument = master->part()->instrument(master->tick());
       const int channel = instrument->channel(master->subchannel())->channel();
-      const int velocity = info.base >= 0 ? NoteVelocity::effective(info.base, info.type, info.raw) : (info.type == Note::ValueType::USER_VAL ? qBound(1, info.raw, 127) : 80);
+      const auto edit=_pending.value(info.note,{info.type,info.raw});
+      const int customized=info.base>=0 ? NoteVelocity::effective(info.base,edit.type,edit.raw) : (edit.type==Note::ValueType::USER_VAL ? qBound(1,edit.raw,127) : 80);
+      const int velocity=NoteVelocity::eventVelocity(customized,info.generatedVelocities.isEmpty() ? 1 : info.generatedVelocities.front().factor);
       const int cc = mscore ? mscore->synthesizerState().ccToUse() : -1;
       if (cc != -1) seq->sendEvent(NPlayEvent(ME_CONTROLLER, channel, cc, 80));
       seq->startNote(channel, info.pitch, velocity, MScore::defaultPlayDuration, info.note->tuning());
@@ -188,8 +190,12 @@ void PerformanceEditor::applyAppearance()
 QString PerformanceEditor::noteTooltip(int i) const
       {
       const auto& note = _notes[i]; const auto edit = _pending.value(note.note, {note.type, note.raw});
-      auto actual = [note](Note::ValueType type, int raw) { return note.base >= 0 ? QString::number(NoteVelocity::effective(note.base, type, raw)) : (type == Note::ValueType::USER_VAL ? QString::number(qBound(1, raw, 127)) : QObject::tr("基准待停播")); };
-      return tr("记谱：%1\n实音：%2 · MIDI %3\n%4 · 谱表 %5 · 声部 %6\n小节拍位 %7 · 时值 %8\n已保存：%9%10 · MIDI %11\n当前预览：%12%13 · 实际 MIDI %14（整数舍入）")
+      auto actual = [this,&note](Note::ValueType type, int raw) {
+            if(note.base<0) return QObject::tr("基准待停播");
+            const auto range=generatedVelocityRange(note,type,raw);
+            return range.first==range.second ? QString::number(range.first) : QString("%1–%2").arg(range.first).arg(range.second);
+            };
+      return tr("记谱：%1\n实音：%2 · MIDI %3\n%4 · 谱表 %5 · 声部 %6\n小节拍位 %7 · 时值 %8\n已保存：%9%10 · 实际 MIDI %11\n当前预览：%12%13 · 实际 MIDI %14（整数舍入）")
             .arg(note.written, note.name).arg(note.pitch).arg(note.instrument).arg(note.track / VOICES + 1).arg(note.track % VOICES + 1)
             .arg(note.position, note.duration).arg(note.raw).arg(note.type == Note::ValueType::OFFSET_VAL ? " %" : "")
             .arg(actual(note.type, note.raw)).arg(edit.raw).arg(edit.type == Note::ValueType::OFFSET_VAL ? " %" : "")
