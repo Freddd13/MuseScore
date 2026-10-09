@@ -122,3 +122,5 @@ PlaybackTiming 是 libmscore 的局部助手，MidiRenderer 生成带 nominalTic
 0.18 rit./a tempo 复用 TextLine/TempoText，TempoExpression 批量派生原 TempoMap；精确端点扩展已有踏板接线，旧对象旁路。详见 [15](15-piano-expression.md)。
 
 0.19 PlaybackEnvelope 复用震音／颤音生成器，NoteEvent缓存派生倍率及双音来源，NoteVelocity统一播放器／导出／试听／编辑器计算；音频回调只读既有事件。详见 [15](15-piano-expression.md)。
+
+0.20.1：键形修正为黑键左、自然键前端右，以音高中心对齐；柱宽仅存 PerformanceAppearance。谱带以完整 frame 隔离鼠标，原生选择优先停播当前系统，选择与悬浮末层描边。实现保留在演奏编辑器及其测试；主窗口仅添加共享谱带 QAction／信号连接和 qrc 图标，无模型／音频／格式扩展。

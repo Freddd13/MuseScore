@@ -2,6 +2,7 @@
     <qresource prefix="/">
         <file>data/icons/edit.svg</file>
         <file>data/icons/performance-editor.svg</file>
+        <file>data/icons/performance-score-band.svg</file>
         <file alias="styles/Leland.mss">../share/styles/Leland.mss</file>
         <file alias="styles/Edwin.mss">../share/styles/Edwin.mss</file>
         <file alias="styles/PVGMusicXML.mss">../share/styles/PVGMusicXML.mss</file>

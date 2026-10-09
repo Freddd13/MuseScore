@@ -101,7 +101,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QLabel* _parameterHint = nullptr;
       bool _noteTips = true, _scoreVoiceColors = true, _scoreRangePanning = false;
       int _bandHeight = 48, _tempoPointTick = -1;
-      QRectF _scoreAxis;
+      QRectF _scoreAxis, _scoreFrame;
       std::array<QRectF, 6> _scoreControls;
       void rebuildStaffMenu();
       bool staffEnabled(int track) const;
@@ -215,6 +215,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       void setOverlaySystem(System*);
       System* systemAtTick(int) const;
       bool overlayAllowed() const;
+      bool surfacesActive() const;
       QRectF laneRect() const;
       double xForTick(int tick, bool onScore) const;
       int tickForX(double x, bool onScore) const;
@@ -234,11 +235,15 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       void paintOverlay(QPainter&);
       bool eventFilter(QObject*, QEvent*) override;
       void resizeEvent(QResizeEvent*) override;
+   signals:
+      void scoreBandChanged(bool);
    public:
       explicit PerformanceEditor(QWidget* parent = nullptr);
       ~PerformanceEditor() override;
       void setView(ScoreView*);
       void selectionChanged();
+      bool scoreBandEnabled() const;
+      void setScoreBandEnabled(bool);
       void convertSelected(Note::ValueType);
       void setSelectedValue(double);
       QPair<int,int> actualVelocityRange(const Note*) const;

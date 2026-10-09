@@ -9,7 +9,7 @@
 namespace Ms {
 class PerformanceEditor;
 enum class PerformanceSurface { Notes, Ruler, Parameter };
-// White key fronts are equal; their necks and black keys follow semitone rows.
+// Black keys face left; natural-key centres and black centres follow semitone rows.
 struct PerformanceKeyboard {
       static bool isBlack(int pitch);
       static QPolygonF shape(int pitch, double topPitch, double rowHeight, double width);

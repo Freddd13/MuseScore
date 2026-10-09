@@ -12,6 +12,7 @@ struct PerformanceAppearance {
       std::array<QColor, 8> staves;
       std::array<int, 4> stops {{1, 43, 85, 127}};
       int mode = 0;
+      int velocityWidth = 3;
       PerformanceAppearance();
       QColor noteColor(int midiVelocity, int track) const;
       void load();

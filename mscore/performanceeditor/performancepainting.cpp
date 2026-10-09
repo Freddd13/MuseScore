@@ -70,12 +70,14 @@ void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface su
             painter.save(); painter.setClipRect(QRectF(0, 0, PerformanceViewport::gutter, widget->height()));
             for (bool black : {false, true}) for (int pitch = low; pitch <= high; ++pitch) {
                   if (PerformanceKeyboard::isBlack(pitch) != black) continue;
-                  painter.setPen(QPen(QColor("#6c6c6c"), 1)); painter.setBrush(QColor(black ? "#303030" : "#bcbcbc"));
+                  painter.setPen(QPen(QColor(black ? "#161616" : "#777777"), 1)); painter.setBrush(QColor(black ? "#161616" : "#f1f1f1"));
                   painter.drawPolygon(PerformanceKeyboard::shape(pitch, _viewport.topPitch, _viewport.rowHeight, PerformanceViewport::gutter));
                   if (_keyboardNames && (_viewport.rowHeight >= 10 || pitch % 12 == 0)) {
                         painter.setPen(black ? QColor("#ededed") : QColor("#292929"));
+                        QFont font = painter.font(); font.setPixelSize(qBound(7, int(_viewport.rowHeight * .82), 12)); painter.setFont(font);
                         const double y = (_viewport.topPitch - pitch) * _viewport.rowHeight;
-                        painter.drawText(QRectF(PerformanceViewport::gutter * .34 + 3, y, PerformanceViewport::gutter * .66 - 5, _viewport.rowHeight), Qt::AlignVCenter, pitchName(pitch));
+                        painter.drawText(QRectF(black ? 2 : PerformanceViewport::gutter * .58 + 2, y,
+                              PerformanceViewport::gutter * (black ? .58 : .42) - 4, _viewport.rowHeight), Qt::AlignVCenter | Qt::AlignRight, pitchName(pitch));
                         }
                   }
             painter.restore();
@@ -130,9 +132,11 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
             // Identical native-time/value marks have identical pixels. Draw each style
             // once; keep every source note in the hit/selection/transaction indexes.
             QSet<QPair<QPair<int, int>, quint64>> marks;
+            QVector<int> emphasis;
+            const int stemWidth = _appearance.velocityWidth, columnWidth = qMax(2, stemWidth);
             QVector<QPair<double, double>> density; QVector<QColor> densityColors;
             const double baseline = qBound(rect.top(), yForValue(rangeKind() == 1 ? 0 : 1, rect, onScore), rect.bottom());
-            if (dense) { density.fill({rect.bottom(), rect.bottom()}, int(rect.width() / 2) + 1); densityColors.fill(_appearance.colors[PerformanceAppearance::Text], density.size()); }
+            if (dense) { density.fill({rect.bottom(), rect.bottom()}, int(rect.width() / columnWidth) + 1); densityColors.fill(_appearance.colors[PerformanceAppearance::Text], density.size()); }
             for (auto it = first; it != _notes.cend() && it->tick <= until; ++it) {
                   if (onScore && it->system != _system) continue;
                   const int index = int(it - _notes.cbegin());
@@ -140,7 +144,7 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
                   const double x = xForTick(it->tick, onScore);
                   const double y = yForValue(noteValue(index), rect, onScore);
                   if (dense && !it->selected && index != _hover && !_playingNotes.contains(index) && !_pending.contains(it->note)) {
-                        const int column = int((x - rect.left()) / 2);
+                        const int column = int((x - rect.left()) / columnWidth);
                         if (column >= 0 && column < density.size()) {
                               if (y < density[column].first) densityColors[column] = _appearance.noteColor(NoteVelocity::effective(it->base, it->type, it->raw), it->track);
                               density[column].first = qMin(density[column].first, y);
@@ -152,9 +156,10 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
                   QColor color = it->base < 0 && edit.type == Note::ValueType::OFFSET_VAL && _appearance.mode == 0 ? _appearance.colors[PerformanceAppearance::Grid].lighter(130) : _appearance.noteColor(NoteVelocity::effective(it->base, edit.type, edit.raw), it->track);
                   if (onScore) color = scoreNoteColor(index);
                   color.setAlpha(!it->enabled ? 40 : (it->audible ? 230 : 70));
-                  const auto mark = qMakePair(qMakePair(qRound(x * 256), qRound(y * 256)), (quint64(color.rgba()) << 2) | (it->selected ? 2 : 0) | (it->audible ? 1 : 0));
+                  const auto mark = qMakePair(qMakePair(qRound(x * 256), qRound(y * 256)), (quint64(color.rgba()) << 3) | (index == _hover ? 4 : 0) | (it->selected ? 2 : 0) | (it->audible ? 1 : 0));
                   if (marks.contains(mark)) continue;
-                  marks.insert(mark); painter.setPen(QPen(color, it->selected ? 2 : 1));
+                  if (it->selected || index == _hover) emphasis.append(index);
+                  marks.insert(mark); painter.setPen(QPen(color, stemWidth));
                   painter.drawLine(QPointF(x, baseline), QPointF(x, y));
                   painter.setBrush(it->audible ? QBrush(color) : Qt::NoBrush); painter.drawEllipse(QPointF(x, y), onScore ? 2.5 : 2.0, onScore ? 2.5 : 2.0);
                   if (!_axis->currentIndex() && !it->generatedVelocities.isEmpty() && (it->selected || index==_hover)) {
@@ -168,11 +173,25 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
             if (dense) {
                   painter.setPen(QPen(_appearance.colors[PerformanceAppearance::Text], 1));
                   for (int i = 0; i < density.size(); ++i) if (density[i].first < rect.bottom()) {
-                        const double x = rect.left() + i * 2;
-                        painter.setPen(QPen(densityColors[i], 1));
+                        const double x = rect.left() + i * columnWidth;
+                        painter.setPen(QPen(densityColors[i], stemWidth));
                         painter.drawLine(QPointF(x, baseline), QPointF(x, density[i].first));
                         painter.drawLine(QPointF(x - 1, density[i].second), QPointF(x + 1, density[i].second));
                         }
+                  }
+            // Draw selected/hovered targets last so overlapping voices and dense
+            // overview bins cannot cover the native selection. No time offset.
+            for (int index : emphasis) {
+                  const auto& note = _notes[index];
+                  const double x = xForTick(note.tick, onScore), y = yForValue(noteValue(index), rect, onScore);
+                  const auto edit = _pending.value(note.note, {note.type, note.raw});
+                  QColor color = onScore ? scoreNoteColor(index) : _appearance.noteColor(NoteVelocity::effective(note.base, edit.type, edit.raw), note.track);
+                  if (!note.enabled) color.setAlpha(40);
+                  const QColor border = index == _hover ? _appearance.colors[PerformanceAppearance::Preview] : (onScore ? QColor("#303a43") : _appearance.colors[PerformanceAppearance::Selection]);
+                  painter.setPen(QPen(border, stemWidth + 2)); painter.drawLine(QPointF(x, baseline), QPointF(x, y));
+                  painter.setPen(QPen(color, stemWidth)); painter.drawLine(QPointF(x, baseline), QPointF(x, y));
+                  painter.setPen(QPen(border, 2)); painter.setBrush(color); const double radius = qMax(3.0, stemWidth / 2.0 + 1);
+                  painter.drawEllipse(QPointF(x, y), radius, radius);
                   }
             }
       else if (parameter == 1) {

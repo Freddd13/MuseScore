@@ -725,10 +725,10 @@ void MuseScore::populateAlternativeOperations()
             }
       // Personal panel entry survives workspace toolbar repopulation, sharing the
       // View-menu action and its checked state. No new shortcut command is needed.
-      if (auto action = findChild<QAction*>("performance-editor")) {
-            alternativeTools->addSeparator();
+      alternativeTools->addSeparator();
+      for (const char* name : {"performance-score-band", "performance-editor"}) if (auto action = findChild<QAction*>(name)) {
             auto button = new AccessibleToolButton(alternativeTools, action);
-            button->setObjectName("performance-editor-button");
+            button->setObjectName(QString(name) + "-button");
             alternativeTools->addWidget(button);
             }
       }
@@ -1985,6 +1985,12 @@ MuseScore::MuseScore()
       Workspace::addActionAndString(performanceAction, "performance-editor");
       menuView->addAction(performanceAction);
       connect(performanceAction, &QAction::toggled, this, &MuseScore::showPerformanceEditor);
+      auto bandAction = new QAction(tr("谱行参数带（独立显示）"), this);
+      bandAction->setObjectName("performance-score-band"); bandAction->setCheckable(true);
+      bandAction->setIcon(QIcon(":/data/icons/performance-score-band.svg"));
+      bandAction->setToolTip(tr("在谱面独立显示参数带；演奏编辑器关闭时仍可选音、调力度和查看播放线。"));
+      Workspace::addActionAndString(bandAction, "performance-score-band"); menuView->addAction(bandAction);
+      connect(bandAction, &QAction::toggled, this, [this](bool enabled) { performanceEditor()->setScoreBandEnabled(enabled); });
       populateAlternativeOperations();
 
       a = getAction("toggle-scorecmp-tool");
@@ -2774,7 +2780,7 @@ void MuseScore::updateMenus()
             menuDebug->addAction(_debugLogAction);
             }
 
-      if (auto action = findChild<QAction*>("performance-editor"))
+      for (const char* name : {"performance-editor", "performance-score-band"}) if (auto action = findChild<QAction*>(name))
             if (!menuView->actions().contains(action)) menuView->addAction(action);
       connect(openRecent,     SIGNAL(aboutToShow()),       SLOT(openRecentMenu()));
       connect(openRecent,     SIGNAL(triggered(QAction*)), SLOT(selectScore(QAction*)));
@@ -9504,6 +9510,9 @@ void MuseScore::showPerformanceEditor(bool visible)
             _performanceDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::TopDockWidgetArea);
             _performanceEditor = new PerformanceEditor(_performanceDock);
             _performanceDock->setWidget(_performanceEditor);
+            connect(_performanceEditor, &PerformanceEditor::scoreBandChanged, this, [this](bool enabled) {
+                  if (auto action = findChild<QAction*>("performance-score-band")) { QSignalBlocker blocker(action); action->setChecked(enabled); }
+                  });
             addDockWidget(Qt::BottomDockWidgetArea, _performanceDock);
             connect(_performanceDock, &QDockWidget::visibilityChanged, this, [this](bool shown) {
                   if (auto action = findChild<QAction*>("performance-editor")) {

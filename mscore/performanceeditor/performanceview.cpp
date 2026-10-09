@@ -13,23 +13,26 @@ bool PerformanceKeyboard::isBlack(int pitch)
 QPolygonF PerformanceKeyboard::shape(int pitch, double topPitch, double rowHeight, double width)
       {
       const double y = (topPitch - pitch) * rowHeight;
-      const double shoulder = width * .34, right = width - 1;
-      if (isBlack(pitch)) return QPolygonF(QRectF(shoulder, y, right - shoulder, rowHeight));
-      static const int naturalIndex[] = {0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6};
-      const int octave = pitch / 12, key = naturalIndex[pitch % 12];
-      const double frontTop = (topPitch - octave * 12 - (key + 1) * 12.0 / 7 + 1) * rowHeight;
-      const double frontBottom = frontTop + rowHeight * 12.0 / 7;
+      const double shoulder = width * .58, right = width - 1;
+      if (isBlack(pitch)) return QPolygonF(QRectF(0, y, shoulder, rowHeight));
+      // White fronts meet halfway between adjacent natural-key centres. Thus
+      // C/E/F/B span 1.5 rows and D/G/A span two; black centres remain on the grid.
+      const int key = pitch % 12;
+      const double above = key == 4 || key == 11 ? 1 : 2;
+      const double below = key == 0 || key == 5 ? 1 : 2;
+      const double frontTop = y + (1 - above) * rowHeight / 2;
+      const double frontBottom = y + (1 + below) * rowHeight / 2;
       QPolygonF outline;
-      outline << QPointF(0, frontTop) << QPointF(shoulder, frontTop)
-            << QPointF(shoulder, y) << QPointF(right, y) << QPointF(right, y + rowHeight)
-            << QPointF(shoulder, y + rowHeight) << QPointF(shoulder, frontBottom) << QPointF(0, frontBottom);
+      outline << QPointF(0, y) << QPointF(shoulder, y) << QPointF(shoulder, frontTop)
+            << QPointF(right, frontTop) << QPointF(right, frontBottom) << QPointF(shoulder, frontBottom)
+            << QPointF(shoulder, y + rowHeight) << QPointF(0, y + rowHeight);
       return outline;
       }
 int PerformanceKeyboard::pitchAt(QPointF point, double topPitch, double rowHeight, double width)
       {
       if (point.x() < 0 || point.x() >= width) return -1;
-      // At the right edge every key is precisely one pitch row high.
-      if (point.x() >= width * .34) { const int pitch = int(std::ceil(topPitch - point.y() / rowHeight)); return pitch >= 0 && pitch <= 127 ? pitch : -1; }
+      // The left-hand black keys and white necks use equal semitone rows.
+      if (point.x() < width * .58) { const int pitch = int(std::ceil(topPitch - point.y() / rowHeight)); return pitch >= 0 && pitch <= 127 ? pitch : -1; }
       for (int pitch = 0; pitch <= 127; ++pitch)
             if (!isBlack(pitch) && shape(pitch, topPitch, rowHeight, width).containsPoint(point, Qt::OddEvenFill)) return pitch;
       return -1;

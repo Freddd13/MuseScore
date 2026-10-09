@@ -63,6 +63,7 @@ void PerformanceAppearance::load()
       for (int i = 0; i < 4; ++i) candidate[i] = settings.value(QString("stop%1").arg(i), stops[i]).toInt();
       if (candidate[0] == 1 && candidate[3] == 127 && candidate[0] < candidate[1] && candidate[1] < candidate[2] && candidate[2] < candidate[3]) stops = candidate;
       mode = qBound(0, settings.value("mode", 0).toInt(), 2);
+      velocityWidth = qBound(1, settings.value("velocityWidth", 3).toInt(), 8);
       // Upgrade only the complete previous factory palette; retain every custom palette.
       const std::array<QColor, RoleCount> oldColors {{QColor("#26282b"), QColor("#303338"), QColor("#282b30"), QColor("#484d54"), QColor("#e0e4e9"), QColor("#ffffff"), QColor("#81e9ac"), QColor("#f0ad51"), QColor("#66badd"), QColor("#c49af0")}};
       const std::array<QColor, 4> oldGradient {{QColor("#4f80db"), QColor("#48bfa5"), QColor("#dab759"), QColor("#d66354")}};
@@ -73,7 +74,7 @@ void PerformanceAppearance::load()
       const bool original = colors == oldColors && gradient == oldGradient && voices == oldVoices && staves == oldStaves;
       const bool previous = colors == previousColors && gradient == previousGradient && voices == PerformanceAppearance().voices && staves == PerformanceAppearance().staves;
       if ((original || previous) && stops == std::array<int, 4>{{1, 43, 85, 127}}) {
-            const int savedMode = mode; *this = PerformanceAppearance(); mode = savedMode; settings.endGroup(); save();
+            const int savedMode = mode, savedWidth = velocityWidth; *this = PerformanceAppearance(); mode = savedMode; velocityWidth = savedWidth; settings.endGroup(); save();
             }
 
       }
@@ -84,13 +85,17 @@ void PerformanceAppearance::save() const
       for (int i = 0; i < 4; ++i) { settings.setValue(QString("gradient%1").arg(i), gradient[i].name()); settings.setValue(QString("voice%1").arg(i), voices[i].name()); settings.setValue(QString("stop%1").arg(i), stops[i]); }
       for (int i = 0; i < 8; ++i) settings.setValue(QString("staff%1").arg(i), staves[i].name());
       settings.setValue("mode", mode);
+      settings.setValue("velocityWidth", velocityWidth);
       }
 bool PerformanceAppearance::edit(QWidget* parent)
       {
       PerformanceAppearance draft = *this;
-      QDialog dialog(parent); dialog.setWindowTitle(QObject::tr("演奏编辑器配色")); dialog.resize(410, 570);
+      QDialog dialog(parent); dialog.setWindowTitle(QObject::tr("演奏编辑器外观")); dialog.resize(410, 570);
       auto outer = new QVBoxLayout(&dialog); auto scroll = new QScrollArea; scroll->setWidgetResizable(true); outer->addWidget(scroll);
       auto contents = new QWidget; auto grid = new QGridLayout(contents); scroll->setWidget(contents);
+      auto width = new QSpinBox; width->setObjectName("performanceVelocityWidth"); width->setRange(1, 8); width->setSuffix(" px"); width->setValue(draft.velocityWidth);
+      width->setToolTip(QObject::tr("力度柱的屏幕宽度，同时用于演奏编辑器和谱行带；不改变力度或时间。"));
+      grid->addWidget(new QLabel(QObject::tr("力度柱宽")), 0, 0); grid->addWidget(width, 0, 1);
       QVector<QPair<QPushButton*, QColor*>> buttons;
       auto add = [&](const QString& label, QColor& color) {
             const int row = grid->rowCount(); grid->addWidget(new QLabel(label), row, 0);
@@ -113,11 +118,11 @@ bool PerformanceAppearance::edit(QWidget* parent)
       auto update = [&buttons] { for (const auto& pair : buttons) { pair.first->setText(pair.second->name()); pair.first->setStyleSheet(QString("background:%1; color:%2").arg(pair.second->name(), pair.second->lightness() > 140 ? "black" : "white")); } };
       update();
       auto box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::RestoreDefaults); outer->addWidget(box);
-      QObject::connect(box->button(QDialogButtonBox::RestoreDefaults), &QPushButton::clicked, &dialog, [&] { draft = PerformanceAppearance(); for (int i = 0; i < 4; ++i) stopSpins[i]->setValue(draft.stops[i]); update(); });
+      QObject::connect(box->button(QDialogButtonBox::RestoreDefaults), &QPushButton::clicked, &dialog, [&] { draft = PerformanceAppearance(); width->setValue(draft.velocityWidth); for (int i = 0; i < 4; ++i) stopSpins[i]->setValue(draft.stops[i]); update(); });
       QObject::connect(box, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
       QObject::connect(box, &QDialogButtonBox::accepted, &dialog, [&] {
             if (stopSpins[1]->value() >= stopSpins[2]->value() || stopSpins[1]->value() <= 1 || stopSpins[2]->value() >= 127) { QMessageBox::information(&dialog, QObject::tr("力度渐变"), QObject::tr("渐变位置须按 1 < 中间值 < 127 递增。")); return; }
-            for (int i = 0; i < 4; ++i) draft.stops[i] = stopSpins[i]->value(); dialog.accept();
+            for (int i = 0; i < 4; ++i) draft.stops[i] = stopSpins[i]->value(); draft.velocityWidth = width->value(); dialog.accept();
             });
       if (dialog.exec() != QDialog::Accepted) return false;
       *this = draft; save(); return true;

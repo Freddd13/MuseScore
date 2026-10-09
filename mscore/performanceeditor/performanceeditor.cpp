@@ -120,6 +120,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             };
       _handles = new QCheckBox(tr("音旁手柄"), this); second->addWidget(_handles, second->count() / 6, second->count() % 6);
       _band = new QCheckBox(tr("谱行参数带"), this); second->addWidget(_band, second->count() / 6, second->count() % 6);
+      _band->setObjectName("performanceScoreBand");
       button(tr("转换为相对"), [this] { convertSelected(Note::ValueType::OFFSET_VAL); })->setObjectName("performanceConvertRelative");
       button(tr("转换为绝对"), [this] { convertSelected(Note::ValueType::USER_VAL); })->setObjectName("performanceConvertAbsolute");
       _number = new QDoubleSpinBox(this); _number->setObjectName("performanceValue"); _number->setRange(1, 127); _number->setDecimals(0); second->addWidget(_number, second->count() / 6, second->count() % 6);
@@ -160,7 +161,8 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             }
       auto values = displayMenu->addAction(tr("音符内显示力度")); values->setCheckable(true); values->setChecked(QSettings().value("performanceEditor/showValues", false).toBool()); _showValues = values->isChecked();
       connect(values, &QAction::toggled, this, [this](bool on) { _showValues = on; QSettings().setValue("performanceEditor/showValues", on); updateSurfaces(); });
-      connect(displayMenu->addAction(tr("编辑配色…")), &QAction::triggered, this, [this] { if (_appearance.edit(this)) { applyAppearance(); invalidateVisual(); if (_view) _view->update(); } });
+      auto appearanceAction = displayMenu->addAction(tr("配色／力度柱宽…")); appearanceAction->setObjectName("performanceAppearance");
+      connect(appearanceAction, &QAction::triggered, this, [this] { if (_appearance.edit(this)) { applyAppearance(); invalidateVisual(); if (_view) _view->update(); } });
       connect(displayMenu->addAction(tr("REAPER 默认力度色")), &QAction::triggered, this, [this] { _appearance = PerformanceAppearance(); _appearance.save(); applyAppearance(); invalidateVisual(); if (_view) _view->update(); });
       second->addWidget(appearance, second->count() / 6, second->count() % 6);
       _followButton = new QToolButton(this); _followButton->setText(tr("跟随播放")); _followButton->setToolTip(tr("手动浏览后暂停跟随；单击恢复，下一次开始播放也会恢复。")); _followButton->setCheckable(true); _followButton->setChecked(true);
@@ -236,6 +238,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             resizeEvent(nullptr); updateSelection(); status(); invalidateVisual(); if (_view) _view->update();
             });
       for (auto box : {_handles, _band}) connect(box, &QCheckBox::toggled, this, [this] { cancelGesture(); syncOverlayTracking(); if (_view) _view->update(); });
+      connect(_band, &QCheckBox::toggled, this, [this](bool enabled) { emit scoreBandChanged(enabled); scheduleRefresh(); syncTransport(); });
       if (seq) {
             connect(seq, &Seq::stopped, this, [this] { if (_snapshotDegraded) { _dirty = true; scheduleRefresh(); } _commitTimer.start(0); syncTransport(); });
             connect(seq, &Seq::started, this, [this] { cancelGesture(); _following = true; _followButton->setChecked(true); syncTransport(); status(); });
@@ -333,7 +336,7 @@ void PerformanceEditor::scheduleRefresh()
 void PerformanceEditor::refresh()
       {
       if (!_score) { status(); updateSurfaces(); return; }
-      if (!isVisible()) return;
+      if (!surfacesActive()) return;
       // A late-opened panel may copy stable notation while playing, but must not
       // regenerate/read mutable playback events or velocity maps until stopped.
       const bool live = _score->isPlaying() || (seq && seq->isPlaying());
@@ -443,19 +446,21 @@ void PerformanceEditor::updateSelection()
       if (_dirty || (_score && _score->masterScore()->state() != _state)) {
             _dirty = true; scheduleRefresh(); return;
             }
-      _selectedIndices.clear(); _systemIndices.clear();
-      _system = _hover >= 0 && _hover < _notes.size() ? _notes[_hover].system : nullptr;
+      _selectedIndices.clear();
+      System* system = nullptr;
+      const auto focus = _score ? _score->inputState().cr() : nullptr;
       for (auto& note : _notes) {
             note.selected = note.note->selected();
             if (note.selected && noteEditable(note)) _selectedIndices.append(int(&note - _notes.data()));
-            if (note.selected && !_system) _system = note.system;
+            if (note.selected && (!system || note.note->chord() == focus)) system = note.system;
             }
-      if (!_system && _score) for (auto element : _score->selection().elements())
-            if (element->isChordRest()) { _system = toChordRest(element)->measure()->system(); break; }
-      if (!_system && _hover >= 0 && _hover < _notes.size()) _system = _notes[_hover].system;
-      if (!_system && !_notes.isEmpty()) _system = _notes.front().system;
-      if (seq && seq->isPlaying() && seq->score() == _score->masterScore()) _system = systemAtTick(_playTick);
-      setOverlaySystem(_system);
+      if (!system && _score) for (auto element : _score->selection().elements())
+            if (element->isChordRest()) { system = toChordRest(element)->measure()->system(); break; }
+      if (!system && _hover >= 0 && _hover < _notes.size()) system = _notes[_hover].system;
+      if (!system && _layoutIndex.contains(_system)) system = _system;
+      if (!system && !_notes.isEmpty()) system = _notes.front().system;
+      if (seq && seq->isPlaying() && seq->score() == _score->masterScore()) system = systemAtTick(_playTick);
+      if (system != _system || _systemSegments.isEmpty()) setOverlaySystem(system);
       if (_parameter->currentIndex() == 0 && !_selectedIndices.isEmpty()) {
             QSignalBlocker blocker(_number); _number->setValue(noteValue(_selectedIndices.front()));
             }
@@ -700,9 +705,15 @@ void PerformanceEditor::fit(bool selection)
 
 bool PerformanceEditor::overlayAllowed() const
       {
-      return isVisible() && _view && _score && !_score->printing() && !_view->fotoMode()
+      return surfacesActive() && _view && _score && !_score->printing() && !_view->fotoMode()
             && !_view->editMode() && !_view->noteEntryMode();
       }
+bool PerformanceEditor::surfacesActive() const
+      { return isVisible() || (_band->isChecked() && _view && _view->isVisible()); }
+bool PerformanceEditor::scoreBandEnabled() const
+      { return _band->isChecked(); }
+void PerformanceEditor::setScoreBandEnabled(bool enabled)
+      { _band->setChecked(enabled); }
 
 QRectF PerformanceEditor::laneRect() const { return QRectF(PerformanceViewport::gutter, PerformanceViewport::parameterPadding, qMax(10, _canvas->width() - PerformanceViewport::gutter - PerformanceViewport::rightMargin), qMax(30, _canvas->height() - 2 * PerformanceViewport::parameterPadding)); }
 
@@ -964,7 +975,11 @@ bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       const bool onScore = object == _view;
       if (onScore && event->type() == QEvent::MouseButtonRelease) QTimer::singleShot(0, this, [this] { syncOverlayTracking(); });
       if (object != _canvas && !onScore) return false;
-      if (event->type() == QEvent::Show && object == _canvas) { scheduleRefresh(); return false; }
+      if ((event->type() == QEvent::Show || event->type() == QEvent::Hide) && (object == _canvas || onScore)) {
+            cancelGesture();
+            QTimer::singleShot(0, this, [this] { syncOverlayTracking(); syncTransport(); scheduleRefresh(); invalidateOverlay(); });
+            return false;
+            }
       if (onScore && !overlayAllowed()) return false;
       if (onScore && overlayEvent(event)) return true;
       if (event->type() == QEvent::ShortcutOverride && _dragging && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) { event->accept(); return true; }

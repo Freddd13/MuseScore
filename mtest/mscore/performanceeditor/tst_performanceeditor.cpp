@@ -733,7 +733,8 @@ class TestPerformanceEditor : public QObject, public MTest {
                   sequence->seek(1840);
                   for (int i = 0; i < 8; ++i) { driver->pulse(); QTest::qWait(10); if (i > 1 && score->repeatList().utick2tick(sequence->getCurTick()) < 480) break; }
                   QVERIFY(score->repeatList().utick2tick(sequence->getCurTick()) < 480); getAction("loop")->setChecked(false);
-                  editor.hide(); driver->pulse(); QTest::qWait(30); QVERIFY(!editor.isVisible()); QVERIFY(!playbackTimer->isActive());
+                  editor.hide(); driver->pulse(); QTest::qWait(30); QVERIFY(!editor.isVisible()); QVERIFY(editor.scoreBandEnabled()); QVERIFY(playbackTimer->isActive());
+                  editor.setScoreBandEnabled(false); QTest::qWait(25); QVERIFY(!playbackTimer->isActive());
                   editor.show(); QTest::qWait(25); QVERIFY(editor.isVisible()); QTRY_VERIFY(playbackTimer->isActive());
                   sequence->stopWait(); sequence->waitForStoppedRendering(); QApplication::processEvents(); QVERIFY(!sequence->isPlaying()); QVERIFY(!playbackTimer->isActive()); QTRY_VERIFY(!late.hasPending()); QCOMPARE(note->veloOffset(), 26);
                   editor.setView(nullptr); score->doLayout(); editor.setView(main->currentScoreView()); QTest::qWait(30);
@@ -818,6 +819,7 @@ class TestPerformanceEditor : public QObject, public MTest {
             }
 #ifdef Q_MOC_RUN
       void keyboardContoursAndCompactParameterLayout();
+      void reaperStemsAndStripSelection();
       void finePedalNativeLayoutMidiUndoAndPersistence();
       void scoreControlsTempoNodesFinePedalAndTips();
       void finePedalLinkedExcerpt();
@@ -843,11 +845,11 @@ class TestPerformanceEditor : public QObject, public MTest {
                   QSettings::setDefaultFormat(QSettings::IniFormat); QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, qEnvironmentVariable("PERFORMANCE_APPEARANCE_DIRECTORY"));
                   PerformanceAppearance appearance;
                   if (mode == "write") {
-                        appearance.mode = 2; appearance.colors[PerformanceAppearance::Background] = QColor("#123456"); appearance.gradient[1] = QColor("#234567"); appearance.stops[1] = 35; appearance.save();
+                        appearance.mode = 2; appearance.velocityWidth = 6; appearance.colors[PerformanceAppearance::Background] = QColor("#123456"); appearance.gradient[1] = QColor("#234567"); appearance.stops[1] = 35; appearance.save();
                         QSettings settings; settings.setValue("performanceEditor/keyboardNames", false); settings.setValue("performanceEditor/wheelVelocity", true); settings.setValue("performanceEditor/noteTooltips", false); settings.setValue("performanceEditor/scoreVoiceColors", false); settings.setValue("performanceEditor/bandHeight", 112); settings.setValue("performanceEditor/pedalGrid", 4); settings.sync(); QCOMPARE(settings.status(), QSettings::NoError);
                         }
                   else {
-                        appearance.load(); QCOMPARE(appearance.mode, 2); QCOMPARE(appearance.colors[PerformanceAppearance::Background], QColor("#123456")); QCOMPARE(appearance.gradient[1], QColor("#234567")); QCOMPARE(appearance.stops[1], 35);
+                        appearance.load(); QCOMPARE(appearance.velocityWidth, 6); QCOMPARE(appearance.mode, 2); QCOMPARE(appearance.colors[PerformanceAppearance::Background], QColor("#123456")); QCOMPARE(appearance.gradient[1], QColor("#234567")); QCOMPARE(appearance.stops[1], 35);
                         PerformanceEditor editor; QVERIFY(editor.findChild<QToolButton*>("performanceWheelVelocity")->isChecked()); QVERIFY(!editor.findChild<QAction*>("performanceNoteTooltips")->isChecked()); QVERIFY(!editor.findChild<QAction*>("performanceScoreVoiceColors")->isChecked()); QCOMPARE(editor.findChild<QComboBox*>("performancePedalGrid")->currentIndex(), 4); editor.resize(600, 520); editor.show(); QTest::qWait(25); auto canvas = editor.findChild<QWidget*>("performanceParameterCanvas"); QVERIFY(canvas);
                         QVERIFY(!editor.findChild<QAction*>("performanceKeyboardNames")->isChecked());
                         const QImage rendered = canvas->grab().toImage(); QCOMPARE(rendered.pixelColor(10, rendered.height() - 3), QColor("#123456"));

@@ -233,7 +233,7 @@ void PerformanceEditor::pauseFollow()
       { _following = false; if (_followButton) { _followButton->setChecked(false); _followButton->setText(tr("跟随：暂停")); } }
 void PerformanceEditor::syncTransport()
       {
-      const bool playing = isVisible() && _score && seq && seq->isPlaying() && seq->score() == _score->masterScore();
+      const bool playing = surfacesActive() && _score && seq && seq->isPlaying() && seq->score() == _score->masterScore();
       if (playing) { if (!_playTimer.isActive()) _playTimer.start(); }
       else { _playTimer.stop(); if (!_playingNotes.isEmpty()) { _playingNotes.clear(); updateSurfaces(); } }
       _playButton->setText(playing ? tr("■ 停止") : tr("▶ 播放"));
@@ -241,7 +241,7 @@ void PerformanceEditor::syncTransport()
       }
 void PerformanceEditor::updatePlayhead()
       {
-      if (!_score || !isVisible()) { _playTimer.stop(); return; }
+      if (!_score || !surfacesActive()) { _playTimer.stop(); return; }
       const bool playing = seq && seq->isPlaying() && seq->score() == _score->masterScore();
       if (!playing) _playTimer.stop();
       const int tick = playing ? _score->repeatList().utick2tick(seq->getCurTick()) : _score->playPos().ticks();
@@ -253,7 +253,7 @@ void PerformanceEditor::updatePlayhead()
                   _automaticScroll = true; _scroll->setValue(qMax(0, tick - int(span * 0.12))); _automaticScroll = false;
                   }
             }
-      if (_band->isChecked() && !_geometryDirty && !_dirty) {
+      if (playing && _band->isChecked() && !_geometryDirty && !_dirty) {
             auto system = systemAtTick(tick);
             if (system != _system && !_dragging && _wheelIndex < 0) { invalidateOverlay(); setOverlaySystem(system); if (_view) _view->update(); }
             }
@@ -280,7 +280,7 @@ void PerformanceEditor::updateHover(int index)
       if (_dirty || index >= _notes.size()) index = -1;
       if (index == _hover) return;
       const int before = _hover; _hover = index; buildGeometry();
-      if (index >= 0 && _notes[index].system != _system) updateSelection();
+      if (index >= 0 && _notes[index].system != _system && _selectedIndices.isEmpty()) updateSelection();
       if (_view && (_handles->isChecked() || _band->isChecked())) {
             invalidateOverlay();
             for (int i : {before, index}) if (i >= 0 && i < _notes.size()) _view->update(_view->matrix().mapRect(_notes[i].bounds).adjusted(-5, -35, 95, 5).toAlignedRect());
@@ -294,6 +294,9 @@ void PerformanceEditor::seek(int tick)
       if (seq && seq->isPlaying() && seq->score() == _score->masterScore()) seq->seek(_score->repeatList().tick2utick(tick));
       else _score->setPlayPos(Fraction::fromTicks(tick));
       if (_view && (!seq || !seq->isPlaying())) _view->moveCursor(Fraction::fromTicks(tick));
+      if (_band->isChecked() && !_dirty && !_geometryDirty) {
+            invalidateOverlay(); setOverlaySystem(systemAtTick(tick)); if (_view) _view->update();
+            }
       updatePlayhead();
       }
 void PerformanceEditor::cancelSurfaceGesture()

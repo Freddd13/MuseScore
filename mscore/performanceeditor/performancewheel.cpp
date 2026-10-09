@@ -34,6 +34,8 @@ bool PerformanceEditor::wheelVelocity(QWheelEvent* wheel, bool notes, bool onSco
       if (_dirty) refresh();
       if (_dirty) return false;
       const QPointF point = wheel->position();
+      const bool overStrip = onScore && _band->isChecked() && _scoreFrame.contains(point);
+      if (overStrip && !_scoreLane.contains(point)) return false;
       QWidget* surface = onScore ? static_cast<QWidget*>(_view) : (notes ? static_cast<QWidget*>(_noteCanvas) : _canvas);
       int target = -1;
       // Keep a stationary wheel burst attached to its first endpoint even when
@@ -49,7 +51,7 @@ bool PerformanceEditor::wheelVelocity(QWheelEvent* wheel, bool notes, bool onSco
                   auto candidates = _selectedIndices; if (_hover >= 0 && !candidates.contains(_hover)) candidates.append(_hover);
                   for (int i : candidates) if (QLineF(point, _view->matrix().mapRect(_notes[i].bounds).topRight() + QPointF(12, -12)).length() <= 9) { target = i; break; }
                   }
-            if (target < 0 && (_wheelButton->isChecked() || temporary)) target = _noteIndex.value(_view->elementNear(_view->toLogical(point.toPoint())), -1);
+            if (target < 0 && !overStrip && (_wheelButton->isChecked() || temporary)) target = _noteIndex.value(_view->elementNear(_view->toLogical(point.toPoint())), -1);
             }
       else {
             buildGeometry(); const auto candidates = hits(point, !notes); if (!candidates.isEmpty()) target = candidates.front();

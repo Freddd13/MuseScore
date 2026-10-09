@@ -113,3 +113,15 @@ TempoText 本来会反复 fixTicks；新增临时批事务，用成对 UndoComma
 谱行切换只更新屏幕缓存；真实 Seq 回归比较开关谱带时同一原生 moveCursor 的视图 matrix，禁止编辑器自行改变谱面默认导航。
 
 0.19 生成事件包络不改保存值轴。停播快照缓存实际事件基准／倍率，双音震音分音符取源；提示、绝对轴选择范围旁标、试听和数值预览统一 NoteVelocity。详见 [15](15-piano-expression.md)。
+
+## 0.20.1 REAPER 键形、柱宽和谱带选择
+
+谱行带可独立开启：“视图 → 谱行参数带（独立显示）”和其他选项栏的带图标共享 QAction，面板内勾选框通过 scoreBandChanged 双向同步。主窗口 glue 仅添加菜单／工具栏和一次连接；实际生命周期仍在 PerformanceEditor。surfacesActive 在面板可见或参数带开启且谱面可见时提供缓存／播放线，关闭面板不再擦掉已开启的带；两者均关闭、切谱或关闭谱面后停止无用计时。参数、过滤、范围复用当前会话状态，带开关不在启动时自动恢复。
+
+本节替代 0.18.1 的键形设计：黑键在左 58%，白键前端在网格侧；自然音中心仍在半音行中心，左右相邻半音距离的中点决定前端边界（C/E/F/B 1.5 行，D/G/A 2 行）。PerformanceKeyboard::shape/pitchAt 共用轮廓，背景缓存和原生试听不变。
+
+PerformanceAppearance::velocityWidth 默认 3，设置组保存 1–8 逻辑像素，编辑对话框取消不保存、恢复默认同步回 3。paintLane 两处共享柱宽，密集概览同步调整聚合列宽；选中／悬浮柱在聚合之后补画对比描边和端点，实际 tick 不偏移。
+
+谱带缓存完整 _scoreFrame；标题、刻度、边缘的鼠标移动／按下／释放／提示归浮层所有，只有力度柱命中后才进入选择／编辑。wheelVelocity 禁止框内空白回退到 native elementNear；修复隐藏谱表被滚轮改值。updateSelection 优先原生输入焦点／选音，悬浮只在无可编辑选音时切行；同系统更新不重建系统索引。播放照旧优先记谱播放 tick；不改 ScoreView 导航。选中原生音头在带模式下也绘制声部色边框。
+
+真实 Qt reaperStemsAndStripSelection 覆盖两个谱行、标题／轴阻断、选音与图像、同刻和弦选中目标的拖动／一次 Undo／轮换、播放位置不变，以及实际外观对话框和跨进程柱宽恢复。keyboardContoursAndCompactParameterLayout 改为核对左侧全部半音及右侧自然音中心／前端尺寸；常规／高 DPI／万音压力结果见更新日志。

@@ -156,3 +156,5 @@ GUI suite 增加 wheelVelocityBurstAndScoreTargets、personalBrandingAndToolbarE
 0.19 震音／颤音验证入口为 tst_midi 的 envelope* 和 tst_performanceeditor 的 envelope*；128小节8192攻击密度／完整链分块用例常规执行。实际Seq测试使用不访问声卡的RecordingSynth／Driver，不能当作真实声卡长播放。最终安装 msvc.install_piano_0_19_x64，验证小文件在 validation。
 
 0.20 自由圆滑线：tst_performanceeditor 的 freeSlur* 检查模型及真实Qt；tst_readwriteundoreset 链接现有testutils_mscoreapp以避免同时带入独立／应用两套global符号。旧谱重置／MSCX回归与tst_midi一起检查；独立安装msvc.install_piano_0_20_x64及validation见日志。
+
+0.20.1 使用独立 msvc.performance-reaper-source/msvc.build_reaper_x64 构建，安装到 msvc.install_performance_0_20_1_x64。Qt 用例新增 reaperStemsAndStripSelection；真实常规／1.5 DPI、1万／5万音压力及 MIDI 结果见 CHANGELOG。完成后只清理本任务隔离与临时测试程序，保留其他任务、SDK和既有安装。

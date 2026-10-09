@@ -133,3 +133,5 @@ Arpeggio 属性/原生读写 → PlaybackTiming 参与音/窗口 → renderArpeg
 | 震音／颤音力度包络（0.19） | `playbackenvelope.*`、`notevelocity.*`、`rendermidi.cpp` | `envelopeinspector.h`、`envelopepreview.cpp` | `envelope_playback_tests.inc`、`envelope_editor_tests.inc` |
 
 | 自由圆滑线（0.20） | `slur.*`、`freeslur.*` | `freeslurinspector.h`、ScoreView局部手柄／键盘入口 | `freeslur_tests.inc` |
+
+0.20.1：REAPER 式键形、1–8 px 力度柱、谱带完整鼠标区域与双向选音，入口及限制见 [14](14-performance-editor.md) 和 [用户说明](../USER_GUIDE.md)。
