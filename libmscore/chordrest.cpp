@@ -25,6 +25,7 @@
 #include "barline.h"
 #include "articulation.h"
 #include "tempo.h"
+#include "symbol.h"
 #include "note.h"
 #include "arpeggio.h"
 #include "dynamic.h"
@@ -500,7 +501,7 @@ Element* ChordRest::drop(EditData& data)
             case ElementType::TREMOLOBAR:
             case ElementType::SYMBOL:
                   e->setTrack(track());
-                  e->setParent(segment());
+                  e->setParent(isChord() && e->isSymbol() && toSymbol(e)->handBracket() ? static_cast<Element*>(this) : segment());
                   score()->undoAddElement(e);
                   return e;
 

@@ -82,6 +82,7 @@
 #include "libmscore/tuplet.h"
 #include "libmscore/undo.h"
 #include "libmscore/utils.h"
+#include "libmscore/symbol.h"
 #include "libmscore/volta.h"
 #include "libmscore/xml.h"
 
@@ -5545,8 +5546,21 @@ QList<Element*> ScoreView::elementsNear(QPointF p)
                         ll.append(e);
                   }
             }
-      if (!ll.empty())
+      if (!ll.empty()) {
             std::sort(ll.begin(), ll.end(), elementLower);
+            // Note/Chord shapes include attached symbols for spacing. Prefer a
+            // direct hit on the new hand line over its enclosing note/chord;
+            // preserve ordinary glyph stacking and all unrelated candidates.
+            Element* owner=ll.front();
+            for (int i=1;i<ll.size();++i) {
+                  Element* child=ll[i];
+                  if (child->isSymbol() && toSymbol(child)->handBracket() && child->contains(p)
+                     && ((owner->isNote() && (child->parent()==owner || child->parent()==owner->parent()))
+                        || (owner->isChord() && child->parent()==owner))) {
+                        ll.move(i,0);break;
+                        }
+                  }
+            }
       return ll;
       }
 

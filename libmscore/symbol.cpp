@@ -10,6 +10,10 @@
 //  the file LICENCE.GPL
 //=============================================================================
 
+#include "chord.h"
+#include "note.h"
+#include <cmath>
+#include <QPainterPathStroker>
 #include "image.h"
 #include "measure.h"
 #include "page.h"
@@ -37,6 +41,11 @@ Symbol::Symbol(const Symbol& s)
       {
       _sym       = s._sym;
       _scoreFont = s._scoreFont;
+      _handMode = s._handMode;
+      _handText = s._handText;
+      _handH = s._handH;
+      _handV = s._handV;
+      _handWidth = s._handWidth;
       }
 
 //---------------------------------------------------------
@@ -64,8 +73,143 @@ QString Symbol::accessibleInfo() const
 //    values when calling this method
 //---------------------------------------------------------
 
+bool Symbol::handEligible() const
+      {
+      return _sym == SymId::keyboardPlayWithRH || _sym == SymId::keyboardPlayWithRHEnd
+         || _sym == SymId::keyboardPlayWithLH || _sym == SymId::keyboardPlayWithLHEnd;
+      }
+
+bool Symbol::handLeft() const
+      {
+      return _sym == SymId::keyboardPlayWithLH || _sym == SymId::keyboardPlayWithLHEnd;
+      }
+
+bool Symbol::handEnd() const
+      {
+      return _sym == SymId::keyboardPlayWithRHEnd || _sym == SymId::keyboardPlayWithLHEnd;
+      }
+
+void Symbol::applyHandPreset()
+      {
+      if (!handEligible()) return;
+      _handMode = true; _handH = handEnd() ? -2 : 2; _handV = -1;
+      _handWidth = .12; _handText = false;
+      }
+
+Segment* Symbol::segment() const
+      {
+      if (parent() && parent()->isNote()) return toNote(parent())->chord()->segment();
+      if (parent() && parent()->isChord()) return toChord(parent())->segment();
+      return parent() && parent()->isSegment() ? toSegment(parent()) : nullptr;
+      }
+
+QPainterPath Symbol::handPath() const
+      {
+      const qreal unit = spatium() * mag();
+      const qreal y = handLeft() ? _handV * unit : 0;
+      QPainterPath path;
+      path.moveTo(0, handLeft() ? 0 : _handV * unit);
+      path.lineTo(0, y); path.lineTo(_handH * unit, y);
+      return path;
+      }
+
+QFont Symbol::handFont() const
+      {
+      QFont font("FreeSerif"); font.setPixelSize(qMax(1,qRound(.9 * spatium() * mag())));
+      return font;
+      }
+
+QPointF Symbol::handTextPosition() const
+      {
+      const qreal unit = spatium() * mag();
+      const qreal width = QFontMetricsF(handFont(), MScore::paintDevice()).horizontalAdvance(handLeft() ? "LH" : "RH");
+      return QPointF(_handH * unit + (_handH >= 0 ? .3 * unit : -.3 * unit - width),
+         (handLeft() ? _handV * unit : 0) + .3 * unit);
+      }
+
+QRectF Symbol::handTextRect() const
+      {
+      return _handText ? QFontMetricsF(handFont(), MScore::paintDevice()).boundingRect(handLeft() ? "LH" : "RH").translated(handTextPosition()) : QRectF();
+      }
+
+Shape Symbol::shape() const
+      {
+      if (!handBracket()) return BSymbol::shape();
+      const qreal unit = spatium() * mag(), pad = (_handWidth / 2 + .12) * unit;
+      const qreal x = _handH * unit, y = _handV * unit, corner = handLeft() ? y : 0;
+      Shape result;
+      result.add(QRectF(-pad,qMin(qreal(0),y)-pad,2*pad,std::abs(y)+2*pad));
+      result.add(QRectF(qMin(qreal(0),x)-pad,corner-pad,std::abs(x)+2*pad,2*pad));
+      if (_handText) result.add(handTextRect());
+      return result;
+      }
+
+std::vector<QPointF> Symbol::gripsPositions(const EditData&) const
+      {
+      if (!handBracket()) return {};
+      const qreal unit = spatium() * mag();
+      return {pagePos()+QPointF(_handH*unit,handLeft() ? _handV*unit : 0),pagePos()+QPointF(0,_handV*unit)};
+      }
+
+void Symbol::startEditDrag(EditData& ed)
+      {
+      Element::startEditDrag(ed);
+      if (handBracket() && int(ed.curGrip)>=0 && int(ed.curGrip)<2) {
+            auto data=ed.getData(this); data->pushProperty(Pid::HAND_BRACKET_H); data->pushProperty(Pid::HAND_BRACKET_V);
+            _handDragOriginal=QPointF(_handH,_handV); _handDragging=true;
+            }
+      }
+
+void Symbol::editDrag(EditData& ed)
+      {
+      if (!handBracket() || int(ed.curGrip)<0 || int(ed.curGrip)>=2) {BSymbol::editDrag(ed);return;}
+      if (!_handDragging) return; // cancelled preview stays cancelled until release
+      const qreal unit=spatium()*mag();
+      const Pid id=int(ed.curGrip)==0 ? Pid::HAND_BRACKET_H : Pid::HAND_BRACKET_V;
+      const qreal delta=int(ed.curGrip)==0 ? ed.delta.x() : ed.delta.y();
+      score()->addRefresh(canvasBoundingRect());
+      setProperty(id,qBound(-40.0,getProperty(id).toDouble()+delta/unit,40.0));
+      layout(); score()->addRefresh(canvasBoundingRect());
+      }
+
+void Symbol::endEditDrag(EditData& ed)
+      {
+      Element::endEditDrag(ed); _handDragging=false;
+      }
+
+bool Symbol::edit(EditData& ed)
+      {
+      if (handBracket() && int(ed.curGrip)>=0 && int(ed.curGrip)<2) {
+            if (ed.key==Qt::Key_Escape && _handDragging) {
+                  score()->addRefresh(canvasBoundingRect());
+                  setProperty(Pid::HAND_BRACKET_H,_handDragOriginal.x());
+                  setProperty(Pid::HAND_BRACKET_V,_handDragOriginal.y());
+                  _handDragging=false; layout(); score()->addRefresh(canvasBoundingRect()); return true;
+                  }
+            if (ed.key==Qt::Key_Home) {
+                  const Pid id=int(ed.curGrip)==0 ? Pid::HAND_BRACKET_H : Pid::HAND_BRACKET_V;
+                  undoChangeProperty(id,propertyDefault(id));return true;
+                  }
+            }
+      return BSymbol::edit(ed);
+      }
+
 void Symbol::layout()
       {
+      if (handBracket()) {
+            BSymbol::layout();
+            if (parent() && (parent()->isNote() || parent()->isChord())) setMag(parent()->mag());
+            QPainterPathStroker stroke; stroke.setWidth(_handWidth*spatium()*mag());
+            stroke.setJoinStyle(Qt::MiterJoin); stroke.setCapStyle(Qt::SquareCap);
+            QRectF box=stroke.createStroke(handPath()).boundingRect();
+            if (_handText) box |= handTextRect(); setbbox(box);
+            QPointF position;
+            if (parent() && (parent()->isNote() || parent()->isChord())) {
+                  position.setX(-2.5 * spatium() * mag());
+                  if (parent()->isChord()) position += toChord(parent())->downNote()->pos();
+                  }
+            setPos(position); return;
+            }
       // foreach(Element* e, leafs())     done in BSymbol::layout() ?
       //      e->layout();
       setbbox(_scoreFont ? _scoreFont->bbox(_sym, magS()) : symBbox(_sym));
@@ -91,6 +235,13 @@ void Symbol::layout()
 
 void Symbol::draw(QPainter* p) const
       {
+      if (handBracket()) {
+            p->save();p->setBrush(Qt::NoBrush);
+            p->setPen(QPen(curColor(),_handWidth*spatium()*mag(),Qt::SolidLine,Qt::SquareCap,Qt::MiterJoin));
+            p->drawPath(handPath());
+            if (_handText) {p->setPen(curColor());p->setFont(handFont());p->drawText(handTextPosition(),handLeft() ? "LH" : "RH");}
+            p->restore();return;
+            }
       if (!isNoteDot() || !staff()->isTabStaff(tick())) {
             p->setPen(curColor());
             if (_scoreFont)
@@ -110,6 +261,8 @@ void Symbol::write(XmlWriter& xml) const
       xml.tag("name", Sym::id2name(_sym));
       if (_scoreFont)
             xml.tag("font", _scoreFont->name());
+      for (Pid id : {Pid::HAND_BRACKET_MODE,Pid::HAND_BRACKET_H,Pid::HAND_BRACKET_V,Pid::HAND_BRACKET_WIDTH,Pid::HAND_BRACKET_TEXT})
+            writeProperty(xml,id);
       BSymbol::writeProperties(xml);
       xml.etag();
       }
@@ -158,6 +311,11 @@ void Symbol::read(XmlReader& e)
                   }
             else if (tag == "small" || tag == "subtype")    // obsolete
                   e.skipCurrentElement();
+            else if (tag == propertyName(Pid::HAND_BRACKET_MODE)) readProperty(e,Pid::HAND_BRACKET_MODE);
+            else if (tag == propertyName(Pid::HAND_BRACKET_H)) readProperty(e,Pid::HAND_BRACKET_H);
+            else if (tag == propertyName(Pid::HAND_BRACKET_V)) readProperty(e,Pid::HAND_BRACKET_V);
+            else if (tag == propertyName(Pid::HAND_BRACKET_WIDTH)) readProperty(e,Pid::HAND_BRACKET_WIDTH);
+            else if (tag == propertyName(Pid::HAND_BRACKET_TEXT)) readProperty(e,Pid::HAND_BRACKET_TEXT);
             else if (!BSymbol::readProperties(e))
                   e.unknown();
             }
@@ -171,6 +329,11 @@ void Symbol::read(XmlReader& e)
 QVariant Symbol::getProperty(Pid propertyId) const
       {
       switch (propertyId) {
+            case Pid::HAND_BRACKET_MODE: return _handMode;
+            case Pid::HAND_BRACKET_H: return _handH;
+            case Pid::HAND_BRACKET_V: return _handV;
+            case Pid::HAND_BRACKET_WIDTH: return _handWidth;
+            case Pid::HAND_BRACKET_TEXT: return _handText;
             case Pid::SYMBOL:
                   return QVariant::fromValue(_sym);
             default:
@@ -183,16 +346,36 @@ QVariant Symbol::getProperty(Pid propertyId) const
 //   Symbol::setProperty
 //---------------------------------------------------------
 
-bool Symbol::setProperty(Pid propertyId, const QVariant& v)
+bool Symbol::setProperty(Pid id, const QVariant& value)
       {
-      switch (propertyId) {
-            case Pid::SYMBOL:
-                  _sym = v.value<SymId>();
+      const qreal number=value.toDouble();
+      switch (id) {
+            case Pid::HAND_BRACKET_MODE: _handMode=value.toBool();break;
+            case Pid::HAND_BRACKET_TEXT: _handText=value.toBool();break;
+            case Pid::HAND_BRACKET_H:
+            case Pid::HAND_BRACKET_V:
+                  if (!std::isfinite(number) || std::abs(number)>40) return false;
+                  if (id==Pid::HAND_BRACKET_H) _handH=number; else _handV=number;
                   break;
-            default:
-                  break;
+            case Pid::HAND_BRACKET_WIDTH:
+                  if (!std::isfinite(number) || number<.02 || number>2) return false;
+                  _handWidth=number;break;
+            case Pid::SYMBOL: _sym=value.value<SymId>();break;
+            default: return BSymbol::setProperty(id,value);
             }
-      return BSymbol::setProperty(propertyId, v);
+      triggerLayout(); return true;
+      }
+
+QVariant Symbol::propertyDefault(Pid id) const
+      {
+      switch (id) {
+            case Pid::HAND_BRACKET_MODE: return false;
+            case Pid::HAND_BRACKET_TEXT: return false;
+            case Pid::HAND_BRACKET_H: return handEnd() ? -2.0 : 2.0;
+            case Pid::HAND_BRACKET_V: return -1.0;
+            case Pid::HAND_BRACKET_WIDTH: return .12;
+            default: return BSymbol::propertyDefault(id);
+            }
       }
 
 //---------------------------------------------------------

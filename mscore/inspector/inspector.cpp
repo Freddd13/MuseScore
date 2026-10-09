@@ -15,6 +15,7 @@
 #include "scrubproperty.h"
 #include "envelopeinspector.h"
 #include "freeslurinspector.h"
+#include "libmscore/symbol.h"
 #include "../performanceeditor/performanceeditor.h"
 
 #include "musescore.h"
@@ -347,6 +348,9 @@ void Inspector::update(Score* s)
                               break;
                         case ElementType::BEAM:
                               ie = new InspectorBeam(this);
+                              break;
+                        case ElementType::SYMBOL:
+                              ie = toSymbol(element())->handEligible() ? static_cast<InspectorBase*>(new InspectorHandSymbol(this)) : new InspectorElementBase(this);
                               break;
                         case ElementType::IMAGE:
                               ie = new InspectorImage(this);
@@ -1426,6 +1430,48 @@ void InspectorStaffText::setElement()
 //---------------------------------------------------------
 //   InspectorSlurTie
 //---------------------------------------------------------
+
+InspectorHandSymbol::InspectorHandSymbol(QWidget* parent)
+   : InspectorElementBase(parent)
+      {
+      auto host=addWidget(); auto grid=new QGridLayout(host);
+      auto title=new QLabel(tr("左右手记号"),host);grid->addWidget(title,0,0,1,3);
+      _mode=new QCheckBox(tr("可伸缩折线"),host);_mode->setObjectName("handBracketMode");grid->addWidget(_mode,1,0,1,3);
+      _details=new QWidget(host);grid->addWidget(_details,2,0,1,3);auto details=new QGridLayout(_details);
+      auto h=scrubProperty(_details,tr("水平长度"),Pid::HAND_BRACKET_H,-40,40,.1,tr(" sp"));
+      auto v=scrubProperty(_details,tr("竖直长度"),Pid::HAND_BRACKET_V,-40,40,.1,tr(" sp"));
+      auto width=scrubProperty(_details,tr("线宽"),Pid::HAND_BRACKET_WIDTH,.02,2,.01,tr(" sp"));
+      auto text=new QCheckBox(tr("显示 LH / RH"),_details);text->setObjectName("handBracketText");details->addWidget(text,details->rowCount(),0,1,3);
+      auto horizontal=new QPushButton(tr("水平反向"),_details),vertical=new QPushButton(tr("竖直反向"),_details);
+      horizontal->setObjectName("handBracketFlipH");vertical->setObjectName("handBracketFlipV");int row=details->rowCount();details->addWidget(horizontal,row,0);details->addWidget(vertical,row,1,1,2);
+      auto flip=[this,h,v](Pid id) {
+            auto spin=qobject_cast<QDoubleSpinBox*>(id==Pid::HAND_BRACKET_H ? h.w : v.w);
+            const bool single=inspector->el()->size()==1;
+            const double value=-spin->value();
+            for (auto e:*inspector->el()) if(e->isSymbol() && toSymbol(e)->handEligible())
+                  mscore->performanceEditor()->queueProperty(e,id,single ? value : -e->getProperty(id).toDouble());
+            if (single) {const QSignalBlocker block(spin);spin->setValue(value);}
+            };
+      connect(horizontal,&QPushButton::clicked,this,[flip]{flip(Pid::HAND_BRACKET_H);});
+      connect(vertical,&QPushButton::clicked,this,[flip]{flip(Pid::HAND_BRACKET_V);});
+      auto preset=new QPushButton(tr("应用短折线预设"),host);preset->setObjectName("handBracketPreset");grid->addWidget(preset,3,0,1,3);
+      connect(preset,&QPushButton::clicked,this,[this] {
+            for (auto e:*inspector->el()) if(e->isSymbol() && toSymbol(e)->handEligible()) {
+                  auto editor=mscore->performanceEditor();
+                  for (Pid id:{Pid::HAND_BRACKET_H,Pid::HAND_BRACKET_V,Pid::HAND_BRACKET_WIDTH,Pid::HAND_BRACKET_TEXT}) editor->queueProperty(e,id,e->propertyDefault(id));
+                  editor->queueProperty(e,Pid::HAND_BRACKET_MODE,true);
+                  }
+            });
+      auto hint=new QLabel(tr("正数向右／向下，负数向左／向上。双击记号后分别拖动横、竖端点；拖动整个记号改变偏移。数字名称可拖动，Shift精调、Esc取消。关闭折线模式恢复原字形。"),host);hint->setWordWrap(true);grid->addWidget(hint,4,0,1,3);
+      mapSignals({h,v,width,{Pid::HAND_BRACKET_MODE,0,_mode,nullptr},{Pid::HAND_BRACKET_TEXT,0,text,nullptr}},{});
+      }
+
+void InspectorHandSymbol::postInit()
+      {
+      bool all=true,enabled=true;
+      for (auto e:*inspector->el()) {all &= e->isSymbol() && toSymbol(e)->handEligible(); enabled &= e->isSymbol() && toSymbol(e)->handBracket();}
+      _mode->setEnabled(all);_details->setEnabled(all && enabled);
+      }
 
 InspectorSlurTie::InspectorSlurTie(QWidget* parent)
    : InspectorElementBase(parent)

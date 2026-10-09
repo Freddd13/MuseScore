@@ -15,6 +15,7 @@
 #include "articulation.h"
 #include "beam.h"
 #include "chord.h"
+#include "symbol.h"
 #include "chordline.h"
 #include "drumset.h"
 #include "fingering.h"
@@ -295,7 +296,11 @@ Chord::Chord(const Chord& c, bool link)
             }
 
       for (Element* e : c.el()) {
-            if (e->isChordLine()) {
+            if (e->isSymbol()) {
+                  auto copy=e->clone();add(copy);
+                  if (link) score()->undo(new Link(copy,e));
+                  }
+            else if (e->isChordLine()) {
                   ChordLine* cl = toChordLine(e);
                   ChordLine* ncl = new ChordLine(*cl);
                   add(ncl);
@@ -326,7 +331,7 @@ void Chord::undoUnlink()
             _tremolo->undoUnlink();
 
       for (Element* e : el()) {
-            if (e->type() == ElementType::CHORDLINE)
+            if (e->type() == ElementType::CHORDLINE || e->isSymbol())
                   e->undoUnlink();
             }
       }
@@ -576,6 +581,7 @@ void Chord::add(Element* e)
             case ElementType::HOOK:
                   _hook = toHook(e);
                   break;
+            case ElementType::SYMBOL:
             case ElementType::CHORDLINE:
                   el().push_back(e);
                   break;
@@ -665,6 +671,7 @@ void Chord::remove(Element* e)
                         score()->deselect(_stemSlash);
                   _stemSlash = 0;
                   break;
+            case ElementType::SYMBOL:
             case ElementType::CHORDLINE:
                   el().remove(e);
                   break;
@@ -1158,6 +1165,9 @@ bool Chord::readProperties(XmlReader& e)
             }
       else if (tag == "tickOffset")       // obsolete
             ;
+      else if (tag == "Symbol") {
+            auto symbol=new Symbol(score());symbol->setTrack(track());symbol->read(e);add(symbol);
+            }
       else if (tag == "ChordLine") {
             ChordLine* cl = new ChordLine(score());
             cl->read(e);
@@ -3279,6 +3289,7 @@ Element* Chord::nextElement()
             case ElementType::FINGERING:
             case ElementType::TEXT:
             case ElementType::BEND: {
+                  if (e->parent() == this) return downNote();
                   Note* n = toNote(e->parent());
                   if(n == _notes.front()) {
                         if (_arpeggio)

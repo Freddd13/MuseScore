@@ -831,6 +831,10 @@ PalettePanel* MuseScore::newFingeringPalettePanel()
             Articulation* s = new Articulation(i, gscore);
             sp->append(s, s->userName());
             }
+      for (auto id : {SymId::keyboardPlayWithLH,SymId::keyboardPlayWithRH}) {
+            auto symbol=new Symbol(gscore);symbol->setSym(id);symbol->applyHandPreset();
+            sp->append(symbol,id==SymId::keyboardPlayWithLH ? QT_TRANSLATE_NOOP("Palette", "左手弹（可伸缩）") : QT_TRANSLATE_NOOP("Palette", "右手弹（可伸缩）"));
+            }
       return sp;
       }
 

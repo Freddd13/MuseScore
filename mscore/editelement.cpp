@@ -16,6 +16,7 @@
 #include "texttools.h"
 #include "inspector/inspector.h"
 
+#include "libmscore/symbol.h"
 #include "libmscore/utils.h"
 #include "libmscore/score.h"
 #include "libmscore/undo.h"
@@ -46,10 +47,10 @@ void ScoreView::updateGrips()
       QRectF r(-w*.5, -h*.5, w, h);
 
       // Intermediate slur nodes may be added or removed during editing.
-      if (editData.element->isSlurSegment()) {
+      if (editData.element->isSlurSegment() || (editData.element->isSymbol() && toSymbol(editData.element)->handEligible())) {
             editData.grips = editData.element->gripsCount();
             if (int(editData.curGrip) >= editData.grips)
-                  editData.curGrip = Grip::DRAG;
+                  editData.curGrip = editData.element->isSlurSegment() ? Grip::DRAG : editData.element->defaultGrip();
             }
       editData.grip.resize(editData.grips);
 

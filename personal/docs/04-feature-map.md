@@ -135,3 +135,7 @@ Arpeggio 属性/原生读写 → PlaybackTiming 参与音/窗口 → renderArpeg
 | 自由圆滑线（0.20） | `slur.*`、`freeslur.*` | `freeslurinspector.h`、ScoreView局部手柄／键盘入口 | `freeslur_tests.inc` |
 
 0.20.1：REAPER 式键形、1–8 px 力度柱、谱带完整鼠标区域与双向选音，入口及限制见 [14](14-performance-editor.md) 和 [用户说明](../USER_GUIDE.md)。
+
+## 0.21.0 左右手短折线
+
+指法调色板两个新Symbol预设；仅四个SMuFL手符号允许可伸缩几何。Symbol原生属性／Undo／读写，InspectorHandSymbol数字和名称拖动，两个端点独立调长度；Note和Chord附着，原生绘制用于PDF/SVG，播放不变。详见[钢琴表达](15-piano-expression.md)。

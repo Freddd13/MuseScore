@@ -386,6 +386,11 @@ enum class Pid : short {
       ENVELOPE_ALTERNATE,
       FREE_SLUR_MODE,
       FREE_SLUR_NODES,
+      HAND_BRACKET_MODE,
+      HAND_BRACKET_H,
+      HAND_BRACKET_V,
+      HAND_BRACKET_WIDTH,
+      HAND_BRACKET_TEXT,
       END
       };
 

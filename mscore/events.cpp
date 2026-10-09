@@ -18,6 +18,7 @@
 #include "texttools.h"
 #include "zoombox.h"
 
+#include "libmscore/symbol.h"
 #include "libmscore/chordrest.h"
 #include "libmscore/keysig.h"
 #include "libmscore/measure.h"
@@ -67,8 +68,8 @@ bool ScoreView::event(QEvent* event)
                   QKeyEvent* ke = static_cast<QKeyEvent*>(event);
                   switch (ke->key()) {
                         case Qt::Key_Escape:
-                              if (state == ViewState::DRAG_EDIT && editData.element && editData.element->isSlurSegment()
-                                 && int(editData.curGrip) >= int(Grip::GRIPS)) {
+                              if (state == ViewState::DRAG_EDIT && editData.element && ((editData.element->isSlurSegment() && int(editData.curGrip) >= int(Grip::GRIPS))
+                                    || (editData.element->isSymbol() && toSymbol(editData.element)->handBracket() && int(editData.curGrip)>=0))) {
                                     ke->accept(); return true;
                                     }
                               break;
@@ -861,8 +862,8 @@ void ScoreView::keyPressEvent(QKeyEvent* ev)
 
       // Cancel an intermediate-node preview inside the active mouse transaction.
       if (state == ViewState::DRAG_EDIT && ev->key() == Qt::Key_Escape
-         && editData.element && editData.element->isSlurSegment()
-         && int(editData.curGrip) >= int(Grip::GRIPS)) {
+         && editData.element && ((editData.element->isSlurSegment() && int(editData.curGrip) >= int(Grip::GRIPS))
+            || (editData.element->isSymbol() && toSymbol(editData.element)->handBracket() && int(editData.curGrip)>=0))) {
             editData.element->edit(editData); updateGrips(); score()->update(); return;
             }
       if (state != ViewState::EDIT) {

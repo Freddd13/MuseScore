@@ -91,3 +91,15 @@ freeslur.*扩展Slur／SlurSegment，FREE_SLUR_MODE=false和FREE_SLUR_NODES="[]"
 动态gripsCount=6+3*n，最多102适配signed-char Grip；gripsPositions自行生成，不能调用使用固定_ups数组的基类循环。ScoreView更新仅对SlurSegment同步动态数目；额外键盘快捷键只在中间手柄生效。节点拖动根对象直接预览，endEditDrag恢复旧值后根undoChangeProperty一次提交以传播分谱；取消恢复旧值。不能把新属性push进段的旧ElementEditData，因为段links不是根Slur链接。
 
 FreeSlurInspector模式复用原生属性映射，节点编辑将整份规范化JSON通过PerformanceEditor安全队列提交；数字名称复用ScrubPropertyLabel。多选只改模式，节点单选；待提交期间保留面板草稿以免后续数字覆盖。freeslur_tests.inc检查模型／实际Qt编辑、重排／读写／分谱／MIDI不变／导出，实际结果见版本日志。
+
+## 0.21.0 可伸缩分手记号
+
+Symbol以HAND_BRACKET_MODE=false保留旧字形。仅keyboardPlayWithRH/RHEnd/LH/LHEnd四SymId启用折线，H/V为带方向的sp数值±40，WIDTH为0.02–2sp，TEXT可选LH/RH；全部linked、有限数校验、克隆和原生读写。applyHandPreset仅在新内置指法调色板或明确转换时调用，不在读取或复制时调用。RH下端横线，LH上端横线，End镜像横向；两条轴向线段共用绘制、bbox和带少量命中边界的shape，文字计入bbox。线宽和尺寸乘sp与staff mag。
+
+新增Symbol作为Chord的ElementList子对象时，局部补齐Chord add/remove、复制/链接/解除链接、读取和键盘导航。原生ElementList写入、扫描、布局和shape直接复用；Note的既有Symbol附着路径不动。ChordRest.drop仅新折线的Symbol附着于Chord，普通Symbol仍放Segment。Symbol.segment根据Note/Chord/Segment父对象安全定位；目标被移动时布局重新计算位置，不持有额外Note裸指针。
+
+端点用两项原生gripsPositions；横端仅改H，竖端仅改V；ElementEditData记录长度与原OFFSET/AUTOPLACE，松开原生undoPropertyChanged传播关联分谱。Esc恢复预览起值，仍在既有鼠标事务中收尾，不能创建嵌套命令。ScoreView动态grip更新只扩展到四个手记号。InspectorHandSymbol复用scrubProperty、属性映射和播放安全队列，反向／预设显式提交，不在属性setter连带修改其他参数。
+
+handsymbol_tests.inc覆盖原字形精确不变、四方向、适用范围、非法参数、单音／和弦drop、克隆、分谱链接／一次Undo、原生读写、sp重排、删除恢复、MIDI不变；实际Qt验证新指法预设/MIME、数字/Shift名称拖动/Esc、端点键盘和鼠标编辑、取消/一次Undo、播放中多字段安全提交及PDF/SVG。实际构建结果见个人版本日志。普通Symbol、NoteDot、播放和音频回调不增加折线计算。
+
+Note/Chord的shape包含附着记号，默认命中排序会先命中容器。ScoreView::elementsNear保持原排序，仅当首个候选是该手折线的Note/Chord容器且鼠标直接命中折线时，将该子Symbol移到前面；普通字形和无关元素顺序不变。实际Qt用鼠标单击＋双击入口验证。形状参考[SMuFL键盘奏法](https://www.w3.org/2021/03/smufl14/tables/keyboard-techniques.html)四个既有符号；长度是本分支预设。

@@ -423,6 +423,15 @@ class Inspector : public QDockWidget {
 //   InspectorSlurTie
 //---------------------------------------------------------
 
+class InspectorHandSymbol : public InspectorElementBase {
+      Q_OBJECT
+      QWidget* _details;
+      QCheckBox* _mode;
+      void postInit() override;
+   public:
+      InspectorHandSymbol(QWidget* parent);
+      };
+
 class FreeSlurInspector;
 class InspectorSlurTie : public InspectorElementBase {
       Q_OBJECT

@@ -158,3 +158,7 @@ GUI suite 增加 wheelVelocityBurstAndScoreTargets、personalBrandingAndToolbarE
 0.20 自由圆滑线：tst_performanceeditor 的 freeSlur* 检查模型及真实Qt；tst_readwriteundoreset 链接现有testutils_mscoreapp以避免同时带入独立／应用两套global符号。旧谱重置／MSCX回归与tst_midi一起检查；独立安装msvc.install_piano_0_20_x64及validation见日志。
 
 0.20.1 使用独立 msvc.performance-reaper-source/msvc.build_reaper_x64 构建，安装到 msvc.install_performance_0_20_1_x64。Qt 用例新增 reaperStemsAndStripSelection；真实常规／1.5 DPI、1万／5万音压力及 MIDI 结果见 CHANGELOG。完成后只清理本任务隔离与临时测试程序，保留其他任务、SDK和既有安装。
+
+## 0.21.0 手折线验证
+
+在隔离msvc.piano-source构建Release，安装msvc.install_piano_0_21_x64；相关模型和真实Qt在tst_performanceeditor的handSymbolModelAndPersistence/handSymbolInspectorAndGrips，复用已有freeslur小谱。测试/导出报告保存在最终安装validation，生成夹具及构建缓存均忽略。最终合并并行0.20.1后重新链接与回归；只清理有归属证据的本任务临时目录，保留正式安装和其他任务目录。
