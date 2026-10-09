@@ -64,6 +64,9 @@ class Chord final : public ChordRest {
       Tremolo*            _tremolo;
       bool                _endsGlissando;///< true if this chord is the ending point of a glissando (needed for layout)
       QVector<Chord*>     _graceNotes;
+      int _gracePlayMode = 0; // missing fields retain historical grace interpretation
+      int _graceDurationMode = 0;
+      double _graceDuration = 65.0;
       int                 _graceIndex;   ///< if this is a grace note, index in parent list
 
       Direction          _stemDirection;
@@ -104,6 +107,8 @@ class Chord final : public ChordRest {
       void write(XmlWriter& xml) const override;
       void read(XmlReader&) override;
       bool readProperties(XmlReader&) override;
+      Element* propertyDelegate(Pid) override;
+      static int graceAppearanceValue(NoteType, const TDuration&);
       Element* drop(EditData&) override;
 
       void setStemDirection(Direction d, Direction beamDir = Direction::AUTO);
@@ -237,4 +242,3 @@ class Chord final : public ChordRest {
 
 }     // namespace Ms
 #endif
-

@@ -1885,6 +1885,17 @@ Shortcut Shortcut::_sc[] = {
       {
          MsWidget::SCORE_TAB,
          STATE_NORMAL | STATE_NOTE_ENTRY,
+         "fast-grace",
+         QT_TRANSLATE_NOOP("action","快速拍前小音符（无斜线）"),
+         QT_TRANSLATE_NOOP("action","添加快速拍前小音符（无斜线）"),
+         QT_TRANSLATE_NOOP("action","快速拍前小音符（无斜线）"),
+         Icons::appoggiatura_ICON,
+         Qt::WindowShortcut,
+         ShortcutFlags::A_CHECKABLE
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY,
          "appoggiatura",
          QT_TRANSLATE_NOOP("action","Appoggiatura"),
          QT_TRANSLATE_NOOP("action","Add appoggiatura"),

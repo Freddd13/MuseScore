@@ -2,6 +2,20 @@
 
 个人版本记录本仓库的个人维护增量；应用上游版本另由 `config.cmake` 管理。历史源码提交尚未追溯归类，此处从首次建立指南开始记录，不代表此前没有个人改动。
 
+## 0.15.0 — 2026-10-09
+
+- 功能：新增无斜线快速拍前小音符预设，默认每音 65 ms，主音保持原拍点；检视器分开外观与原解释／拍前／拍上／拍后、毫秒／整组比例，实际整组最多为主音时值一半，拍前再限制为前一同声部音／休止起点间隔的一半，避免短前音的起奏被颠倒。数字、名称拖拽、Shift 精调、Esc、播放暂存和单次撤销复用 0.14 的控件及原生队列。
+- 模型：三个整组属性存于主 Chord，小音符通过 propertyDelegate 访问；克隆、关联属性和 MSCX/MSCZ 接入原机制，缺字段走旧解释。外观使用原 NoteType／DurationType／dots 标签；检视器外观 Pid 将三项编码为一次原生撤销，不另写外观字段。fast-grace 动作和调色板复用 setGraceNote，不增加新小音符类。
+- 播放：createGraceNotesPlayEvents 使用速度图分配小音符时间，collectNote 仅缩短紧邻同声部的自动前音，反复边界按实际跳转处理；不改记谱时值、手动事件或其他声部；自动震音／滑音事件适配拍上／拍后的主音窗口，外部延音保持总长，包含手动事件的延音链不让时。融合颤音先走原判断，只演奏一次。分块、起播、循环和导出复用提前窗口及首拍标记，不增加音频回调计算。
+- 测试入口：MIDI 新增位置／比例与上限、前音让时与用户事件保护、克隆／撤销／原生保存重开、不同拍前时间的反复回跳、颤音融合、生成震音事件窗口、外部延音和曲首短前音保护；Qt 独立 grace_playback_tests.inc 检查原生命令、名称拖拽／Shift／Esc／单次撤销／停播提交，以及真实 Seq 曲首和中途预备时间。
+- 验证：独立 x64 Release 构建成功，MIDI 68/68、安装版真实 Qt 宿主 26/26（0 失败／跳过）；包括新增 8 项时序模型和 2 项检视器／Seq。系统剪贴板写入按并行任务标志跳过，关于页版本／作者和其余检查保留。实际 SF3 WAV 与 MIDI 导出返回 0，WAV 为 48000 Hz／双声道／4.565333 秒，非静音，原首拍偏移 0.063542 秒；--long-version 返回 0。未运行真实声卡听感、长期播放或大谱 benchmark。
+- 发布隔离：并行任务在演奏编辑器／踏板及文档的未提交改动不混入本批提交。最终构建从 msvc.piano-source 的隔离检出生成，仅含本批源码；独立安装 msvc.install_piano_0_15_x64，保留旧软件／配置／音源。
+- 部署：构建与安装 SHA256 同为 478d6f0e7f5f10acb7b4fb90122f6b91678df2fc780f084b2b8cdea524af832e；同 SDK QmlModels／WorkerScript／WebSockets DLL 补齐。最终记录：piano015-release.log、piano015-install.log、piano015-midi-final-run/gui.txt、piano015-installed-gui-run/gui.txt、piano015-installed/verification.json 及 export-wav/mid.log。
+- 维护：同步用户说明、01／04／15／README 和源码索引。详细构建及运行产物保存在忽略的 msvc.piano-source/msvc.build_release_x64；共享工作区编译只作为集成检查，不能冒充独立发布验证。
+- Git 父提交：46beea923c4b340a61205ff28e671512d7590a04。
+- Git 提交主题：feat(playback): add configurable fast grace-note timing。
+- 提交定位：personal-v0.15.0；核对远端无冲突后普通 push 分支和标签，不强推。
+
 ## 0.14.1 — 2026-10-08
 
 - 修复：新琶音排除延音续接音的重触发，但保留其单个原生 NoteEvent 时长用于 collectNote 累加延音链；不更改谱面、旧琶音、排序或对拍。

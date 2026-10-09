@@ -358,6 +358,10 @@ static constexpr PropertyMetaData propertyList[] = {
       { Pid::ARP_TIMING_MODE, P_TYPE::INT, true, "arpTimingMode", "arpeggio timing" },
       { Pid::ARP_INTERVAL_MS, P_TYPE::REAL, true, "arpIntervalMs", "arpeggio interval (ms)" },
       { Pid::ARP_OFFSET_MS, P_TYPE::REAL, true, "arpOffsetMs", "arpeggio offset (ms)" },
+      { Pid::GRACE_PLAY_MODE, P_TYPE::INT, true, "gracePlayMode", "grace playback position" },
+      { Pid::GRACE_DURATION_MODE, P_TYPE::INT, true, "graceDurationMode", "grace duration unit" },
+      { Pid::GRACE_DURATION, P_TYPE::REAL, true, "graceDuration", "grace duration" },
+      { Pid::GRACE_APPEARANCE, P_TYPE::INT, true, "graceAppearance", "grace appearance" },
       { Pid::END,                       P_TYPE::INT,            false, "++end++",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "<invalid property>")                            }
       };
 

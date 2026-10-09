@@ -71,6 +71,48 @@ double intervalMs(const Arpeggio* a)
       return std::min(a->intervalMs(), duration * 0.5 / (notes.size() - 1));
       }
 
+QList<Chord*> graceNotes(const Chord* chord)
+      {
+      QList<Chord*> result;
+      for (auto group : {chord->graceNotesBefore(), chord->graceNotesAfter()}) for (auto grace : group) {
+            if (grace->playEventType() != PlayEventType::Auto) continue;
+            for (auto note : grace->notes()) if (note->play() && !note->hidden()) { result.append(grace); break; }
+            }
+      return result;
+      }
+double graceSpanMs(const Chord* chord)
+      {
+      int count = graceNotes(chord).size();
+      if (!count || chord->playEventType() != PlayEventType::Auto) return 0;
+      auto map = chord->score()->tempomap(); int tick = chord->tick().ticks();
+      double ms = 1000.0 * (map->tick2time(tick + chord->actualTicks().ticks()) - map->tick2time(tick));
+      double requested = chord->getProperty(Pid::GRACE_DURATION).toDouble();
+      double limit = ms * 0.5;
+      // Keep a later anticipation after the preceding same-voice onset,
+      // including a short note at the start of the score. It must remain audible.
+      if (chord->getProperty(Pid::GRACE_PLAY_MODE).toInt() == 1 && chord->segment())
+            for (auto s = chord->segment()->prev1(SegmentType::ChordRest); s; s = s->prev1(SegmentType::ChordRest)) {
+                  if (!s->element(chord->track())) continue;
+                  limit = std::min(limit, 500.0 * (map->tick2time(tick) - map->tick2time(s->tick().ticks())));
+                  break;
+                  }
+      return std::min(limit, chord->getProperty(Pid::GRACE_DURATION_MODE).toInt() ? ms * requested / 100.0 : requested * count);
+      }
+int tickAtTime(const Score* score, double seconds)
+      {
+      auto map = score->tempomap();
+      return seconds < 0 ? qRound(seconds * DIVISION * map->tempo(0) * map->relTempo()) : map->time2tick(seconds);
+      }
+int graceStartTick(const Chord* chord)
+      {
+      int tick = chord->tick().ticks();
+      if (chord->getProperty(Pid::GRACE_PLAY_MODE).toInt() != 1) return tick;
+      int duration = chord->actualTicks().ticks();
+      int raw = tickAtTime(chord->score(), chord->score()->tempomap()->tick2time(tick) - graceSpanMs(chord) / 1000.0);
+      int permille = qRound(1000.0 * (raw - tick) / duration);
+      return tick + duration * permille / 1000; // Match the first rendered grace event.
+      }
+
 double time(const Score* score, int utick)
       {
       return utick < 0 ? double(utick) / (DIVISION * score->tempomap()->tempo(0) * score->tempomap()->relTempo()) : score->utick2utime(utick);

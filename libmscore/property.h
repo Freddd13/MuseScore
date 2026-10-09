@@ -366,6 +366,10 @@ enum class Pid : short {
       ARP_TIMING_MODE,
       ARP_INTERVAL_MS,
       ARP_OFFSET_MS,
+      GRACE_PLAY_MODE,
+      GRACE_DURATION_MODE,
+      GRACE_DURATION,
+      GRACE_APPEARANCE,
       END
       };
 

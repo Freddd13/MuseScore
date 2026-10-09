@@ -2916,13 +2916,20 @@ void Score::cmdInsertClef(Clef* clef, ChordRest* cr)
 ///   adds grace note of specified type to selected notes
 //---------------------------------------------------------
 
-void Score::cmdAddGrace (NoteType graceType, int duration)
+void Score::cmdAddGrace (NoteType graceType, int duration, bool fast)
       {
       const QList<Element*> copyOfElements = selection().elements();
       for (Element* e : copyOfElements) {
             if (e->type() == ElementType::NOTE) {
                   Note* n = toNote(e);
-                  setGraceNote(n->chord(), n->pitch(), graceType, duration);
+                  auto owner = n->chord();
+                  if (owner->isGrace()) owner = toChord(owner->parent());
+                  setGraceNote(owner, n->pitch(), graceType, duration);
+                  if (fast) {
+                        owner->undoChangeProperty(Pid::GRACE_PLAY_MODE, 1);
+                        owner->undoChangeProperty(Pid::GRACE_DURATION_MODE, 0);
+                        owner->undoChangeProperty(Pid::GRACE_DURATION, 65.0);
+                        }
                   }
             }
       }
@@ -4622,6 +4629,7 @@ void Score::cmd(const QAction* a, EditData& ed)
             { "add-parentheses",            [](Score* cs, EditData&){ cs->cmdAddParentheses();                                        }},
             { "add-braces",                 [](Score* cs, EditData&){ cs->cmdAddBraces();                                        }},
             { "acciaccatura",               [](Score* cs, EditData&){ cs->cmdAddGrace(NoteType::ACCIACCATURA, DIVISION / 2);  }},
+            { "fast-grace", [](Score* cs, EditData&){ cs->cmdAddGrace(NoteType::APPOGGIATURA, DIVISION / 2, true); }},
             { "appoggiatura",               [](Score* cs, EditData&){ cs->cmdAddGrace(NoteType::APPOGGIATURA, DIVISION / 2);  }},
             { "grace4",                     [](Score* cs, EditData&){ cs->cmdAddGrace(NoteType::GRACE4, DIVISION);            }},
             { "grace16",                    [](Score* cs, EditData&){ cs->cmdAddGrace(NoteType::GRACE16, DIVISION / 4);       }},

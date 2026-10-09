@@ -1895,6 +1895,12 @@ Element* Note::drop(EditData& data)
                               break;
                         case IconType::APPOGGIATURA:
                               score()->setGraceNote(ch, pitch(), NoteType::APPOGGIATURA, DIVISION/2);
+                              if (toIcon(e)->action() == "fast-grace") {
+                                    auto owner = ch->isGrace() ? toChord(ch->parent()) : ch;
+                                    owner->undoChangeProperty(Pid::GRACE_PLAY_MODE, 1);
+                                    owner->undoChangeProperty(Pid::GRACE_DURATION_MODE, 0);
+                                    owner->undoChangeProperty(Pid::GRACE_DURATION, 65.0);
+                                    }
                               break;
                         case IconType::GRACE4:
                               score()->setGraceNote(ch, pitch(), NoteType::GRACE4, DIVISION);

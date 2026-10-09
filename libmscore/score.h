@@ -512,7 +512,7 @@ class Score : public QObject, public ScoreElement {
       void cmdResetBeamMode();
 
       void cmdInsertClef(ClefType);
-      void cmdAddGrace(NoteType, int);
+      void cmdAddGrace(NoteType, int, bool fast = false);
       void removeChordRest(ChordRest* cr, bool clearSegment);
       void cmdMoveRest(Rest*, Direction);
       void cmdMoveLyrics(Lyrics*, Direction);

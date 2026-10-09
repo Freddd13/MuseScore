@@ -22,11 +22,13 @@
 #include "libmscore/chord.h"
 #include "libmscore/arpeggio.h"
 #include "libmscore/tie.h"
+#include "libmscore/tremolo.h"
 #include "libmscore/playbacktiming.h"
 #include "libmscore/note.h"
 #include "libmscore/tempotext.h"
 #include "libmscore/tempo.h"
 #include <memory>
+#include <QTemporaryDir>
 #include "libmscore/durationtype.h"
 #include "libmscore/keysig.h"
 #include "libmscore/mcursor.h"
@@ -46,6 +48,7 @@
 
 namespace Ms {
       extern Score::FileError importMidi(MasterScore*, const QString&);
+      bool graceNotesMerged(Chord*);
       }
 
 using namespace Ms;
@@ -69,6 +72,14 @@ class TestMidi : public QObject, public MTest
       void timedArpeggio();
       void timedArpeggioSpanAndCap();
       void timedArpeggioTies();
+      void timedGracePositions();
+      void timedGracePrecedingAndCustom();
+      void timedGracePersistence();
+      void timedGraceRepeatJump();
+      void timedGraceMergedTrill();
+      void timedGraceGeneratedEvents();
+      void timedGraceTiedContinuations();
+      void timedGraceShortPredecessor();
       void midi02();
       void midi03();
       void events_data();
@@ -547,6 +558,229 @@ void TestMidi::midiSingleNoteDynamics()
       testMidiExport(score, writeFile, reference);
 
       delete score;
+      }
+
+void TestMidi::timedGracePositions()
+      {
+      std::unique_ptr<MasterScore> score(readScore(DIR + "timed-arpeggio.mscx"));
+      auto main = toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(0));
+      score->startCmd();
+      auto grace = score->setGraceNote(main, 62, NoteType::APPOGGIATURA, DIVISION / 2);
+      score->endCmd();
+      SynthesizerState state; EventMap events;
+      auto ticks = [&](const Note* note, bool on) {
+            QVector<int> result;
+            for (const auto& event : events)
+                  if (event.second.note() == note && bool(event.second.velo()) == on) result.append(event.first);
+            return result;
+            };
+      score->renderMidi(&events, false, false, state);
+      QCOMPARE(ticks(grace, true), QVector<int>({0})); // Legacy long appoggiatura.
+      QCOMPARE(ticks(main->downNote(), true), QVector<int>({240}));
+      main->setProperty(Pid::GRACE_PLAY_MODE, 1);
+      events.clear(); score->renderMidi(&events, false, false, state);
+      int begin = ticks(grace, true).front();
+      QVERIFY(qAbs(begin + 62) <= 1);
+      QCOMPARE(ticks(main->downNote(), true), QVector<int>({0}));
+      QVERIFY(qAbs(ticks(grace, false).front() + 1) <= 1);
+      QCOMPARE(ticks(main->downNote(), false), QVector<int>({479}));
+      QCOMPARE(PlaybackTiming::startTick(events, 0, score.get()), begin);
+      ExportMidi exporter(score.get()); QBuffer buffer;
+      QVERIFY(exporter.write(&buffer, false, false, state));
+      bool first = false, mainOn = false, marker = false;
+      for (const auto& track : exporter.mf.tracks()) for (const auto& event : track.events()) {
+            QVERIFY(event.first >= 0);
+            if (event.second.type() == ME_NOTEON && event.second.velo()) {
+                  if (event.second.pitch() == 62 && event.first == 0) first = true;
+                  if (event.second.pitch() == 60 && event.first == -begin) mainOn = true;
+                  }
+            if (event.second.type() == ME_META && event.second.metaType() == META_MARKER) { marker = true; QCOMPARE(event.first, -begin); }
+            }
+      QVERIFY(first && mainOn && marker);
+      main->setProperty(Pid::GRACE_PLAY_MODE, 2);
+      events.clear(); score->renderMidi(&events, false, false, state);
+      QCOMPARE(ticks(grace, true), QVector<int>({0}));
+      QVERIFY(qAbs(ticks(main->downNote(), true).front() - 62) <= 1);
+      QVERIFY(qAbs(ticks(main->downNote(), false).front() - 479) <= 1);
+      main->setProperty(Pid::GRACE_PLAY_MODE, 3);
+      events.clear(); score->renderMidi(&events, false, false, state);
+      QCOMPARE(ticks(main->downNote(), true), QVector<int>({0}));
+      QVERIFY(qAbs(ticks(grace, true).front() - 418) <= 1);
+      QVERIFY(qAbs(ticks(grace, false).front() - 479) <= 1);
+      QVERIFY(ticks(main->downNote(), false).front() < ticks(grace, true).front());
+      main->setProperty(Pid::GRACE_DURATION_MODE, 1); main->setProperty(Pid::GRACE_DURATION, 25.0);
+      QCOMPARE(PlaybackTiming::graceSpanMs(main), 125.0);
+      main->setProperty(Pid::GRACE_DURATION, 1000.0); QCOMPARE(PlaybackTiming::graceSpanMs(main), 250.0);
+      main->setProperty(Pid::GRACE_DURATION_MODE, 0);
+      score->startCmd(); auto other = score->setGraceNote(main, 65, NoteType::GRACE8_AFTER, DIVISION / 2); score->endCmd();
+      events.clear(); score->renderMidi(&events, false, false, state);
+      QVERIFY(ticks(grace, true).front() < ticks(other, true).front());
+      QCOMPARE(main->actualTicks().ticks(), 480);
+      QCOMPARE(grace->chord()->noteType(), NoteType::APPOGGIATURA);
+      QCOMPARE(other->chord()->noteType(), NoteType::GRACE8_AFTER);
+      }
+
+void TestMidi::timedGracePrecedingAndCustom()
+      {
+      std::unique_ptr<MasterScore> score(readScore(DIR + "timed-arpeggio.mscx"));
+      auto first = toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(0));
+      auto segment = first->segment()->next(SegmentType::ChordRest);
+      auto rest = segment->element(0); segment->remove(rest); delete rest;
+      auto second = new Ms::Chord(*first); second->setParent(segment); segment->add(second);
+      score->startCmd(); auto grace = score->setGraceNote(second, 62, NoteType::APPOGGIATURA, DIVISION / 2); score->endCmd();
+      second->setProperty(Pid::GRACE_PLAY_MODE, 1);
+      SynthesizerState state; EventMap events; score->renderMidi(&events, false, false, state);
+      int begin = -1, off = -1;
+      for (const auto& event : events) {
+            if (event.second.note() == grace && event.second.velo()) begin = event.first;
+            if (event.second.note() == first->downNote() && !event.second.velo()) off = event.first;
+            }
+      QVERIFY(qAbs(begin - 418) <= 1); QCOMPARE(begin, PlaybackTiming::graceStartTick(second)); QCOMPARE(off, begin - 1);
+      auto otherStaff = toChord(first->segment()->element(4))->downNote();
+      for (const auto& event : events) if (event.second.note() == otherStaff && !event.second.velo()) QCOMPARE(event.first, 479);
+      QCOMPARE(first->downNote()->playEvents().front().len(), 1000); // No model mutation.
+      first->setPlayEventType(PlayEventType::User);
+      events.clear(); score->renderMidi(&events, false, false, state);
+      for (const auto& event : events) if (event.second.note() == first->downNote() && !event.second.velo()) QCOMPARE(event.first, 479);
+      grace->chord()->setPlayEventType(PlayEventType::User);
+      auto& custom = grace->playEvents(); custom.clear(); custom.append(NoteEvent(0, -180, 100));
+      events.clear(); score->renderMidi(&events, false, false, state);
+      QCOMPARE(custom.front().ontime(), -180); QCOMPARE(custom.front().len(), 100);
+      QCOMPARE(PlaybackTiming::graceSpanMs(second), 0.0);
+      }
+
+void TestMidi::timedGraceRepeatJump()
+      {
+      std::unique_ptr<MasterScore> score(readScore(DIR + "timed-grace-repeat.mscx")); QVERIFY(score);
+      SynthesizerState state; EventMap events; score->renderMidi(&events, false, true, state);
+      auto last = toChord(score->tick2segment(Fraction::fromTicks(1440), false, SegmentType::ChordRest)->element(0))->downNote();
+      auto first = toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(0));
+      auto afterRepeat = toChord(score->firstMeasure()->nextMeasure()->first(SegmentType::ChordRest)->element(0));
+      QVector<int> offs, starts;
+      for (const auto& event : events) {
+            if (event.second.note() == last && !event.second.velo()) offs.append(event.first);
+            if (event.second.note() && event.second.note()->chord()->isGrace() && event.second.velo()) starts.append(event.first);
+            }
+      QCOMPARE(offs.size(), 2); QCOMPARE(starts.size(), 3);
+      QCOMPARE(offs[0], starts[1] - 1); QCOMPARE(offs[1], starts[2] - 1);
+      QVERIFY(qAbs(starts[1] - (1920 + PlaybackTiming::graceStartTick(first))) <= 1);
+      QVERIFY(qAbs(starts[2] - (1920 + PlaybackTiming::graceStartTick(afterRepeat))) <= 1);
+      }
+
+void TestMidi::timedGraceMergedTrill()
+      {
+      std::unique_ptr<MasterScore> score(readScore(DIR + "testBeforeAfterGraceTrill.mscx")); QVERIFY(score);
+      SynthesizerState state; EventMap before, after; score->renderMidi(&before, false, false, state);
+      for (auto s = score->firstMeasure()->first(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            for (int track = 0; track < score->ntracks(); ++track) {
+                  auto element = s->element(track);
+                  if (element && element->isChord() && graceNotesMerged(toChord(element))) element->setProperty(Pid::GRACE_PLAY_MODE, 1);
+                  }
+      score->renderMidi(&after, false, false, state);
+      QCOMPARE(after.size(), before.size());
+      auto a = after.begin();
+      for (auto b = before.begin(); b != before.end(); ++b, ++a) {
+            QCOMPARE(a->first, b->first); QCOMPARE(a->second.type(), b->second.type());
+            QCOMPARE(a->second.pitch(), b->second.pitch()); QCOMPARE(a->second.velo(), b->second.velo());
+            }
+      }
+
+void TestMidi::timedGraceGeneratedEvents()
+      {
+      std::unique_ptr<MasterScore> score(readScore(DIR + "timed-arpeggio.mscx"));
+      auto main = toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(0));
+      score->startCmd(); auto grace = score->setGraceNote(main, 62, NoteType::APPOGGIATURA, DIVISION / 2); score->endCmd();
+      auto tremolo = new Tremolo(score.get()); tremolo->setTremoloType(TremoloType::R16); main->add(tremolo);
+      SynthesizerState state; EventMap events;
+      for (int mode : {2, 3}) {
+            main->setProperty(Pid::GRACE_PLAY_MODE, mode);
+            events.clear(); score->renderMidi(&events, false, false, state);
+            QVector<int> on, off; int graceOn = -1;
+            for (const auto& event : events) {
+                  if (event.second.note() == main->downNote()) (event.second.velo() ? on : off).append(event.first);
+                  if (event.second.note() == grace && event.second.velo()) graceOn = event.first;
+                  }
+            QCOMPARE(on.size(), 4); QCOMPARE(off.size(), 4);
+            if (mode == 2) { QVERIFY(qAbs(on.front() - 62) <= 1); QVERIFY(qAbs(off.back() - 479) <= 1); QCOMPARE(graceOn, 0); }
+            else { QCOMPARE(on.front(), 0); QVERIFY(off.back() < graceOn); QVERIFY(qAbs(graceOn - 418) <= 1); }
+            }
+      }
+
+void TestMidi::timedGraceTiedContinuations()
+      {
+      std::unique_ptr<MasterScore> score(readScore(DIR + "timed-arpeggio.mscx"));
+      auto first = toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(0));
+      auto segment = first->segment()->next(SegmentType::ChordRest);
+      auto rest = segment->element(0); segment->remove(rest); delete rest;
+      auto second = new Ms::Chord(*first); second->setParent(segment); segment->add(second);
+      auto tie = new Tie(score.get()); tie->setStartNote(first->downNote()); tie->setEndNote(second->downNote()); first->downNote()->add(tie);
+      score->startCmd(); score->setGraceNote(second, 62, NoteType::APPOGGIATURA, DIVISION / 2); score->endCmd();
+      SynthesizerState state; EventMap events;
+      for (int mode : {1, 2}) {
+            second->setProperty(Pid::GRACE_PLAY_MODE, mode); events.clear(); score->renderMidi(&events, false, false, state);
+            int off = -1, repeated = 0;
+            for (const auto& event : events) {
+                  if (event.second.note() == first->downNote() && !event.second.velo()) off = event.first;
+                  if (event.second.note() == second->downNote() && event.second.velo()) ++repeated;
+                  }
+            QCOMPARE(off, 959); QCOMPARE(repeated, 0);
+            }
+      second->setProperty(Pid::GRACE_PLAY_MODE, 1);
+      score->startCmd(); score->setGraceNote(first, 65, NoteType::APPOGGIATURA, DIVISION / 2); score->endCmd();
+      first->setProperty(Pid::GRACE_PLAY_MODE, 3);
+      events.clear(); score->renderMidi(&events, false, false, state);
+      for (const auto& event : events) if (event.second.note() == first->downNote() && !event.second.velo()) QCOMPARE(event.first, 959);
+      QCOMPARE(first->downNote()->tieFor(), tie); QCOMPARE(second->downNote()->tieBack(), tie);
+      }
+
+void TestMidi::timedGraceShortPredecessor()
+      {
+      std::unique_ptr<MasterScore> score(readScore(DIR + "timed-grace-short.mscx")); QVERIFY(score);
+      auto first = toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(0));
+      auto second = toChord(first->segment()->next(SegmentType::ChordRest)->element(0));
+      QCOMPARE(second->tick().ticks(), 30);
+      QVERIFY(qAbs(PlaybackTiming::graceSpanMs(second) - 15.625) < 0.01);
+      SynthesizerState state; EventMap events; score->renderMidi(&events, false, false, state);
+      int off = -1, graceOn = -1;
+      for (const auto& event : events) {
+            if (event.second.note() == first->downNote() && !event.second.velo()) off = event.first;
+            if (event.second.note() && event.second.note()->chord()->isGrace() && event.second.velo()) graceOn = event.first;
+            }
+      QVERIFY(off > 0 && off < graceOn); QVERIFY(graceOn >= 15 && graceOn < 30);
+      QCOMPARE(PlaybackTiming::exportOffset(events), 0);
+      }
+
+void TestMidi::timedGracePersistence()
+      {
+      std::unique_ptr<MasterScore> score(readScore(DIR + "timed-arpeggio.mscx"));
+      auto main = toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(0));
+      score->startCmd(); auto grace = score->setGraceNote(main, 62, NoteType::APPOGGIATURA, DIVISION / 2); score->endCmd();
+      TDuration written(TDuration::DurationType::V_16TH); written.setDots(1);
+      score->startCmd(); grace->chord()->undoChangeProperty(Pid::GRACE_APPEARANCE, Ms::Chord::graceAppearanceValue(NoteType::GRACE16, written)); score->endCmd();
+      QCOMPARE(grace->chord()->durationType(), written); QCOMPARE(grace->chord()->noteType(), NoteType::GRACE16);
+      EditData appearanceEdit; score->undoRedo(true, &appearanceEdit);
+      QCOMPARE(grace->chord()->durationType(), TDuration(TDuration::DurationType::V_EIGHTH));
+      QCOMPARE(grace->chord()->noteType(), NoteType::APPOGGIATURA);
+      score->undoRedo(false, &appearanceEdit); QCOMPARE(grace->chord()->durationType(), written);
+      score->undoRedo(true, &appearanceEdit); // Continue with the original eighth appearance.
+      score->startCmd(); grace->chord()->propertyDelegate(Pid::GRACE_PLAY_MODE)->undoChangeProperty(Pid::GRACE_PLAY_MODE, 1);
+      main->undoChangeProperty(Pid::GRACE_DURATION, 73.0); score->endCmd();
+      EditData ed; score->undoRedo(true, &ed); QCOMPARE(main->getProperty(Pid::GRACE_PLAY_MODE).toInt(), 0);
+      QCOMPARE(main->getProperty(Pid::GRACE_DURATION).toDouble(), 65.0);
+      score->undoRedo(false, &ed); QCOMPARE(grace->chord()->getProperty(Pid::GRACE_PLAY_MODE).toInt(), 1);
+      std::unique_ptr<Ms::Chord> copy(new Ms::Chord(*main)); QCOMPARE(copy->getProperty(Pid::GRACE_DURATION).toDouble(), 73.0);
+      QTemporaryDir dir; QVERIFY(dir.isValid());
+      for (const auto& suffix : {"mscx", "mscz"}) {
+            QString path = dir.path() + "/grace." + suffix;
+            if (QString(suffix) == "mscz") { QFileInfo info(path); QVERIFY(score->saveCompressedFile(info, false, false)); }
+            else QVERIFY(saveScore(score.get(), path));
+            std::unique_ptr<MasterScore> restored(readCreatedScore(path)); QVERIFY(restored);
+            auto chord = toChord(restored->firstMeasure()->first(SegmentType::ChordRest)->element(0));
+            QCOMPARE(chord->getProperty(Pid::GRACE_PLAY_MODE).toInt(), 1);
+            QCOMPARE(chord->getProperty(Pid::GRACE_DURATION).toDouble(), 73.0);
+            QCOMPARE(chord->graceNotes().size(), 1);
+            QCOMPARE(chord->graceNotes().front()->noteType(), NoteType::APPOGGIATURA);
+            }
       }
 
 void TestMidi::timedArpeggio()

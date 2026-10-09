@@ -108,3 +108,7 @@ rg -n 'QSKIP|add_test|subdirs|MTEST_LINK_MSCOREAPP' mtest
 Arpeggio 属性/原生读写 → PlaybackTiming 参与音/窗口 → renderArpeggio → Seq 与导出；InspectorArpeggio/scrubproperty → PerformanceEditor 参数暂存。定位与测试见 [15](15-piano-expression.md)。
 
 0.14.1：新琶音保留续接音的时长事件供 MIDI 延音链累加，续接音仍不参与展开、不重触发；见 [钢琴演奏扩展](15-piano-expression.md)。
+
+## 0.15 快速小音符
+
+新增预设 action 为 `fast-grace`，复用 `Score::setGraceNote` 和 APPOGGIATURA 外观。时序模型在 Chord / PlaybackTiming / createGraceNotesPlayEvents；检视器在 InspectorNote；回归在 tst_midi 的 timedGrace 系列及 grace_playback_tests.inc。旧长倚音入口保持，拍前／拍上／拍后与外观独立，操作见用户说明，设计见 [15](15-piano-expression.md)。

@@ -795,6 +795,8 @@ class TestPerformanceEditor : public QObject, public MTest {
             QVERIFY(looped); getAction("loop")->setChecked(false);
             sequence->stopWait(); sequence->waitForStoppedRendering(); QApplication::processEvents();
             }
+      void graceInspectorAndNativePreset();
+      void graceRealSequencerPreRoll();
       void displaySettingsAcrossProcesses()
             {
             const QByteArray mode = qgetenv("PERFORMANCE_APPEARANCE_CHILD");
@@ -903,5 +905,6 @@ class TestPerformanceEditor : public QObject, public MTest {
                   }
             }
       };
+#include "grace_playback_tests.inc"
 QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"

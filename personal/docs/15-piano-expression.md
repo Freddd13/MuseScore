@@ -2,7 +2,7 @@
 
 ## 状态和边界
 
-0.14.0 为琶音对拍及通用参数交互。倚音、可调重音、rit./a tempo、震音力度包络、自由圆滑线和分手折线仍是后续批次；不能把计划当作已实现功能。
+0.14.0 为琶音对拍及通用参数交互，0.14.1 修复延音续接；0.15.0 增加快速小音符播放解释。可调重音、rit./a tempo、震音力度包络、自由圆滑线和分手折线仍是后续批次；不能把计划当作已实现功能。
 
 旧谱缺少个人属性时沿用上游行为。新增交互入口写入显式属性，复制与导入不批量改谱。个人属性属于原生 MSCX/MSCZ；其他版本重新保存可能删除扩展字段。
 
@@ -39,3 +39,15 @@ InspectorBase 只对追加的个人 Pid 采用播放中暂存。PerformanceEdito
 ## 0.14.1 延音续接
 
 排除排序不等于清空续接音的所有事件：collectNote 通过续接音单个 NoteEvent 的 len 累加延音总时长。新琶音为 tieBack 保留 `NoteEvent(0, 0, 1000)` 的时长体；collectNote 原有 tieBack 规则阻止独立 Note-on。`timedArpeggioTies` 检查两个相邻四分和弦低音连接时结束 tick 959（修复前 479）、无续接重触发且 Tie 不变。
+
+## 0.15.0 小音符外观与播放
+
+参数存于主 Chord，整组共享：`GRACE_PLAY_MODE` 为 0 原解释、1 拍前、2 拍上、3 拍后；`GRACE_DURATION_MODE` 为 0 每个小和弦毫秒、1 整组占主音比例；`GRACE_DURATION` 有限范围 1–1000，默认 65。缺字段仍是 0，不改变旧谱或原长倚音入口。小音符 Chord 的 `propertyDelegate` 把时序属性交给主 Chord；原 MSCX 倚音／时值／附点标签仍负责外观，`GRACE_APPEARANCE` 编码 NoteType、DurationType 和 dots，作为检视器一次原生撤销的属性，避免第二份外观数据。
+
+`fast-grace` QAction / 倚音调色板预设调用原 `Score::setGraceNote`，创建无斜线八分外观，写入 1 / 0 / 65。Note Inspector 可单独选外观、位置、单位和持续时间，数字与名称拖拽共用原属性事务。应用预设通过现有 queueProperty 批量提交一次 Undo，播放期间暂存至安全边界。
+
+`PlaybackTiming::graceNotes` 汇合前后小音符的原顺序，只选择自动且可发声的组；`graceSpanMs` 通过 TempoMap 求主音的实际记谱时间，整组最多取一半；拍前再限制到前一同声部音／休止起奏间隔的一半，保护曲首短前音。`graceStartTick` 使用与第一生成事件相同的 tick／千分比量化。`createGraceNotesPlayEvents` 在旧融合颤音判断后计算新事件，不重复播放已融合的小音符。拍前事件为负千分比，主音仍为零；拍上延迟主音；拍后在主音末端留出空间。固定毫秒受既有 MIDI tick / 千分比量化，实际间隔误差随主音时值变化，长音可能有数毫秒；首版保持既有事件表示。
+
+`collectNote` 仅缩短同声部紧邻的自动前音（沿延音链寻找其最后片段）；不修改乐谱时值、NoteEvent 保存值、其他声部或用户事件；延音链任一片段有用户事件时不裁剪。拍上／拍后把自动生成的震音／滑音事件放入主音窗口，外部延音保留结束点。`canBreakChunk` 复用琶音的提前窗口合块规则。起播、循环、MIDI 和音频统一走 0.14 的预备时间助手；没有给谱面插入时值或小节。
+
+模型入口为 `timedGracePositions`、`timedGracePrecedingAndCustom`、`timedGracePersistence`、`timedGraceRepeatJump`、`timedGraceMergedTrill`、`timedGraceGeneratedEvents`、`timedGraceTiedContinuations`、`timedGraceShortPredecessor`；真实 Qt 入口单独放在 `grace_playback_tests.inc`，测试名称拖拽、Shift、Esc、播放暂存、原生预设、单次撤销和真实 Seq 的曲首／中途拍前发声。结果以更新日志实际记录为准。

@@ -31,6 +31,9 @@ class InspectorNote : public InspectorElementBase {
       Ui::InspectorNote    n;
       Ui::InspectorChord   c;
       Ui::InspectorSegment s;
+      QWidget* _gracePanel = nullptr;
+      QLabel* _graceActual = nullptr;
+      void postInit() override;
 
       void block(bool);
       void valueChanged(int idx, bool reset) override;
@@ -54,4 +57,3 @@ class InspectorNote : public InspectorElementBase {
 
 } // namespace Ms
 #endif
-

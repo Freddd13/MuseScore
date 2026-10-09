@@ -24,6 +24,11 @@
 #include "libmscore/staff.h"
 #include "inspector.h"
 #include "inspectorNote.h"
+#include "scrubproperty.h"
+#include "libmscore/playbacktiming.h"
+#include "../performanceeditor/performanceeditor.h"
+#include <QPushButton>
+#include <QStandardItemModel>
 
 namespace Ms {
 
@@ -111,7 +116,7 @@ InspectorNote::InspectorNote(QWidget* parent)
       n.noteHeadType->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
       n.noteHeadType->setMinimumContentsLength(6);
 
-      const std::vector<InspectorItem> iiList = {
+      std::vector<InspectorItem> iiList = {
             { Pid::SMALL,          0, n.isSmall,       n.resetSmall         },
             { Pid::HEAD_SCHEME,    0, n.noteHeadScheme, n.resetNoteHeadScheme },
             { Pid::HEAD_GROUP,     0, n.noteHeadGroup, n.resetNoteHeadGroup },
@@ -131,6 +136,60 @@ InspectorNote::InspectorNote(QWidget* parent)
 
             { Pid::LEADING_SPACE,  2, s.leadingSpace,  s.resetLeadingSpace  },
             };
+      _gracePanel = new QWidget(c.panel);
+      auto graceLayout = new QGridLayout(_gracePanel);
+      auto chordLayout = qobject_cast<QGridLayout*>(c.panel->layout());
+      chordLayout->addWidget(_gracePanel, chordLayout->rowCount(), 0, 1, 3);
+      auto appearance = new QComboBox(_gracePanel);
+      appearance->setObjectName("graceAppearance");
+      for (const auto& item : std::vector<std::pair<QString, NoteType>> {
+            {tr("主音"), NoteType::NORMAL}, {tr("带斜线八分"), NoteType::ACCIACCATURA},
+            {tr("无斜线八分"), NoteType::APPOGGIATURA}, {tr("四分"), NoteType::GRACE4},
+            {tr("十六分"), NoteType::GRACE16}, {tr("三十二分"), NoteType::GRACE32},
+            {tr("后八分"), NoteType::GRACE8_AFTER}, {tr("后十六分"), NoteType::GRACE16_AFTER},
+            {tr("后三十二分"), NoteType::GRACE32_AFTER}})
+            {
+            auto duration = TDuration::DurationType::V_EIGHTH;
+            if (item.second == NoteType::GRACE4) duration = TDuration::DurationType::V_QUARTER;
+            if (item.second == NoteType::GRACE16 || item.second == NoteType::GRACE16_AFTER) duration = TDuration::DurationType::V_16TH;
+            if (item.second == NoteType::GRACE32 || item.second == NoteType::GRACE32_AFTER) duration = TDuration::DurationType::V_32ND;
+            appearance->addItem(item.first, item.second == NoteType::NORMAL ? 0 : Chord::graceAppearanceValue(item.second, TDuration(duration)));
+            }
+      graceLayout->addWidget(new QLabel(tr("小音符外观"), _gracePanel), 0, 0);
+      graceLayout->addWidget(appearance, 0, 1, 1, 2);
+      auto position = new QComboBox(_gracePanel);
+      position->setObjectName("gracePlayMode");
+      position->addItems({tr("原倚音解释"), tr("拍前（主音落正拍）"), tr("拍上（延后主音）"), tr("拍后（主音末端）")});
+      graceLayout->addWidget(new QLabel(tr("小音符播放位置"), _gracePanel), 1, 0);
+      graceLayout->addWidget(position, 1, 1, 1, 2);
+      auto unit = new QComboBox(_gracePanel);
+      unit->setObjectName("graceDurationMode");
+      unit->addItems({tr("每音毫秒"), tr("整组占主音比例")});
+      graceLayout->addWidget(new QLabel(tr("持续时间单位"), _gracePanel), 2, 0);
+      graceLayout->addWidget(unit, 2, 1, 1, 2);
+      iiList.push_back({Pid::GRACE_APPEARANCE, 1, appearance, nullptr});
+      iiList.push_back({Pid::GRACE_PLAY_MODE, 1, position, nullptr});
+      iiList.push_back({Pid::GRACE_DURATION_MODE, 1, unit, nullptr});
+      iiList.push_back(scrubProperty(_gracePanel, tr("小音符持续时间"), Pid::GRACE_DURATION, 1, 1000, 1, " ms", 1));
+      auto preset = new QPushButton(tr("应用快速拍前预设"), _gracePanel);
+      preset->setObjectName("graceApplyPreset");
+      graceLayout->addWidget(preset, graceLayout->rowCount(), 0, 1, 3);
+      connect(preset, &QPushButton::clicked, this, [this] {
+            for (auto element : *inspector->el()) {
+                  if (!element->isNote()) continue;
+                  auto chord = toNote(element)->chord();
+                  auto editor = mscore->performanceEditor();
+                  if (chord->isGrace()) {
+                        editor->queueProperty(chord, Pid::GRACE_APPEARANCE, Chord::graceAppearanceValue(NoteType::APPOGGIATURA, chord->durationType()));
+                        chord = toChord(chord->parent());
+                        }
+                  editor->queueProperty(chord, Pid::GRACE_PLAY_MODE, 1);
+                  editor->queueProperty(chord, Pid::GRACE_DURATION_MODE, 0);
+                  editor->queueProperty(chord, Pid::GRACE_DURATION, 65.0);
+                  }
+            });
+      _graceActual = new QLabel(_gracePanel); _graceActual->setWordWrap(true);
+      graceLayout->addWidget(_graceActual, graceLayout->rowCount(), 0, 1, 3);
       const std::vector<InspectorPanel> ppList = {
             { s.title, s.panel },
             { c.title, c.panel },
@@ -148,6 +207,26 @@ InspectorNote::InspectorNote(QWidget* parent)
       connect(n.stem,     SIGNAL(clicked()),     SLOT(stemClicked()));
       connect(n.beam,     SIGNAL(clicked()),     SLOT(beamClicked()));
       connect(n.tuplet,   SIGNAL(clicked()),     SLOT(tupletClicked()));
+      }
+
+void InspectorNote::postInit()
+      {
+      auto element = inspector->element();
+      if (!element || !element->isNote()) return;
+      auto chord = toNote(element)->chord();
+      bool isGrace = chord->isGrace();
+      auto main = isGrace ? toChord(chord->parent()) : chord;
+      _gracePanel->setVisible(isGrace || !main->graceNotes().isEmpty());
+      auto appearance = _gracePanel->findChild<QComboBox*>("graceAppearance");
+      appearance->setEnabled(isGrace);
+      if (auto model = qobject_cast<QStandardItemModel*>(appearance->model())) model->item(0)->setEnabled(!isGrace);
+      auto duration = _gracePanel->findChild<QDoubleSpinBox*>("graceDuration");
+      int mode = main->getProperty(Pid::GRACE_PLAY_MODE).toInt();
+      duration->setEnabled(mode != 0);
+      duration->setSuffix(main->getProperty(Pid::GRACE_DURATION_MODE).toInt() ? " %" : " ms");
+      _gracePanel->findChild<QComboBox*>("graceDurationMode")->setEnabled(mode != 0);
+      _graceActual->setText(mode ? tr("整组实际时间：%1 ms，最多占主音一半。自定义事件及融合颤音保持原解释。")
+            .arg(PlaybackTiming::graceSpanMs(main), 0, 'f', 2) : tr("沿用原倚音播放；可显式应用快速拍前预设。"));
       }
 
 //---------------------------------------------------------
@@ -180,6 +259,14 @@ void InspectorNote::valueChanged(int idx, bool reset)
 void InspectorNote::setElement()
       {
       Note* note = toNote(inspector->element());
+
+      // Legacy grace notes may have a different written duration from their
+      // original insertion type. Expose that exact value without converting it.
+      auto appearance = _gracePanel->findChild<QComboBox*>("graceAppearance");
+      { QSignalBlocker blocker(appearance);
+        while (appearance->count() > 9) appearance->removeItem(9);
+        int value = note->chord()->getProperty(Pid::GRACE_APPEARANCE).toInt();
+        if (appearance->findData(value) < 0) appearance->addItem(tr("原外观（保留记谱时值）"), value); }
 
       { QSignalBlocker blocker(n.velocity);
         n.velocity->setRange(note->veloType() == Note::ValueType::USER_VAL ? qMin(0, note->veloOffset()) : NoteVelocity::minOffset,
@@ -371,4 +458,3 @@ void InspectorNote::tupletClicked()
       }
 
 }
-

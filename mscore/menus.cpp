@@ -1277,6 +1277,7 @@ PalettePanel* MuseScore::newGraceNotePalettePanel()
       sp->setDrawGrid(true);
       static const IconAction gna[] = {
             { IconType::ACCIACCATURA,  "acciaccatura" },
+            { IconType::APPOGGIATURA,  "fast-grace" },
             { IconType::APPOGGIATURA,  "appoggiatura" },
             { IconType::GRACE4,        "grace4" },
             { IconType::GRACE16,       "grace16" },

@@ -16,6 +16,7 @@
 */
 
 #include <set>
+#include <limits>
 
 #include "arpeggio.h"
 #include "playbacktiming.h"
@@ -368,6 +369,38 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
       bool tieFor  = note->tieFor();
       bool tieBack = note->tieBack();
 
+      int anticipationEnd = std::numeric_limits<int>::max();
+      // Anticipations shorten only the immediately preceding same-voice
+      // automatic playback; stored durations and custom events stay intact.
+      if (!note->chord()->isGrace() && chord->playEventType() == PlayEventType::Auto) {
+            const Note* last = note;
+            bool automatic = true;
+            while (last->tieFor() && last->tieFor()->endNote() && last->tieFor()->endNote()->chord()->tick() > last->chord()->tick()) {
+                  last = last->tieFor()->endNote();
+                  if (last->chord()->playEventType() != PlayEventType::Auto) { automatic = false; break; }
+                  }
+            auto ending = last->chord();
+            int boundary = ending->tick().ticks() + ending->actualTicks().ticks();
+            int performed = ending->score()->repeatList().utick2tick(boundary + tickOffset);
+            bool jumps = performed != boundary;
+            auto nextSegment = jumps ? ending->score()->tick2segment(Fraction::fromTicks(performed), false, SegmentType::ChordRest)
+                                     : ending->segment()->next1(SegmentType::ChordRest);
+            if (!automatic) nextSegment = nullptr;
+            for (auto s = nextSegment; s; s = s->next1(SegmentType::ChordRest)) {
+                  auto element = s->element(ending->track());
+                  if (!element) continue;
+                  if (element->isChord()) {
+                        auto next = toChord(element);
+                        if (!graceNotesMerged(next) && next->getProperty(Pid::GRACE_PLAY_MODE).toInt() == 1 && PlaybackTiming::graceSpanMs(next) > 0) {
+                              int begin = PlaybackTiming::graceStartTick(next) + (jumps ? boundary + tickOffset - performed : tickOffset);
+                              anticipationEnd = begin - 1;
+                              }
+                        }
+                  break;
+                  }
+            }
+
+
       NoteEventList nel = note->playEvents();
       int nels = nel.size();
       for (int i = 0, pitch = note->ppitch(); i < nels; ++i) {
@@ -388,6 +421,8 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
             int off = on + (ticks * e.len())/1000 - 1;
             if (tieFor && i == nels - 1)
                   off += tieLen;
+
+            if (on <= anticipationEnd && off > anticipationEnd) off = anticipationEnd;
 
             // Get the velocity used for this note from the staff
             // This allows correct playback of tremolos even without SND enabled.
@@ -2106,6 +2141,7 @@ static QList<NoteEventList> renderChord(Chord* chord, int gateTime, int ontime, 
       else
             renderChordArticulation(chord, ell, gateTime);
 
+      bool explicitGrace = chord->getProperty(Pid::GRACE_PLAY_MODE).toInt() && (ontime || trailtime);
       // Check each note and apply gateTime
       for (unsigned i = 0; i < notes; ++i) {
             NoteEventList* el = &ell[i];
@@ -2113,13 +2149,38 @@ static QList<NoteEventList> renderChord(Chord* chord, int gateTime, int ontime, 
                   el->clear();
                   continue;
                   }
+            auto note = chord->notes()[i];
+            int localTrail = explicitGrace && note->tieFor() ? 0 : trailtime;
+            if (explicitGrace && note->tieBack() && el->size() == 1 && !isGlissandoFor(note)) {
+                  el->front().setOntime(0); el->front().setLen(1000 - localTrail);
+                  }
+            else if (arpeggio && explicitGrace) {
+                  for (auto& event : *el) {
+                        event.setOntime(event.ontime() + ontime);
+                        event.setLen(qMax(0, 1000 - localTrail - event.ontime()));
+                        }
+                  }
+            else if (explicitGrace && (ontime || localTrail)) {
+                  // Fit automatically generated tremolo/glissando events into
+                  // this chord's remaining window. Later double-tremolo events
+                  // already belong to its partner and retain their times.
+                  for (auto& event : *el) {
+                        if (event.ontime() < 0 || event.ontime() >= 1000) continue;
+                        int oldEnd = event.ontime() + event.len();
+                        int available = 1000 - ontime - localTrail;
+                        int begin = ontime + qRound(event.ontime() * available / 1000.0);
+                        int end = oldEnd <= 1000 ? ontime + qRound(oldEnd * available / 1000.0) : oldEnd;
+                        event.setOntime(begin); event.setLen(qMax(0, end - begin));
+                        }
+                  }
             if (arpeggio)
                   continue; // don't add extra events and apply gateTime to arpeggio
 
             // If we are here then we still need to render the note.
             // Render its body if necessary and apply gateTime.
             if (el->size() == 0 && chord->tremoloChordType() != TremoloChordType::TremoloSecondNote) {
-                  el->append(NoteEvent(0, ontime, 1000 - ontime - trailtime));
+                  int begin = explicitGrace && note->tieBack() ? 0 : ontime;
+                  el->append(NoteEvent(0, begin, 1000 - begin - localTrail));
                   }
             if (trailtime == 0) // if trailtime is non-zero that means we have graceNotesAfter, so we don't need additional gate time.
                   for (NoteEvent& e : ell[i])
@@ -2162,6 +2223,29 @@ void Score::createGraceNotesPlayEvents(const Fraction& tick, Chord* chord, int& 
             }
       // return immediately if the chord has a trill or articulation which effectively plays the graces notes.
       if (graceNotesMerged(chord)) {
+            return;
+            }
+      int mode = chord->getProperty(Pid::GRACE_PLAY_MODE).toInt();
+      if (mode && chord->playEventType() == PlayEventType::Auto) {
+            auto graces = PlaybackTiming::graceNotes(chord);
+            if (graces.isEmpty()) return;
+            int duration = chord->actualTicks().ticks();
+            auto map = tempomap();
+            double start = map->tick2time(tick.ticks());
+            double span = PlaybackTiming::graceSpanMs(chord) / 1000.0;
+            if (mode == 1) start -= span;
+            else if (mode == 3) start = map->tick2time(tick.ticks() + duration) - span;
+            for (int i = 0; i < graces.size(); ++i) {
+                  int begin = PlaybackTiming::tickAtTime(this, start + span * i / graces.size());
+                  int end = PlaybackTiming::tickAtTime(this, start + span * (i + 1) / graces.size());
+                  int on = qRound(1000.0 * (begin - tick.ticks()) / duration);
+                  int len = qRound(1000.0 * (end - begin) / duration);
+                  QList<NoteEventList> lists;
+                  for (auto note : graces[i]->notes()) { Q_UNUSED(note); NoteEventList list; list.append(NoteEvent(0, on, len)); lists.append(list); }
+                  graces[i]->setNoteEventLists(lists);
+                  }
+            if (mode == 2) ontime = qBound(0, qRound(1000.0 * (PlaybackTiming::tickAtTime(this, start + span) - tick.ticks()) / duration), 500);
+            if (mode == 3) trailtime = qBound(0, qRound(1000.0 * (tick.ticks() + duration - PlaybackTiming::tickAtTime(this, start)) / duration), 500);
             return;
             }
       // if there are graceNotesBefore and also graceNotesAfter, and the before grace notes are
@@ -2551,7 +2635,9 @@ bool MidiRenderer::canBreakChunk(const Measure* last)
                         for (int voice = 0; voice < VOICES; ++voice) {
                               auto element = segment->element(staff->idx() * VOICES + voice);
                               if (!element || !element->isChord()) continue;
-                              auto a = PlaybackTiming::arpeggio(toChord(element));
+                              auto nextChord = toChord(element);
+                              if (nextChord->getProperty(Pid::GRACE_PLAY_MODE).toInt() == 1 && PlaybackTiming::graceStartTick(nextChord) < next->tick().ticks()) return false;
+                              auto a = PlaybackTiming::arpeggio(nextChord);
                               if (a) {
                                     double earliest = a->offsetMs();
                                     if (a->timingMode() == 2) earliest -= PlaybackTiming::intervalMs(a) * (PlaybackTiming::arpeggioNotes(a).size() - 1);

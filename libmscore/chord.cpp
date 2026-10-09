@@ -46,6 +46,7 @@
 #include "undo.h"
 #include "utils.h"
 #include "xml.h"
+#include <cmath>
 
 namespace Ms {
 
@@ -258,6 +259,9 @@ Chord::Chord(const Chord& c, bool link)
       _stemSlash     = 0;
       _tremolo       = 0;
 
+      _gracePlayMode = c._gracePlayMode;
+      _graceDurationMode = c._graceDurationMode;
+      _graceDuration = c._graceDuration;
       _graceIndex     = c._graceIndex;
       _noStem         = c._noStem;
       _playEventType  = c._playEventType;
@@ -995,6 +999,11 @@ void Chord::write(XmlWriter& xml) const
       writeBeam(xml);
       xml.stag(this);
       ChordRest::writeProperties(xml);
+      if (!isGrace()) {
+            writeProperty(xml, Pid::GRACE_PLAY_MODE);
+            writeProperty(xml, Pid::GRACE_DURATION_MODE);
+            writeProperty(xml, Pid::GRACE_DURATION);
+            }
       for (const Articulation* a : _articulations)
             a->write(xml);
       switch (_noteType) {
@@ -1078,6 +1087,9 @@ bool Chord::readProperties(XmlReader& e)
             note->read(e);
             add(note);
             }
+      else if (tag == "gracePlayMode") readProperty(tag, e, Pid::GRACE_PLAY_MODE);
+      else if (tag == "graceDurationMode") readProperty(tag, e, Pid::GRACE_DURATION_MODE);
+      else if (tag == "graceDuration") readProperty(tag, e, Pid::GRACE_DURATION);
       else if (ChordRest::readProperties(e))
             ;
       else if (tag == "Stem") {
@@ -2819,9 +2831,29 @@ void Chord::localSpatiumChanged(qreal oldValue, qreal newValue)
 //   getProperty
 //---------------------------------------------------------
 
+Element* Chord::propertyDelegate(Pid pid)
+      {
+      if (isGrace() && parent() && parent()->isChord()
+          && (pid == Pid::GRACE_PLAY_MODE || pid == Pid::GRACE_DURATION_MODE || pid == Pid::GRACE_DURATION)) return parent();
+      return ChordRest::propertyDelegate(pid);
+      }
+
+int Chord::graceAppearanceValue(NoteType type, const TDuration& duration)
+      {
+      // A single inspector transaction must restore both the type and its
+      // written duration, including legacy dotted/custom appearances.
+      return int(type) | (int(duration.type()) << 8) | (duration.dots() << 16);
+      }
+
 QVariant Chord::getProperty(Pid propertyId) const
       {
+      if (isGrace() && parent() && parent()->isChord()
+          && (propertyId == Pid::GRACE_PLAY_MODE || propertyId == Pid::GRACE_DURATION_MODE || propertyId == Pid::GRACE_DURATION)) return parent()->getProperty(propertyId);
       switch (propertyId) {
+            case Pid::GRACE_PLAY_MODE: return _gracePlayMode;
+            case Pid::GRACE_DURATION_MODE: return _graceDurationMode;
+            case Pid::GRACE_DURATION: return _graceDuration;
+            case Pid::GRACE_APPEARANCE: return isGrace() ? graceAppearanceValue(noteType(), durationType()) : 0;
             case Pid::NO_STEM:        return noStem();
             case Pid::STEM_DIRECTION: return QVariant::fromValue<Direction>(stemDirection());
             default:
@@ -2836,6 +2868,10 @@ QVariant Chord::getProperty(Pid propertyId) const
 QVariant Chord::propertyDefault(Pid propertyId) const
       {
       switch (propertyId) {
+            case Pid::GRACE_PLAY_MODE: return 0;
+            case Pid::GRACE_DURATION_MODE: return 0;
+            case Pid::GRACE_DURATION: return 65.0;
+            case Pid::GRACE_APPEARANCE: return isGrace() ? graceAppearanceValue(NoteType::APPOGGIATURA, TDuration(TDuration::DurationType::V_EIGHTH)) : 0;
             case Pid::NO_STEM:        return false;
             case Pid::STEM_DIRECTION: return QVariant::fromValue<Direction>(Direction::AUTO);
             default:
@@ -2849,7 +2885,23 @@ QVariant Chord::propertyDefault(Pid propertyId) const
 
 bool Chord::setProperty(Pid propertyId, const QVariant& v)
       {
+      if (auto delegate = propertyDelegate(propertyId)) return delegate->setProperty(propertyId, v);
       switch (propertyId) {
+            case Pid::GRACE_PLAY_MODE: _gracePlayMode = qBound(0, v.toInt(), 3); break;
+            case Pid::GRACE_DURATION_MODE: _graceDurationMode = qBound(0, v.toInt(), 1); break;
+            case Pid::GRACE_DURATION:
+                  if (!std::isfinite(v.toDouble())) return false;
+                  _graceDuration = qBound(1.0, v.toDouble(), 1000.0); break;
+            case Pid::GRACE_APPEARANCE: {
+                  if (!isGrace()) return false;
+                  int value = v.toInt();
+                  int duration = (value >> 8) & 255, dots = value >> 16;
+                  if (value < 0 || duration > int(TDuration::DurationType::V_1024TH) || dots > 4) return false;
+                  auto type = NoteType(value & 255);
+                  if (type != NoteType::ACCIACCATURA && type != NoteType::APPOGGIATURA && type != NoteType::GRACE4 && type != NoteType::GRACE16 && type != NoteType::GRACE32 && type != NoteType::GRACE8_AFTER && type != NoteType::GRACE16_AFTER && type != NoteType::GRACE32_AFTER) return false;
+                  TDuration written{TDuration::DurationType(duration)}; written.setDots(dots);
+                  setNoteType(type); setDurationType(written); setTicks(written.fraction()); break;
+                  }
             case Pid::NO_STEM:
                   setNoStem(v.toBool());
                   break;

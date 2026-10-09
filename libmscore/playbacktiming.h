@@ -13,6 +13,10 @@ namespace PlaybackTiming {
 Arpeggio* arpeggio(const Chord*);
 QList<Note*> arpeggioNotes(const Arpeggio*);
 double intervalMs(const Arpeggio*);
+QList<Chord*> graceNotes(const Chord*);
+double graceSpanMs(const Chord*);
+int tickAtTime(const Score*, double seconds);
+int graceStartTick(const Chord*);
 // Signed time before score tick zero uses the initial tempo, not a repeat lookup.
 double time(const Score*, int utick);
 int startTick(const EventMap&, int target, const Score*);

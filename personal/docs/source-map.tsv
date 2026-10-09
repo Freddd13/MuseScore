@@ -4,10 +4,10 @@ topic	path	symbol	line	role	tests
 主应用初始化	mscore/musescore.cpp	int runApplication(	8819	应用初始化与CLI	-
 命令分发	mscore/musescore.cpp	void MuseScore::cmd(QAction* a)	6839	状态检查与事务	-
 主窗口更新	mscore/musescore.cpp	void MuseScore::endCmd(bool undoRedo)	6917	UI与插件结束通知	-
-快捷键	mscore/shortcut.cpp	Shortcut::getShortcut(	4397	命令注册与查询	-
+快捷键	mscore/shortcut.cpp	Shortcut::getShortcut(	4408	命令注册与查询	-
 视图命令	mscore/scoreview.cpp	void ScoreView::cmd(const char* s)	2247	视图本地命令表	-
 事件与输入模式	mscore/events.cpp	void ScoreView::changeState(ViewState s)	1132	交互状态切换	-
-核心命令	libmscore/cmd.cpp	void Score::cmd(const QAction* a, EditData& ed)	4492	核心命令分发	mtest/libmscore/tools
+核心命令	libmscore/cmd.cpp	void Score::cmd(const QAction* a, EditData& ed)	4499	核心命令分发	mtest/libmscore/tools
 编辑事务开始	libmscore/cmd.cpp	void Score::startCmd()	200	开启用户撤销单元	mtest/libmscore/readwriteundoreset
 编辑事务结束	libmscore/cmd.cpp	void Score::endCmd(bool rollback)	240	布局及状态同步	mtest/libmscore/readwriteundoreset
 撤销栈	libmscore/undo.cpp	void UndoStack::push(UndoCommand* cmd, EditData* ed)	277	记录并执行undo命令	mtest/libmscore/readwriteundoreset
@@ -58,9 +58,9 @@ MIDI左右手拆分	importexport/midiimport/importmidi_lrhand.h	void splitIntoLe
 起音参数	mscore/pianoroll/pianolevelsfilter.cpp	void PianoLevelFilterOnTime::setValue(	72	ChangeNoteEvent	-
 主窗口键盘	mscore/pianotools.cpp	PianoTools::PianoTools(	463	独立虚拟钢琴	-
 实时MIDI输入	mscore/musescore.cpp	void MuseScore::midiNoteReceived(	3772	硬件与UI输入转发	-
-生成播放事件	libmscore/rendermidi.cpp	void Score::createPlayEvents(Chord* chord)	2259	Auto/User事件策略	mtest/libmscore/midi
-播放MIDI渲染	libmscore/rendermidi.cpp	void MidiRenderer::renderScore(	2408	分块渲染	mtest/libmscore/midi
-踏板播放	libmscore/rendermidi.cpp	void MidiRenderer::renderSpanners(	1114	踏板控制器及跨时元素	mtest/libmscore/spanners
+生成播放事件	libmscore/rendermidi.cpp	void Score::createPlayEvents(Chord* chord)	2343	Auto/User事件策略	mtest/libmscore/midi
+播放MIDI渲染	libmscore/rendermidi.cpp	void MidiRenderer::renderScore(	2492	分块渲染	mtest/libmscore/midi
+踏板播放	libmscore/rendermidi.cpp	void MidiRenderer::renderSpanners(	1149	踏板控制器及跨时元素	mtest/libmscore/spanners
 播放事件收集	mscore/seq.cpp	void Seq::collectEvents(int utick)	1514	缓存与异步结果	-
 音频回调	mscore/seq.cpp	void Seq::process(unsigned framesPerPeriod, float* buffer)	1111	实时事件调度与合成	-
 播放界面心跳	mscore/seq.cpp	void Seq::heartBeatTimeout()	2587	输入消息与显示同步	-
@@ -141,4 +141,8 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 琶音时序	libmscore/playbacktiming.cpp	Arpeggio* arpeggio(	18	跨谱表参与音和提前窗口	mtest/libmscore/midi/tst_midi.cpp
 琶音检视器	mscore/inspector/inspectorArpeggio.cpp	void InspectorArpeggio::postInit()	65	实际间隔与旧比率提示	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
 参数暂存	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::queueProperty(	610	播放中暂存/停播和保存提交	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
-琶音延音回归	mtest/libmscore/midi/tst_midi.cpp	void TestMidi::timedArpeggioTies()	598	防止续接时长丢失/不重触发	mtest/libmscore/midi/tst_midi.cpp
+琶音延音回归	mtest/libmscore/midi/tst_midi.cpp	void TestMidi::timedArpeggioTies()	832	防止续接时长丢失/不重触发	mtest/libmscore/midi/tst_midi.cpp
+小音符时序	libmscore/playbacktiming.cpp	double graceSpanMs(	83	速度图与整组上限	mtest/libmscore/midi/tst_midi.cpp
+倚音播放解释	libmscore/rendermidi.cpp	void Score::createGraceNotesPlayEvents(	2200	旧融合与新位置解释	mtest/libmscore/midi/tst_midi.cpp
+小音符检视器	mscore/inspector/inspectorNote.cpp	void InspectorNote::postInit()	212	外观/时间分离及实际时间	mtest/libmscore/midi/tst_midi.cpp
+小音符反复回归	mtest/libmscore/midi/tst_midi.cpp	void TestMidi::timedGraceRepeatJump()	652	按实际跳转缩短同声部前音	mtest/libmscore/midi/tst_midi.cpp
