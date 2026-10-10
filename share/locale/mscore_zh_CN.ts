@@ -29894,6 +29894,18 @@ failed</source>
         <source>Start center</source>
         <translation>启动中心</translation>
     </message>
+    <message>
+        <source>Tap BPM</source>
+        <translation>Tap BPM 测速</translation>
+    </message>
+    <message>
+        <source>Tap tempo</source>
+        <translation>点击测速</translation>
+    </message>
+    <message>
+        <source>Estimate tempo without changing the score</source>
+        <translation>测量速度，不修改乐谱</translation>
+    </message>
 </context>
 <context>
     <name>awlutils</name>
@@ -36838,6 +36850,83 @@ This score already has part scores. Changing local time signatures while part sc
         <location filename="../../libmscore/vibrato.cpp" line="35"/>
         <source>Tremolo sawtooth wide</source>
         <translation>震音锯齿宽</translation>
+    </message>
+</context>
+<context>
+    <name>Ms::TapTempo</name>
+    <message>
+        <source>Tap tempo</source>
+        <translation>点击测速</translation>
+    </message>
+    <message>
+        <source>Tap BPM</source>
+        <translation>Tap BPM 测速</translation>
+    </message>
+    <message>
+        <source>Estimate tempo without changing the score</source>
+        <translation>测量速度，不修改乐谱</translation>
+    </message>
+    <message>
+        <source>Quarter BPM: %1
+Tap BPM: %2</source>
+        <translation>四分音符 BPM：%1
+点击单位 BPM：%2</translation>
+    </message>
+    <message>
+        <source>Tap at least four beats</source>
+        <translation>点击至少四拍开始估计</translation>
+    </message>
+    <message>
+        <source>%1 · %2 taps</source>
+        <translation>%1 · 已点击 %2 拍</translation>
+    </message>
+    <message>
+        <source>Starting</source>
+        <translation>起步</translation>
+    </message>
+    <message>
+        <source>Stable</source>
+        <translation>稳定</translation>
+    </message>
+    <message>
+        <source>Unstable</source>
+        <translation>不稳定</translation>
+    </message>
+    <message>
+        <source>Metronome is following the score</source>
+        <translation>节拍器正在跟随乐谱，停播后可应用</translation>
+    </message>
+    <message>
+        <source>Independent metronome range: 20–400 quarter BPM</source>
+        <translation>独立节拍器范围：四分音符 BPM 20–400</translation>
+    </message>
+    <message>
+        <source>Eighth note</source>
+        <translation>八分音符</translation>
+    </message>
+    <message>
+        <source>Quarter note</source>
+        <translation>四分音符</translation>
+    </message>
+    <message>
+        <source>Dotted quarter</source>
+        <translation>附点四分音符</translation>
+    </message>
+    <message>
+        <source>Half note</source>
+        <translation>二分音符</translation>
+    </message>
+    <message>
+        <source>Reset</source>
+        <translation>重置</translation>
+    </message>
+    <message>
+        <source>TAP</source>
+        <translation>TAP</translation>
+    </message>
+    <message>
+        <source>Set independent metronome</source>
+        <translation>设为独立节拍器</translation>
     </message>
 </context>
 </TS>

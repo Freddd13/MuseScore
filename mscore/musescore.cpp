@@ -70,6 +70,7 @@
 #include "textpalette.h"
 #include "texttools.h"
 #include "timedialog.h"
+#include "taptempo/taptempo.h"
 #include "timeline.h"
 #include "toolbuttonmenu.h"
 #include "tourhandler.h"
@@ -331,6 +332,7 @@ const std::list<const char*> MuseScore::_allPlaybackControlEntries {
             "",
             "repeat",
             "independent-metronome",
+            "tap-tempo",
             "pan",
             "metronome",
             "playback-highlight",
@@ -1160,6 +1162,9 @@ void MuseScore::populatePlaybackControls()
                   else if (QString(s) == "play") {
                         _playButton = new AccessibleToolButton(transportTools, getAction("play"));
                         transportTools->addWidget(_playButton);
+                        }
+                  else if (QString(s) == "tap-tempo") {
+                        transportTools->addWidget(TapTempo::instance(this)->createButton(transportTools, getAction("tap-tempo")));
                         }
                   else if (QString(s) == "independent-metronome") {
                         QAction* action = getAction("independent-metronome");
@@ -2230,6 +2235,7 @@ MuseScore::MuseScore()
       menuTools = mb->addMenu("");
       menuTools->setObjectName("Tools");
 
+      menuTools->addAction(getAction("tap-tempo"));
       menuTools->addAction(getAction("transpose"));
       menuTools->addSeparator();
       menuTools->addAction(getAction("explode"));
@@ -7380,6 +7386,8 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
             ;
       else if (cmd == "countin")    // no action
             ;
+      else if (cmd == "tap-tempo")
+            TapTempo::instance(this)->tap();
       else if (cmd == "independent-metronome")
             seq->setIndependentMetronomeEnabled(a->isChecked());
       else if (cmd == "playback-speed-increase") {

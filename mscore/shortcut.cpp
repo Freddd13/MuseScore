@@ -3360,6 +3360,14 @@ Shortcut Shortcut::_sc[] = {
       {
          MsWidget::MAIN_WINDOW,
          STATE_DISABLED | STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY | STATE_EDIT,
+         "tap-tempo",
+         QT_TRANSLATE_NOOP("action","Tap BPM"),
+         QT_TRANSLATE_NOOP("action","Tap tempo"),
+         QT_TRANSLATE_NOOP("action","Estimate tempo without changing the score")
+         },
+      {
+         MsWidget::MAIN_WINDOW,
+         STATE_DISABLED | STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY | STATE_EDIT,
          "independent-metronome",
          QT_TRANSLATE_NOOP("action","Independent Metronome"),
          QT_TRANSLATE_NOOP("action","Toggle independent metronome"),
