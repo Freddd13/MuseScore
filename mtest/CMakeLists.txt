@@ -196,6 +196,7 @@ subdirs (
         mscore/palette
         mscore/performanceeditor
         mscore/scoreobserver
+        mscore/p0native
         mscore/pluginhost
         importmidi
         capella

@@ -64,7 +64,7 @@ ScoreObserver::ScoreObserver(QObject* parent) : QObject(parent)
       watchSurface();
       }
 
-ScoreObserver::~ScoreObserver() { clearAllPreviews(); }
+ScoreObserver::~ScoreObserver() { cancelReadOnlyJob(); clearAllPreviews(); }
 
 void ScoreObserver::watchSurface()
       {
@@ -97,6 +97,7 @@ void ScoreObserver::setScore(Score* wrapped)
       for (const auto& connection : _scoreConnections) disconnect(connection);
       _scoreConnections.clear();
       _score = score;
+      ++_analysisSession;
       _index.clear();
       _firstTrack = _endTrack = -1;
       _tick = -1;

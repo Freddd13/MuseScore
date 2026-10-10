@@ -1,10 +1,10 @@
 topic	path	symbol	line	role	tests
 启动	main/main.cpp	int main(	56	资源与应用入口	-
 模块装配	main/modulessetup.cpp	void ModulesSetup::setup()	52	可选模块注册	-
-主应用初始化	mscore/musescore.cpp	int runApplication(	8839	应用初始化与CLI	-
-命令分发	mscore/musescore.cpp	void MuseScore::cmd(QAction* a)	6847	状态检查与事务	-
-主窗口更新	mscore/musescore.cpp	void MuseScore::endCmd(bool undoRedo)	6925	UI与插件结束通知	-
-快捷键	mscore/shortcut.cpp	Shortcut::getShortcut(	4420	命令注册与查询	-
+主应用初始化	mscore/musescore.cpp	int runApplication(	8847	应用初始化与CLI	-
+命令分发	mscore/musescore.cpp	void MuseScore::cmd(QAction* a)	6853	状态检查与事务	-
+主窗口更新	mscore/musescore.cpp	void MuseScore::endCmd(bool undoRedo)	6931	UI与插件结束通知	-
+快捷键	mscore/shortcut.cpp	Shortcut::getShortcut(	4428	命令注册与查询	-
 视图命令	mscore/scoreview.cpp	void ScoreView::cmd(const char* s)	2248	视图本地命令表	-
 事件与输入模式	mscore/events.cpp	void ScoreView::changeState(ViewState s)	1162	交互状态切换	-
 核心命令	libmscore/cmd.cpp	void Score::cmd(const QAction* a, EditData& ed)	4501	核心命令分发	mtest/libmscore/tools
@@ -57,7 +57,7 @@ MIDI左右手拆分	importexport/midiimport/importmidi_lrhand.h	void splitIntoLe
 力度曲线	mscore/pianoroll/pianolevels.cpp	void PianoLevels::adjustLevelLerp(	1182	批量线性调整	-
 起音参数	mscore/pianoroll/pianolevelsfilter.cpp	void PianoLevelFilterOnTime::setValue(	72	ChangeNoteEvent	-
 主窗口键盘	mscore/pianotools.cpp	PianoTools::PianoTools(	463	独立虚拟钢琴	-
-实时MIDI输入	mscore/musescore.cpp	void MuseScore::midiNoteReceived(	3780	硬件与UI输入转发	-
+实时MIDI输入	mscore/musescore.cpp	void MuseScore::midiNoteReceived(	3786	硬件与UI输入转发	-
 生成播放事件	libmscore/rendermidi.cpp	void Score::createPlayEvents(Chord* chord)	2433	Auto/User事件策略	mtest/libmscore/midi
 播放MIDI渲染	libmscore/rendermidi.cpp	void MidiRenderer::renderScore(	2582	分块渲染	mtest/libmscore/midi
 踏板播放	libmscore/rendermidi.cpp	void MidiRenderer::renderSpanners(	1166	踏板控制器及跨时元素	mtest/libmscore/spanners
@@ -76,17 +76,17 @@ MIDI左右手拆分	importexport/midiimport/importmidi_lrhand.h	void splitIntoLe
 测试目标	mtest/CreateMtestTarget.cmake	add_test(${TARGET}	105	CTest与QTest接线	-
 脚本测试跳过	mtest/testscript/tst_runscripts.cpp	QSKIP(	52	当前不可算运行覆盖	mtest/testscript
 插件实时观察	mscore/plugin/api/scoreobserver.cpp	ScoreObserver::ScoreObserver(	51	GUI 心跳与生命周期；不修改音频回调	mtest/mscore/scoreobserver
-持续音缓存	mscore/plugin/api/scoreobserver.cpp	void ScoreObserver::ensureIndex(	157	内容状态/范围失效，每声部二分持续音	mtest/mscore/scoreobserver
+持续音缓存	mscore/plugin/api/scoreobserver.cpp	void ScoreObserver::ensureIndex(	158	内容状态/范围失效，每声部二分持续音	mtest/mscore/scoreobserver
 屏幕临时音符颜色	mscore/scoreview.cpp	void ScoreView::setNotePreviewColors(	5749	按 owner 隔离的屏幕色层，旧新局部重绘	mtest/mscore/scoreobserver
 和声辅助插件	share/plugins/HarmonyAssistant/HarmonyAssistant_MS3.qml	    function followNativePosition()	918	插件音乐解释、级数、功能音和 GUI 播放合并	mtest/mscore/scoreobserver
-踏板/琶音上下文	mscore/plugin/api/scoreobserver.cpp	QVariantMap ScoreObserver::contextSnapshot(	328	即时音/上下文分离，小节/休止/踏板边界	mtest/mscore/scoreobserver
-谱面屏幕标注	mscore/plugin/api/scoreobserver.cpp	void ScoreObserver::applyPreview(	408	独立和声变化标记、原谱优先与两层避让	mtest/mscore/pluginhost
+踏板/琶音上下文	mscore/plugin/api/scoreobserver.cpp	QVariantMap ScoreObserver::contextSnapshot(	329	即时音/上下文分离，小节/休止/踏板边界	mtest/mscore/scoreobserver
+谱面屏幕标注	mscore/plugin/api/scoreobserver.cpp	void ScoreObserver::applyPreview(	409	独立和声变化标记、原谱优先与两层避让	mtest/mscore/pluginhost
 插件停靠状态	mscore/plugin/qmlplugin.cpp	void QmlPlugin::attachPanelDock(	33	实际区域/悬浮通知，可选横条高度	mtest/mscore/pluginhost
 插件菜单/析构回归	mtest/mscore/pluginhost/tst_pluginhost.cpp	class TestPluginHost	43	真实 Qt 主窗口、菜单、重排和停靠	mtest/mscore/pluginhost
-plugin-preview	mscore/plugin/api/scoreobserver.cpp	ScoreObserver::setActiveScorePreview	593	固定区间高亮，不复制全谱色表	mtest/mscore/pluginhost/tst_pluginhost.cpp
+plugin-preview	mscore/plugin/api/scoreobserver.cpp	ScoreObserver::setActiveScorePreview	594	固定区间高亮，不复制全谱色表	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-preview	mscore/scoreview.cpp	ScoreView::activateNotePreview	5769	固定记号点击命中与弱目标转发	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-preview	mscore/plugin/qmlplugin.cpp	QmlPlugin::focusPanel	53	聚焦已有插件窗口，保留停靠状态	mtest/mscore/pluginhost/tst_pluginhost.cpp
-plugin-display	mscore/plugin/api/scoreobserver.cpp	static qreal previewTickX	392	变化节拍定位，无新音时插值	mtest/mscore/pluginhost/tst_pluginhost.cpp
+plugin-display	mscore/plugin/api/scoreobserver.cpp	static qreal previewTickX	393	变化节拍定位，无新音时插值	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-display	mscore/plugin/qmlplugin.cpp	QmlPlugin::showDetailPanel	68	共享控件的单辅助停靠窗口	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-display	mscore/scoreview.cpp	QRectF ScoreView::previewEditBounds	1229	原生编辑/拖动优先区域	mtest/mscore/pluginhost/tst_pluginhost.cpp
 SF2/SF3解析	audio/midi/fluid/sfont.cpp	bool SFont::load()	840	标准RIFF/LIST边界与HYDRA元数据	mtest/audio/sfloader
@@ -98,10 +98,10 @@ SF2文件跳转	audio/midi/fluid/sfont.cpp	void SFont::safe_fseek(qint64 ofs)	18
 自动节奏策略	libmscore/inputrhythm.cpp	bool InputRhythm::normalize	61	局部链比较/重组/数值选区与光标恢复	mtest/libmscore/inputrhythm
 复杂对象保护	libmscore/inputrhythm.cpp	bool InputRhythm::eligible	42	自定义事件和复杂附着保守跳过	mtest/libmscore/inputrhythm
 和弦输入延音链	libmscore/inputrhythm.cpp	Note* InputRhythm::addToChain	160	新音高覆盖整链/延音/逻辑光标	mtest/libmscore/inputrhythm
-自动记谱开关	mscore/musescore.cpp	QAction* autoRhythm	2261	工具菜单/默认true/应用偏好	mtest/mscore/pluginhost
+自动记谱开关	mscore/musescore.cpp	QAction* autoRhythm	2267	工具菜单/默认true/应用偏好	mtest/mscore/pluginhost
 卷帘记谱输入	mscore/pianoroll/pianoview.cpp	QVector<Note*> PianoView::addNote	4037	明确输入与普通粘贴分开/重新查找片段	mtest/mscore/pluginhost
 rhythm-rules	libmscore/durationtype.cpp	std::vector<TDuration> toRhythmicDurationList	526	Simple/compound meter duration spelling; see personal guide 13	mtest/libmscore/inputrhythm
-restored-rhythm-menu	mscore/musescore.cpp	void MuseScore::updateMenus()	2742	Restore personal action into old workspace menus	mtest/mscore/pluginhost
+restored-rhythm-menu	mscore/musescore.cpp	void MuseScore::updateMenus()	2748	Restore personal action into old workspace menus	mtest/mscore/pluginhost
 text-font-fallback	libmscore/textbase.cpp	QFont TextFragment::font(	851	ScoreText music font vs ordinary Qt font merging	mtest/libmscore/text
 music-text-fallback	libmscore/sym.cpp	const char* ScoreFont::fallbackTextFont()	7156	Bravura Text fallback; not CJK title fallback	-
 harmony-regions	share/plugins/HarmonyAssistant/Timeline.js	function createBuilder	47	Numeric interval builder and manual overlays	mtest/mscore/scoreobserver
@@ -130,7 +130,7 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 独立纵向视窗	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::zoomVertical	157	音高/参数各自缩放/滚动条同步	mtest/mscore/performanceeditor
 滚轮力度	mscore/performanceeditor/performancewheel.cpp	bool PerformanceEditor::wheelVelocity	26	单音细粗调/端点锁定/临时模式与原生预览	mtest/mscore/performanceeditor
 滚轮撤销段	mscore/performanceeditor/performancewheel.cpp	void PerformanceEditor::finishWheel	13	300ms合并/生命周期与一次提交	mtest/mscore/performanceeditor
-个人工具栏	mscore/musescore.cpp	void MuseScore::populateAlternativeOperations	708	Evolution其他选项栏复用演奏编辑器QAction	mtest/mscore/performanceeditor
+个人工具栏	mscore/musescore.cpp	void MuseScore::populateAlternativeOperations	710	Evolution其他选项栏复用演奏编辑器QAction	mtest/mscore/performanceeditor
 个人启动标识	mscore/mssplashscreen.cpp	_miscText(QString	54	上游版本与Kumo分支/作者/个人版本	mtest/mscore/performanceeditor
 个人帮助标识	mscore/musescoredialogs.cpp	AboutBoxDialog::AboutBoxDialog()	144	关于/复制版本/个人标签链接	mtest/mscore/performanceeditor
 个人版本生成	personal/branding.cmake	file(STRINGS	3	单一VERSION源/独立生成头/自动重配置	mtest/mscore/performanceeditor
@@ -171,7 +171,7 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 谱带鼠标隔离	mscore/performanceeditor/performanceoverlay.cpp	bool PerformanceEditor::overlayEvent	47	完整frame阻断／原生双向选音	mtest/mscore/performanceeditor
 力度柱宽	mscore/performanceeditor/performancesettings.cpp	bool PerformanceAppearance::edit	90	1–8逻辑像素／取消和默认／独立设置	mtest/mscore/performanceeditor
 谱带重叠回归	mtest/mscore/performanceeditor/performance_controls_tests.inc	void reaperStemsAndStripSelection	62	双谱行和弦／真实选择拖拽／一次Undo	mtest/mscore/performanceeditor
-独立谱带入口	mscore/musescore.cpp	auto bandAction = new QAction	1988	共享菜单／工具栏Action与面板同步	mtest/mscore/performanceeditor
+独立谱带入口	mscore/musescore.cpp	auto bandAction = new QAction	1993	共享菜单／工具栏Action与面板同步	mtest/mscore/performanceeditor
 独立谱带生命周期	mscore/performanceeditor/performanceeditor.cpp	bool PerformanceEditor::surfacesActive() const	711	面板或谱带激活／关闭停刷	mtest/mscore/performanceeditor
 hand-bracket-geometry	libmscore/symbol.cpp	QPainterPath Symbol::handPath	106	Optional SMuFL hand geometry in spatium	mtest/mscore/performanceeditor/handsymbol_tests.inc
 hand-bracket-grips	libmscore/symbol.cpp	void Symbol::startEditDrag	154	Native Undo and cancellable endpoint preview	mtest/mscore/performanceeditor/handsymbol_tests.inc
@@ -180,8 +180,11 @@ hand-bracket-hit	mscore/scoreview.cpp	QList<Element*> ScoreView::elementsNear	55
 和弦空位搜索	mscore/notepreview.h	inline QRectF findPreviewChordBox	109	保持 x；按障碍上沿查空隙，页面有限边界	mtest/mscore/pluginhost
 和弦识别点列表	share/plugins/HarmonyAssistant/MarkerList.qml	ColumnLayout {	5	完整当前乐器区间及待排；点击定位	mtest/mscore/pluginhost
 和声宿主主题	share/plugins/HarmonyAssistant/UiTheme.qml	QtObject {	3	明暗系统调色板与统一紧凑控件	mtest/mscore/pluginhost
-Tap 估算	mscore/taptempo/tapestimate.h	class TapEstimate	9	值数据速度估算	-
-Tap 入口	mscore/taptempo/taptempo.cpp	QWidget* TapTempo::createButton	61	菜单共享动作与固定宽度工具栏	-
-MIDI 裁剪	audio/exports/midigate.h	class MidiGateProcessor	40	值副本释放保护与可复现微随机	-
-MIDI 最终事件	audio/exports/midigatefile.cpp	MidiGateData midiGateSnapshot	9	正常导出事件配对及踏板控制保护	-
-MIDI 对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare	165	可取消后台计算及可见范围卷帘	-
+Tap 估算	mscore/taptempo/tapestimate.h	class TapEstimate	9	值数据速度估算	mtest/mscore/p0native
+Tap 入口	mscore/taptempo/taptempo.cpp	QWidget* TapTempo::createButton	61	菜单共享动作与固定宽度工具栏	mtest/mscore/p0native
+MIDI 裁剪	audio/exports/midigate.h	class MidiGateProcessor	40	值副本释放保护与可复现微随机	mtest/mscore/p0native
+MIDI 最终事件	audio/exports/midigatefile.cpp	MidiGateData midiGateSnapshot	9	正常导出事件配对及踏板控制保护	mtest/mscore/p0native
+MIDI 对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare	165	可取消后台计算及可见范围卷帘	mtest/mscore/p0native
+编配完整分页	mscore/plugin/api/arrangementsnapshot.cpp	QVariantMap ScoreObserver::analysisRange	68	版本保护的完整复调值数据	mtest/mscore/p0native
+只读 JS 任务	mscore/plugin/api/readonlyanalysisjob.cpp	void ReadOnlyAnalysisJob::start	21	独立可取消 JS 引擎	mtest/mscore/p0native
+编配插件	share/plugins/ArrangementAssistant/Rules.js	function defaults()	6	音乐规则与可校正角色	mtest/mscore/p0native

@@ -2,6 +2,14 @@
 
 个人版本记录本仓库的个人维护增量；应用上游版本另由 `config.cmake` 管理。历史源码提交尚未追溯归类，此处从首次建立指南开始记录，不代表此前没有个人改动。
 
+## 0.25.0 — 2026-10-10
+
+- 功能：编配检查：独立只读分析。
+- 实现：ScoreObserver 新增独立完整分页 API、会话／内容版本及值数据 JS worker；不使用合并音高的 analysisNotes。ArrangementAssistant 直接复用共享 Harmony／Timeline／Desk 控件，规则留在插件，750 ms 停播局部刷新。
+- 验证：JS 音乐规则 27/27；原生 P0 11/11，真实插件峰值 GUI 批次约 1–2 ms；千小节／6000 完整音符 47 页，峰值 1.015 ms，总计 41.733 ms（本机观察，非任意机器保证）。QML 侧栏／摘要／双面板／配置交互通过；原 pluginhost 12/12、scoreobserver 17/17，保留既有 Qt Connections／临时工作区警告。
+- 发布：个人版本单一来源 personal/VERSION，保留 Kumo branch／Freddd13；最终独立安装 msvc.install_p0_x64。
+- Git：父提交 `e829696fb6b9e2f076078fea2896246ad31783b1`；本批定位 `personal-v0.25.0`。两仓库开始时 ff-only 已最新；保留用户 AGENTS.md 与 USER_GUIDE 的并行 MCP 规划未提交增量。
+
 ## 0.24.0 — 2026-10-10
 
 - 功能：MIDI 导出：保守裁剪与视觉对比。

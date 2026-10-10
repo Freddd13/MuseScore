@@ -54,6 +54,11 @@ class ScoreObserver : public QObject {
       const PedalWindow* pedalWindow(int tick,int track) const;
       QVariantList contextNotes(int tick, int firstTrack, int endTrack, bool pedal, int windowTicks);
 
+      ScoreContentState _analysisState;
+      quint64 _analysisRevision = 0;
+      quint64 _analysisSession = 0;
+      QObject* _readOnlyJob = nullptr;
+      int _readOnlyJobToken = 0;
       QPointer<Ms::Score> _score;
       QVector<QMetaObject::Connection> _scoreConnections;
       QVector<QPointer<Ms::ScoreView>> _previewViews;
@@ -83,6 +88,11 @@ class ScoreObserver : public QObject {
       void setEnabled(bool enabled);
       int indexBuildCount() const { return _indexBuildCount; }
       double indexBuildMilliseconds() const { return _indexBuildMilliseconds; }
+      Q_INVOKABLE int startReadOnlyJob(const QString& source, const QVariantMap& input);
+      Q_INVOKABLE void cancelReadOnlyJob();
+      Q_INVOKABLE QString analysisRevision();
+      Q_INVOKABLE QVariantMap analysisScope(bool whole = false) const;
+      Q_INVOKABLE QVariantMap analysisRange(int start, int end, int firstTrack, int endTrack, int fromTick, int limit, const QString& expected = QString());
       Q_INVOKABLE QVariantMap snapshot(int tick, int firstTrack, int endTrack, bool sounding = false);
       Q_INVOKABLE void setNotePreviewColors(const QVariantList& notes);
       Q_INVOKABLE void clearNotePreviewColors();
@@ -98,6 +108,7 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QString readTextFile(const QString& path) const;
       Q_INVOKABLE bool writeTextFile(const QString& path, const QString& text) const;
    signals:
+      void readOnlyJobFinished(int token, const QVariantMap& result);
       void scoreChanged();
       void positionChanged();
       void previewActivated(int tick, int track);
