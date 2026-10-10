@@ -46,7 +46,7 @@ int qt_ntfs_permission_lookup;
 
 namespace Ms {
 
-static constexpr int WORKSPACE_UI_VERSION = 3;
+static constexpr int WORKSPACE_UI_VERSION = 4;
 
 bool WorkspacesManager::isWorkspacesListDirty = true;
 Workspace* WorkspacesManager::m_currentWorkspace = nullptr;
@@ -1108,6 +1108,13 @@ void Workspace::migrate(int uiVersion)
                                      "toggle-piano",
                                      InsertPosition::AFTER);
                   mscore->populateAlternativeOperations();
+                  }
+            }
+      if (uiVersion < 4) {
+            ensureMenuAction("menu-tools", "tap-tempo", "transpose");
+            if (auto entries = mscore->playbackControlEntries()) {
+                  ensureToolbarEntry(*entries, "tap-tempo", "independent-metronome", InsertPosition::AFTER);
+                  mscore->populatePlaybackControls();
                   }
             }
       }

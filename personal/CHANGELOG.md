@@ -2,6 +2,15 @@
 
 个人版本记录本仓库的个人维护增量；应用上游版本另由 `config.cmake` 管理。历史源码提交尚未追溯归类，此处从首次建立指南开始记录，不代表此前没有个人改动。
 
+## 0.25.1 — 2026-10-10
+
+- 修正：旧工作区原菜单／播放工具栏未列 TAP 时，uiVersion 4 一次性迁移共享 QAction；新版本保存后允许自定义移除，不强制永久恢复。
+- 验证：新增旧 uiVersion 3 迁移、原位置／单动作及 uiVersion 4 尊重自定义回归；最终 Release／独立安装和品牌核对另见安装 validation。原 MIDI 套件 79/79，P0 值 11/11、规则 27/27；原选择／P 键盘／播放／范围回归保留。
+- 最终交付：P0 实际 Qt 12/12、原插件宿主12/12（含启动／关于0.25.1）、原观察器17/17、原MIDI79/79；安装插件和和声助手CLI隔离启动通过，正常PDF导出返回0。最后千小节完整分页峰值1.089 ms／总计43.915 ms，实际插件GUI批次1 ms；当前SF3原／裁剪PCM最大差异0。独立安装与构建EXE SHA256同为34c990e7618788051d78c4bf00c82371a74fa16b4513ba56a5b0c993105e5ef5。
+- 文档：同步累计用户说明、源码索引和 VERSION；check_guides 只保留 USER_GUIDE 既有跨仓库链接，未改为不真实仓内链接。
+- Git：父提交 `8518cba90ed667bbd93f0226e25f979421598c62`；提交主题 `fix(tempo): migrate Tap action into saved workspaces`；定位 `personal-v0.25.1`。不混入用户 AGENTS 与并行 MCP USER_GUIDE 未提交内容。
+- 发布：Kumo branch／Freddd13 标识从 personal/VERSION 生成；最终独立安装 msvc.install_p0_x64，保留旧程序。当前音源单片段 PCM 相同不扩展为所有设备与工程保证。
+
 ## 0.25.0 — 2026-10-10
 
 - 功能：编配检查：独立只读分析。

@@ -118,7 +118,7 @@ MidiCropPanel::MidiCropPanel(QWidget* parent,std::function<QList<Score*>()> scor
       auto layout=new QVBoxLayout(this);layout->setContentsMargins(0,6,0,0);
       _enabled=new QCheckBox(tr("Humanized release: conservative pedal mode"),this);
       _enabled->setChecked(preferences.getBool("export/midi/cropEnabled"));layout->addWidget(_enabled);
-      auto buttons=new QHBoxLayout;auto config=new QPushButton(tr("Release settings…"),this);auto preview=new QPushButton(tr("Compare…"),this);
+      auto buttons=new QHBoxLayout;auto config=new QPushButton(tr("Release settings…"),this);auto preview=new QPushButton(tr("Compare…"),this);preview->setObjectName("midiCropCompare");
       buttons->addWidget(config);buttons->addWidget(preview);buttons->addStretch();layout->addLayout(buttons);
       _original=new QCheckBox(tr("Also export original MIDI"),this);_original->setChecked(preferences.getBool("export/midi/cropOriginal"));layout->addWidget(_original);
       _gate.lengthRatio=preferences.getDouble("export/midi/cropLength");_gate.nextAttackRatio=preferences.getDouble("export/midi/cropNext");
@@ -165,7 +165,7 @@ bool MidiCropPanel::write(Score* score,const QString& path,const QString& origin
 void MidiCropPanel::compare() {
       if(seq && seq->isPlaying()) {QMessageBox::information(this,tr("MIDI release"),tr("Stop playback before preparing a comparison."));return;}
       const auto scores=_scores();if(scores.isEmpty())return;
-      QDialog dialog(this);dialog.setWindowTitle(tr("MIDI release comparison"));dialog.resize(920,650);
+      QDialog dialog(this);dialog.setObjectName("midiCropComparison");dialog.setWindowTitle(tr("MIDI release comparison"));dialog.resize(920,650);
       auto layout=new QVBoxLayout(&dialog);auto bar=new QHBoxLayout;
       auto scoreBox=new QComboBox(&dialog);for(auto score:scores)scoreBox->addItem(score->title());bar->addWidget(scoreBox);
       auto part=new QComboBox(&dialog);bar->addWidget(part);auto filter=new QComboBox(&dialog);filter->addItems({tr("All"),tr("Shortened"),tr("Preserved")});bar->addWidget(filter);

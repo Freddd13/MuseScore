@@ -188,3 +188,4 @@ MIDI 对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare	165	�
 编配完整分页	mscore/plugin/api/arrangementsnapshot.cpp	QVariantMap ScoreObserver::analysisRange	68	版本保护的完整复调值数据	mtest/mscore/p0native
 只读 JS 任务	mscore/plugin/api/readonlyanalysisjob.cpp	void ReadOnlyAnalysisJob::start	21	独立可取消 JS 引擎	mtest/mscore/p0native
 编配插件	share/plugins/ArrangementAssistant/Rules.js	function defaults()	6	音乐规则与可校正角色	mtest/mscore/p0native
+Tap 工作区迁移	mscore/workspace.cpp	if (uiVersion < 4)	1113	一次性添加共享入口，保留后续用户自定义	mtest/mscore/p0native

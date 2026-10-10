@@ -8,6 +8,9 @@
 #include <QPushButton>
 #include <QDialog>
 #include <QDomDocument>
+#include <QMenu>
+#include "mscore/workspace.h"
+#include "libmscore/xml.h"
 #include "mscore/midicrop/midicroppanel.h"
 #include <QQuickView>
 #include "mtest/testutils.h"
@@ -70,6 +73,19 @@ class TestP0Native : public QObject {
             QKeyEvent repeat(QEvent::KeyPress,Qt::Key_Space,Qt::NoModifier,QString(),true);QApplication::sendEvent(button,&repeat);QCOMPARE(taps.size(),1);
             QTest::keyRelease(button,Qt::Key_Space);QCOMPARE(taps.size(),1);
             QTest::mouseClick(button,Qt::LeftButton,Qt::NoModifier,QPoint(8,8));QTest::mouseDClick(button,Qt::LeftButton,Qt::NoModifier,QPoint(8,8));QCOMPARE(taps.size(),3);
+            }
+      void savedWorkspaceTapMigrationAndCustomization() {
+            auto action=getAction("tap-tempo");auto tools=Workspace::findMenuFromString("menu-tools");QVERIFY(tools);tools->removeAction(action);
+            auto restore=[](int version) {
+                  const auto content=QString("<Workspace><uiVersion>%1</uiVersion><Toolbar name=\"playbackControl\"><action>play</action><action>independent-metronome</action><action>metronome</action></Toolbar></Workspace>").arg(version).toUtf8();
+                  XmlReader reader(content);QVERIFY(reader.readNextStartElement());Workspace workspace;workspace.read(reader);
+                  };
+            restore(3);tools=Workspace::findMenuFromString("menu-tools");qInfo()<<"Tap migration mapping"<<action<<tools;for(auto entry:tools->actions())qInfo()<<entry<<entry->data()<<entry->text();QVERIFY(tools->actions().contains(action));
+            const auto entries=mscore->playbackControlEntries();int position=0,tap=-1,metronome=-1,count=0;
+            for(auto entry:*entries) {if(QString(entry)=="tap-tempo") {tap=position;++count;}if(QString(entry)=="independent-metronome")metronome=position;++position;}
+            QCOMPARE(count,1);QCOMPARE(tap,metronome+1);
+            restore(4);for(auto entry:*entries)QVERIFY(QString(entry)!="tap-tempo");
+            mscore->setPlaybackControlEntries(mscore->allPlaybackControlEntries());mscore->populatePlaybackControls();
             }
       void fullPagingAndRevisionInvalidation() {
             std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx"));QVERIFY(score);
@@ -141,10 +157,10 @@ class TestP0Native : public QObject {
             std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx"));QVERIFY(score);
             auto pedal=new Pedal(score.get());pedal->setTick(Fraction::fromTicks(0));pedal->setTicks(Fraction::fromTicks(1800));pedal->setTrack(4);pedal->setTrack2(4);score->addSpanner(pedal);
             MidiCropPanel panel(nullptr,[&]{return QList<Score*>{score.get()};});panel.show();
-            QPushButton* button=nullptr;for(auto candidate:panel.findChildren<QPushButton*>())if(candidate->text().startsWith("Compare"))button=candidate;QVERIFY(button);
+            QPushButton* button=nullptr;for(auto candidate:panel.findChildren<QPushButton*>())if(candidate->objectName()=="midiCropCompare")button=candidate;QVERIFY(button);
             bool ready=false;int tries=0;QTimer close;close.setInterval(50);
             connect(&close,&QTimer::timeout,&panel,[&] {
-                  ++tries;for(auto widget:QApplication::topLevelWidgets())if(auto dialog=qobject_cast<QDialog*>(widget))if(dialog->windowTitle()=="MIDI release comparison") {
+                  ++tries;for(auto widget:QApplication::topLevelWidgets())if(auto dialog=qobject_cast<QDialog*>(widget))if(dialog->objectName()=="midiCropComparison") {
                         auto table=dialog->findChild<QTableView*>();if(table && table->model()->rowCount()>0) {ready=true;table->selectRow(0);const auto output=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");if(!output.isEmpty())dialog->grab().save(output+"/midi-compare.png");dialog->accept();}
                         else if(tries>80)dialog->reject();
                         }
