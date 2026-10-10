@@ -209,6 +209,7 @@ add_library(mscoreapp STATIC
       ${AUDIODRIVERS_SRC}
 
       taptempo/taptempo.h taptempo/taptempo.cpp
+      midicrop/midicroppanel.h midicrop/midicroppanel.cpp
       abstractdialog.h accessibletoolbutton.h albummanager.h
       analyse.h articulationprop.h
       bendcanvas.h breaksdialog.h

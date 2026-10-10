@@ -2,6 +2,9 @@
 
 
 set (EXPORTS_SRC
+    ${CMAKE_CURRENT_LIST_DIR}/midigatefile.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/midigatefile.h
+    ${CMAKE_CURRENT_LIST_DIR}/midigate.h
     ${CMAKE_CURRENT_LIST_DIR}/exportmidi.h
     ${CMAKE_CURRENT_LIST_DIR}/exportmidi.cpp
     )

@@ -21,6 +21,7 @@
 #include "exportdialog.h"
 #include "musescore.h"
 #include "preferences.h"
+#include "midicrop/midicroppanel.h"
 
 // Supported export formats
 // ------------------------
@@ -60,6 +61,15 @@ ExportDialog::ExportDialog(Score* s, QWidget* parent)
       {
       setObjectName("ExportDialog");
       setupUi(this);
+      midiCrop = new MidiCropPanel(midiPage, [this] {
+            QList<Score*> scores;
+            for (int i=0; i<listWidget->count(); ++i) {
+                  auto item=static_cast<ExportScoreItem*>(listWidget->item(i));
+                  if(item->isChecked())scores.append(item->score());
+                  }
+            return scores;
+            });
+      qobject_cast<QGridLayout*>(midiPage->layout())->addWidget(midiCrop,2,0);
       setWindowFlags(this->windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
       connect(listWidget, &QListWidget::itemChanged, this, &ExportDialog::setOkButtonEnabled);
@@ -601,7 +611,28 @@ void ExportDialog::accept()
                                     break;
                               }
                         }
-                  mscore->saveAs(score, true, definitiveFilename, suffix, &replacePolicy);
+                  if (saveFormat == "mid" && midiCrop->enabled()) {
+                        midiCrop->savePreferences();
+                        QString original;
+                        if (midiCrop->includeOriginal()) {
+                              const QFileInfo info(definitiveFilename);
+                              original = info.path()+"/"+info.completeBaseName()+"-original."+info.suffix();
+                              if (QFileInfo::exists(original)) {
+                                    if(replacePolicy == SaveReplacePolicy::SKIP_ALL)original.clear();
+                                    else if(replacePolicy != SaveReplacePolicy::REPLACE_ALL) {
+                                          const int response=mscore->askOverwriteAll(original);
+                                          if(response==QMessageBox::No || response==QMessageBox::NoToAll)original.clear();
+                                          if(response==QMessageBox::NoToAll)replacePolicy=SaveReplacePolicy::SKIP_ALL;
+                                          if(response==QMessageBox::YesToAll)replacePolicy=SaveReplacePolicy::REPLACE_ALL;
+                                          }
+                                    }
+                              }
+                        if(!midiCrop->write(score,definitiveFilename,original))return;
+                        }
+                  else {
+                        if(saveFormat == "mid")midiCrop->savePreferences();
+                        mscore->saveAs(score, true, definitiveFilename, suffix, &replacePolicy);
+                        }
                   }
             }
       }
@@ -613,6 +644,7 @@ void ExportDialog::accept()
 void ExportDialog::showEvent(QShowEvent* event)
       {
       loadValues();
+      midiCrop->clearSessions();
       loadScoreAndPartsList();
       selectScore();
 

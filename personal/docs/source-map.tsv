@@ -182,3 +182,6 @@ hand-bracket-hit	mscore/scoreview.cpp	QList<Element*> ScoreView::elementsNear	55
 和声宿主主题	share/plugins/HarmonyAssistant/UiTheme.qml	QtObject {	3	明暗系统调色板与统一紧凑控件	mtest/mscore/pluginhost
 Tap 估算	mscore/taptempo/tapestimate.h	class TapEstimate	9	值数据速度估算	-
 Tap 入口	mscore/taptempo/taptempo.cpp	QWidget* TapTempo::createButton	61	菜单共享动作与固定宽度工具栏	-
+MIDI 裁剪	audio/exports/midigate.h	class MidiGateProcessor	40	值副本释放保护与可复现微随机	-
+MIDI 最终事件	audio/exports/midigatefile.cpp	MidiGateData midiGateSnapshot	9	正常导出事件配对及踏板控制保护	-
+MIDI 对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare	165	可取消后台计算及可见范围卷帘	-

@@ -36929,4 +36929,203 @@ Tap BPM: %2</source>
         <translation>设为独立节拍器</translation>
     </message>
 </context>
+<context>
+    <name>Ms::MidiCropPanel</name>
+    <message>
+        <source>Earlier release within the same pedal</source>
+        <translation>同一踏板内提前释放</translation>
+    </message>
+    <message>
+        <source>Instrument not selected</source>
+        <translation>未选择此乐器</translation>
+    </message>
+    <message>
+        <source>Source not uniquely identified</source>
+        <translation>无法唯一确定来源</translation>
+    </message>
+    <message>
+        <source>Manual performance / grace / ornament</source>
+        <translation>手工演奏／倚音／装饰音</translation>
+    </message>
+    <message>
+        <source>Ambiguous same-pitch retrigger</source>
+        <translation>同音重触或配对有歧义</translation>
+    </message>
+    <message>
+        <source>Excluded by user</source>
+        <translation>用户排除</translation>
+    </message>
+    <message>
+        <source>Already shorter than minimum</source>
+        <translation>原音已短于最小 gate</translation>
+    </message>
+    <message>
+        <source>No safe shortening</source>
+        <translation>没有安全裁剪结果</translation>
+    </message>
+    <message>
+        <source>No holding pedal</source>
+        <translation>没有延音踏板</translation>
+    </message>
+    <message>
+        <source>Unsupported pedal/control semantics</source>
+        <translation>未支持的踏板／控制语义</translation>
+    </message>
+    <message>
+        <source>Crosses pedal-up boundary</source>
+        <translation>跨越抬踏板边界</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>音符</translation>
+    </message>
+    <message>
+        <source>Occurrence (ticks)</source>
+        <translation>起音位置（tick）</translation>
+    </message>
+    <message>
+        <source>Original ms</source>
+        <translation>原长度 ms</translation>
+    </message>
+    <message>
+        <source>New ms</source>
+        <translation>新长度 ms</translation>
+    </message>
+    <message>
+        <source>Reason</source>
+        <translation>处理依据</translation>
+    </message>
+    <message>
+        <source>Humanized release: conservative pedal mode</source>
+        <translation>人性化裁剪：保守踏板模式</translation>
+    </message>
+    <message>
+        <source>Release settings…</source>
+        <translation>裁剪设置…</translation>
+    </message>
+    <message>
+        <source>Compare…</source>
+        <translation>查看对比…</translation>
+    </message>
+    <message>
+        <source>Also export original MIDI</source>
+        <translation>同时导出未裁剪 MIDI</translation>
+    </message>
+    <message>
+        <source>Conservative MIDI release</source>
+        <translation>保守 MIDI 裁剪</translation>
+    </message>
+    <message>
+        <source>Original length</source>
+        <translation>原长度比例</translation>
+    </message>
+    <message>
+        <source>Next attack interval</source>
+        <translation>后续同声部起音间隔比例</translation>
+    </message>
+    <message>
+        <source>Minimum gate</source>
+        <translation>最小 gate</translation>
+    </message>
+    <message>
+        <source>Release jitter ± (0 disables)</source>
+        <translation>释放微随机 ±（0 为关闭）</translation>
+    </message>
+    <message>
+        <source>Repeatable seed</source>
+        <translation>固定随机种子</translation>
+    </message>
+    <message>
+        <source>Only piano notes with both release times in the same supported pedal window are shortened. Onsets and controllers remain unchanged.</source>
+        <translation>仅裁剪新旧释放点均位于同一有效踏板区间的钢琴音符。起音、力度和控制事件保持原样。</translation>
+    </message>
+    <message>
+        <source>MIDI release</source>
+        <translation>MIDI 裁剪</translation>
+    </message>
+    <message>
+        <source>Stop playback before preparing MIDI.</source>
+        <translation>请停播后准备 MIDI。</translation>
+    </message>
+    <message>
+        <source>MIDI export</source>
+        <translation>MIDI 导出</translation>
+    </message>
+    <message>
+        <source>Could not write %1: %2</source>
+        <translation>无法写入 %1：%2</translation>
+    </message>
+    <message>
+        <source>Stop playback before preparing a comparison.</source>
+        <translation>请停播后准备对比。</translation>
+    </message>
+    <message>
+        <source>MIDI release comparison</source>
+        <translation>MIDI 裁剪对比</translation>
+    </message>
+    <message>
+        <source>All</source>
+        <translation>全部</translation>
+    </message>
+    <message>
+        <source>Shortened</source>
+        <translation>已裁剪</translation>
+    </message>
+    <message>
+        <source>Preserved</source>
+        <translation>保留</translation>
+    </message>
+    <message>
+        <source>Overlay</source>
+        <translation>叠加</translation>
+    </message>
+    <message>
+        <source>Stacked</source>
+        <translation>上下分列</translation>
+    </message>
+    <message>
+        <source>Outline: original · Solid: export · Pedal: bottom lane · Positions include expanded repeats and pauses</source>
+        <translation>细轮廓：原长度 · 实心：导出长度 · 下轨：踏板 · 位置包含反复展开和暂停</translation>
+    </message>
+    <message>
+        <source>Outline: original · Solid: export · Pedal: bottom lane</source>
+        <translation>细轮廓：原长度 · 实心：导出长度 · 下轨：踏板</translation>
+    </message>
+    <message>
+        <source>Toggle exclusion</source>
+        <translation>排除／恢复此音</translation>
+    </message>
+    <message>
+        <source>Recompute</source>
+        <translation>重算</translation>
+    </message>
+    <message>
+        <source>Restore defaults</source>
+        <translation>恢复默认</translation>
+    </message>
+    <message>
+        <source>Return to export</source>
+        <translation>返回导出</translation>
+    </message>
+    <message>
+        <source>Crop piano part:</source>
+        <translation>裁剪钢琴部分：</translation>
+    </message>
+    <message>
+        <source>Calculating… Closing cancels the task.</source>
+        <translation>计算中…关闭窗口会取消任务。</translation>
+    </message>
+    <message>
+        <source>All piano parts</source>
+        <translation>全部钢琴部分</translation>
+    </message>
+    <message>
+        <source>All instruments</source>
+        <translation>全部乐器</translation>
+    </message>
+    <message>
+        <source> · staff %1</source>
+        <translation> · 谱表 %1</translation>
+    </message>
+</context>
 </TS>

@@ -14,6 +14,7 @@
 #define __EXPORTMIDI_H__
 
 #include "audio/midi/midifile.h"
+#include "midigatefile.h"
 
 namespace Ms {
 
@@ -51,6 +52,11 @@ class ExportMidi {
 
    public:
       MidiFile mf;
+      MidiFile gateBaseline;
+      bool collectGateData = false;
+      MidiGateData gateData;
+      QVector<MidiGateNote> gateReport;
+      bool write(QIODevice*, bool, bool, const SynthesizerState&, const MidiExportOptions&);
 
       ExportMidi(Score* s) { cs = s; }
       bool write(const QString& name, bool midiExpandRepeats, bool exportRPNs);

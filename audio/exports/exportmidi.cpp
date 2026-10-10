@@ -17,6 +17,8 @@
 #include "audio/midi/event.h"
 
 #include "libmscore/chordrest.h"
+#include "libmscore/chord.h"
+#include "libmscore/note.h"
 #include "libmscore/key.h"
 #include "libmscore/lyrics.h"
 #include "libmscore/measure.h"
@@ -235,7 +237,12 @@ void ExportMidi::writeHeader(MidiTrack& tempoTrack)
 //---------------------------------------------------------
 
 bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPNs, const SynthesizerState& synthState)
+      { return write(device, midiExpandRepeats, exportRPNs, synthState, MidiExportOptions()); }
+
+bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPNs, const SynthesizerState& synthState, const MidiExportOptions& options)
       {
+      QVector<MidiGateSource> sources;
+      mf.tracks().clear();
       mf.setDivision(DIVISION);
       mf.setFormat(1);
       QList<MidiTrack>& tracks = mf.tracks();
@@ -336,6 +343,20 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                     continue;
 
                               if (event.type() == ME_NOTEON) {
+                                    if ((collectGateData || options.crop) && event.velo() > 0) {
+                                          const Note* note = event.noteEventOwner() ? event.noteEventOwner() : event.note();
+                                          if (note) {
+                                                MidiGateSource tag;
+                                                tag.track = staffIdx + 1;
+                                                tag.on = pauseMap.addPauseTicks(i->first);
+                                                tag.pitch = (!exportRPNs && event.portamento()) ? event.note()->pitch() : event.pitch();
+                                                tag.channel = channel; tag.staff = staffIdx; tag.voice = note->chord()->track();
+                                                tag.partName = part->instrumentName(note->tick());
+                                                tag.piano = part->instrumentId(note->tick()).contains("piano", Qt::CaseInsensitive);
+                                                tag.manual = note->chord()->playEventType() == PlayEventType::User || event.discard() || event.portamento() || note->chord()->isGrace() || event.pitch()!=note->ppitch() || note->chord()->tremolo();
+                                                sources.append(tag);
+                                                }
+                                          }
                                     // use the note values instead of the event values if portamento is suppressed
                                     if (!exportRPNs && event.portamento())
                                           track.insert(pauseMap.addPauseTicks(i->first), MidiEvent(ME_NOTEON, channel,
@@ -436,6 +457,16 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
             marker.setEData(std::vector<unsigned char>(text.begin(), text.end()));
             tracks.front().insert(preRoll, marker);
             fprintf(stderr, "Kumo MIDI: score first beat offset %d ticks\n", preRoll);
+            }
+      if (collectGateData || options.crop) {
+            for (auto& source : sources) source.on += preRoll;
+            gateData = midiGateSnapshot(mf, sources);
+            if (options.crop) {
+                  gateBaseline = mf;
+                  MidiGateProcessor processor;
+                  gateReport = processor.process(gateData, options.gate);
+                  applyMidiGate(mf, gateReport);
+                  }
             }
       return !mf.write(device);
       }

@@ -49,6 +49,8 @@ class ExportScoreItem : public QListWidgetItem {
 //   ExportDialog
 //---------------------------------------------------------
 
+class MidiCropPanel;
+
 class ExportDialog : public AbstractDialog, public Ui::ExportDialog {
       Q_OBJECT
       
@@ -56,6 +58,7 @@ class ExportDialog : public AbstractDialog, public Ui::ExportDialog {
       QButtonGroup* exportBackgroundOption;
 
       Score* cs = nullptr;
+      MidiCropPanel* midiCrop = nullptr;
       
       void loadValues();
       void loadScoreAndPartsList();
