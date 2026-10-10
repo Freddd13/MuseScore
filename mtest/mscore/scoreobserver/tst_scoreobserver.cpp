@@ -336,6 +336,24 @@ class TestScoreObserver : public QObject, public MTest {
             QCOMPARE(context.value("pedalWindows").toList().front().toMap().value("start").toInt(),0);
             }
 
+      void adaptiveMarkerPlacement()
+            {
+            const QRectF page(0,0,500,500),preferred(120,300,80,20);
+            QVector<QRectF> obstacles;
+            for(int row=0;row<6;++row)obstacles.append(QRectF(110,300-row*40,100,2));
+            for(int row=0;row<6;++row) {
+                  const auto oldCandidate=preferred.translated(0,-row*40);
+                  QVERIFY(std::any_of(obstacles.begin(),obstacles.end(),[&](const auto& box){return box.intersects(oldCandidate);}));
+                  }
+            const auto placed=findPreviewChordBox(preferred,page,obstacles,1);
+            QVERIFY(!placed.isEmpty());QCOMPARE(placed.x(),preferred.x());QVERIFY(placed.y()<preferred.y());
+            for(const auto box:obstacles)QVERIFY(!box.adjusted(-1,-1,1,1).intersects(placed));
+            auto together=obstacles;together.append(placed);
+            const auto second=findPreviewChordBox(preferred,page,together,1);
+            QVERIFY(!second.isEmpty());QCOMPARE(second.x(),preferred.x());QVERIFY(!second.intersects(placed));
+            QVERIFY(findPreviewChordBox(preferred,page,{QRectF(0,0,500,350)},1).isEmpty());
+            }
+
       void boundedPedalMetadataAndNativeRenderingIsolation()
             {
             std::unique_ptr<MasterScore> score(readScore("mscore/scoreobserver/piano.mscx"));

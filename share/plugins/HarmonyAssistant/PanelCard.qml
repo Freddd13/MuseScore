@@ -4,15 +4,16 @@ Rectangle {
     default property alias content: body.data
     property alias body: body
     property real minimumBodyHeight: 0
-    color: "#FFFFFF"
-    radius: 10
-    border.color: "#E1E5E8"
-    implicitHeight: Math.max(minimumBodyHeight, body.implicitHeight) + 24
+    UiTheme {id:theme}
+    color: theme.field
+    radius: 2
+    border.color: theme.subtleLine
+    implicitHeight: Math.max(minimumBodyHeight, body.implicitHeight) + 20
     Column {
         id: body
-        x: 12
-        y: 12
-        width: parent.width - 24
-        spacing: 8
+        x: 10
+        y: 10
+        width: parent.width - 20
+        spacing: 6
     }
 }

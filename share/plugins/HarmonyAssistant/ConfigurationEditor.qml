@@ -6,6 +6,7 @@ import "Preferences.js" as Preferences
 
 Column {
     id:editor
+    UiTheme {id:theme}
     objectName:"harmonyConfiguration"
     property var configuration: Preferences.defaults()
     signal modified(var configuration)
@@ -28,45 +29,45 @@ Column {
         onModified:editor.modified(configuration)
         onChooseColor:editor.openColor("",key,color)
     }
-    Rectangle {width:parent.width; height:1; color:"#e0e0e0"}
+    Rectangle {width:parent.width; height:1; color:theme.subtleLine}
     RowLayout {
         width:parent.width
-        UiLabel { text:"功能色方案"; Layout.fillWidth:true; font.bold:true; color:"#343a3f" }
-        ComboBox {
-            model:["Carbon","柔和","单色"]; implicitHeight:32; Layout.preferredWidth:104
+        UiLabel { text:"功能色方案"; Layout.fillWidth:true; font.bold:true; color:theme.text }
+        DeskComboBox {
+            model:["Carbon","柔和","单色"]; implicitHeight:28; Layout.preferredWidth:104
             currentIndex:model.indexOf(configuration.palette)
             onActivated:modified(Preferences.preset(configuration,model[currentIndex]))
         }
     }
-    UiLabel { width:parent.width; text:"点击色块或「选色」打开选色器，也可填写 #RRGGBB。"; color:"#697077"; font.pixelSize:11; wrapMode:Text.Wrap }
+    UiLabel { width:parent.width; text:"点击色块或「选色」打开选色器，也可填写 #RRGGBB。"; color:theme.muted; font.pixelSize:11; wrapMode:Text.Wrap }
     Repeater {
         model:Preferences.roles
         ColorOption {width:parent.width; caption:modelData; value:configuration.colors[modelData]; onEdited:editor.change("colors",modelData,color); onChooseRequested:editor.openColor("colors",modelData,value)}
     }
-    UiLabel { text:"音旁文字（留空可隐藏该功能）"; font.bold:true; color:"#343a3f"; font.pixelSize:12 }
+    UiLabel { text:"音旁文字（留空可隐藏该功能）"; font.bold:true; color:theme.text; font.pixelSize:12 }
     Repeater {
         model:Preferences.labels
         RowLayout {
             width:parent.width
-            UiLabel { text:modelData; Layout.preferredWidth:36; color:"#697077" }
-            TextField {
-                Layout.fillWidth:true; implicitHeight:30; font.pixelSize:12; maximumLength:24
+            UiLabel { text:modelData; Layout.preferredWidth:36; color:theme.muted }
+            DeskTextField {
+                Layout.fillWidth:true; maximumLength:24
                 text:configuration.labels[modelData]
                 onEditingFinished:change("labels",modelData,text)
             }
         }
     }
-    Button { id:fixedPitch; text:checked?"收起固定音名覆盖":"固定音名覆盖（可选）"; checkable:true; implicitHeight:32 }
+    DeskButton { id:fixedPitch; text:checked?"收起固定音名覆盖":"固定音名覆盖（可选）"; checkable:true; implicitHeight:28 }
     Column {
         width:parent.width; visible:fixedPitch.checked; spacing:6
-        UiLabel {width:parent.width; text:"按十二音级指定文字；留空沿用和弦功能名。"; color:"#697077"; font.pixelSize:11; wrapMode:Text.Wrap}
+        UiLabel {width:parent.width; text:"按十二音级指定文字；留空沿用和弦功能名。"; color:theme.muted; font.pixelSize:11; wrapMode:Text.Wrap}
         Repeater {
             model:["C","C♯ / D♭","D","D♯ / E♭","E","F","F♯ / G♭","G","G♯ / A♭","A","A♯ / B♭","B"]
             RowLayout {
                 width:parent.width
-                UiLabel {text:modelData; Layout.preferredWidth:66; color:"#697077"; font.pixelSize:11}
-                TextField {
-                    Layout.fillWidth:true; implicitHeight:30; maximumLength:24; font.pixelSize:12
+                UiLabel {text:modelData; Layout.preferredWidth:66; color:theme.muted; font.pixelSize:11}
+                DeskTextField {
+                    Layout.fillWidth:true; maximumLength:24
                     text:configuration.noteLabels[index] || ""; placeholderText:"沿用功能名"
                     onEditingFinished:change("noteLabels",index,text)
                 }

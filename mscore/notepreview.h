@@ -104,6 +104,23 @@ inline QSizeF layoutPreviewChord(NotePreviewEntry& entry, int order)
       return combined + QSizeF(2*padding,2*padding);
       }
 
+// Keep the rhythmic x. Each blocked candidate jumps above the actual obstacle edge.
+// This searches the free vertical intervals, rather than sampling six fixed rows.
+inline QRectF findPreviewChordBox(QRectF candidate,const QRectF& page,const QVector<QRectF>& obstacles,qreal gap)
+      {
+      if (candidate.isEmpty() || !page.contains(candidate)) return {};
+      for (int step=0;step<=obstacles.size();++step) {
+            qreal next=candidate.top();
+            for (const auto& obstacle:obstacles)
+                  if (obstacle.adjusted(-gap,-gap,gap,gap).intersects(candidate))
+                        next=qMin(next,obstacle.top()-gap-candidate.height());
+            if (next==candidate.top()) return candidate;
+            candidate.moveTop(next);
+            if (!page.contains(candidate)) return {};
+            }
+      return {};
+      }
+
 class NotePreviewLayers {
       struct Layer {
             const void* owner;

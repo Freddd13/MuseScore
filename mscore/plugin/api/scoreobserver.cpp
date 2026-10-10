@@ -424,7 +424,7 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
       // Private style/chord list: parsing unknown symbols must not modify the user's score.
       std::unique_ptr<Ms::MasterScore> scratch;
       QHash<QString,NotePreviewEntry> rendered;
-      int hidden=0;QString fontFallback;
+      int hidden=0;QVariantList unplaced;QString fontFallback;
       for (const auto& descriptor : descriptors) {
             const auto value=descriptor.toMap();
             auto note=resolve(value,descriptors.size()>64 ? &segments : nullptr);
@@ -553,20 +553,26 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
                   qreal height=0;for (int index:group) height=qMax(height,markers[index].chordBox.height());
                   const qreal top=system->staffYpage(groupIt.key()/VOICES)-sp*1.5-height;
                   for (int index:group) {
-                        auto& entry=markers[index];QRectF placed;
-                        for (int lane=0;lane<6;++lane) {
-                              const QRectF candidate(positions[index].x(),top-lane*(height+sp*.5),entry.chordBox.width(),height);
-                              bool collision=!page->bbox().contains(candidate);
-                              for (const auto& box:occupied[page])
-                                    if (box.adjusted(-sp*.15,-sp*.12,sp*.15,sp*.12).intersects(candidate)){collision=true;break;}
-                              if (!collision) for (const auto element:page->items(candidate)) {
-                                    if (!element->visible() || element->isStaffLines() || element->isPage() || element->isSystem() || element->isMeasure()) continue;
-                                    if (element->pageBoundingRect().adjusted(-sp*.12,-sp*.12,sp*.12,sp*.12).intersects(candidate)){collision=true;break;}
-                                    }
-                              if (!collision){placed=candidate;break;}
+                        auto& entry=markers[index];
+                        const QRectF preferred(positions[index].x(),top,entry.chordBox.width(),height);
+                        const auto pageBounds=page->bbox();
+                        const qreal gap=sp*.12;
+                        QVector<QRectF> obstacles=occupied[page];
+                        if (owner==this) obstacles+=_baseChordBoxes.value(page);
+                        const QRectF corridor(preferred.left()-gap,pageBounds.top(),preferred.width()+2*gap,
+                              qMax(qreal(0),preferred.bottom()-pageBounds.top()+gap));
+                        for (const auto element:page->items(corridor)) {
+                              if (!element->visible() || element->isPage() || element->isSystem() || element->isMeasure()) continue;
+                              const auto box=element->pageBoundingRect();
+                              if (!box.isEmpty())obstacles.append(box);
                               }
+                        const auto placed=findPreviewChordBox(preferred,pageBounds,obstacles,gap);
                         entry.chordBox=placed.isEmpty() ? QRectF() : placed.translated(-positions[index]);
-                        if (placed.isEmpty()) ++hidden;
+                        if (placed.isEmpty()) {
+                              ++hidden;
+                              unplaced.append(QVariantMap{{"tick",entry.chordTick},{"track",entry.annotationTrack},
+                                    {"chord",entry.chord},{"degree",entry.degree}});
+                              }
                         else {occupied[page].append(placed);chordBoxes[page].append(placed);}
                         entry.bounds=entry.chordBox.isEmpty() ? QRectF() : entry.chordBox.translated(entry.anchor);
                         }
@@ -574,7 +580,7 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
                   }
             }
       if (owner==&_baseOwner){_baseColors=colors;_baseChordBoxes=chordBoxes;
-            setProperty("previewStatus",QVariantMap{{"hidden",hidden},{"fontFallback",fontFallback}});}
+            setProperty("previewStatus",QVariantMap{{"hidden",hidden},{"unplaced",unplaced},{"fontFallback",fontFallback}});}
       for (auto viewer:_score->getViewer()) {
             auto view=dynamic_cast<Ms::ScoreView*>(viewer);if (!view) continue;
             view->setNotePreviewColors(owner,colors,markers);
@@ -596,7 +602,8 @@ void ScoreObserver::clearPreview(QObject* owner)
       { for (auto& view : _previewViews) if (view) view->setNotePreviewColors(owner, {}); }
 void ScoreObserver::clearNotePreviewColors() { clearPreview(this); }
 void ScoreObserver::clearAllPreviews()
-      { clearPreview(this); clearPreview(&_baseOwner); _baseColors.clear(); _baseChordBoxes.clear(); _previewViews.clear(); _activePreviewTick=-1; }
+      { clearPreview(this); clearPreview(&_baseOwner); _baseColors.clear(); _baseChordBoxes.clear(); _previewViews.clear(); _activePreviewTick=-1;
+        setProperty("previewStatus",QVariantMap{{"hidden",0},{"unplaced",QVariantList{}},{"fontFallback",QString()}}); }
 
 static QString localPath(const QString& path)
       { const QUrl url(path); return url.isLocalFile() ? url.toLocalFile() : path; }

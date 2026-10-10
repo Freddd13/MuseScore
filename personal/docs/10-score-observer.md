@@ -104,3 +104,11 @@ contextSnapshot 新增每乐器当前踏板窗口、parts、scoreEnd；note desc
 events.cpp 在 NORMAL、左键且无修饰键命中可见固定记号时激活，双击路径保留；编辑/foto 交还原生操作。ScoreView 音符预览调用原生 curColor(visible,override)，保持选中/播放/拖放/隐藏颜色，不改变 HPiano 或选区框实现。
 
 插件 Timeline.js 的加权模板、区间/人工覆盖、Preferences.js 新显示模式以及 RangeEditor.qml 与宿主解耦。人工修正由既有配置接口保存，原生不理解其 JSON。schema 2 分析由插件处理，schema 1 兼容。实际回归和部署见 CHANGELOG 0.8.0；接口仍是 GUI 屏幕辅助，首次扫描/避让有成本。
+
+## 0.22.0：实际空位搜索与待排元数据
+
+`findPreviewChordBox` 是只处理矩形的内联纯几何函数：从共同基线出发，每次跳到相交障碍的上沿，至多 obstacleCount+1 轮；保持 x，遇页面边界返回空。applyPreview 一次查询该记号 x 范围内从页顶到基线的 Page 空间索引，收集可见对象／谱线以及已排记号；无需六条采样行和六次空间查询。首次构建仍有代价，播放的有序区间索引、高亮切换与音频回调不变。
+
+`previewStatus` 新增 `unplaced` 数值／文本列表 `{tick,track,chord,degree}`，保留 `hidden` 和 `fontFallback`。清全部预览时重置这些字段，避免切谱沿用旧状态。QML MarkerList 以当前乐器区间为模型，待排不删除识别区间；列表激活复用既有 openAnnotation 路径。原谱优先及区间起点规则不变；页内空间不足仍不覆盖原对象、不移动原谱布局。
+
+UiTheme／DeskButton／DeskSwitch／DeskComboBox／DeskSpinBox／DeskTextField 统一宿主调色板与紧凑控件；RangeEditor 和 ConfigurationEditor 保留现有事件／数据语义。新增纯几何六行间隙回归、实际高音＋速度文字点击定位／密集记号／超页待排回归，以及当前版本关于／启动画面检查。提交定位 personal-v0.22.0；最终测试记录见 CHANGELOG。

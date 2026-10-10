@@ -11,9 +11,10 @@ import QtQuick.Window 2.2
 
 MuseScore {
     id: root
+    UiTheme {id:theme}
     menuPath: "Plugins.Harmony Assistant"
     description: "钢琴和声助手：持续音识别、级数、音程功能与可选谱面配色。"
-    version: "1.4.0"
+    version: "1.5.0"
     requiresScore: true
     pluginType: "dock"
     dockArea: "right"
@@ -35,6 +36,8 @@ MuseScore {
     property var analysisRegions: []
     property var automaticRegions: []
     property var regionBuilder: null
+    property var unplacedMarkers: []
+    property var unplacedIndex: ({})
     property var manualOverrides: []
     property var editUndo: []
     property var editRedo: []
@@ -65,7 +68,7 @@ MuseScore {
     property string pendingExport: ""
     property int preferredRibbonHeight: 140
     property string detailPanelTitle:"和声助手 · 详细面板"
-    property color detailPanelBackground:"#f4f4f4"
+    property color detailPanelBackground:theme.background
     property bool started: false
     property var observer: null
     property bool surfaceActive: visible && (!observer || observer.surfaceVisible)
@@ -107,8 +110,9 @@ MuseScore {
     property string scopeText: "当前乐器 · 包含全部声部"
     property string positionText: "等待选区"
     property string noticeText: ""
-    property color ink: "#253342"
-    property color muted: "#6B7785"
+    property string placementNotice: ""
+    property color ink: theme.text
+    property color muted: theme.muted
     property var qualityNames: Harmony.defs.map(function(d) { return d.name })
 
     function windowTicks() {return [0,240,480,960,1920][arpeggioWindow.currentIndex] || 0}
@@ -397,8 +401,11 @@ MuseScore {
         observer.clearNotePreviewColors();repaintNotes()
         if(typeof observer.previewStatus==="function") {
             var status=observer.previewStatus()
-            if(status.hidden>0)noticeText=status.hidden+" 个记号空间不足；分析及范围编辑仍可查看。"
-            else if(status.fontFallback)noticeText="记号字体缺失，已回退到 "+status.fontFallback
+            unplacedMarkers=status.unplaced || []
+            var unavailable={}
+            for(var u=0;u<unplacedMarkers.length;++u)unavailable[unplacedMarkers[u].track+":"+unplacedMarkers[u].tick]=true
+            unplacedIndex=unavailable
+            placementNotice=status.hidden>0 ? status.hidden+" 个记号待排：点击面板「记号」查看并定位。" : status.fontFallback ? "记号字体缺失，已回退到 "+status.fontFallback : ""
         }
     }
     function prepareExport(action) {
@@ -525,6 +532,7 @@ MuseScore {
         timeline = []
         analysisTimer.stop()
         manualOverrides=[];editUndo=[];editRedo=[];analysisRegions=[];automaticRegions=[];regionBuilder=null;loadedFingerprint="";manualNeedsReview=false;annotationTick=-1
+        unplacedMarkers=[];unplacedIndex=({});placementNotice=""
         importedRecords = []
         importedRegions = []
         analysisRecords = []
@@ -562,6 +570,7 @@ MuseScore {
             analysisDirty = true
             regionBuilder = null
             if (advancedNative) observer.clearAllPreviews()
+            unplacedMarkers=[];unplacedIndex=({});placementNotice=""
             if (importedRecords.length || importedRegions.length) {importedRecords=[];importedRegions=[]; noticeText="乐谱已变更，已退出导入结果；请重新分析。"}
         }
         if (surfaceActive) refreshTimer.restart()
@@ -582,6 +591,7 @@ MuseScore {
         if (oldFirst !== firstTrack || oldEnd !== endTrack) {
             saveCorrections();manualOverrides=[];editUndo=[];editRedo=[];loadedFingerprint="";manualNeedsReview=false
             analysisRegions=[];automaticRegions=[];regionBuilder=null;cacheDirty=true;analysisDirty=true;importedRecords=[];importedRegions=[];annotationTick=-1
+            unplacedMarkers=[];unplacedIndex=({});placementNotice=""
             if(advancedNative)observer.setScorePreview([])
         }
         if(annotationSelectionKey.length && annotationSelectionKey===location.tick+":"+location.track && annotationTick>=0)location.tick=annotationTick
@@ -951,12 +961,12 @@ MuseScore {
     onVisibleChanged: {
         if (!started) return
         if (observer) observer.enabled = visible
-        if (!visible) {buildTimer.stop(); restoreColors()}
+        if (!visible) {buildTimer.stop(); restoreColors();markerWindow.hide()}
         else requestRefresh(true)
     }
     onSurfaceActiveChanged: {
         if (!started) return
-        if (!surfaceActive) {refreshTimer.stop(); playbackTimer.stop(); buildTimer.stop(); analysisTimer.stop()}
+        if (!surfaceActive) {refreshTimer.stop(); playbackTimer.stop(); buildTimer.stop(); analysisTimer.stop();markerWindow.hide()}
         else if(advancedNative) {analysisDirty=true; scheduleAnalysis()}
         if (surfaceActive) {followNativePosition(); requestRefresh(false)}
     }
@@ -965,6 +975,17 @@ MuseScore {
     Timer {id:configurationTimer; interval:350; onTriggered:savePreferences()}
     Timer {id:analysisTimer; interval:12; onTriggered:buildAnalysisChunk()}
     Loader {id:settingsStore; active:false; source:"SettingsStore.qml"; onLoaded:{if(item.payload.length){try{applyPreferences(JSON.parse(item.payload))}catch(error){noticeText="配置未读取："+error}}}}
+    Window {
+        id:markerWindow;objectName:"harmonyMarkerWindow"
+        width:360;height:430;minimumWidth:260;minimumHeight:220
+        visible:false;flags:Qt.Tool;title:"和声助手 · 识别点";color:theme.background
+        MarkerList {
+            anchors.fill:parent;anchors.margins:10
+            regions:markerWindow.visible ? root.analysisRegions.filter(function(r){return r.part===root.focusedPart}) : []
+            unplaced:root.unplacedIndex;tick:root.currentTick
+            onActivated:root.openAnnotation(tick,part)
+        }
+    }
     FileDialog {
         id:exchangeDialog
         title:pendingFileAction.indexOf("import")===0 ? "导入 JSON" : "导出和声信息"
@@ -994,63 +1015,69 @@ MuseScore {
     Rectangle {
         id:backdrop
         anchors.fill: parent
-        color: "#f4f4f4"
+        color: theme.background
         Flickable {
             id: flick
             parent:root.dualDetailActive ? root.detailPanelHost : root.ribbon ? detailPopup.contentItem : backdrop
             anchors.fill: parent
             clip: true
             contentWidth: width
-            contentHeight: panel.height + 24
+            contentHeight: panel.height + 16
             boundsBehavior: Flickable.StopAtBounds
             visible:!root.ribbon || detailPopup.opened || root.dualDetailActive
             ScrollBar.vertical: ScrollBar { }
             Flow {
                 id: panel
-                x: 12
-                y: 12
-                width: Math.max(160, flick.width - 24)
-                spacing: 10
+                x: 8
+                y: 8
+                width: Math.max(160, flick.width - 16)
+                spacing: 6
                 Column {
                     width: parent.width
                     spacing: 3
                     RowLayout {
                         width: parent.width
-                        UiLabel {text:"和声助手"; Layout.fillWidth:true; color:ink; font.pixelSize:19; font.bold:true}
-                        ToolButton {
+                        UiLabel {text:"和声助手"; Layout.fillWidth:true; color:ink; font.pixelSize:14; font.bold:true}
+                        DeskButton {
+                            objectName:"harmonyPointButton";flat:true;text:root.unplacedMarkers.length ? "记号 !" : "记号"
+                            implicitWidth:48;enabled:root.advancedNative
+                            onClicked:{markerWindow.show();markerWindow.raise();markerWindow.requestActivate()}
+                            ToolTip.visible:hovered;ToolTip.text:root.unplacedMarkers.length ? root.unplacedMarkers.length+" 个待排记号；查看全部识别点" : "查看全部识别点与所属区间"
+                        }
+                        DeskButton {flat:true;
                             text:typeof root.panelFloating === "boolean" && root.panelFloating ? "停靠" : "悬浮"
                             visible:typeof root.setPanelFloating === "function"
                             font.pixelSize:11
                             onClicked:root.setPanelFloating(!root.panelFloating)
                         }
-                        ToolButton {
-                            font.family: "Microsoft YaHei UI";text:"键盘"; checked:keyboardExpanded; checkable:true; font.pixelSize:11; onClicked:{keyboardExpanded=checked; configurationTimer.restart()}}
-                        ToolButton {
-                            font.family: "Microsoft YaHei UI";text:"设置"; checked:settingsExpanded; checkable:true; font.pixelSize:11; onClicked:{settingsExpanded=checked; configurationTimer.restart()}}
+                        DeskButton {flat:true;
+                            font.family: theme.fontFamily;text:"键盘"; checked:keyboardExpanded; checkable:true; font.pixelSize:11; onClicked:{keyboardExpanded=checked; configurationTimer.restart()}}
+                        DeskButton {flat:true;
+                            font.family: theme.fontFamily;text:"设置"; checked:settingsExpanded; checkable:true; font.pixelSize:11; onClicked:{settingsExpanded=checked; configurationTimer.restart()}}
                     }
                     UiLabel {width:parent.width; text:Harmony.rootNames[keyTonic.currentIndex]+(keyMode.currentIndex===0?" 大调":" 小调")+" · "+scopeText; color:muted; font.pixelSize:11; wrapMode:Text.Wrap}
                 }
                 PanelCard {
                     id:summaryCard; objectName:"harmonySummary"
                     width: root.expanded ? (panel.width-10)/2 : panel.width
-                    minimumBodyHeight:settingsExpanded ? 246 : 208
+                    minimumBodyHeight:settingsExpanded ? 190 : 156
                     StableLabel {text:positionText; color:muted; font.pixelSize:11}
-                    StableLabel {text:chordText; color:chordInk; font.pixelSize:30; font.bold:true}
+                    StableLabel {text:chordText; color:chordInk; font.pixelSize:28; font.bold:true}
                     RowLayout {
                         width: parent.width
                         UiLabel {text:"级数"; color:muted; font.pixelSize:12}
-                        StableLabel {Layout.fillWidth:true; text:degreeText; color:chordInk; font.pixelSize:21; font.bold:true}
+                        StableLabel {Layout.fillWidth:true; text:degreeText; color:chordInk; font.pixelSize:18; font.bold:true}
                     }
                     StableLabel {reservedLines:2; text:matchText+(configuration.chromaticAccent && chromaticChord?" · 含调外音":""); color:muted; font.pixelSize:12}
                     StableLabel {reservedLines:2; text:alternativesText; color:muted; font.pixelSize:11}
-                    Rectangle {width:parent.width; height:1; color:"#EBEEF0"}
+                    Rectangle {width:parent.width; height:1; color:theme.subtleLine}
                     StableLabel {text:inversionText; color:muted; font.pixelSize:11}
                     StableLabel {visible:settingsExpanded; reservedLines:2; text:voicingText; color:ink; font.pixelSize:12}
                 }
                 PanelCard {
                     id:tonesCard; objectName:"harmonyFunctions"
                     width: root.expanded ? (panel.width-10)/2 : panel.width
-                    minimumBodyHeight:body.width>=290 ? 264 : 332
+                    minimumBodyHeight:body.width>=290 ? 224 : 292
                     UiLabel {text:"音程功能"; color:ink; font.bold:true; font.pixelSize:13}
                     Flow {
                         width: parent.width
@@ -1060,10 +1087,10 @@ MuseScore {
                             delegate: Rectangle {
                                 width: Math.max(64, (parent.width - (parent.width >= 290 ? 18 : 12)) / (parent.width >= 290 ? 4 : 3))
                                 height:64
-                                radius: 6
-                                color: modelData.present ? "#F2F5F7" : "#FAFBFC"
-                                border.color:"#e0e0e0"
-                                Rectangle {width:3; height:parent.height-16; x:0; y:8; color:modelData.present?modelData.color:"#e0e0e0"; radius:1}
+                                radius: 1
+                                color: modelData.present ? theme.section : theme.field
+                                border.color:theme.subtleLine
+                                Rectangle {width:parent.width-12; height:2; x:6; y:parent.height-3; color:modelData.present?modelData.color:theme.subtleLine; radius:1}
                                 Column {
                                     id:toneBody
                                     x:6; y:6; width:parent.width-12; spacing:4
@@ -1083,8 +1110,8 @@ MuseScore {
                             model:currentNotes
                             delegate:Rectangle {
                                 property string functionLabel:Harmony.labelFor(modelData.pitch,chordRoot,chordDefinition)
-                                width:noteChip.implicitWidth+16; height:26; radius:4
-                                color:"#f4f4f4"; border.color:"#e0e0e0"
+                                width:noteChip.implicitWidth+16; height:26; radius:1
+                                color:theme.background; border.color:theme.subtleLine
                                 Rectangle {x:0;y:6;width:3;height:14;color:root.colorFor(modelData.pitch,chordRoot,chordDefinition)}
                                 UiLabel {id:noteChip; anchors.centerIn:parent; text:noteName(modelData)+" · "+root.functionText(modelData.pitch,chordRoot,chordDefinition); color:ink; font.pixelSize:11}
                             }
@@ -1142,15 +1169,15 @@ MuseScore {
                     RowLayout {
                         width:parent.width
                         UiLabel {text:"调性"; color:muted; font.pixelSize:12}
-                        ComboBox {
-                            font.family: "Microsoft YaHei UI";
-                            id:keyTonic; Layout.fillWidth:true; Layout.minimumWidth:55; implicitHeight:32
+                        DeskComboBox {
+                            font.family: theme.fontFamily;
+                            id:keyTonic; Layout.fillWidth:true; Layout.minimumWidth:55; implicitHeight:28
                             model:Harmony.rootNames; font.pixelSize:12
                             onActivated:{manualKey=true; updateTexts(); optionsChanged()}
                         }
-                        ComboBox {
-                            font.family: "Microsoft YaHei UI";
-                            id:keyMode; Layout.preferredWidth:80; implicitHeight:32
+                        DeskComboBox {
+                            font.family: theme.fontFamily;
+                            id:keyMode; Layout.preferredWidth:80; implicitHeight:28
                             model:["大调","小调"]; font.pixelSize:12
                             onActivated:{if(!manualKey && currentTick>=0) initializeKey(currentTick); updateTexts(); optionsChanged()}
                         }
@@ -1158,41 +1185,41 @@ MuseScore {
                     UiLabel {width:parent.width; text:manualKey?"调性由你指定":"主音取自当前位置调号；大 / 小调请自行确认"; color:muted; font.pixelSize:10; wrapMode:Text.Wrap}
                     RowLayout {
                         width:parent.width
-                        Switch {
-                            font.family: "Microsoft YaHei UI";id:autoChord; text:"自动识别"; checked:true; font.pixelSize:12; onToggled:{analyze(); optionsChanged()}}
+                        DeskSwitch {
+                            font.family: theme.fontFamily;id:autoChord; text:"自动识别"; checked:true; font.pixelSize:12; onToggled:{analyze(); optionsChanged()}}
                         Item {Layout.fillWidth:true}
-                        Button {
-                            font.family: "Microsoft YaHei UI";text:"读调号"; implicitHeight:32; font.pixelSize:11; onClicked:{manualKey=false; if(currentTick>=0)initializeKey(currentTick); updateTexts(); optionsChanged()}}
+                        DeskButton {
+                            font.family: theme.fontFamily;text:"读调号"; implicitHeight:28; font.pixelSize:11; onClicked:{manualKey=false; if(currentTick>=0)initializeKey(currentTick); updateTexts(); optionsChanged()}}
                     }
                     RowLayout {width:parent.width
                         UiLabel {text:"踏板内识别";color:muted;font.pixelSize:11}
-                        ComboBox {model:["单个和弦","多个和弦"];currentIndex:configuration.pedalMode;Layout.fillWidth:true;onActivated:{var c=Timeline.clone(configuration);c.pedalMode=currentIndex;configuration=Preferences.clean(c);optionsChanged()}}
+                        DeskComboBox {model:["单个和弦","多个和弦"];currentIndex:configuration.pedalMode;Layout.fillWidth:true;onActivated:{var c=Timeline.clone(configuration);c.pedalMode=currentIndex;configuration=Preferences.clean(c);optionsChanged()}}
                     }
-                    Switch {id:pedalContext; text:"踏板保持"; checked:true; enabled:advancedNative; onToggled:optionsChanged()}
+                    DeskSwitch {id:pedalContext; text:"踏板保持"; checked:true; enabled:advancedNative; onToggled:optionsChanged()}
                     RowLayout {
                         width:parent.width
                         UiLabel {text:"无踏板聚合"; color:muted; font.pixelSize:11}
-                        ComboBox {id:arpeggioWindow; model:["即时","半拍","1 拍","2 拍","4 拍"]; Layout.fillWidth:true; implicitHeight:32; onActivated:optionsChanged()}
+                        DeskComboBox {id:arpeggioWindow; model:["即时","半拍","1 拍","2 拍","4 拍"]; Layout.fillWidth:true; implicitHeight:28; onActivated:optionsChanged()}
                     }
                     UiLabel {width:parent.width; text:"聚合限当前小节，休止截断。快速转和弦时建议即时或半拍；踏板保持不等同于声学残响。"; color:muted; font.pixelSize:10; wrapMode:Text.Wrap; visible:settingsExpanded}
-                    ComboBox {
-                            font.family: "Microsoft YaHei UI";
-                        id:scope; width:parent.width; implicitHeight:32; font.pixelSize:12
+                    DeskComboBox {
+                            font.family: theme.fontFamily;
+                        id:scope; width:parent.width; implicitHeight:28; font.pixelSize:12
                         model:["当前乐器（钢琴双谱表）","全谱"]
                         onActivated:{requestRefresh(true); optionsChanged()}
                     }
                     RowLayout {
                         width:parent.width
-                        ComboBox {
-                            font.family: "Microsoft YaHei UI";id:rootCombo; Layout.preferredWidth:76; implicitHeight:32; model:Harmony.rootNames; font.pixelSize:12; onActivated:{autoChord.checked=false; analyze(); optionsChanged()}}
-                        ComboBox {
-                            font.family: "Microsoft YaHei UI";id:qualityCombo; Layout.fillWidth:true; Layout.minimumWidth:80; implicitHeight:32; model:qualityNames; font.pixelSize:12; onActivated:{autoChord.checked=false; analyze(); optionsChanged()}}
+                        DeskComboBox {
+                            font.family: theme.fontFamily;id:rootCombo; Layout.preferredWidth:76; implicitHeight:28; model:Harmony.rootNames; font.pixelSize:12; onActivated:{autoChord.checked=false; analyze(); optionsChanged()}}
+                        DeskComboBox {
+                            font.family: theme.fontFamily;id:qualityCombo; Layout.fillWidth:true; Layout.minimumWidth:80; implicitHeight:28; model:qualityNames; font.pixelSize:12; onActivated:{autoChord.checked=false; analyze(); optionsChanged()}}
                     }
                 }
                 PanelCard {
                     width:root.expanded ? (panel.width-10)/2 : panel.width
-                    Switch {
-                            font.family: "Microsoft YaHei UI";
+                    DeskSwitch {
+                            font.family: theme.fontFamily;
                         id:followPlayback; text:"跟随播放"; checked:true; enabled:playbackAvailable; font.pixelSize:12
                         visible:settingsExpanded && playbackAvailable
                         onToggled:{lastPlayTick=-1; requestRefresh(false); configurationTimer.restart()}
@@ -1202,14 +1229,14 @@ MuseScore {
                         visible:settingsExpanded || !playbackAvailable
                         text:observer?"跟随音序器发声音；选中状态与播放标记保持可见。":playbackAvailable?"读取真实播放位置；播放中仅更新面板。":"当前主程序没有提供播放位置接口，暂时跟随选区。"
                     }
-                    Switch {
-                            font.family: "Microsoft YaHei UI";
+                    DeskSwitch {
+                            font.family: theme.fontFamily;
                         id:scoreColoring; text:"谱面临时配色"; checked:false; font.pixelSize:12
                         onToggled:{if(checked)undoPause=false; if(!internalChange){repaintNotes(); optionsChanged()}}
                     }
-                    Switch {id:allColor; text:"配色覆盖全部小节"; checked:false; enabled:advancedNative && scoreColoring.checked; onToggled:optionsChanged()}
-                    Switch {id:showChords; text:"谱面上方显示和弦 / 级数"; checked:false; enabled:advancedNative; onToggled:optionsChanged()}
-                    Switch {id:showFunctions; text:"音旁显示功能名"; checked:false; enabled:advancedNative; onToggled:optionsChanged()}
+                    DeskSwitch {id:allColor; text:"配色覆盖全部小节"; checked:false; enabled:advancedNative && scoreColoring.checked; onToggled:optionsChanged()}
+                    DeskSwitch {id:showChords; text:"谱面上方显示和弦 / 级数"; checked:false; enabled:advancedNative; onToggled:optionsChanged()}
+                    DeskSwitch {id:showFunctions; text:"音旁显示功能名"; checked:false; enabled:advancedNative; onToggled:optionsChanged()}
                     UiLabel {
                         width:parent.width; font.pixelSize:10; color:muted; wrapMode:Text.Wrap
                         visible:scoreColoring.checked || settingsExpanded
@@ -1217,12 +1244,12 @@ MuseScore {
                     }
                     RowLayout {
                         width:parent.width
-                        Button {
-                            font.family: "Microsoft YaHei UI";text:"恢复原色"; Layout.fillWidth:true; implicitHeight:32; font.pixelSize:12; onClicked:stopColoring()}
-                        Button {
-                            font.family: "Microsoft YaHei UI";text:"刷新"; Layout.fillWidth:true; implicitHeight:32; font.pixelSize:12; onClicked:requestRefresh(true)}
+                        DeskButton {
+                            font.family: theme.fontFamily;text:"恢复原色"; Layout.fillWidth:true; implicitHeight:28; font.pixelSize:12; onClicked:stopColoring()}
+                        DeskButton {
+                            font.family: theme.fontFamily;text:"刷新"; Layout.fillWidth:true; implicitHeight:28; font.pixelSize:12; onClicked:requestRefresh(true)}
                     }
-                    StableLabel {reservedLines:2; text:noticeText; color:muted; font.pixelSize:10}
+                    StableLabel {reservedLines:2; text:placementNotice || noticeText; color:muted; font.pixelSize:10}
                 }
                 PanelCard {
                     width:root.expanded ? (panel.width-10)/2 : panel.width
@@ -1230,8 +1257,8 @@ MuseScore {
                     ConfigurationEditor {width:parent.width; configuration:root.configuration; onModified:{root.configuration=configuration; rebuildRegions();analyze();optionsChanged(false)}}
                     RowLayout {
                         width:parent.width
-                        Button {text:"导入配置"; Layout.fillWidth:true; enabled:advancedNative; onClicked:chooseFile("import-config")}
-                        Button {text:"导出配置"; Layout.fillWidth:true; enabled:advancedNative; onClicked:chooseFile("export-config")}
+                        DeskButton {text:"导入配置"; Layout.fillWidth:true; enabled:advancedNative; onClicked:chooseFile("import-config")}
+                        DeskButton {text:"导出配置"; Layout.fillWidth:true; enabled:advancedNative; onClicked:chooseFile("export-config")}
                     }
                     UiLabel {width:parent.width; text:"设置自动保存，下次启动自动读取。"; color:muted; font.pixelSize:10; wrapMode:Text.Wrap}
                 }
@@ -1241,7 +1268,7 @@ MuseScore {
                     RangeEditor {width:parent.width;region:root.ownedRegion;regions:root.analysisRegions.filter(function(n){return n.part===root.focusedPart})
                         tick:Math.max(0,root.currentTick);scoreEnd:root.analysisEnd;canUndo:root.editUndo.length>0;canRedo:root.editRedo.length>0
                         roots:Harmony.rootNames;rootPcs:Harmony.rootPcs;qualities:root.qualityNames;onAction:root.editRange(command,start,end,rootIndex,qualityIndex,bassIndex)}
-                    Button {text:"复核完成：应用原人工范围";visible:root.manualNeedsReview;onClicked:root.editRange("review",0,0,0,0)}
+                    DeskButton {text:"复核完成：应用原人工范围";visible:root.manualNeedsReview;onClicked:root.editRange("review",0,0,0,0)}
                 }
                 PanelCard {
                     width:root.expanded ? (panel.width-10)/2 : panel.width
@@ -1249,10 +1276,10 @@ MuseScore {
                     UiLabel {text:"全谱和弦分析"; color:ink; font.bold:true; font.pixelSize:13}
                     Flow {
                         width:parent.width; spacing:6
-                        Button {text:"导出 JSON"; enabled:advancedNative; onClicked:prepareExport("json")}
-                        Button {text:"导出 CSV"; enabled:advancedNative; onClicked:prepareExport("csv")}
-                        Button {text:"导入 JSON"; enabled:advancedNative; onClicked:chooseFile("import-analysis")}
-                        Button {text:"重新检测"; enabled:advancedNative; onClicked:{importedRecords=[];importedRegions=[]; optionsChanged()}}
+                        DeskButton {text:"导出 JSON"; enabled:advancedNative; onClicked:prepareExport("json")}
+                        DeskButton {text:"导出 CSV"; enabled:advancedNative; onClicked:prepareExport("csv")}
+                        DeskButton {text:"导入 JSON"; enabled:advancedNative; onClicked:chooseFile("import-analysis")}
+                        DeskButton {text:"重新检测"; enabled:advancedNative; onClicked:{importedRecords=[];importedRegions=[]; optionsChanged()}}
                     }
                     UiLabel {width:parent.width; text:analysisTimer.running?"正在分批分析…":analysisRecords.length+" 个时间切片"+(importedRecords.length?" · 使用导入分析":""); color:muted; font.pixelSize:11; wrapMode:Text.Wrap}
                 }
@@ -1278,7 +1305,7 @@ MuseScore {
                     Flow {
                         id:ribbonTones; visible:ribbonGroup.width>=540; Layout.fillWidth:true; Layout.alignment:Qt.AlignVCenter; spacing:6
                         Repeater {model:root.summaryToneRows; delegate:Rectangle {
-                            width:42; height:30; color:"#ffffff"; radius:4
+                            width:42; height:30; color:theme.field; radius:1
                             Rectangle {x:0;y:8;width:3;height:14;color:modelData.present?modelData.color:"#d0d0d0"}
                             UiLabel {anchors.centerIn:parent; text:modelData.label; color:modelData.present?ink:muted; font.pixelSize:12}
                         }}
@@ -1287,12 +1314,16 @@ MuseScore {
             }
             Column {
                 id:ribbonControls; width:112; anchors.right:parent.right; anchors.rightMargin:12; anchors.verticalCenter:parent.verticalCenter; spacing:4
-                ComboBox {width:parent.width; model:["靠左","居中","靠右","自定位置"]; currentIndex:configuration.ribbonAlign; implicitHeight:28; font.pixelSize:11; onActivated:root.setRibbonPosition(currentIndex)}
-                Button {width:parent.width; text:root.dualDetailActive ? "隐藏右侧详情" : "右侧详情"; visible:typeof root.showDetailPanel==="function"; onClicked:root.toggleDetailPanel(); implicitHeight:28; font.pixelSize:11}
+                DeskComboBox {width:parent.width; model:["靠左","居中","靠右","自定位置"]; currentIndex:configuration.ribbonAlign; implicitHeight:28; font.pixelSize:11; onActivated:root.setRibbonPosition(currentIndex)}
+                RowLayout {
+                    width:parent.width;spacing:4
+                    DeskButton {Layout.fillWidth:true;implicitWidth:50;text:"详情";checked:root.dualDetailActive;visible:typeof root.showDetailPanel==="function";onClicked:root.toggleDetailPanel();ToolTip.visible:hovered;ToolTip.text:"显示／隐藏右侧详情"}
+                    DeskButton {Layout.fillWidth:true;implicitWidth:50;text:root.unplacedMarkers.length ? "记号 !" : "记号";enabled:root.advancedNative;onClicked:{markerWindow.show();markerWindow.raise();markerWindow.requestActivate()}}
+                }
                 RowLayout {
                     width:parent.width; spacing:4
-                    Button {Layout.fillWidth:true; text:"窗口"; onClicked:root.openDetailWindow(); implicitHeight:28; font.pixelSize:11}
-                    Button {Layout.fillWidth:true; text:"悬浮"; visible:typeof root.setPanelFloating==="function"; onClicked:root.setPanelFloating(true); implicitHeight:28; font.pixelSize:11}
+                    DeskButton {Layout.fillWidth:true; text:"窗口"; onClicked:root.openDetailWindow(); implicitHeight:28; font.pixelSize:11}
+                    DeskButton {Layout.fillWidth:true; text:"悬浮"; visible:typeof root.setPanelFloating==="function"; onClicked:root.setPanelFloating(true); implicitHeight:28; font.pixelSize:11}
                 }
             }
         }

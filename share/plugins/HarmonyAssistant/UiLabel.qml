@@ -1,7 +1,8 @@
 import QtQuick.Controls 2.2
 
 Label {
-    font.family: "Microsoft YaHei UI"
+    UiTheme {id:theme}
+    font.family: theme.fontFamily
     font.pixelSize: 12
-    color: "#253342"
+    color: theme.text
 }

@@ -8,6 +8,10 @@
 #include <QJSValue>
 #include <QTemporaryDir>
 #include <QSettings>
+#include <QLabel>
+#include "mscore/mssplashscreen.h"
+#include "mscore/musescoredialogs.h"
+#include "personalbranding.h"
 #include "mtest/testutils.h"
 #include "mscore/musescore.h"
 #include "mscore/scoreview.h"
@@ -162,7 +166,7 @@ class TestPluginHost : public QObject {
             for(auto window:QGuiApplication::allWindows()) {
                   auto view=qobject_cast<QQuickView*>(window);
                   auto root=view ? qobject_cast<QmlPlugin*>(view->rootObject()) : nullptr;
-                  if(root && root->version()=="1.4.0") {panel=root;panelView=view;break;}
+                  if(root && root->version()=="1.5.0") {panel=root;panelView=view;break;}
                   }
             for(auto candidate:main->findChildren<QDockWidget*>())
                   if(candidate->windowTitle()=="Harmony Assistant") {dock=candidate;break;}
@@ -430,6 +434,45 @@ class TestPluginHost : public QObject {
             view->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("native-range-color.png"));
             main->hide();
             }
+      void currentPersonalBranding()
+            {
+            QFile version(QString(TESTROOT)+"/personal/VERSION");QVERIFY(version.open(QIODevice::ReadOnly));
+            QCOMPARE(QString::fromUtf8(version.readAll()).trimmed(),QString(KUMO_PERSONAL_VERSION));
+            AboutBoxDialog about;about.show();QTest::qWait(25);
+            const auto label=about.findChild<QLabel*>("versionLabel");QVERIFY(label);
+            QVERIFY(label->text().contains(personalBuildLabel()));
+            const auto credits=about.findChild<QLabel*>("copyrightLabel");QVERIFY(credits);
+            QVERIFY(credits->text().contains(personalReleaseUrl()));
+            const QDir artifacts(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path()));
+            about.grab().save(artifacts.filePath("kumo-about-022.png"));about.hide();
+            MsSplashScreen splash;splash.show();QTest::qWait(30);
+            splash.grab().save(artifacts.filePath("kumo-splash-022.png"));splash.hide();
+            }
+      void highTrebleAndTempoKeepMarkers()
+            {
+            auto main=Ms::mscore;
+            auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/high-treble.mscx");
+            QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));
+            main->resize(1100,800);main->show();QTest::qWait(30);
+            auto view=main->currentScoreView();PluginAPI::Score wrapped(score);
+            PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);
+            auto first=observer.snapshot(0,4,8).value("notes").toList().front().toMap();
+            first["chord"]="G";first["degree"]="I";first["chordTick"]=0;first["chordUntil"]=480;
+            auto second=first;second["chord"]="D/F#";second["degree"]="V";
+            second["chordTick"]=480;second["chordUntil"]=960;
+            observer.setScorePreview({first,second});
+            QCOMPARE(observer.previewStatus().value("hidden").toInt(),0);
+            const auto segment=score->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest);
+            QVERIFY(segment);const auto page=segment->measure()->system()->page();
+            const qreal x=segment->pagePos().x()+page->pos().x()+score->spatium()*.3;
+            QSignalSpy activated(&observer,&PluginAPI::ScoreObserver::previewActivated);
+            bool found=false;
+            for(qreal y=page->pos().y();y<segment->pagePos().y()+page->pos().y();y+=1)
+                  if(view->activateNotePreview(QPointF(x,y)) && activated.last().front().toInt()==480)found=true;
+            QVERIFY(found);observer.setActiveScorePreview(480);
+            view->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("high-treble-tempo.png"));
+            main->hide();
+            }
       void denseMarkersKeepTickAndNativeFont()
             {
             auto main=Ms::mscore;
@@ -461,6 +504,11 @@ class TestPluginHost : public QObject {
             view->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("dense-native-font.png"));
             const auto normal=view->grab().toImage();first["chordFont"]="Arial";second["chordFont"]="Arial";
             observer.setScorePreview({first,second});QVERIFY(view->grab().toImage()!=normal);
+            first["chordScale"]=2.0;first["chord"]=QString(64,QChar('W'));first["degree"]="I";
+            observer.setScorePreview({first});
+            QCOMPARE(observer.previewStatus().value("hidden").toInt(),1);
+            const auto unplaced=observer.previewStatus().value("unplaced").toList();
+            QCOMPARE(unplaced.size(),1);QCOMPARE(unplaced.front().toMap().value("tick").toInt(),0);
             main->hide();
             }
       };

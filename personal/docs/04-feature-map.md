@@ -139,3 +139,5 @@ Arpeggio 属性/原生读写 → PlaybackTiming 参与音/窗口 → renderArpeg
 ## 0.21.0 左右手短折线
 
 指法调色板两个新Symbol预设；仅四个SMuFL手符号允许可伸缩几何。Symbol原生属性／Undo／读写，InspectorHandSymbol数字和名称拖动，两个端点独立调长度；Note和Chord附着，原生绘制用于PDF/SVG，播放不变。详见[钢琴表达](15-piano-expression.md)。
+
+0.22.0 和声界面：UiTheme.qml／Desk*.qml 统一主题，MarkerList.qml 展示全部识别点；notepreview.h::findPreviewChordBox 保持 x 的实际空位搜索，ScoreObserver::applyPreview 返回待排元数据。纯几何及真实高音／速度文字回归见 tst_scoreobserver／tst_pluginhost。
