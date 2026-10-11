@@ -226,7 +226,7 @@ PianorollEditor::PianorollEditor(QWidget* parent)
 
       // Option: Show levels editor
       _showPianoLevels = preferences.getBool(PREF_UI_PIANOROLL_SHOW_LEVELS_EDITOR);
-      QAction* showLevelsAction = new QAction(tr("Levels Editor"), this);
+      showLevelsAction = new QAction(tr("Levels Editor"), this);
       showLevelsAction->setCheckable(true);
       showLevelsAction->setChecked(_showPianoLevels);
 
@@ -238,7 +238,7 @@ PianorollEditor::PianorollEditor(QWidget* parent)
       tbMain->addSeparator();
 
       // Option: Voice coloring / Unselect preference coloring:
-      QComboBox* coloringBox = new PianoRollComboBox;
+      coloringBox = new PianoRollComboBox;
       coloringBox->setToolTip(tr("Coloring scheme"));
       coloringBox->addItem(tr("Voice"),   int(Coloring::VOICING));
       coloringBox->addItem(tr("Staff"),  int(Coloring::STAFF));
@@ -246,7 +246,7 @@ PianorollEditor::PianorollEditor(QWidget* parent)
 
       tbMain->addWidget(coloringBox);
 
-      auto applyColoring = [this, coloringBox](int index) {
+      auto applyColoring = [this](int index) {
             Coloring c = static_cast<Coloring>(coloringBox->itemData(index).toInt());
             setColoring(c);
             };
@@ -309,8 +309,8 @@ PianorollEditor::PianorollEditor(QWidget* parent)
                     });
 
 
-      // Option: custon note color to be honored or not
-      QAction* useNoteColorsAction = new QAction(
+      // Option: custom note color to be honored or not
+      useNoteColorsAction = new QAction(
             *icons[int(Icons::noteheadColor_ICON)],
             QString(),
             this);
@@ -334,7 +334,7 @@ PianorollEditor::PianorollEditor(QWidget* parent)
       tbMain->addSeparator();
 
       // Option: Show pitch names
-      QAction* showPitchNamesAction = new QAction(
+      showPitchNamesAction = new QAction(
             QIcon(":/data/icons/note-show-pitch.svg"),
             tr("Show pitch names"),
             this);
@@ -362,7 +362,7 @@ PianorollEditor::PianorollEditor(QWidget* parent)
 
       tbMain->addAction(showPitchNamesAction);
 
-      QAction* regroupVoicingAction = tbMain->addAction(tr("Regroup Voicing"));
+      regroupVoicingAction = tbMain->addAction(tr("Regroup Voicing"));
 
       regroupVoicingAction->setToolTip(
             tr("Regroup existing voices by pitch order"));
@@ -612,6 +612,161 @@ PianorollEditor::~PianorollEditor()
       {
       if (_score)
             _score->removeViewer(this);
+      }
+
+//---------------------------------------------------------
+//   changeEvent
+//---------------------------------------------------------
+
+void PianorollEditor::changeEvent(QEvent* event)
+      {
+      QWidget::changeEvent(event);
+
+      if (event->type() == QEvent::LanguageChange)
+            retranslate();
+      }
+
+//---------------------------------------------------------
+//   retranslate
+//---------------------------------------------------------
+
+void PianorollEditor::retranslate()
+      {
+      staffBox->setToolTip(tr("Editable staff"));
+
+      {
+      QSignalBlocker blocker(veloType);
+      orientationBox->setToolTip(tr("View orientation"));
+      orientationBox->setItemText(0, tr("Horizontal"));
+      orientationBox->setItemText(1, tr("Vertical"));
+
+      scopeBox->setToolTip(tr("Displayed scope"));
+      scopeBox->setItemText(0, tr("Staff"));
+      scopeBox->setItemText(1, tr("Part"));
+      scopeBox->setItemText(2, tr("Score"));
+
+      showLevelsAction->setText(tr("Levels Editor"));
+
+      coloringBox->setToolTip(tr("Coloring scheme"));
+      coloringBox->setItemText(0, tr("Voice"));
+      coloringBox->setItemText(1, tr("Staff"));
+      coloringBox->setItemText(2, tr("Instrument"));
+
+      noteShapeBox->setItemText(0, tr("Auto"));
+      noteShapeBox->setItemText(1, tr("Duration"));
+      noteShapeBox->setItemText(2, tr("Onset"));
+
+      noteShapeBox->setItemData(
+            0,
+            tr("Automatic: rectangles for pitched instruments, diamonds for drums"),
+            Qt::ToolTipRole);
+
+      noteShapeBox->setItemData(1, tr("Rectangle"), Qt::ToolTipRole);
+      noteShapeBox->setItemData(2, tr("Diamond"), Qt::ToolTipRole);
+      }
+
+      // Third toolbar: static labels
+      cursorLabel->setText(tr("Cursor:"));
+      subdivLabel->setText(tr("Subdiv.:"));
+      tupletLabel->setText(tr("Tuplet:"));
+      stripePatternLabel->setText(tr("Stripe Pattern:"));
+      velocityLabel->setText(tr("Velocity:"));
+      pitchTextLabel->setText(tr("Pitch:"));
+      onTimeLabel->setText(tr("OnTime:"));
+      lengthLabel->setText(tr("Len:"));
+
+      // Third toolbar: editor tooltips
+      subdiv->setToolTip(tr("Subdivide the beat this many times"));
+      tuplet->setToolTip(tr("Edit notes aligned to tuplets of this many beats"));
+      barPattern->setToolTip(tr("White stripes show the tones of this chord."));
+
+      // Stripe pattern names
+      {
+      QSignalBlocker blocker(barPattern);
+      for (int i = 0; i < barPattern->count(); ++i) {
+            const int patternIndex = barPattern->itemData(i).toInt();
+            const QString name = PianoView::barPatterns[patternIndex].name;
+            barPattern->setItemText(
+                  i, qApp->translate("BarPattern", name.toUtf8().constData()));
+            }
+      }
+
+      // Velocity type
+      {
+      QSignalBlocker blocker(veloType);
+      const int offsetIndex = veloType->findData(int(Note::ValueType::OFFSET_VAL));
+      const int userIndex = veloType->findData(int(Note::ValueType::USER_VAL));
+
+      if (offsetIndex >= 0)
+            veloType->setItemText(offsetIndex, tr("Offset"));
+      if (userIndex >= 0)
+            veloType->setItemText(userIndex, tr("User"));
+      }
+
+      regroupVoicingAction->setText(tr("Regroup Voicing"));
+      regroupVoicingAction->setToolTip(tr("Regroup existing voices by pitch order"));
+
+      keyboardAlignedGrid->setText(tr("Keyboard-aligned grid"));
+      keyboardAlignedGrid->setToolTip(tr("Align the vertical piano-roll pitch lanes with the keyboard"));
+
+      if (_score && staffBox) {
+            QSignalBlocker blocker(staffBox);
+
+            for (int i = 0; i < staffBox->count(); ++i) {
+                  const int staffIndex = staffBox->itemData(i).toInt();
+
+                  if (staffIndex >= 0 && staffIndex < _score->nstaves()) {
+                        staffBox->setItemText(i, staffDisplayName(_score->staff(staffIndex)));
+                        }
+                  }
+            }
+
+      // Edit-tool button tooltips
+      auto setEditToolTip = [this](PianoRollEditTool tool, const QString& text) {
+            if (QAbstractButton* button = bngrpActionBns->button(int(tool)))
+                  button->setToolTip(text);
+            };
+
+      setEditToolTip(PianoRollEditTool::SELECT, tr("Select Notes"));
+      setEditToolTip(PianoRollEditTool::ADD, tr("Add Note"));
+      setEditToolTip(PianoRollEditTool::PAINT, tr("Paint Notes"));
+      setEditToolTip(PianoRollEditTool::CUT, tr("Cut Chord"));
+      setEditToolTip(PianoRollEditTool::ERASE, tr("Erase Note"));
+      setEditToolTip(PianoRollEditTool::EVENT_ADJUST, tr("Change Playback Length"));
+      setEditToolTip(PianoRollEditTool::TIE, tr("Toggle Tie"));
+
+      if (QAbstractButton* button = voiceGroup->button(0))
+            button->setToolTip(tr("Voice 1"));
+      if (QAbstractButton* button = voiceGroup->button(1))
+            button->setToolTip(tr("Voice 2"));
+      if (QAbstractButton* button = voiceGroup->button(2))
+            button->setToolTip(tr("Voice 3"));
+      if (QAbstractButton* button = voiceGroup->button(3))
+            button->setToolTip(tr("Voice 4"));
+
+      automaticVoiceAction->setText(tr("Auto Voice"));
+      automaticVoiceAction->setToolTip(tr("Automatically choose a compatible voice when inserting notes"));
+
+      // Note representation
+      noteShapeBox->setToolTip(tr("Piano roll note representation for the editable instrument"));
+
+      // Note colors
+      useNoteColorsAction->setToolTip(tr("Honor user-defined note colors"));
+
+      // Pitch names
+      showPitchNamesAction->setText(tr("Show pitch names"));
+      showPitchNamesAction->setToolTip(tr("Show pitch names"));
+      showPitchNamesAction->setStatusTip(tr("Show pitch names"));
+
+      // Regroup voicing
+      regroupVoicingAction->setToolTip(tr("Regroup existing voices by pitch order"));
+
+      // Controls chevron
+      controlsChevronButton->setToolTip(
+            _controlsVisible
+                  ? tr("Hide piano roll controls")
+                  : tr("Show piano roll controls"));
+
       }
 
 //---------------------------------------------------------
@@ -876,7 +1031,7 @@ void PianorollEditor::createEditToolbars(const QSize& iconSize)
 
       tbVoices = new QToolBar("Toolbar Voices", this);
 
-      QButtonGroup* voiceGroup = new QButtonGroup(this);
+      voiceGroup = new QButtonGroup(this);
 
       tbVoices->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
       tbVoices->setIconSize(iconSize);
@@ -917,7 +1072,7 @@ void PianorollEditor::createEditToolbars(const QSize& iconSize)
             if (p->selected)
                   button->setChecked(true);
 
-            voiceGroup->addButton(button);
+            voiceGroup->addButton(button, voice);
             tbVoices->addWidget(button);
             }
 
@@ -951,7 +1106,7 @@ Awl::PitchLabel* PianorollEditor::createTweakToolbar(const QSize& iconSize)
       tbTweak = new QToolBar("Toolbar Tweak", this);
       tbTweak->setIconSize(iconSize);
 
-      tbTweak->addWidget(new QLabel(tr("Cursor:")));
+      tbTweak->addWidget(cursorLabel = new QLabel(tr("Cursor:")));
 
       pos = new Awl::PosLabel;
       pos->setFrameStyle(static_cast<int>(QFrame::NoFrame)
@@ -965,7 +1120,7 @@ Awl::PitchLabel* PianorollEditor::createTweakToolbar(const QSize& iconSize)
 
       tbTweak->addSeparator();
 
-      tbTweak->addWidget(new QLabel(tr("Subdiv.:")));
+      tbTweak->addWidget(subdivLabel = new QLabel(tr("Subdiv.:")));
 
       subdiv = new QSpinBox;
       subdiv->setToolTip(tr("Subdivide the beat this many times"));
@@ -973,7 +1128,7 @@ Awl::PitchLabel* PianorollEditor::createTweakToolbar(const QSize& iconSize)
       subdiv->setValue(0);
       tbTweak->addWidget(subdiv);
 
-      tbTweak->addWidget(new QLabel(tr("Tuplet:")));
+      tbTweak->addWidget(tupletLabel = new QLabel(tr("Tuplet:")));
 
       tuplet = new QSpinBox;
       tuplet->setToolTip(tr("Edit notes aligned to tuplets of this many beats"));
@@ -981,7 +1136,7 @@ Awl::PitchLabel* PianorollEditor::createTweakToolbar(const QSize& iconSize)
       tuplet->setValue(1);
       tbTweak->addWidget(tuplet);
 
-      tbTweak->addWidget(new QLabel(tr("Stripe Pattern:")));
+      tbTweak->addWidget(stripePatternLabel = new QLabel(tr("Stripe Pattern:")));
 
       barPattern = new PianoRollComboBox;
       barPattern->setToolTip(tr("White stripes show the tones of this chord."));
@@ -1024,11 +1179,12 @@ Awl::PitchLabel* PianorollEditor::createTweakToolbar(const QSize& iconSize)
       tbTweak->addSeparator();
 
       // Option: Velocity type
-      tbTweak->addWidget(new QLabel(tr("Velocity:")));
+      tbTweak->addWidget(velocityLabel = new QLabel(tr("Velocity:")));
 
       veloType = new PianoRollComboBox;
       veloType->addItem(tr("Offset"), int(Note::ValueType::OFFSET_VAL));
       veloType->addItem(tr("User"), int(Note::ValueType::USER_VAL));
+
       tbTweak->addWidget(veloType);
 
       velocity = new QSpinBox;
@@ -1042,20 +1198,20 @@ Awl::PitchLabel* PianorollEditor::createTweakToolbar(const QSize& iconSize)
 
       tbTweak->addWidget(velocity);
 
-      tbTweak->addWidget(new QLabel(tr("Pitch:")));
+      tbTweak->addWidget(pitchTextLabel = new QLabel(tr("Pitch:")));
 
       pitch = new Awl::PitchEdit;
       pitch->setReadOnly(false);
       tbTweak->addWidget(pitch);
 
-      tbTweak->addWidget(new QLabel(tr("OnTime:")));
+      tbTweak->addWidget(onTimeLabel = new QLabel(tr("OnTime:")));
 
       onTime = new QSpinBox;
       onTime->setRange(-60000, +60000);
       onTime->setSingleStep(50);
       tbTweak->addWidget(onTime);
 
-      tbTweak->addWidget(new QLabel(tr("Len:")));
+      tbTweak->addWidget(lengthLabel = new QLabel(tr("Len:")));
 
       tickLen = new QSpinBox;
       tickLen->setRange(-2000, 60000);

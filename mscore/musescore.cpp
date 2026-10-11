@@ -2706,6 +2706,8 @@ void MuseScore::retranslate()
             _debugLogAction->setText(tr("Debug Log"));
       if (_debugLogDock)
             _debugLogDock->setWindowTitle(tr("Debug Log"));
+      if (pianorollDock)
+            pianorollDock->setWindowTitle(tr("Piano Roll Editor"));
 
       aboutAction->setText(tr("&About…"));
       aboutQtAction->setText(tr("About &Qt…"));

@@ -107,6 +107,23 @@ class PianorollEditor : public QWidget, public MuseScoreView {
       QAction* keyboardAlignedGridSeparator { nullptr };
       QAction* automaticVoiceAction { nullptr };
       QAction* automaticVoiceSeparator { nullptr };
+      QAction* showLevelsAction { nullptr };
+      QAction* regroupVoicingAction { nullptr };
+      QComboBox* coloringBox { nullptr };      
+      QAction* useNoteColorsAction { nullptr };
+      QAction* showPitchNamesAction { nullptr };
+      
+      QButtonGroup* voiceGroup { nullptr };      
+
+      QLabel* cursorLabel { nullptr };
+      QLabel* subdivLabel { nullptr };
+      QLabel* tupletLabel { nullptr };
+      QLabel* stripePatternLabel { nullptr };
+      QLabel* velocityLabel { nullptr };
+      QLabel* pitchTextLabel { nullptr };
+      QLabel* onTimeLabel { nullptr };
+      QLabel* lengthLabel { nullptr };
+
       QSplitter* split { nullptr };
       PianoRollScope _scope;
       PianoRollOrientation _orientation;
@@ -161,7 +178,7 @@ class PianorollEditor : public QWidget, public MuseScoreView {
       void createEditToolbars(const QSize& iconSize);
       Awl::PitchLabel* createTweakToolbar(const QSize& iconSize);
       void connectEditorSignals(Awl::PitchLabel* pitchLabel, QComboBox* coloringBox);
-
+      void retranslate();
 
       void updatePlaybackFollow();
       void stopPlaybackFollow();
@@ -190,6 +207,9 @@ class PianorollEditor : public QWidget, public MuseScoreView {
       void setOnTime(int);
       void setTickLen(int);
       void setPianoLevelsVisible(bool visible);
+
+   protected:
+      void changeEvent(QEvent* event) override;
 
    public:
       PianorollEditor(QWidget* parent = 0);
