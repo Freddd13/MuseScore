@@ -13,8 +13,10 @@ for /r %1 %%a in (*.ui) do echo     %%a \
 echo.
 
 echo INCLUDEPATH = \
+echo     %1 \
 echo     %1/libmscore \
 echo     %1/mscore \
+echo     %1/mscore/pianoroll \
 echo.
 
 echo SOURCES = \
