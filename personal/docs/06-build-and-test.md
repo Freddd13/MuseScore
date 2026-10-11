@@ -162,3 +162,11 @@ GUI suite 增加 wheelVelocityBurstAndScoreTargets、personalBrandingAndToolbarE
 ## 0.21.0 手折线验证
 
 在隔离msvc.piano-source构建Release，安装msvc.install_piano_0_21_x64；相关模型和真实Qt在tst_performanceeditor的handSymbolModelAndPersistence/handSymbolInspectorAndGrips，复用已有freeslur小谱。测试/导出报告保存在最终安装validation，生成夹具及构建缓存均忽略。最终合并并行0.20.1后重新链接与回归；只清理有归属证据的本任务临时目录，保留正式安装和其他任务目录。
+
+## 0.26 隔离验证与性能比较
+
+独立 msvc.performance-strip-source/msvc.build_strip_x64，VS2019 v142 x64 Release，原 Qt5.15.2 SDK 只用 junction 共享。编译器堆不足时保持 BUILD_PCH=ON，以进程 _CL_=/Y- /MP1、MSBuild /m:1 /nr:false /p:PreferredToolArchitecture=x64 使用64位宿主；关闭 BUILD_PCH 会破坏原目标必需的强制包含，不作为替代。测试直接调用各子目录 .vcxproj，保持同一套静态依赖重编，避免旧 ABI 混用。
+
+新增位置／真实头中心与隐藏选择／窄列损伤真实 Qt 槽；常规、150%DPI、原 MIDI 与其他个人模型／插件回归及实际安装运行报告见 CHANGELOG。压力槽加四种显示状态的选择回调／原生绘制／定位／QPaintEvent region面积，各40样本；另分力度／速度／踏板测固定区域绘制。基线与最终数据分别保存，不把不同视口大小或并行任务旧版本的帧耗时视为等价。
+
+最终安装 msvc.install_performance_strip_x64；小量日志／截图／校验脚本保存在 verification。完成后验证标签／EXE哈希，移除自己 dependencies 链接本身，再移除自己的 CLI worktree／构建与临时测试EXE；原SDK、其他任务目录和旧程序保留。

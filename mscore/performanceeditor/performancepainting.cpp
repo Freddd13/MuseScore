@@ -137,11 +137,14 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
             QVector<QPair<double, double>> density; QVector<QColor> densityColors;
             const double baseline = qBound(rect.top(), yForValue(rangeKind() == 1 ? 0 : 1, rect, onScore), rect.bottom());
             if (dense) { density.fill({rect.bottom(), rect.bottom()}, int(rect.width() / columnWidth) + 1); densityColors.fill(_appearance.colors[PerformanceAppearance::Text], density.size()); }
-            for (auto it = first; it != _notes.cend() && it->tick <= until; ++it) {
-                  if (onScore && it->system != _system) continue;
-                  const int index = int(it - _notes.cbegin());
+            const int begin = onScore ? 0 : int(first - _notes.cbegin());
+            const int end = onScore ? _systemIndices.size() : int(std::upper_bound(first, _notes.cend(), until, [](int t, const NoteInfo& n) { return t < n.tick; }) - _notes.cbegin());
+            for (int position = begin; position < end; ++position) {
+                  const int index = onScore ? _systemIndices[position] : position;
+                  const auto it = _notes.cbegin() + index;
                   if (!it->inScope || (!it->enabled && !_ghostVoices) || !hasNoteValue(*it)) continue;
-                  const double x = xForTick(it->tick, onScore);
+                  const double x = xForNote(index, onScore);
+                  if (x < active.left() - 8 || x > active.right() + 8) continue;
                   const double y = yForValue(noteValue(index), rect, onScore);
                   if (dense && !it->selected && index != _hover && !_playingNotes.contains(index) && !_pending.contains(it->note)) {
                         const int column = int((x - rect.left()) / columnWidth);
@@ -183,7 +186,7 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
             // overview bins cannot cover the native selection. No time offset.
             for (int index : emphasis) {
                   const auto& note = _notes[index];
-                  const double x = xForTick(note.tick, onScore), y = yForValue(noteValue(index), rect, onScore);
+                  const double x = xForNote(index, onScore), y = yForValue(noteValue(index), rect, onScore);
                   const auto edit = _pending.value(note.note, {note.type, note.raw});
                   QColor color = onScore ? scoreNoteColor(index) : _appearance.noteColor(NoteVelocity::effective(note.base, edit.type, edit.raw), note.track);
                   if (!note.enabled) color.setAlpha(40);
@@ -206,13 +209,13 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
                   return segment.bpm;
                   };
             const int from = tickForX(rect.left(), onScore), until = tickForX(rect.right(), onScore);
-            auto first = std::lower_bound(_segments.cbegin(), _segments.cend(), from, [](const SegmentInfo& s, int t) { return s.tick < t; });
-            if (first != _segments.cbegin()) --first;
+            const auto& segments = onScore ? _systemSegments : _segments;
+            auto first = std::lower_bound(segments.cbegin(), segments.cend(), from, [](const SegmentInfo& s, int t) { return s.tick < t; });
+            if (first != segments.cbegin()) --first;
             if (!paintTempoCurves(painter, rect, onScore)) {
             const SegmentInfo* previous = nullptr;
-            for (auto it = first; it != _segments.cend(); ++it) {
+            for (auto it = first; it != segments.cend(); ++it) {
                   const auto& segment = *it;
-                  if (onScore && segment.system != _system) continue;
                   const double bpm = bpmAt(segment);
                   if (previous) {
                         const double x0 = xForTick(previous->tick, onScore), x1 = xForTick(segment.tick, onScore);
@@ -224,9 +227,11 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
                   if (segment.tick > until) break;
                   }
             }
-            for (const auto& tempo : _tempos) {
+            const int nodeFrom = tickForX(rect.left() - 6, onScore), nodeUntil = tickForX(rect.right() + 6, onScore);
+            auto firstTempo = std::lower_bound(_tempos.cbegin(), _tempos.cend(), nodeFrom, [](const TempoInfo& t, int tick) { return t.tick < tick; });
+            for (auto it = firstTempo; it != _tempos.cend() && it->tick <= nodeUntil; ++it) {
+                  const auto& tempo = *it;
                   const double x = xForTick(tempo.tick, onScore), y = yForValue(_tempoDraft.value(tempo.tick, tempo.bpm), rect, onScore);
-                  if (onScore && (tempo.tick < tickForX(rect.left(), true) || tempo.tick > tickForX(rect.right(), true))) continue;
                   painter.setPen(QPen(tempo.visible ? _appearance.colors[PerformanceAppearance::Preview] : _appearance.colors[PerformanceAppearance::Tempo], 2)); painter.setBrush(QBrush(_appearance.colors[PerformanceAppearance::Background]));
                   painter.drawRect(QRectF(x - 4, y - 4, 8, 8));
                   }

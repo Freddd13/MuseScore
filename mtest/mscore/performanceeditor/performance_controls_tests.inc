@@ -94,7 +94,7 @@
             const auto position = score->playPos(); const auto matrix = view->matrix(); const int undo = score->undoStack()->getCurIdx();
             const double left = qMax(56.0, matrix.map(system->firstMeasure()->canvasPos()).x());
             const double right = qMin(double(view->width() - 12), matrix.map(system->lastMeasure()->canvasPos() + QPointF(system->lastMeasure()->width(), 0)).x());
-            const int x = qRound(matrix.map(chord->segment()->canvasPos()).x());
+            const int x = qRound(matrix.mapRect(target->canvasBoundingRect()).center().x());
             const int top = view->height() - 106, endpoint = top + 40;
             view->repaint();
             const QImage selectedImage = view->grab().toImage();
@@ -103,7 +103,9 @@
             auto other = noteAt(score, 1920, 0); QVERIFY(other);
             QTest::mouseMove(view, matrix.mapRect(other->canvasBoundingRect()).center().toPoint());
             for (QPoint point : {QPoint(qRound(left + 20), top - 12), QPoint(qRound(left - 25), top + 20)}) {
-                  QTest::mouseMove(view, point); QTest::mouseClick(view, Qt::RightButton, Qt::NoModifier, point);
+                  QTest::mouseMove(view, point);
+                  if (point.y() < top) QTimer::singleShot(20, [] { if (auto popup = QApplication::activePopupWidget()) popup->close(); });
+                  QTest::mouseClick(view, Qt::RightButton, Qt::NoModifier, point);
                   QCOMPARE(score->selection().noteList().size(), 1); QVERIFY(target->selected());
                   }
             QCOMPARE(view->matrix(), matrix); QCOMPARE(score->playPos(), position); QCOMPARE(score->undoStack()->getCurIdx(), undo);
@@ -130,7 +132,7 @@
             QVERIFY(bandAction->isChecked());
             main->showPerformanceEditor(false); QTest::qWait(60); QVERIFY(!editor->isVisible()); QVERIFY(editor->scoreBandEnabled()); QVERIFY(bandAction->isChecked());
             QVERIFY(PerformanceSelection::apply(score, {target}, target)); editor->selectionChanged(); QTest::qWait(25);
-            const int standaloneX = qRound(view->matrix().map(chord->segment()->canvasPos()).x()), standaloneY = view->height() - 66;
+            const int standaloneX = qRound(view->matrix().mapRect(target->canvasBoundingRect()).center().x()), standaloneY = view->height() - 66;
             const int standaloneUndo = score->undoStack()->getCurIdx();
             QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, QPoint(standaloneX, standaloneY));
             QMouseEvent standaloneMove(QEvent::MouseMove, QPointF(standaloneX, standaloneY - 8), Qt::NoButton, Qt::LeftButton, Qt::NoModifier); QApplication::sendEvent(view, &standaloneMove);
@@ -285,4 +287,117 @@
                   QCOMPARE(item.second->tick().ticks(), 615); QCOMPARE(item.second->tick2().ticks(), 2535); QVERIFY(!item.second->spannerSegments().empty()); found = true;
                   }
             QVERIFY(found);
+            }
+
+      void scoreStripPlacementAndNativeAnchors()
+            {
+            auto main = Ms::mscore; QVERIFY(main);
+            QFile fixtureFile(QString(TESTROOT) + "/mtest/mscore/scoreobserver/piano.mscx"); QVERIFY(fixtureFile.open(QIODevice::ReadOnly));
+            auto xml = fixtureFile.readAll(); xml.replace("<pitch>62</pitch><tpc>16</tpc>", "<pitch>60</pitch><tpc>14</tpc>");
+            xml.replace("<Rest><durationType>quarter</durationType></Rest><Chord>", "<Rest><durationType>quarter</durationType></Rest><Chord><acciaccatura/><durationType>eighth</durationType><Note><pitch>74</pitch><tpc>16</tpc></Note></Chord><Chord>");
+            const QString path = _directory.path() + "/native-strip-heads.mscx"; QFile fixtureOut(path); QVERIFY(fixtureOut.open(QIODevice::WriteOnly)); fixtureOut.write(xml); fixtureOut.close();
+            auto score = main->readScore(path); QVERIFY(score);
+            auto chord = noteAt(score)->chord(); auto target = chord->notes().back(); auto other = chord->notes().front();
+            // Real native displacement, deliberately outside the segment's hit
+            // tolerance; selection must follow the head rather than its tick.
+            score->startCmd(); target->undoChangeProperty(Pid::OFFSET, QPointF(3 * score->spatium(), 0)); score->endCmd(); score->doLayout();
+            main->setCurrentScoreView(main->appendScore(score)); main->resize(1280, 1000); main->show();
+            auto editor = main->performanceEditor(); main->showPerformanceEditor(true);
+            editor->findChild<QComboBox*>("performanceParameter")->setCurrentIndex(0);
+            editor->findChild<QComboBox*>("performanceTool")->setCurrentIndex(0);
+            editor->findChild<QComboBox*>("performanceScope")->setCurrentIndex(2);
+            editor->findChild<QComboBox*>("performanceAxis")->setCurrentIndex(0);
+            for (auto check : editor->findChildren<QCheckBox*>()) check->setChecked(false);
+            QList<Note*> group; for (auto note : chord->notes()) group.append(note);
+            QVERIFY(PerformanceSelection::apply(score, group, target)); editor->selectionChanged(); editor->setSelectedValue(64); QTest::qWait(40);
+            auto fixed = editor->findChild<QAction*>("performanceBandPosition0"), follow = editor->findChild<QAction*>("performanceBandPosition1"); QVERIFY(fixed); QVERIFY(follow);
+            fixed->trigger(); editor->findChild<QAction*>("performanceBandHeight48")->trigger(); editor->setScoreBandEnabled(true); main->showPerformanceEditor(false); QTest::qWait(50);
+            // Earlier fixtures may leave page-fit zoom active. Set a real
+            // native head offset giving 30 logical pixels at that zoom/DPI.
+            const auto fixtureMatrix = main->currentScoreView()->matrix();
+            const double headGap = fixtureMatrix.mapRect(target->canvasBoundingRect()).center().x() - fixtureMatrix.mapRect(other->canvasBoundingRect()).center().x();
+            score->startCmd(); target->undoChangeProperty(Pid::OFFSET, target->offset() + QPointF((30 - headGap) / fixtureMatrix.m11(), 0)); score->endCmd(); score->doLayout(); QTest::qWait(30);
+            auto view = main->currentScoreView(); const auto matrix = view->matrix(); const auto playPos = score->playPos(); const int undo = score->undoStack()->getCurIdx();
+            const int x = qRound(matrix.mapRect(target->canvasBoundingRect()).center().x());
+            const int otherX = qRound(matrix.mapRect(other->canvasBoundingRect()).center().x()); QVERIFY(std::abs(x - otherX) > 15);
+            QVERIFY(chord->notes().size() >= 3); auto second = chord->notes()[1];
+            QVERIFY(std::abs(matrix.mapRect(second->canvasBoundingRect()).center().x() - matrix.mapRect(other->canvasBoundingRect()).center().x()) > 1);
+            QVERIFY(!chord->graceNotesBefore().empty()); auto grace = chord->graceNotesBefore().front()->notes().front();
+            const int graceX = qRound(matrix.mapRect(grace->canvasBoundingRect()).center().x()); QVERIFY(std::abs(graceX - otherX) > 2);
+            QVERIFY(PerformanceSelection::apply(score, {other}, other)); editor->selectionChanged(); QTest::qWait(20);
+            const int y = view->height() - 26 - 24;
+            QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, QPoint(x, y)); QTest::qWait(20);
+            QVERIFY(target->selected()); QVERIFY(!other->selected()); QCOMPARE(score->playPos(), playPos); QCOMPARE(score->undoStack()->getCurIdx(), undo); QCOMPARE(view->matrix(), matrix);
+            QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, QPoint(x, y));
+            QMouseEvent move(QEvent::MouseMove, QPointF(x, y - 10), Qt::NoButton, Qt::LeftButton, Qt::NoModifier); QApplication::sendEvent(view, &move);
+            QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier, QPoint(x, y - 10)); QTest::qWait(40);
+            QVERIFY(target->customizeVelocity(NoteVelocity::referenceBase(target)) > 64); QCOMPARE(other->customizeVelocity(NoteVelocity::referenceBase(other)), 64);
+            QCOMPARE(score->undoStack()->getCurIdx(), undo + 1); score->undoRedo(true, &ed); QTest::qWait(40);
+            // Integer mouse coordinates must still hit fractional native head
+            // centres when the pencil moves vertically without a time sweep.
+            editor->findChild<QComboBox*>("performanceTool")->setCurrentIndex(1);
+            QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, QPoint(x, y));
+            QMouseEvent pencilMove(QEvent::MouseMove, QPointF(x, y - 10), Qt::NoButton, Qt::LeftButton, Qt::NoModifier); QApplication::sendEvent(view, &pencilMove);
+            QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier, QPoint(x, y - 10)); QTest::qWait(30);
+            QVERIFY(target->customizeVelocity(NoteVelocity::referenceBase(target)) > 64); QCOMPARE(other->customizeVelocity(NoteVelocity::referenceBase(other)), 64);
+            QCOMPARE(score->undoStack()->getCurIdx(), undo + 1); score->undoRedo(true, &ed); QTest::qWait(35);
+            editor->findChild<QComboBox*>("performanceTool")->setCurrentIndex(0);
+            QVERIFY(PerformanceSelection::apply(score, {grace}, grace)); editor->selectionChanged(); editor->setSelectedValue(64); QTest::qWait(30);
+            QVERIFY(PerformanceSelection::apply(score, {target}, target)); editor->selectionChanged(); QTest::qWait(20);
+            QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, QPoint(graceX, y)); QTest::qWait(20); QVERIFY(grace->selected()); QVERIFY(!target->selected());
+            // Nearby but visibly distinct stems must use their nearest actual
+            // endpoint, not let the old selected neighbour steal a drag/cycle.
+            const double delta = other->canvasBoundingRect().center().x() + 6 / matrix.m11() - second->canvasBoundingRect().center().x();
+            score->startCmd(); second->undoChangeProperty(Pid::OFFSET, second->offset() + QPointF(delta, 0)); score->endCmd(); score->doLayout(); QTest::qWait(40);
+            const double secondX = view->matrix().mapRect(second->canvasBoundingRect()).center().x(); QVERIFY(std::abs(secondX - otherX) < 7);
+            QVERIFY(PerformanceSelection::apply(score, {second}, second)); editor->selectionChanged(); QTest::qWait(20);
+            QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, QPoint(otherX, y));
+            QMouseEvent nearMove(QEvent::MouseMove, QPointF(otherX, y - 8), Qt::NoButton, Qt::LeftButton, Qt::NoModifier); QApplication::sendEvent(view, &nearMove);
+            QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier, QPoint(otherX, y - 8)); QTest::qWait(30);
+            QVERIFY(other->selected()); QVERIFY(!second->selected()); QVERIFY(other->customizeVelocity(NoteVelocity::referenceBase(other)) > 64); QCOMPARE(second->customizeVelocity(NoteVelocity::referenceBase(second)), 64);
+            score->undoRedo(true, &ed); QTest::qWait(35); const int afterGrace = score->undoStack()->getCurIdx();
+            // Follow the native lowest visible staff/ink edge; placement is purely
+            // screen geometry and cannot move the native score or playback cursor.
+            auto system = chord->measure()->system(); double bottom = 0;
+            for (auto staff : *system->staves()) if (staff->show()) bottom = qMax(bottom, system->canvasPos().y() + qMax(staff->bbox().bottom(), staff->y() + staff->yBottom()));
+            follow->trigger(); QTest::qWait(30); const int top = qRound(matrix.map(QPointF(0, bottom)).y() + 36);
+            QVERIFY(top + 48 + 5 <= view->height() - 12); QVERIFY(top < view->height() - 74);
+            view->grab().save("performance-strip-follow-native-heads.png");
+            QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, QPoint(otherX, top + 24)); QTest::qWait(20); QVERIFY(other->selected()); QVERIFY(!target->selected());
+            QCOMPARE(score->playPos(), playPos); QCOMPARE(view->matrix(), matrix); QCOMPARE(score->undoStack()->getCurIdx(), afterGrace);
+            // A viewport scroll erases both old and new strip pixels; moving the
+            // native row out of the visible space falls back to the fixed strip.
+            const auto beforeScroll = view->grab().toImage(); view->setOffset(matrix.dx(), matrix.dy() + view->height()); QTest::qWait(30);
+            const auto scrolled = view->matrix(); const int fallbackX = qRound(scrolled.mapRect(target->canvasBoundingRect()).center().x());
+            QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, QPoint(fallbackX, view->height() - 50)); QTest::qWait(20); QVERIFY(target->selected());
+            QVERIFY(view->grab().toImage() != beforeScroll); view->grab().save("performance-strip-follow-fallback.png");
+            view->setOffset(matrix.dx(), matrix.dy()); fixed->trigger(); editor->setScoreBandEnabled(false); main->showPerformanceEditor(true); QTest::qWait(30);
+            }
+      void scoreStripHiddenSelectionAndCursorDamage()
+            {
+            auto main = Ms::mscore; QVERIFY(main); auto editor = main->performanceEditor();
+            auto score = main->readScore(QString(TESTROOT) + "/mtest/mscore/scoreobserver/piano.mscx"); QVERIFY(score);
+            main->setCurrentScoreView(main->appendScore(score)); main->resize(1280, 1000); main->show(); main->showPerformanceEditor(true);
+            editor->findChild<QComboBox*>("performanceScope")->setCurrentIndex(1);
+            editor->findChild<QComboBox*>("performanceParameter")->setCurrentIndex(0); editor->findChild<QComboBox*>("performanceAxis")->setCurrentIndex(0);
+            for (auto check : editor->findChildren<QCheckBox*>()) check->setChecked(false);
+            auto upper = noteAt(score), lower = noteAt(score, 0, 4);
+            QVERIFY(PerformanceSelection::apply(score, {upper}, upper)); editor->selectionChanged(); editor->setSelectedValue(64); QTest::qWait(30);
+            main->showPerformanceEditor(false); QTest::qWait(30); auto view = main->currentScoreView();
+            QVERIFY(PerformanceSelection::apply(score, {lower}, lower)); QApplication::processEvents(); QTest::qWait(30);
+            PerformancePaintDamage damage; view->installEventFilter(&damage);
+            editor->selectionChanged(); QApplication::processEvents(); QVERIFY(damage.region.isEmpty());
+            editor->setScoreBandEnabled(true); QTest::qWait(40);
+            // Re-opening only the strip must rebuild the hidden native context,
+            // including Current staff, without stale previous staff selection.
+            editor->setSelectedValue(92); QTest::qWait(30);
+            QCOMPARE(lower->customizeVelocity(NoteVelocity::referenceBase(lower)), 92); QCOMPARE(upper->customizeVelocity(NoteVelocity::referenceBase(upper)), 64);
+            auto timer = editor->findChild<QTimer*>("performancePlaybackTimer"); QVERIFY(timer); QVERIFY(!timer->isActive());
+            score->setPlayPos(Fraction::fromTicks(120)); QApplication::processEvents(); QTest::qWait(20); damage.region = QRegion();
+            score->setPlayPos(Fraction::fromTicks(240)); QApplication::processEvents();
+            QVERIFY(!damage.region.isEmpty());
+            const double right = qMin(double(view->width() - 12), view->matrix().map(score->firstMeasure()->canvasPos() + QPointF(score->firstMeasure()->width(), 0)).x());
+            QVERIFY(!damage.region.contains(QPoint(qRound(right - 12), view->height() - 50)));
+            view->removeEventFilter(&damage); editor->setScoreBandEnabled(false); QVERIFY(!timer->isActive()); main->showPerformanceEditor(true); QTest::qWait(20);
+            editor->findChild<QComboBox*>("performanceScope")->setCurrentIndex(2);
             }

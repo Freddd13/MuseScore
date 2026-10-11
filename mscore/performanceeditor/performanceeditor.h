@@ -101,6 +101,10 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QLabel* _parameterHint = nullptr;
       bool _noteTips = true, _scoreVoiceColors = true, _scoreRangePanning = false;
       int _bandHeight = 48, _tempoPointTick = -1;
+      bool _selectionRefreshNeeded = false;
+      bool _bandFollowsSystem = false;
+      double _systemBottom = 0, _nextSystemTop = 0;
+      QRectF scoreBandLane() const;
       QRectF _scoreAxis, _scoreFrame;
       std::array<QRectF, 6> _scoreControls;
       void rebuildStaffMenu();
@@ -218,6 +222,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       bool surfacesActive() const;
       QRectF laneRect() const;
       double xForTick(int tick, bool onScore) const;
+      double xForNote(int index, bool onScore) const;
       int tickForX(double x, bool onScore) const;
       int snap(int tick, bool end = false) const;
       double valueForY(double y, const QRectF&, bool onScore = false) const;

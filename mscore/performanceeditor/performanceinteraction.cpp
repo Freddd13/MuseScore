@@ -41,7 +41,7 @@ void PerformanceEditor::rebuildFilter()
             note.enabled = note.inScope && staffEnabled(note.track) && (_voiceMask & (1 << (note.track % VOICES))) && (!_voice->currentIndex() || note.track % VOICES == _voice->currentIndex() - 1);
             changed |= oldScope != note.inScope || oldEnabled != note.enabled;
             }
-      _hover = -1; updateSelection(); if (changed) { invalidateVisual(); invalidateOverlay(); }
+      _selectionRefreshNeeded = false; _hover = -1; updateSelection(); if (changed) { invalidateVisual(); invalidateOverlay(); }
       }
 void PerformanceEditor::selectIndices(const QVector<int>& indices, Qt::KeyboardModifiers modifiers, bool preserveGroup)
       {
@@ -86,9 +86,12 @@ QVector<int> PerformanceEditor::hits(QPointF point, bool parameter, bool onScore
       else {
             const int from = tickForX(point.x() - 8, onScore), until = tickForX(point.x() + 8, onScore);
             auto first = std::lower_bound(_notes.cbegin(), _notes.cend(), from, [](const NoteInfo& n, int t) { return n.tick < t; });
-            for (auto it = first; it != _notes.cend() && it->tick <= until; ++it) {
-                  const int i = int(it - _notes.cbegin());
-                  if (noteEditable(*it) && (!onScore || it->system == _system) && std::abs(xForTick(it->tick, onScore) - point.x()) < 7
+            const int begin = onScore ? 0 : int(first - _notes.cbegin());
+            const int end = onScore ? _systemIndices.size() : int(std::upper_bound(first, _notes.cend(), until, [](int t, const NoteInfo& n) { return t < n.tick; }) - _notes.cbegin());
+            for (int position = begin; position < end; ++position) {
+                  const int i = onScore ? _systemIndices[position] : position;
+                  const auto it = _notes.cbegin() + i;
+                  if (noteEditable(*it) && std::abs(xForNote(i, onScore) - point.x()) < 7
                         && point.y() >= qMax(lane.top(), yForValue(noteValue(i), lane, onScore)) - 7 && point.y() <= lane.bottom() + 5) result.append(i);
                   }
             }
@@ -96,7 +99,14 @@ QVector<int> PerformanceEditor::hits(QPointF point, bool parameter, bool onScore
             if (parameter) {
                   const int da = qRound(std::abs(yForValue(noteValue(a), lane, onScore) - point.y())), db = qRound(std::abs(yForValue(noteValue(b), lane, onScore) - point.y()));
                   if ((da <= 7) != (db <= 7)) return da <= 7;
-                  if (da != db && (da <= 7 || db <= 7)) return da < db;
+                  if (onScore && da <= 7 && db <= 7) {
+                        // Quantized distance forms a strict ordering; pairwise
+                        // epsilon ties combined with selection are not transitive.
+                        const int ea = qRound(QLineF(point, QPointF(xForNote(a, true), yForValue(noteValue(a), lane, true))).length() * 2);
+                        const int eb = qRound(QLineF(point, QPointF(xForNote(b, true), yForValue(noteValue(b), lane, true))).length() * 2);
+                        if (ea != eb) return ea < eb;
+                        }
+                  else if (da != db && (da <= 7 || db <= 7)) return da < db;
                   if (_notes[a].selected != _notes[b].selected) return _notes[a].selected;
                   if (da != db) return da < db;
                   }
@@ -258,7 +268,13 @@ void PerformanceEditor::updatePlayhead()
             if (system != _system && !_dragging && _wheelIndex < 0) { invalidateOverlay(); setOverlaySystem(system); if (_view) _view->update(); }
             }
       if (previous == tick) return;
-      if (_view && _band->isChecked()) _view->update(_scoreLane.adjusted(-4, -24, 4, 4).toAlignedRect());
+      if (_view && _band->isChecked() && !_scoreLane.isEmpty()) {
+            for (int position : {previous, tick}) if (position >= 0) {
+                  const double x = xForTick(position, true);
+                  const auto line = QRectF(x - 4, _scoreLane.top() - 2, 8, _scoreLane.height() + 4).intersected(_scoreLane.adjusted(-4, -2, 4, 2));
+                  if (!line.isEmpty()) _view->update(line.toAlignedRect());
+                  }
+            }
       for (QWidget* canvas : {static_cast<QWidget*>(_noteCanvas), static_cast<QWidget*>(_ruler), _canvas}) {
             const int oldX = qRound(xForTick(previous, false)), newX = qRound(xForTick(tick, false));
             if (previous >= 0) canvas->update(QRect(oldX - 3, 0, 7, canvas->height()));

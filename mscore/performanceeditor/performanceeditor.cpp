@@ -38,6 +38,7 @@
 #include <QScrollBar>
 #include <QDoubleSpinBox>
 #include <QMenu>
+#include <QActionGroup>
 #include <QToolTip>
 #include <algorithm>
 
@@ -62,6 +63,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _keyboardNames = QSettings().value("performanceEditor/keyboardNames", true).toBool();
       _scoreVoiceColors = QSettings().value("performanceEditor/scoreVoiceColors", true).toBool();
       _bandHeight = qBound(48, QSettings().value("performanceEditor/bandHeight", 48).toInt(), 144);
+      _bandFollowsSystem = QSettings().value("performanceEditor/bandFollowsSystem", false).toBool();
       editors.append(this);
       setObjectName("performanceEditor");
       auto layout = new QVBoxLayout(this);
@@ -154,6 +156,13 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       connect(keyNames, &QAction::toggled, this, [this](bool on) { _keyboardNames = on; QSettings().setValue("performanceEditor/keyboardNames", on); invalidateVisual(); });
       auto scoreColors = displayMenu->addAction(tr("谱行带／手柄使用原生声部颜色")); scoreColors->setObjectName("performanceScoreVoiceColors"); scoreColors->setCheckable(true); scoreColors->setChecked(_scoreVoiceColors);
       connect(scoreColors, &QAction::toggled, this, [this](bool on) { _scoreVoiceColors = on; QSettings().setValue("performanceEditor/scoreVoiceColors", on); invalidateOverlay(); });
+      auto placement = displayMenu->addMenu(tr("谱行带位置")); placement->setObjectName("performanceBandPlacement");
+      auto placementGroup = new QActionGroup(this);
+      for (int mode = 0; mode < 2; ++mode) {
+            auto action = placement->addAction(mode ? tr("当前谱行下方（放不下时回到底部）") : tr("固定在视口底部"));
+            action->setObjectName(QString("performanceBandPosition%1").arg(mode)); action->setCheckable(true); action->setChecked(_bandFollowsSystem == bool(mode)); placementGroup->addAction(action);
+            connect(action, &QAction::triggered, this, [this, mode] { finishWheel(); cancelGesture(); invalidateOverlay(); _bandFollowsSystem = bool(mode); QSettings().setValue("performanceEditor/bandFollowsSystem", _bandFollowsSystem); if (_view) _view->update(); });
+            }
       auto heights = displayMenu->addMenu(tr("谱行带高度"));
       for (int h : {48, 80, 112, 144}) {
             auto action = heights->addAction(tr("%1 像素").arg(h)); action->setObjectName(QString("performanceBandHeight%1").arg(h));
@@ -344,7 +353,7 @@ void PerformanceEditor::refresh()
             // Layout/selection are GUI data; never regenerate playback events here.
             if (_score->masterScore()->state() == _state) {
                   if (_geometryDirty) refreshLayout();
-                  _dirty = false; updateSelection();
+                  _dirty = false; if (_selectionRefreshNeeded) selectionChanged(); else updateSelection();
                   }
             status(); return;
             }
@@ -356,7 +365,7 @@ void PerformanceEditor::refresh()
             if (_geometryDirty) {
                   refreshLayout();
                   }
-            updateSelection(); return;
+            if (_selectionRefreshNeeded) selectionChanged(); else updateSelection(); return;
             }
       if (_dragging) cancelGesture();
       cancelSurfaceGesture();
@@ -466,7 +475,10 @@ void PerformanceEditor::updateSelection()
             }
       findChild<QPushButton*>("performanceConvertRelative")->setEnabled(_parameter->currentIndex() == 0 && !_snapshotDegraded);
       findChild<QPushButton*>("performanceConvertAbsolute")->setEnabled(_parameter->currentIndex() == 0 && !_snapshotDegraded);
-      updateSurfaces(); status(); if (_view) _view->update();
+      updateSurfaces(); status();
+      if (_view && (_handles->isChecked() || _band->isChecked())) {
+            _view->update();
+            }
       }
 
 void PerformanceEditor::refreshLayout()
@@ -486,11 +498,26 @@ System* PerformanceEditor::systemAtTick(int tick) const
 void PerformanceEditor::setOverlaySystem(System* system)
       {
       _system = system; _systemIndices.clear();
-      for (int i = 0; i < _notes.size(); ++i) if (_notes[i].system == _system) _systemIndices.append(i);
+      _systemBottom = _nextSystemTop = 0;
       _systemSegments.clear();
-      for (const auto& segment : _segments) if (segment.system == _system) _systemSegments.append(segment);
+      if (!_system || !_system->firstMeasure() || !_system->lastMeasure()) return;
+      const int from = _system->firstMeasure()->tick().ticks(), until = _system->lastMeasure()->endTick().ticks();
+      auto note = std::lower_bound(_notes.cbegin(), _notes.cend(), from, [](const NoteInfo& n, int tick) { return n.tick < tick; });
+      for (; note != _notes.cend() && note->tick < until; ++note) if (note->system == _system) _systemIndices.append(int(note - _notes.cbegin()));
+      auto segment = std::lower_bound(_segments.cbegin(), _segments.cend(), from, [](const SegmentInfo& s, int tick) { return s.tick < tick; });
+      for (; segment != _segments.cend() && segment->tick <= until; ++segment) if (segment->system == _system) _systemSegments.append(*segment);
       if (_system && !_systemSegments.isEmpty()) {
+            // Cache native ink clearance only on row/layout changes, not at 60 Hz.
+            for (auto staff : *_system->staves()) if (staff->show())
+                  _systemBottom = qMax(_systemBottom, _system->canvasPos().y() + qMax(staff->bbox().bottom(), staff->y() + staff->yBottom()));
             auto last = _system->lastMeasure();
+            if (last && last->nextMeasure()) {
+                  auto next = last->nextMeasure()->system();
+                  if (next && next != _system) for (auto staff : *next->staves()) if (staff->show()) {
+                        const double ink = staff->skyline().north().valid() ? staff->y() + staff->skyline().north().max() : staff->bbox().top();
+                        _nextSystemTop = next->canvasPos().y() + qMin(staff->bbox().top(), ink); break;
+                        }
+                  }
             if (last && _systemSegments.back().tick < last->endTick().ticks())
                   _systemSegments.append({last->endTick().ticks(), last->canvasPos() + QPointF(last->width(), 0), _system, _systemSegments.back().bpm});
             }
@@ -499,8 +526,10 @@ void PerformanceEditor::setOverlaySystem(System* system)
 void PerformanceEditor::selectionChanged()
       {
       if (_dragging || _selecting) return;
-      if (_score) _contextTrack = selectionTrack(_score, _contextTrack);
-      rebuildFilter();
+      if (!surfacesActive()) { _selectionRefreshNeeded = true; return; }
+      const int track = _score ? selectionTrack(_score, _contextTrack) : _contextTrack;
+      if (!_selectionRefreshNeeded && track == _contextTrack) { updateSelection(); return; }
+      _contextTrack = track; rebuildFilter();
       }
 
 void PerformanceEditor::layoutChanged()
@@ -717,6 +746,13 @@ void PerformanceEditor::setScoreBandEnabled(bool enabled)
 
 QRectF PerformanceEditor::laneRect() const { return QRectF(PerformanceViewport::gutter, PerformanceViewport::parameterPadding, qMax(10, _canvas->width() - PerformanceViewport::gutter - PerformanceViewport::rightMargin), qMax(30, _canvas->height() - 2 * PerformanceViewport::parameterPadding)); }
 
+double PerformanceEditor::xForNote(int index, bool onScore) const
+      {
+      // Note bounds are the laid-out head/fret, including mirroring, grace notes,
+      // cross-staff displacement and user offsets. Time automation stays on ticks.
+      return onScore && _view ? _view->matrix().map(_notes[index].bounds.center()).x() : xForTick(_notes[index].tick, false);
+      }
+
 double PerformanceEditor::xForTick(int tick, bool onScore) const
       {
       if (!onScore) return PerformanceViewport::gutter + (tick - _scroll->value()) * _viewport.pixelsPerQuarter / DIVISION;
@@ -788,11 +824,13 @@ void PerformanceEditor::beginGesture(QPointF point, QRectF rect, bool onScore, i
             double distance = 13;
             const int from = tickForX(rect.left() - 32, onScore), until = tickForX(rect.right() + 32, onScore);
             auto first = std::lower_bound(_notes.cbegin(), _notes.cend(), from, [](const NoteInfo& n, int t) { return n.tick < t; });
-            for (auto it = first; forcedAnchor < 0 && it != _notes.cend() && it->tick <= until; ++it) {
-                  const int i = int(it - _notes.cbegin());
-                  const auto& note = *it;
-                  if (!noteEditable(note) || (onScore && note.system != _system)) continue;
-                  const QPointF center(xForTick(note.tick, onScore), yForValue(noteValue(i), rect, onScore));
+            const int begin = onScore ? 0 : int(first - _notes.cbegin());
+            const int end = onScore ? _systemIndices.size() : int(std::upper_bound(first, _notes.cend(), until, [](int t, const NoteInfo& n) { return t < n.tick; }) - _notes.cbegin());
+            for (int position = begin; forcedAnchor < 0 && position < end; ++position) {
+                  const int i = onScore ? _systemIndices[position] : position;
+                  const auto& note = _notes[i];
+                  if (!noteEditable(note)) continue;
+                  const QPointF center(xForNote(i, onScore), yForValue(noteValue(i), rect, onScore));
                   const double d = QLineF(point, center).length();
                   if (noteEditable(note) && d < distance) { distance = d; _anchor = i; }
                   }
@@ -877,9 +915,24 @@ void PerformanceEditor::moveGesture(QPointF point)
             auto value = [from, until, v0, v1](int tick) { return until == from ? v1 : v0 + (v1 - v0) * (tick - from) / (until - from); };
             if (_parameter->currentIndex() == 0) {
                   const bool selected = !_selectedIndices.isEmpty();
-                  auto first = std::lower_bound(_notes.cbegin(), _notes.cend(), from, [](const NoteInfo& n, int t) { return n.tick < t; });
-                  for (auto it = first; it != _notes.cend() && it->tick <= until; ++it)
-                        if ((!selected || it->selected) && (!_scoreGesture || it->system == _system)) setNoteValue(int(it - _notes.cbegin()), value(it->tick), false);
+                  if (_scoreGesture) {
+                        // Draw across the same native head centres used by rendering
+                        // and hit testing; displaced notes are not collapsed by tick.
+                        const double left = qMin(start.x(), point.x()) - .5, right = qMax(start.x(), point.x()) + .5;
+                        for (int i : _systemIndices) {
+                              const double x = xForNote(i, true);
+                              if ((!selected || _notes[i].selected) && x >= left && x <= right) {
+                                    const double fraction = point.x() == start.x() ? 1 : qBound(0.0, (x - start.x()) / (point.x() - start.x()), 1.0);
+                                    const double y = start.y() + fraction * (point.y() - start.y());
+                                    setNoteValue(i, valueForY(y, _gestureLane, true), false);
+                                    }
+                              }
+                        }
+                  else {
+                        auto first = std::lower_bound(_notes.cbegin(), _notes.cend(), from, [](const NoteInfo& n, int t) { return n.tick < t; });
+                        for (auto it = first; it != _notes.cend() && it->tick <= until; ++it)
+                              if (!selected || it->selected) setNoteValue(int(it - _notes.cbegin()), value(it->tick), false);
+                        }
                   }
             else {
                   if (_tool->currentIndex() == 0 && _selectedTempoTick >= 0) {
@@ -997,10 +1050,11 @@ bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
             const QRectF contextLane = onScore ? _scoreLane : laneRect();
             if (mouse->button() == Qt::RightButton && contextLane.contains(mouse->pos()) && _parameter->currentIndex() == 0) {
                   QMenu menu;
-                  for (int i = 0; i < _notes.size(); ++i) {
+                  for (int position = 0; position < (onScore ? _systemIndices.size() : _notes.size()); ++position) {
+                        const int i = onScore ? _systemIndices[position] : position;
                         const auto& note = _notes[i];
-                        if ((onScore && note.system != _system) || std::abs(xForTick(note.tick, onScore) - mouse->x()) > 22) continue;
-                        auto action = menu.addAction(tr("音高 %1 · 声部 %2 · %3%4").arg(note.pitch).arg(note.track % VOICES + 1).arg(noteValue(i))
+                        if (std::abs(xForNote(i, onScore) - mouse->x()) > 22) continue;
+                        auto action = menu.addAction(tr("音高 %1 · 谱表 %2 / 声部 %3 · %4%5").arg(note.pitch).arg(note.track / VOICES + 1).arg(note.track % VOICES + 1).arg(noteValue(i))
                               .arg(note.audible ? QString() : tr(" · 不独立发声")));
                         action->setEnabled(note.audible && note.enabled);
                         connect(action, &QAction::triggered, this, [this, i] {

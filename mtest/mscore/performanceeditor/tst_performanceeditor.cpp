@@ -821,6 +821,8 @@ class TestPerformanceEditor : public QObject, public MTest {
 #ifdef Q_MOC_RUN
       void keyboardContoursAndCompactParameterLayout();
       void reaperStemsAndStripSelection();
+      void scoreStripPlacementAndNativeAnchors();
+      void scoreStripHiddenSelectionAndCursorDamage();
       void finePedalNativeLayoutMidiUndoAndPersistence();
       void scoreControlsTempoNodesFinePedalAndTips();
       void finePedalLinkedExcerpt();
@@ -849,12 +851,12 @@ class TestPerformanceEditor : public QObject, public MTest {
                   PerformanceAppearance appearance;
                   if (mode == "write") {
                         appearance.mode = 2; appearance.velocityWidth = 6; appearance.colors[PerformanceAppearance::Background] = QColor("#123456"); appearance.gradient[1] = QColor("#234567"); appearance.stops[1] = 35; appearance.save();
-                        QSettings settings; settings.setValue("performanceEditor/keyboardNames", false); settings.setValue("performanceEditor/wheelVelocity", true); settings.setValue("performanceEditor/noteTooltips", false); settings.setValue("performanceEditor/scoreVoiceColors", false); settings.setValue("performanceEditor/bandHeight", 112); settings.setValue("performanceEditor/pedalGrid", 4); settings.sync(); QCOMPARE(settings.status(), QSettings::NoError);
+                        QSettings settings; settings.setValue("performanceEditor/keyboardNames", false); settings.setValue("performanceEditor/wheelVelocity", true); settings.setValue("performanceEditor/noteTooltips", false); settings.setValue("performanceEditor/scoreVoiceColors", false); settings.setValue("performanceEditor/bandHeight", 112); settings.setValue("performanceEditor/bandFollowsSystem", true); settings.setValue("performanceEditor/pedalGrid", 4); settings.sync(); QCOMPARE(settings.status(), QSettings::NoError);
                         }
                   else {
                         appearance.load(); QCOMPARE(appearance.velocityWidth, 6); QCOMPARE(appearance.mode, 2); QCOMPARE(appearance.colors[PerformanceAppearance::Background], QColor("#123456")); QCOMPARE(appearance.gradient[1], QColor("#234567")); QCOMPARE(appearance.stops[1], 35);
                         PerformanceEditor editor; QVERIFY(editor.findChild<QToolButton*>("performanceWheelVelocity")->isChecked()); QVERIFY(!editor.findChild<QAction*>("performanceNoteTooltips")->isChecked()); QVERIFY(!editor.findChild<QAction*>("performanceScoreVoiceColors")->isChecked()); QCOMPARE(editor.findChild<QComboBox*>("performancePedalGrid")->currentIndex(), 4); editor.resize(600, 520); editor.show(); QTest::qWait(25); auto canvas = editor.findChild<QWidget*>("performanceParameterCanvas"); QVERIFY(canvas);
-                        QVERIFY(!editor.findChild<QAction*>("performanceKeyboardNames")->isChecked());
+                        QVERIFY(!editor.findChild<QAction*>("performanceKeyboardNames")->isChecked()); QVERIFY(editor.findChild<QAction*>("performanceBandPosition1")->isChecked());
                         const QImage rendered = canvas->grab().toImage(); QCOMPARE(rendered.pixelColor(10, rendered.height() - 3), QColor("#123456"));
                         }
                   return;
@@ -959,6 +961,35 @@ class TestPerformanceEditor : public QObject, public MTest {
                   QWheelEvent finalWheel(hit, notes->mapToGlobal(hit), QPoint(), QPoint(0, -120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false); QApplication::sendEvent(notes, &finalWheel); QVERIFY(editor->hasPending());
                   timer.start(); QVERIFY(QMetaObject::invokeMethod(editor->findChild<QTimer*>("performanceWheelTimer"), "timeout", Qt::DirectConnection)); QApplication::processEvents();
                   qInfo("Performance velocity wheel %d notes: single native commit/cache refresh %.2f ms", all.size(), timer.nsecsElapsed() / 1e6); QVERIFY(!editor->hasPending()); wheelToggle->setChecked(false);
+                  // Separate inactive callback work from native score rendering. The
+                  // same score and runtime exercise all personal surface states.
+                  editor->findChild<QAction*>("performanceBandHeight48")->trigger();
+                  for (int surface = 0; surface < 4; ++surface) {
+                        band->setChecked(surface & 1); editor->setVisible(surface & 2); QTest::qWait(30);
+                        QVector<double> callbacks, paints, locators; QVector<qint64> pixels;
+                        QPixmap scoreImage(view->size()); PerformancePaintDamage damage; view->installEventFilter(&damage);
+                        for (int frame = 0; frame < 40; ++frame) {
+                              timer.start(); editor->selectionChanged(); callbacks.append(timer.nsecsElapsed() / 1e6);
+                              QApplication::processEvents();
+                              timer.start(); view->render(&scoreImage); paints.append(timer.nsecsElapsed() / 1e6);
+                              damage.region = QRegion(); timer.start(); score->setPlayPos(Fraction::fromTicks(frame * 24)); QApplication::processEvents();
+                              locators.append(timer.nsecsElapsed() / 1e6);
+                              qint64 area = 0; for (const auto& r : damage.region) area += qint64(r.width()) * r.height(); pixels.append(area);
+                              }
+                        view->removeEventFilter(&damage);
+                        for (auto samples : {&callbacks, &paints, &locators}) std::sort(samples->begin(), samples->end());
+                        std::sort(pixels.begin(), pixels.end());
+                        qInfo("Performance surfaces %d notes, %s: selection callback P95 %.3f ms, native view paint P95 %.2f ms, locator/repaint P95 %.2f ms, view damage P95 %lld pixels", all.size(), surface == 0 ? "closed" : surface == 1 ? "strip" : surface == 2 ? "editor" : "both", callbacks[37], paints[37], locators[37], static_cast<long long>(pixels[37]));
+                        }
+                  editor->hide(); band->setChecked(true); QTest::qWait(30);
+                  auto mode = editor->findChild<QComboBox*>("performanceParameter");
+                  for (int parameterMode = 0; parameterMode < 3; ++parameterMode) {
+                        mode->setCurrentIndex(parameterMode); QTest::qWait(20); QPixmap stripImage(view->size()); QVector<double> samples;
+                        const QRegion stripArea(QRect(0, view->height() - 105, view->width(), 105));
+                        for (int frame = 0; frame < 40; ++frame) { timer.start(); view->render(&stripImage, QPoint(), stripArea); samples.append(timer.nsecsElapsed() / 1e6); }
+                        std::sort(samples.begin(), samples.end()); qInfo("Performance score strip %d notes, %s: isolated region paint P95 %.2f ms", all.size(), parameterMode == 0 ? "velocity" : parameterMode == 1 ? "tempo" : "pedal", samples[37]);
+                        }
+                  mode->setCurrentIndex(0); editor->show(); band->setChecked(false); QTest::qWait(30);
                   }
             }
       };

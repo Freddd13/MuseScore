@@ -42,6 +42,10 @@ void PerformanceEditor::overlayViewChanged()
                   _overlayDamage &= _view->rect(); _view->update(_overlayDamage);
                   }
             }
+      if (_band->isChecked() && !_dirty && !_geometryDirty) {
+            const auto lane = scoreBandLane();
+            if (!lane.isEmpty()) { const auto frame = lane.adjusted(-50, -26, 4, 5).toAlignedRect(); _overlayDamage |= frame; _view->update(frame); }
+            }
       _overlayMatrix = matrix;
       }
 bool PerformanceEditor::overlayEvent(QEvent* event)
@@ -112,6 +116,7 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
             auto help = static_cast<QHelpEvent*>(event);
             const QStringList controls {tr("缩小纵向显示，显示更大数值范围"), tr("放大纵向显示，精细调节当前范围"), tr("数值视窗上移"), tr("数值视窗下移"), tr("匹配当前谱行选音；没有选音时匹配当前谱行数据"), tr("恢复此参数的完整合法范围")};
             for (int i = 0; i < 6; ++i) if (_scoreControls[i].contains(help->pos())) { QToolTip::showText(help->globalPos(), controls[i], _view); return true; }
+            if (_scoreFrame.contains(help->pos()) && help->y() < _scoreLane.top()) { QToolTip::showText(help->globalPos(), tr("右键标题可切换谱行带位置与高度；自动位置放不下时回到视口底部。"), _view); return true; }
             if (_parameter->currentIndex() && _scoreLane.contains(help->pos())) { QToolTip::showText(help->globalPos(), parameterTooltip(help->pos(), true), _view); return true; }
             if (_noteTips && _hover >= 0) { QToolTip::showText(help->globalPos(), noteTooltip(_hover), _view); return true; }
             if (!_noteTips && _hover >= 0) { QToolTip::hideText(); return true; }
@@ -127,12 +132,13 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
             if (mouse->modifiers() & Qt::AltModifier) { cycleHit(candidates); return true; }
             const int target = candidates.front();
             const bool cycle = candidates.size() > 1 && _selectedIndices.size() == 1 && _notes[target].selected
+                  && std::abs(xForNote(candidates[1], true) - xForNote(target, true)) < 1.5
                   && std::abs(yForValue(noteValue(candidates[1]), _scoreLane, true) - yForValue(noteValue(target), _scoreLane, true)) < 3 && mouse->modifiers() == Qt::NoModifier;
             selectIndices({target}, mouse->modifiers(), !(mouse->modifiers() & Qt::ControlModifier)); updateHover(target); audition(target);
             if (mouse->modifiers() & Qt::ControlModifier) return true;
             beginGesture(mouse->pos(), _scoreLane, true, target); _cycleOnClick = cycle; _pressedCandidates = candidates; return _dragging;
             }
-      // The fixed strip owns its complete frame. Never let its title, axis or
+      // The strip owns its complete frame. Never let its title, axis or
       // margins select/edit the score hidden beneath it. Drag release and lane
       // context menus still belong to the normal editor transaction handler.
       if (!_scoreFrame.isEmpty()) {
@@ -142,7 +148,16 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
                   }
             if (event->type() == QEvent::MouseButtonPress) {
                   auto mouse = static_cast<QMouseEvent*>(event);
-                  if (_scoreFrame.contains(mouse->pos()) && !_scoreLane.contains(mouse->pos())) return true;
+                  if (_scoreFrame.contains(mouse->pos()) && !_scoreLane.contains(mouse->pos())) {
+                        if (mouse->button() == Qt::RightButton && mouse->y() < _scoreLane.top()) {
+                              QMenu menu; auto placement = menu.addMenu(tr("谱行带位置"));
+                              for (int mode = 0; mode < 2; ++mode) placement->addAction(findChild<QAction*>(QString("performanceBandPosition%1").arg(mode)));
+                              auto height = menu.addMenu(tr("谱行带高度"));
+                              for (int h : {48, 80, 112, 144}) height->addAction(findChild<QAction*>(QString("performanceBandHeight%1").arg(h)));
+                              menu.exec(mouse->globalPos());
+                              }
+                        return true;
+                        }
                   }
             if (event->type() == QEvent::MouseButtonRelease && !_dragging && _scoreFrame.contains(static_cast<QMouseEvent*>(event)->pos())) return true;
             if (event->type() == QEvent::Wheel) {
@@ -152,6 +167,25 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
             }
       return false;
       }
+QRectF PerformanceEditor::scoreBandLane() const
+      {
+      if (!_view || !_system || _systemSegments.isEmpty()) return {};
+      const auto first = _system->firstMeasure(), last = _system->lastMeasure();
+      if (!first || !last) return {};
+      const auto matrix = _view->matrix();
+      const double left = qMax(56.0, matrix.map(first->canvasPos()).x());
+      const double right = qMin(double(_view->width() - 12), matrix.map(last->canvasPos() + QPointF(last->width(), 0)).x());
+      if (right <= left) return {};
+      double top = _view->height() - _bandHeight - 26;
+      if (_bandFollowsSystem && _systemBottom > 0) {
+            const double frameTop = matrix.map(QPointF(0, _systemBottom)).y() + 10;
+            const double frameBottom = frameTop + 26 + _bandHeight + 5;
+            const double nextTop = _nextSystemTop > 0 ? matrix.map(QPointF(0, _nextSystemTop)).y() - 8 : _view->height();
+            if (frameTop >= 4 && frameBottom <= qMin(double(_view->height() - 12), nextTop)) top = frameTop + 26;
+            }
+      return QRectF(left, top, right - left, _bandHeight);
+      }
+
 void PerformanceEditor::paintOverlay(QPainter& painter)
       {
       if (!overlayAllowed()) {
@@ -183,12 +217,9 @@ void PerformanceEditor::paintOverlay(QPainter& painter)
             }
       _scoreLane = _scoreAxis = _scoreFrame = QRectF(); _scoreControls.fill(QRectF());
       if (_band->isChecked() && _system && !_systemSegments.isEmpty()) {
-            const auto first = _system->firstMeasure(), last = _system->lastMeasure();
-            if (!first || !last) { painter.restore(); return; }
-            const double left = qMax(56.0, _view->matrix().map(first->canvasPos()).x());
-            const double right = qMin(double(_view->width() - 12), _view->matrix().map(last->canvasPos() + QPointF(last->width(), 0)).x());
-            if (right <= left) { painter.restore(); return; }
-            _scoreLane = QRectF(left, _view->height() - _bandHeight - 26, right - left, _bandHeight);
+            _scoreLane = scoreBandLane();
+            if (_scoreLane.isEmpty()) { painter.restore(); return; }
+            const double left = _scoreLane.left(), right = _scoreLane.right();
             _scoreAxis = QRectF(left - 48, _scoreLane.top(), 46, _scoreLane.height());
             const QRectF frame = _scoreLane.adjusted(-50, -26, 4, 5);
             _scoreFrame = frame;
@@ -236,7 +267,7 @@ void PerformanceEditor::paintOverlay(QPainter& painter)
             painter.save(); painter.setClipRect(_scoreLane.adjusted(-3, -2, 3, 2));
             if (_parameter->currentIndex() == 0) for (int i : handles) if (_notes[i].system == _system && _notes[i].enabled) {
                   painter.setPen(QPen(i == _hover ? _appearance.colors[PerformanceAppearance::Preview] : scoreNoteColor(i), 2)); painter.setBrush(Qt::NoBrush);
-                  painter.drawEllipse(QPointF(xForTick(_notes[i].tick, true), yForValue(noteValue(i), _scoreLane, true)), 5, 5);
+                  painter.drawEllipse(QPointF(xForNote(i, true), yForValue(noteValue(i), _scoreLane, true)), 5, 5);
                   }
             if (_playTick >= _systemSegments.front().tick && _playTick <= _systemSegments.back().tick) {
                   const double x = xForTick(_playTick, true); painter.setPen(QPen(QColor("#4b7658"), 2)); painter.drawLine(QPointF(x, _scoreLane.top()), QPointF(x, _scoreLane.bottom()));

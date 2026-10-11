@@ -125,3 +125,13 @@ PerformanceAppearance::velocityWidth 默认 3，设置组保存 1–8 逻辑像�
 谱带缓存完整 _scoreFrame；标题、刻度、边缘的鼠标移动／按下／释放／提示归浮层所有，只有力度柱命中后才进入选择／编辑。wheelVelocity 禁止框内空白回退到 native elementNear；修复隐藏谱表被滚轮改值。updateSelection 优先原生输入焦点／选音，悬浮只在无可编辑选音时切行；同系统更新不重建系统索引。播放照旧优先记谱播放 tick；不改 ScoreView 导航。选中原生音头在带模式下也绘制声部色边框。
 
 真实 Qt reaperStemsAndStripSelection 覆盖两个谱行、标题／轴阻断、选音与图像、同刻和弦选中目标的拖动／一次 Undo／轮换、播放位置不变，以及实际外观对话框和跨进程柱宽恢复。keyboardContoursAndCompactParameterLayout 改为核对左侧全部半音及右侧自然音中心／前端尺寸；常规／高 DPI／万音压力结果见更新日志。
+
+## 0.26 原生音头与谱行自动位置
+
+scoreBandLane 是谱带绘制、轴和输入 frame 的唯一位置入口。bandFollowsSystem 存在独立 performanceEditor 设置组，默认 false；显示菜单与标题右键菜单复用 QAction。setOverlaySystem 在行／布局变化时缓存最低可见 SysStaff 的 bbox／南侧 skyline 和下一行北侧 ink。视口内有足够空位时落在当前行下方，否则固定到底部，不调用 ScoreView 的导航／滚动方法。overlayViewChanged 同时请求旧帧、滚动副本和新计算帧的损伤，避免自动位置迁移残影。
+
+xForNote 的谱面模式取布局缓存 Note::canvasBoundingRect 的中心（镜像／倚音／跨谱表／手动 offset），编辑器仍用原 tick。paintLane、端点强调、命中、候选、拖动和铅笔／直线共用；铅笔包含半像素鼠标量化容差，不伪造音符时间。端点候选用量化距离形成严格排序，不能用不传递的 epsilon 比较器；相邻真实 x 不自动当成重合轮换。
+
+性能优化最后继承并行稳定版本：两表面均隐藏时 selectionChanged 只标记待同步；重新开启 refresh 路径恢复 contextTrack／过滤，不跳过销毁与内容失效。上下文相同的可见选择只更新选择标记，过滤控件仍显式 rebuildFilter。换行由二分进入本行小节区间并保留合成末端；谱带播放仅旧／新列更新，跨行仍完整擦除。谱面速度绘制复用 _systemSegments，速度节点二分访问可见范围，不改时间映射、TempoText／Pedal 或音频回调。详见[性能审查](performance-audit.md)。
+
+回归 scoreStripPlacementAndNativeAnchors 使用真实镜像／倚音／offset，检查相距6px的柱、整数坐标垂直铅笔、单音原生Undo、位置切换／回退和视图／播放位置不变。scoreStripHiddenSelectionAndCursorDamage 检查隐藏选择不请求原生重绘、独立带重开恢复当前谱表、停止后计时器、播放窄列损伤。跨进程配置保留位置选择。
