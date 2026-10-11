@@ -106,3 +106,5 @@ TSV 包含主题、源码路径、搜索锚点、基准行号、职责与邻近�
 0.25.1 为 P0 最终修正版：旧工作区 TAP 一次性迁移，详见 [P0 钢琴工具](14-piano-workflow-p0.md)。
 
 0.26 谱行带可切换行下方／视口底部，力度柱按原生音头中心对齐，隐藏选择与播放损伤优化见 [14](14-performance-editor.md)；全个人功能审查范围、同机基线及剩余成本见[性能审查](performance-audit.md)。
+
+P1 原曲参考：mscore/workflow轻装配桥，mscore/referenceaudio可选DLL，界面／关联／工作区在share/plugins/ReferencePlayer与WorkflowCommon。边界见累计用户说明。

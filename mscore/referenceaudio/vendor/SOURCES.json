@@ -1,0 +1,14 @@
+{
+  "SoundTouch": {
+    "version": "2.3.3",
+    "url": "https://www.surina.net/soundtouch/soundtouch-2.3.3.tar.gz",
+    "sha256": "43b23dfac2f64a3aff55d64be096ffc7b73842c3f5665caff44975633a975a99",
+    "license": "LGPL-2.1-or-later"
+  },
+  "dr_mp3": {
+    "gitBlob": "a631ae40f066076e41f2f655ffd2891b41ca3772",
+    "sha256": "997b7ee18de6e6b81e2a83f1ea9fc62aef25c62b28d48db95635f49e65de0a2f",
+    "license": "MIT-0",
+    "url": "https://github.com/mackron/dr_libs/blob/master/dr_mp3.h"
+  }
+}

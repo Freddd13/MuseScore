@@ -21,6 +21,7 @@
 #include "qmlpluginapi.h"
 #include "score.h"
 #include "scoreobserver.h"
+#include "mscore/workflow/referencefactory.h"
 #include "selection.h"
 #include "shortcut.h"
 #include "tie.h"
@@ -263,6 +264,8 @@ void PluginAPI::log2(const QString& txt, const QString& txt2)
 //   newQProcess
 ///   Not enabled currently (so excluded from plugin docs)
 //---------------------------------------------------------
+
+QObject* PluginAPI::newReferenceMedia() { return Ms::createReferenceMedia(this); }
 
 QObject* PluginAPI::newScoreObserver()
       {

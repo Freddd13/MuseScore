@@ -1,5 +1,7 @@
 
 set (PLUGIN_API_SRC
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/referencefactory.h
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/referencefactory.cpp
     ${CMAKE_CURRENT_LIST_DIR}/api/cursor.cpp
     ${CMAKE_CURRENT_LIST_DIR}/api/cursor.h
     ${CMAKE_CURRENT_LIST_DIR}/api/elements.cpp

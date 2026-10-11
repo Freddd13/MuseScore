@@ -252,6 +252,7 @@ class PluginAPI : public Ms::QmlPlugin {
       /** \cond PLUGIN_API \private \endcond */
       Q_INVOKABLE Ms::PluginAPI::MsProcess* newQProcess();
       Q_INVOKABLE QObject* newScoreObserver();
+      Q_INVOKABLE QObject* newReferenceMedia();
       Q_INVOKABLE bool writeScore(Ms::PluginAPI::Score*, const QString& name, const QString& ext);
       Q_INVOKABLE Ms::PluginAPI::Score* readScore(const QString& name, bool noninteractive = false);
       Q_INVOKABLE void closeScore(Ms::PluginAPI::Score*);

@@ -194,3 +194,6 @@ Tap 工作区迁移	mscore/workspace.cpp	if (uiVersion < 4)	1113	一次性添加
 隐藏选择同步	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::selectionChanged	526	隐藏待同步／重开恢复上下文／相同上下文不重滤	mtest/mscore/performanceeditor
 谱带位置与点选回归	mtest/mscore/performanceeditor/performance_controls_tests.inc	void scoreStripPlacementAndNativeAnchors	292	真实镜像倚音偏移／近邻柱／垂直铅笔／不改导航	mtest/mscore/performanceeditor
 谱带局部刷新回归	mtest/mscore/performanceeditor/performance_controls_tests.inc	void scoreStripHiddenSelectionAndCursorDamage	376	隐藏不扫描重绘／当前谱表恢复／窄列损伤	mtest/mscore/performanceeditor
+原曲参考	mscore/workflow/referencefactory.cpp	createReferenceMedia	20	按需媒体装配	Muse3Plugins/P1/tests/tst_media.cpp
+原曲参考	mscore/referenceaudio/mediasession.cpp	ReferenceMediaSession::play	72	独立音频会话	Muse3Plugins/P1/tests/tst_media.cpp
+原曲参考	mscore/referenceaudio/audioreader.cpp	bool stream	58	可取消解码及保调	Muse3Plugins/P1/tests/tst_media.cpp

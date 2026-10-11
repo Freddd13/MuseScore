@@ -590,3 +590,6 @@ if (BUILD_PCH)
             target_use_pch(cocoabridge)
       endif (APPLE)
 endif (BUILD_PCH)
+
+# P1 optional media backend; the app never links Qt Multimedia.
+add_subdirectory(referenceaudio)
