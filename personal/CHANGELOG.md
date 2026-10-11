@@ -2,6 +2,13 @@
 
 个人版本记录本仓库的个人维护增量；应用上游版本另由 `config.cmake` 管理。历史源码提交尚未追溯归类，此处从首次建立指南开始记录，不代表此前没有个人改动。
 
+## 0.28.0 — 2026-10-11
+
+- P1 B1：演奏 MIDI 容错对应。
+- 启用独立 Performance Expression 插件；选谱段后导入 MIDI，按谱／任意音高音序、旋律／voice／声部组选择，演奏起止秒和反复次数。自动对齐保留漏／多／错音；人工连接、取消、锚点，重复音序待确认。工作区保存原始 MIDI 的 SHA256副本、输入范围及人工校正，恢复后重新读取谱面。原生只读分页补力度、速度保护、倚音及反复资料；隔离JSworker分段DP，修改锚点复用未变区间。首版固定band最大384，超出需设锚点。隐藏／改谱取消；缓存64页。B2写回及试听随后交付。
+- 验证：MIDI值6/6，合成真值规则／音序漏敲恢复／同音／tie／反复通过；原生5/5含真实面板启动和悬浮；QML侧顶。真实演奏质量与大曲长期压力待素材验收。修正ReferencePlayer悬浮按钮调用宿主接口；依赖上游Connections旧语法警告保留。
+- Git父提交 87ff7343938f00f273f385deb16c4076993b22da；定位personal-v0.28.0；主题feat(expression): add tolerant read-only performance alignment。品牌统一VERSION，保留并行AGENTS／USER_GUIDE增量。
+
 ## 0.27.0 — 2026-10-11
 
 - P1 A：独立ReferencePlayer，WAV／FLAC／固定dr_mp3与SoundTouch2.3.3；保调、循环、波形、书签、手动谱段锚点、原子JSON。

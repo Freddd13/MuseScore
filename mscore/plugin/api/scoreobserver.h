@@ -18,6 +18,8 @@
 #include <QPointer>
 #include <QVariantMap>
 #include <QVector>
+#include <memory>
+#include <atomic>
 #include "libmscore/score.h"
 #include "mscore/notepreview.h"
 
@@ -59,6 +61,8 @@ class ScoreObserver : public QObject {
       quint64 _analysisSession = 0;
       QObject* _readOnlyJob = nullptr;
       int _readOnlyJobToken = 0;
+      int _midiToken = 0;
+      std::shared_ptr<std::atomic_bool> _midiCancel;
       QPointer<Ms::Score> _score;
       QVector<QMetaObject::Connection> _scoreConnections;
       QVector<QPointer<Ms::ScoreView>> _previewViews;
@@ -91,6 +95,12 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE int startReadOnlyJob(const QString& source, const QVariantMap& input);
       Q_INVOKABLE void cancelReadOnlyJob();
       Q_INVOKABLE QString analysisRevision();
+      Q_INVOKABLE int readPerformanceMidi(const QString& path);
+      Q_INVOKABLE void cancelPerformanceMidi();
+      Q_INVOKABLE QVariantMap savePerformanceSource(const QString& source,const QString& destination,const QString& expected);
+      Q_INVOKABLE QVariantMap workflowInfo();
+      Q_INVOKABLE QVariantMap performanceRange(int start,int end,int firstTrack,int endTrack,int fromTick,int limit,const QString& expected);
+      Q_INVOKABLE QVariantMap navigateWorkflow(const QVariantMap& range,bool audition = false);
       Q_INVOKABLE QVariantMap analysisScope(bool whole = false) const;
       Q_INVOKABLE QVariantMap analysisRange(int start, int end, int firstTrack, int endTrack, int fromTick, int limit, const QString& expected = QString());
       Q_INVOKABLE QVariantMap snapshot(int tick, int firstTrack, int endTrack, bool sounding = false);
@@ -108,6 +118,7 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QString readTextFile(const QString& path) const;
       Q_INVOKABLE bool writeTextFile(const QString& path, const QString& text) const;
    signals:
+      void performanceMidiReady(int token,const QVariantMap& result);
       void readOnlyJobFinished(int token, const QVariantMap& result);
       void scoreChanged();
       void positionChanged();

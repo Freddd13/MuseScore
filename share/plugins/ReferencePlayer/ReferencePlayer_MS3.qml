@@ -19,6 +19,7 @@ MuseScore {
  property var observer:null
  property var media:null
  property var owner:null
+ property bool hasScore:false
  property string workspace:""
  property string status:"打开本地原曲开始"
  property var bookmarks:[]
@@ -106,6 +107,7 @@ MuseScore {
   var middle=viewStart+(viewEnd-viewStart)*center;viewStart=Math.max(0,Math.min(duration-span,middle-span*center));viewEnd=viewStart+span;wave.requestPaint();if(typeof media.requestWaveform==="function")media.requestWaveform(viewStart,viewEnd,Math.round(waveHost.width));
  }
  onRun: {
+  hasScore=!!curScore;
   if(typeof root.newScoreObserver==="function")observer=root.newScoreObserver();
   if(typeof root.newReferenceMedia==="function")media=root.newReferenceMedia();
   if(!usable){status=media?media.status:"需要支持原曲媒体扩展的 Kumo 版本";return}
@@ -114,6 +116,7 @@ MuseScore {
   if(config.workspace && config.score && curScore && config.score.name===curScore.scoreName && config.score.measures===curScore.nmeasures)loadProject(config.workspace);
  }
  onScoreStateChanged: {
+  hasScore=!!curScore;
   if(observer)observer.score=curScore;
   if(state && !state.selectionChanged && state.startLayoutTick>=0 && associations.length) {
    associations=associations.map(function(v){var n=Project.copy(v);if(state.startLayoutTick<n.end && state.endLayoutTick>n.start)n.stale=true;return n});
@@ -133,7 +136,7 @@ MuseScore {
    Item {Layout.fillWidth:true;visible:root.narrow}
    Desk.DeskButton {text:"打开";enabled:root.usable;onClicked:audioDialog.open()}
    Desk.DeskButton {text:"项目";enabled:root.usable;onClicked:projectMenu.open()}
-   Desk.DeskButton {text:typeof panelFloating==="boolean" && panelFloating?"停靠":"悬浮";onClicked:{if(typeof panelFloating==="boolean")panelFloating=!panelFloating}}
+   Desk.DeskButton {text:typeof panelFloating==="boolean" && panelFloating?"停靠":"悬浮";onClicked:{if(typeof root.setPanelFloating==="function")root.setPanelFloating(!root.panelFloating)}}
   }
   GridLayout {
    columns:root.compact?3:root.narrow?3:9;Layout.fillWidth:true;rowSpacing:4;columnSpacing:6
@@ -145,7 +148,7 @@ MuseScore {
    Label {text:"速度";color:theme.muted;visible:!root.narrow && !root.compact}
    Desk.DeskSpinBox {from:50;to:150;value:root.usable?Math.round(root.media.speed*100):100;enabled:root.usable;Layout.preferredWidth:88;onValueModified:{root.media.speed=value/100;root.persist()}}
    Slider {visible:!root.compact;from:0;to:1;value:root.usable?root.media.volume:.8;enabled:root.usable;Layout.preferredWidth:root.narrow?110:85;onMoved:{root.media.volume=value;root.persist()}}
-   Desk.DeskButton {text:"关联选区";visible:!root.compact;enabled:root.usable&&curScore;onClicked:root.associate()}
+   Desk.DeskButton {text:"关联选区";visible:!root.compact;enabled:root.usable&&root.hasScore;onClicked:root.associate()}
   }
   Item {
    id:waveHost;clip:true;Layout.fillWidth:true;Layout.fillHeight:true;Layout.minimumHeight:root.compact?0:64;visible:!root.compact
