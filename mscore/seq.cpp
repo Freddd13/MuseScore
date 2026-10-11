@@ -415,6 +415,11 @@ bool Seq::canStart()
 //    called from gui thread
 //---------------------------------------------------------
 
+void Seq::startAtUTick(int utick) {
+      if(!cs || isPlaying() || utick<0 || utick>cs->repeatList().ticks())return;
+      _workflowStartUTick=utick;start();_workflowStartUTick=-1;
+      }
+
 void Seq::start()
       {
       if (!_driver) {
@@ -1637,6 +1642,7 @@ void Seq::setPos(int utick)
 
 int Seq::getPlayStartUtick()
       {
+      if(_workflowStartUTick>=0)return _workflowStartUTick;
       if ((mscore->loop())) {
             if (preferences.getBool(PREF_APP_PLAYBACK_LOOPTOSELECTIONONPLAY)) {
                   setLoopSelection();

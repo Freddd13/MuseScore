@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "taptempo.h"
+#include "mscore/workflow/tapwrite.h"
+#include "libmscore/score.h"
 #include "mscore/seq.h"
 #include "mscore/shortcut.h"
 #include "mscore/musescore.h"
@@ -77,6 +79,9 @@ QWidget* TapTempo::createButton(QWidget* parent, QAction* action) {
       grid->addWidget(half,3,0); grid->addWidget(twice,3,1); grid->addWidget(reset,3,2);
       auto tap = new TapButton(body);tap->setDefaultAction(action);tap->setText(tr("TAP")); grid->addWidget(tap,4,0,1,3);
       auto apply = new QPushButton(tr("Set independent metronome"),body); _apply=apply; grid->addWidget(apply,5,0,1,3);
+      auto write = new QPushButton(tr("写入指定谱面位置…"),body);grid->addWidget(write,6,0,1,3);
+      connect(write,&QPushButton::clicked,this,[this]{const double bpm=_estimate.bpm(_quarterBeats)*_multiplier;if(_estimate.ready()&&bpm>=5&&bpm<=999)showTapWriteDialog(mscore->currentScore(),bpm);});
+      connect(menu,&QMenu::aboutToShow,write,[this,write]{const double bpm=_estimate.bpm(_quarterBeats)*_multiplier;write->setEnabled(_estimate.ready()&&bpm>=5&&bpm<=999&&mscore->currentScore()&&(!seq||(!seq->isPlaying()&&seq->backgroundRenderingIdle())));});
       auto item = new QWidgetAction(menu); item->setDefaultWidget(body); menu->addAction(item);
       connect(unit,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this,unit](int){_quarterBeats=unit->currentData().toDouble();update();});
       connect(half,&QPushButton::clicked,this,[this]{_multiplier=qMax(1./1024.,_multiplier*.5);update();});

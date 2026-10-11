@@ -34,7 +34,7 @@ class TempoBoundary : public UndoCommand {
       };
 }
 namespace ParameterEdit {
-bool velocities(Score* score, const QMap<Note*, VelocityEdit>& edits)
+static bool velocitiesImpl(Score* score, const QMap<Note*, VelocityEdit>& edits,bool ownCommand,bool dryRun)
       {
       if (!editable(score)) return false;
       bool changed = false;
@@ -42,17 +42,18 @@ bool velocities(Score* score, const QMap<Note*, VelocityEdit>& edits)
             if (!i.key() || i.key()->score() != score || (i->type != Note::ValueType::USER_VAL && i->type != Note::ValueType::OFFSET_VAL)) return false;
             if (i.key()->veloType() != i->type || i.key()->veloOffset() != i->raw) changed = true;
             }
+      if(dryRun)return true;
       if (!changed) return false;
-      score->startCmd();
+      if(ownCommand)score->startCmd();
       for (auto i = edits.cbegin(); i != edits.cend(); ++i) {
             i.key()->undoChangeProperty(Pid::VELO_TYPE, int(i->type));
             i.key()->undoChangeProperty(Pid::VELO_OFFSET, i->raw);
             }
-      score->endCmd();
+      if(ownCommand)score->endCmd();
       return true;
       }
 
-bool tempos(Score* score, const QMap<int, double>& bpm, int unlockedTick, QString* error)
+static bool temposImpl(Score* score, const QMap<int, double>& bpm, int unlockedTick, QString* error,bool ownCommand,bool dryRun,bool visibleNew = false)
       {
       if (!editable(score)) return false;
       score = score->masterScore();
@@ -89,15 +90,16 @@ bool tempos(Score* score, const QMap<int, double>& bpm, int unlockedTick, QStrin
             if (!existing || !qFuzzyCompare(existing->tempo(), i.value() / 60.0))
                   points.append({segment, existing, i.value()});
             }
+      if(dryRun)return true;
       if (points.isEmpty()) return false;
-      score->startCmd();
+      if(ownCommand)score->startCmd();
       score->undo(new TempoBoundary(score, true));
       for (const Point& point : points) {
             if (!point.text) {
                   auto text = new TempoText(score);
                   text->setParent(point.segment);
                   text->setTrack(0);
-                  text->setVisible(false);
+                  text->setVisible(visibleNew);
                   text->setFollowText(false);
                   text->setTempo(point.bpm / 60.0);
                   text->setXmlText(QString("<sym>metNoteQuarterUp</sym> = %1").arg(point.bpm, 0, 'f', 2));
@@ -119,9 +121,23 @@ bool tempos(Score* score, const QMap<int, double>& bpm, int unlockedTick, QStrin
                   }
             }
       score->undo(new TempoBoundary(score, false));
-      score->endCmd();
+      if(ownCommand)score->endCmd();
       return true;
       }
+
+bool velocities(Score* score,const QMap<Note*,VelocityEdit>& edits) {return velocitiesImpl(score,edits,true,false);}
+bool tempos(Score* score,const QMap<int,double>& bpm,int unlockedTick,QString* error) {return temposImpl(score,bpm,unlockedTick,error,true,false);}
+bool expression(Score* score,const QMap<Note*,VelocityEdit>& velocities,const QMap<int,double>& bpm,QString* error) {
+ if(!velocitiesImpl(score,velocities,false,true)||!temposImpl(score,bpm,-1,error,false,true))return false;
+ score->startCmd();velocitiesImpl(score,velocities,false,false);temposImpl(score,bpm,-1,error,false,false);score->endCmd();return true;
+}
+bool writeTapTempo(Score* score,int tick,double bpm,bool selectedExisting,QString* error) {
+ if(!editable(score))return false;
+ auto segment=score->masterScore()->tick2segment(Fraction::fromTicks(tick),false,SegmentType::ChordRest);
+ if(!segment){if(error)*error=QObject::tr("请选取实际音符／休止位置。");return false;}
+ for(auto e:segment->annotations())if(e->isTempoText()&&!selectedExisting){if(error)*error=QObject::tr("此处已有速度记号，请直接选中目标后再写入。");return false;}
+ return temposImpl(score,{{tick,bpm}},selectedExisting?tick:-1,error,true,false,true);
+}
 
 bool tempoCurve(Score* input, int from, int until, TextLine* target, bool replace, QString* error)
       {

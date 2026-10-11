@@ -13,6 +13,8 @@ struct VelocityEdit {
       bool operator==(const VelocityEdit& other) const { return type == other.type && raw == other.raw; }
       };
 namespace ParameterEdit {
+bool expression(Score*,const QMap<Note*,VelocityEdit>&,const QMap<int,double>&,QString* error = nullptr);
+bool writeTapTempo(Score*,int tick,double bpm,bool selectedExisting,QString* error = nullptr);
 bool velocities(Score*, const QMap<Note*, VelocityEdit>&);
 // Map keys are existing ChordRest ticks; visible markers are protected unless explicitly selected.
 bool tempos(Score*, const QMap<int, double>& bpm, int unlockedTick, QString* error = nullptr);

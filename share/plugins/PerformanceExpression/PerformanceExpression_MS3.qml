@@ -32,6 +32,7 @@ MuseScore {
  property int selected:-1
  property bool busy:false
  property bool stale:false
+ property bool previewing:false
  property bool dirtyProject:false
  property string loadedSourceHash:""
  property int mode:0
@@ -41,7 +42,7 @@ MuseScore {
  property real fromSeconds:0
  property real untilSeconds:999999
  property bool whole:false
- property var config:({strength:50,velocity:true,rubato:false,keepDuration:true,accompaniment:false,deviceCenter:64,deviceGain:1,unlocked:[]})
+ property var config:({strength:50,velocityStrength:50,rubatoStrength:50,velocity:true,rubato:false,keepDuration:true,accompaniment:false,deviceCenter:64,deviceGain:1,unlocked:[]})
  property bool compact:height<170 || (typeof panelPlacement==="string"&&panelPlacement==="top")
  Desk.UiTheme {id:theme}
  function fail(e){status=String(e)}
@@ -104,6 +105,7 @@ MuseScore {
    midiToken=observer.readPerformanceMidi(Project.fileUrl(Project.resolve(url,data.source)));status="已恢复人工对应；重新读取谱面以验证候选";
   }catch(e){fail(e)}
  }
+ function returnOriginal(){var r=observer.returnWorkflowSource();if(r.error)fail(r.error);else{previewing=false;status="已返回原谱 · 可应用缓存候选"}}
  function apply(){
   if(!candidate||stale)return;
   if(typeof observer.applyExpression!=="function"){status="当前本体仅支持只读对应";return}
@@ -112,7 +114,8 @@ MuseScore {
  function audition(useCandidate){
   if(!workspace){status="先保存工作区，副本保存于其旁边";return}
   if(typeof observer.previewExpression!=="function"){status="副本试听接口尚不可用";return}
-  var r=observer.previewExpression(workspace,useCandidate?candidate:null,scope);if(r.error)fail(r.error);else status="已打开独立试听副本；返回原谱后再应用";
+  previewing=true;
+  var r=observer.previewExpression(workspace,useCandidate?candidate:null,scope);if(r.error){previewing=false;fail(r.error)}else status="已打开独立试听副本；返回原谱后再应用";
  }
  onRun:{
   if(typeof newScoreObserver!=="function"){status="需要支持 P1 的 Kumo 版本";return}
@@ -121,11 +124,12 @@ MuseScore {
   if(typeof observer.performanceRange!=="function")status="需要支持 P1 演奏快照的版本";
  }
  onScoreStateChanged:{
+  if(previewing)return;
   if(observer&&observer.score!==curScore)observer.score=curScore;
   if(notes.length&&observer&&observer.analysisRevision()!==revision){stale=true;candidate=null;cancel();status="谱面／会话变化 · 对应缓存待核查"}
  }
  onVisibleChanged:if(!visible){cancel();if(observer&&typeof observer.cancelPerformanceMidi==="function")observer.cancelPerformanceMidi()}
- Component.onDestruction:cancel()
+ Component.onDestruction:{if(previewing&&observer)observer.returnWorkflowSource();cancel()}
  Timer {id:paging;interval:1;repeat:true;onTriggered:root.slice()}
  Connections {
   target:observer;ignoreUnknownSignals:true
@@ -210,13 +214,15 @@ MuseScore {
    visible:!root.compact;columns:2;Layout.fillWidth:true
    CheckBox {text:"力度";checked:root.config.velocity;onToggled:root.editConfig("velocity",checked)}
    CheckBox {text:"Rubato（全声部速度）";checked:root.config.rubato;onToggled:root.editConfig("rubato",checked)}
-   Label {text:"应用强度";color:theme.muted}
-   Desk.DeskSpinBox {from:0;to:100;value:root.config.strength;onValueModified:root.editConfig("strength",value)}
+   Label {text:"力度 / Rubato 强度 %";color:theme.muted}
+   RowLayout {Desk.DeskSpinBox {from:0;to:100;value:root.config.velocityStrength===undefined?root.config.strength:root.config.velocityStrength;onValueModified:root.editConfig("velocityStrength",value)}
+   Desk.DeskSpinBox {from:0;to:100;value:root.config.rubatoStrength===undefined?root.config.strength:root.config.rubatoStrength;onValueModified:root.editConfig("rubatoStrength",value)}}
    CheckBox {text:"保留段长和边界";checked:root.config.keepDuration;onToggled:root.editConfig("keepDuration",checked)}
    CheckBox {text:"推算伴奏趋势";checked:root.config.accompaniment;onToggled:root.editConfig("accompaniment",checked)}
   }
   RowLayout {
    visible:!root.compact;Layout.fillWidth:true
+   Desk.DeskButton {text:"返回原谱";visible:root.previewing;onClicked:root.returnOriginal()}
    Desk.DeskButton {text:"候选";enabled:!root.busy&&!root.stale;onClicked:root.build()}
    Desk.DeskButton {text:"原版试听";onClicked:root.audition(false)}
    Desk.DeskButton {text:"候选试听";enabled:root.candidate!==null;onClicked:root.audition(true)}
@@ -244,7 +250,7 @@ MuseScore {
   }
  }
  Dialog {
-  id:calibration;title:"设备响应校准";modal:true;width:320;standardButtons:Dialog.Close
+  id:calibration;title:"设备响应校准";modal:true;width:320;height:230;standardButtons:Dialog.Close
   ColumnLayout {anchors.fill:parent
    Label {text:"中心力度（映射到64）"}
  Desk.DeskSpinBox {from:1;to:127;value:root.config.deviceCenter;onValueModified:root.editConfig("deviceCenter",value)}
@@ -253,11 +259,28 @@ MuseScore {
   }
  }
  Dialog {
-  id:changes;title:"写回差异与保护";modal:true;width:440;height:420;standardButtons:Dialog.Close
+  id:changes;title:"写回差异与保护";modal:true;width:480;height:520;standardButtons:Dialog.Close
   ColumnLayout {anchors.fill:parent
    Label {Layout.fillWidth:true;wrapMode:Text.Wrap;text:"速度影响所有声部。未确认对应不写入；已有手工值默认保护。试听请先保存项目。"}
+   Desk.DeskComboBox {id:curveKind;model:["力度曲线（原值 / 候选）","速度曲线（原值 / 候选）"];onActivated:expressionCurve.requestPaint()}
+   Canvas {id:expressionCurve;Layout.fillWidth:true;Layout.preferredHeight:120
+    onWidthChanged:requestPaint()
+    Connections {target:root;onCandidateChanged:expressionCurve.requestPaint()}
+    onPaint:{
+     var c=getContext("2d");c.clearRect(0,0,width,height);c.fillStyle=theme.field;c.fillRect(0,0,width,height);
+     if(!root.candidate)return;
+     var values=curveKind.currentIndex===0?root.candidate.velocity:root.candidate.tempos;if(!values.length)return;
+     values=values.slice().sort(function(a,b){return a.tick-b.tick});
+     var start=root.scope.start,end=root.scope.end,max=127;
+     if(curveKind.currentIndex===1)max=Math.max.apply(Math,values.map(function(v){return Math.max(v.oldBpm,v.bpm)}))*1.1;
+     for(var k=0;k<2;++k){c.strokeStyle=k?theme.accent:theme.muted;c.lineWidth=k?2:1;c.beginPath();
+      for(var i=0;i<values.length;++i){var v=values[i],value=curveKind.currentIndex===0?(k?v.target:(v.oldType===1?v.oldRaw:Math.round(v.oldBase*(1+v.oldRaw/100)))):(k?v.bpm:v.oldBpm),x=8+(width-16)*(v.tick-start)/Math.max(1,end-start),y=height-18-(height-28)*value/max;if(i)c.lineTo(x,y);else c.moveTo(x,y)}c.stroke();
+     }
+     c.fillStyle=theme.muted;c.fillText("原值",8,12);c.fillStyle=theme.accent;c.fillText("候选",55,12);
+    }
+   }
    ListView {Layout.fillWidth:true;Layout.fillHeight:true;clip:true;model:root.candidate?root.candidate.velocity.concat(root.candidate.tempos).concat(root.candidate.kept):[]
-    delegate:ItemDelegate {width:parent.width;text:modelData.reason||((modelData.source==="inferred"?"推算 · ":"实测 · ")+(modelData.id||("tick "+modelData.tick))+" → "+(modelData.target||modelData.bpm));onClicked:{if(!modelData.id)return;var c=Project.copy(root.config);if(c.unlocked.indexOf(modelData.id)<0)c.unlocked.push(modelData.id);root.config=c;root.candidate=null;changes.close();root.build()}}
+    delegate:ItemDelegate {width:parent.width;text:modelData.reason||((modelData.source==="inferred"?"推算 · ":"实测 · ")+(modelData.id||("tick "+modelData.tick))+" · 原 "+(modelData.oldBpm||modelData.oldBase)+" → "+(modelData.target||modelData.bpm)+ (modelData.target?"（写回 "+(modelData.oldType===1?modelData.target:Math.round((modelData.target-modelData.oldBase)*100/modelData.oldBase))+"）":""));onClicked:{if(!modelData.id)return;var c=Project.copy(root.config);if(c.unlocked.indexOf(modelData.id)<0)c.unlocked.push(modelData.id);root.config=c;root.candidate=null;changes.close();root.build()}}
    }
    Desk.DeskButton {text:"应用到当前原谱（一次撤销）";enabled:root.candidate!==null&&!root.stale;onClicked:{root.apply();changes.close()}}
   }

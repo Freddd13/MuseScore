@@ -19,6 +19,11 @@
 #include <QCache>
 #include <QPointer>
 #include <QSet>
+#include <QAction>
+#include "mscore/shortcut.h"
+#include "libmscore/spannermap.h"
+#include "libmscore/spanner.h"
+#include "libmscore/tie.h"
 #include <QSaveFile>
 #include <QFile>
 #include <QCryptographicHash>
@@ -63,10 +68,12 @@ QVariantMap ScoreObserver::performanceRange(int start,int end,int firstTrack,int
  if(auto saved=cache.pages.object(key)){auto value=*saved;value.insert("revision",revision);return value;}
  auto page=analysisRange(start,end,firstTrack,endTrack,fromTick,limit,expected);
  if(page.contains("error"))return page;
+ TempoMap scoreClock=*_score->tempomap();scoreClock.setRelTempo(1.0);
  QVariantList notes;QSet<const Chord*> visited;
  for(auto v:page.value("notes").toList()){
   auto n=v.toMap();auto note=resolve(n);if(!note)continue;
   int base=NoteVelocity::referenceBase(note);
+  n.insert("scoreSeconds",scoreClock.tick2time(n.value("tick").toInt()));
   n.insert("velocityType",int(note->veloType()));n.insert("velocityRaw",note->veloOffset());n.insert("velocityBase",base);
   n.insert("velocity",NoteVelocity::effective(base,note->veloType(),note->veloOffset()));
   bool manual=note->veloType()!=Ms::Note::ValueType::OFFSET_VAL||note->veloOffset()!=0||note->chord()->playEventType()==PlayEventType::User;
@@ -98,7 +105,43 @@ QVariantMap ScoreObserver::navigateWorkflow(const QVariantMap& range,bool auditi
  auto element=segment->element(track);if(!element)for(int t=track;t<_score->ntracks()&&!element;++t)element=segment->element(t);
  if(element){_score->select(element,SelectType::SINGLE,track/VOICES);view->adjustCanvasPosition(element,false);}
  view->moveCursor(Fraction::fromTicks(tick));
- if(audition)return {{"error","audition not enabled until copy isolation is verified"}};
+ if(audition){
+  if(!seq||!seq->driver())return {{"error","audio driver unavailable; the independent copy is open"}};
+  if(!seq->backgroundRenderingIdle())return {{"error","waiting for render"}};
+  auto master=_score->masterScore();int end=range.value("end",-1).toInt(),occurrence=range.value("occurrence",1).toInt();
+  if(end<=tick)return {{"error","invalid audition range"}};
+  int context=tick;auto measure=_score->tick2measure(Fraction::fromTicks(tick));
+  if(measure&&measure->prevMeasure())context=measure->prevMeasure()->tick().ticks();
+  // Incoming ties and pedal need real entry context rather than an artificial cut.
+  if(segment)for(int t=0;t<_score->ntracks();++t){auto e=segment->element(t);if(!e||!e->isChord())continue;for(auto n:toChord(e)->notes()){QSet<Ms::Note*> seen;while(n->tieBack()&&n->tieBack()->startNote()&&!seen.contains(n)){seen.insert(n);n=n->tieBack()->startNote();context=qMin(context,n->chord()->tick().ticks());}}}
+  for(auto pair:_score->spannerMap().map()){auto span=pair.second;if(span->isPedal()&&span->tick().ticks()<tick&&span->tick2().ticks()>tick)context=qMin(context,span->tick().ticks());}
+  const auto& repeats=master->repeatList();int seen=0,utick=-1,endUtick=-1;
+  for(auto r:repeats){
+   if(utick<0&&tick>=r->tick&&tick<r->tick+r->len()&&++seen==qMax(1,occurrence))utick=r->utick+tick-r->tick;
+   if(utick>=0&&end>=r->tick&&end<=r->tick+r->len()&&r->utick+end-r->tick>utick){endUtick=r->utick+end-r->tick;break;}
+  }
+  if(utick<0||endUtick<0)return {{"error","requested repeat occurrence/range unavailable"}};
+  int fromUtick=qMax(0,utick-(tick-context));int actualContext=repeats.utick2tick(fromUtick);
+  static QPointer<QObject> active;
+  if(active)delete active;auto session=new QObject(this);active=session;
+  auto loop=getAction("loop");bool oldLoop=loop&&loop->isChecked();
+  if(loop)loop->setChecked(false);
+  auto touched=std::make_shared<bool>(false);
+  if(loop)connect(loop,&QAction::toggled,session,[touched](bool){*touched=true;});
+  auto guarded=QPointer<MasterScore>(master);auto loopGuard=QPointer<QAction>(loop);
+  connect(session,&QObject::destroyed,seq,[guarded,loopGuard,oldLoop,touched]{
+   // destroyed() fires before QObject data is released.
+   if(loopGuard&&!*touched)loopGuard->setChecked(oldLoop);
+   if(seq&&guarded&&seq->score()==guarded&&seq->isPlaying())seq->stop();
+  });
+  connect(seq,&Seq::heartBeat,session,[session,guarded,endUtick](int,int current,int){
+   if(!guarded||seq->score()!=guarded){session->deleteLater();return;}
+   if(current>=endUtick){seq->stop();seq->stopNotes();session->deleteLater();}
+  });
+  connect(seq,&Seq::stopped,session,[session]{session->deleteLater();});
+  seq->setScoreView(view);seq->startAtUTick(fromUtick);
+  return {{"ok",true},{"start",actualContext},{"end",end},{"occurrence",occurrence},{"fromUtick",fromUtick},{"untilUtick",endUtick},{"stopPrecision","GUI heartbeat"}};
+ }
  return {{"ok",true},{"start",tick}};
 }
 }}

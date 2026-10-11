@@ -143,12 +143,12 @@ function align(input) {
 function candidates(input) {
     var result=clone(input.result),config=input.config||{},strength=(config.strength===undefined?50:config.strength)/100,velocity=[],tempos=[],kept=[],confirmed=result.matches.filter(function(m){return m.confirmed||m.confidence>=.8}),unlock=config.unlocked||[];
     confirmed.forEach(function(m){
-        var n=m.original;
+        var n=m.original,vs=config.velocityStrength===undefined?strength:config.velocityStrength/100;
         if(!config.velocity)return;
         if(n.protected&&unlock.indexOf(n.id)<0){kept.push({id:n.id,reason:n.protection||"已有手工演奏值"});return}
         var measured=Math.max(1,Math.min(127,Math.round((m.velocity-(config.deviceCenter||64))*(config.deviceGain||1)+64)));
-        var target=Math.max(1,Math.min(127,Math.round(n.velocity*(1-strength)+measured*strength)));
-        velocity.push({id:n.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,writtenPitch:n.writtenPitch,writtenTpc:n.writtenTpc,oldType:n.velocityType,oldRaw:n.velocityRaw,oldBase:n.velocityBase,target:target,source:"measured",unlock:unlock.indexOf(n.id)>=0});
+        var target=Math.max(1,Math.min(127,Math.round(n.velocity*(1-vs)+measured*vs)));
+        velocity.push({id:n.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,writtenPitch:n.writtenPitch,writtenTpc:n.writtenTpc,graceIndex:n.graceIndex,oldType:n.velocityType,oldRaw:n.velocityRaw,oldBase:n.velocityBase,target:target,source:"measured",unlock:unlock.indexOf(n.id)>=0});
     });
     if(config.accompaniment&&velocity.length){
         (input.notes||[]).forEach(function(n){
@@ -156,13 +156,19 @@ function candidates(input) {
             var nearest=null,distance=Infinity;
             confirmed.forEach(function(m){if(Math.abs(m.tick-n.tick)<distance){distance=Math.abs(m.tick-n.tick);nearest=m}});
             if(!nearest||distance>480)return;
-            var ratio=nearest.velocity/Math.max(1,nearest.original.velocity),target=Math.round(n.velocity*(1-strength+strength*ratio));
-            velocity.push({id:n.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,writtenPitch:n.writtenPitch,writtenTpc:n.writtenTpc,oldType:n.velocityType,oldRaw:n.velocityRaw,oldBase:n.velocityBase,target:Math.max(1,Math.min(127,target)),source:"inferred"});
+            var vs=config.velocityStrength===undefined?strength:config.velocityStrength/100,calibrated=Math.max(1,Math.min(127,(nearest.velocity-(config.deviceCenter||64))*(config.deviceGain||1)+64)),ratio=calibrated/Math.max(1,nearest.original.velocity),target=Math.round(n.velocity*(1-vs+vs*ratio));
+            velocity.push({id:n.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,writtenPitch:n.writtenPitch,writtenTpc:n.writtenTpc,graceIndex:n.graceIndex,oldType:n.velocityType,oldRaw:n.velocityRaw,oldBase:n.velocityBase,target:Math.max(1,Math.min(127,target)),source:"inferred"});
         });
     }
-    if(config.rubato){
+    var sourceCounts={};velocity.forEach(function(v){var key=[v.tick,v.track,v.index,v.graceIndex].join(":");sourceCounts[key]=(sourceCounts[key]||0)+1});
+    velocity=velocity.filter(function(v){var key=[v.tick,v.track,v.index,v.graceIndex].join(":");if(sourceCounts[key]>1){kept.push({id:v.id,reason:"反复多次对应：请选择一次出现后写回"});return false}return true});
+    var repeatedTicks={};confirmed.forEach(function(m){var key=[m.tick,m.track,m.index].join(":");repeatedTicks[key]=(repeatedTicks[key]||0)+1});
+    var repeated=Object.keys(repeatedTicks).some(function(k){return repeatedTicks[k]>1});
+    if(config.rubato&&repeated)kept.push({reason:"Rubato 请先选择一次反复出现"});
+    if(config.rubato&&!repeated){
+        var rs=config.rubatoStrength===undefined?strength:config.rubatoStrength/100;
         var byTick={};confirmed.filter(function(m){return !m.original.grace}).forEach(function(m){if(!byTick[m.tick])byTick[m.tick]=[];byTick[m.tick].push(m)});
-        var ticks=Object.keys(byTick).map(Number).sort(function(a,b){return a-b}),points=ticks.map(function(t){return {tick:t,seconds:median(byTick[t].map(function(m){return m.seconds})),original:byTick[t][0].original.onSeconds}});
+        var ticks=Object.keys(byTick).map(Number).sort(function(a,b){return a-b}),points=ticks.map(function(t){return {tick:t,seconds:median(byTick[t].map(function(m){return m.seconds})),original:byTick[t][0].original.scoreSeconds===undefined?byTick[t][0].original.onSeconds:byTick[t][0].original.scoreSeconds}});
         if(points.length<4)kept.push({reason:"Rubato 至少需要四个可靠的不同起音"});
         else {
             var span=points[points.length-1].seconds-points[0].seconds,originalSpan=points[points.length-1].original-points[0].original;
@@ -176,7 +182,7 @@ function candidates(input) {
             for(i=1;i<points.length;++i)rates.push((points[i].tick-points[i-1].tick)/480*60/((points[i].seconds-points[i-1].seconds)*factor));
             for(i=0;i<points.length-1;++i){
                 var point=points[i],n=byTick[point.tick][0].original,window=rates.slice(Math.max(0,i-1),Math.min(rates.length,i+2)),rate=median(window);
-                var ease=Math.min(1,i/2,(points.length-2-i)/2),target=n.bpm+(rate-n.bpm)*strength*Math.max(0,ease);
+                var ease=Math.min(1,i/2,(points.length-2-i)/2),target=n.bpm+(rate-n.bpm)*rs*Math.max(0,ease);
                 if(n.tempoProtected){kept.push({tick:point.tick,reason:"已有速度记号／曲线保护"});continue}
                 if(target<5||target>999){kept.push({tick:point.tick,reason:"速度超出可写范围"});continue}
                 tempos.push({tick:point.tick,oldBpm:n.bpm,bpm:target});
@@ -192,5 +198,6 @@ function candidates(input) {
             }
         }
     }
-    return {revision:input.revision,scope:input.scope,velocity:velocity,tempos:tempos,kept:kept,protect:true};
+    velocity.forEach(function(v){if(v.graceIndex===undefined)delete v.graceIndex});
+    return {revision:input.revision,scope:input.scope,keepDuration:config.keepDuration!==false,velocity:velocity,tempos:tempos,kept:kept,protect:true};
 }

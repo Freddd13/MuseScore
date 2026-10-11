@@ -319,6 +319,7 @@ class Seq : public QObject, public Sequencer {
       void addCountInClicks();
 
       int getPlayStartUtick();
+      int _workflowStartUTick = -1;
 
       inline QQueue<NPlayEvent>* liveEventQueue() { return &_liveEventQueue; }
 
@@ -335,6 +336,7 @@ class Seq : public QObject, public Sequencer {
       void seekRT(int utick);
       void stopNotes(int channel = -1, bool realTime = false);
       void start();
+      void startAtUTick(int utick);
       void stop();
       void setPos(POS, unsigned);
       void setMetronomeGain(float val);

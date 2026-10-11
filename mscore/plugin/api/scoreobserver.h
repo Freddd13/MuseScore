@@ -63,6 +63,8 @@ class ScoreObserver : public QObject {
       int _readOnlyJobToken = 0;
       int _midiToken = 0;
       std::shared_ptr<std::atomic_bool> _midiCancel;
+      QPointer<Ms::Score> _workflowOriginal;
+      bool _workflowApplyingPreview = false;
       QPointer<Ms::Score> _score;
       QVector<QMetaObject::Connection> _scoreConnections;
       QVector<QPointer<Ms::ScoreView>> _previewViews;
@@ -95,6 +97,11 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE int startReadOnlyJob(const QString& source, const QVariantMap& input);
       Q_INVOKABLE void cancelReadOnlyJob();
       Q_INVOKABLE QString analysisRevision();
+      Q_INVOKABLE QVariantMap returnWorkflowSource();
+      Q_INVOKABLE QVariantMap previewExpression(const QString& workspace,const QVariantMap& candidate,const QVariantMap& scope);
+      Q_INVOKABLE QVariantMap openWorkflowScore(const QString& filename,bool baseline = false,const QString& expectedHash = QString());
+      Q_INVOKABLE QVariantMap copyWorkflowScore(const QString& destination,const QString& expected,bool overwrite = false);
+      Q_INVOKABLE QVariantMap applyExpression(const QVariantMap& candidate);
       Q_INVOKABLE int readPerformanceMidi(const QString& path);
       Q_INVOKABLE void cancelPerformanceMidi();
       Q_INVOKABLE QVariantMap savePerformanceSource(const QString& source,const QString& destination,const QString& expected);

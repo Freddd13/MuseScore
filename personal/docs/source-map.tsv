@@ -198,5 +198,8 @@ Tap 工作区迁移	mscore/workspace.cpp	if (uiVersion < 4)	1113	一次性添加
 原曲参考	mscore/referenceaudio/mediasession.cpp	ReferenceMediaSession::play	72	独立音频会话	Muse3Plugins/P1/tests/tst_media.cpp
 原曲参考	mscore/referenceaudio/audioreader.cpp	bool stream	58	可取消解码及保调	Muse3Plugins/P1/tests/tst_media.cpp
 演奏表达	mscore/workflow/midiinput.cpp	QVariantMap readPerformanceMidi	23	只读工作流值桥	mtest/mscore/p1native
-演奏表达	mscore/workflow/scoreworkflow.cpp	ScoreObserver::performanceRange	55	只读工作流值桥	mtest/mscore/p1native
-演奏表达	mscore/workflow/scoreworkflow.cpp	ScoreObserver::workflowInfo	48	只读工作流值桥	mtest/mscore/p1native
+演奏表达	mscore/workflow/scoreworkflow.cpp	ScoreObserver::performanceRange	60	只读工作流值桥	mtest/mscore/p1native
+演奏表达	mscore/workflow/scoreworkflow.cpp	ScoreObserver::workflowInfo	53	只读工作流值桥	mtest/mscore/p1native
+演奏表达	mscore/workflow/workflowexpression.cpp	ScoreObserver::applyExpression	43	只读工作流值桥	mtest/mscore/p1native
+演奏表达	mscore/workflow/workflowexpression.cpp	ScoreObserver::copyWorkflowScore	82	只读工作流值桥	mtest/mscore/p1native
+演奏表达	mscore/workflow/tapwrite.cpp	showTapWriteDialog	20	只读工作流值桥	mtest/mscore/p1native

@@ -64,7 +64,7 @@ ScoreObserver::ScoreObserver(QObject* parent) : QObject(parent)
       watchSurface();
       }
 
-ScoreObserver::~ScoreObserver() { cancelReadOnlyJob(); clearAllPreviews(); }
+ScoreObserver::~ScoreObserver() { cancelPerformanceMidi(); cancelReadOnlyJob(); clearAllPreviews(); }
 
 void ScoreObserver::watchSurface()
       {

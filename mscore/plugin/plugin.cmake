@@ -5,6 +5,9 @@ set (PLUGIN_API_SRC
     ${PROJECT_SOURCE_DIR}/mscore/workflow/midiinput.h
     ${PROJECT_SOURCE_DIR}/mscore/workflow/midiinput.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/scoreworkflow.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/workflowexpression.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/tapwrite.h
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/tapwrite.cpp
     ${CMAKE_CURRENT_LIST_DIR}/api/cursor.cpp
     ${CMAKE_CURRENT_LIST_DIR}/api/cursor.h
     ${CMAKE_CURRENT_LIST_DIR}/api/elements.cpp
