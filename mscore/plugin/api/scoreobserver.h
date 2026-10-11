@@ -97,6 +97,7 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE int startReadOnlyJob(const QString& source, const QVariantMap& input);
       Q_INVOKABLE void cancelReadOnlyJob();
       Q_INVOKABLE QString analysisRevision();
+      Q_INVOKABLE QVariantMap workflowFingerprint(int from,int limit,const QString& expected);
       Q_INVOKABLE QVariantMap returnWorkflowSource();
       Q_INVOKABLE QVariantMap previewExpression(const QString& workspace,const QVariantMap& candidate,const QVariantMap& scope);
       Q_INVOKABLE QVariantMap openWorkflowScore(const QString& filename,bool baseline = false,const QString& expectedHash = QString());

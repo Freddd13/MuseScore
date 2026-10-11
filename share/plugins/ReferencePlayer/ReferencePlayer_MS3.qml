@@ -93,6 +93,7 @@ MuseScore {
   if(selectedAssociation<0||!curScore)return;
   if(observer.playing){status="请停播后定位谱面";return}
   var item=associations[selectedAssociation];if(item.stale){status="关联已过期，请核对并重新关联";return}
+  if(typeof observer.navigateWorkflow==="function"){var located=observer.navigateWorkflow(item,false);if(located.error)status=located.error;return}
   var cursor=curScore.newCursor();cursor.track=item.firstTrack;cursor.rewindToTick(item.start);
   if(cursor.element)curScore.selection.select(cursor.element);
  }

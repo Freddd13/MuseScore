@@ -112,3 +112,5 @@ P1 原曲参考：mscore/workflow轻装配桥，mscore/referenceaudio可选DLL�
 P1 B1：演奏 MIDI 容错对应；薄宿主接口在mscore/workflow，纯规则／工作区在share/plugins/PerformanceExpression。测试mtest/mscore/p1native及插件P1/tests。
 
 P1 B2：表达保护写回、独立副本与Tap写谱；薄宿主接口在mscore/workflow，纯规则／工作区在share/plugins/PerformanceExpression。测试mtest/mscore/p1native及插件P1/tests。
+
+P1 C：多方案试写工作区；薄宿主接口在mscore/workflow，纯规则／工作区在share/plugins/PerformanceExpression。测试mtest/mscore/p1native及插件P1/tests。

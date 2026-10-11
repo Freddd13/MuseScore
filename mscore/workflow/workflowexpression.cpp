@@ -85,7 +85,7 @@ QVariantMap ScoreObserver::copyWorkflowScore(const QString& destination,const QS
  const QString path=localFile(destination);if(QFileInfo(path).suffix().compare("mscz",Qt::CaseInsensitive)!=0)return {{"error","workflow copies require MSCZ"}};
  auto master=_score->masterScore();
  for(auto open:mscore->scores())if(canonical(open->fileInfo()->filePath())==canonical(path)){
-  if(open!=master||!master->property("kumoWorkflowOwned").toBool())return {{"error","cannot overwrite an open user/original score"}};
+  if(open!=master||master->readOnly()||!master->property("kumoWorkflowOwned").toBool())return {{"error","cannot overwrite an open user/original score"}};
  }
  if(QFile::exists(path)&&!overwrite)return {{"error","destination exists; choose another path"}};
  QElapsedTimer clock;clock.start();

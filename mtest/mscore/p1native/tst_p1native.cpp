@@ -3,6 +3,7 @@
 #include <QSettings>
 #include <QSaveFile>
 #include <QQuickView>
+#include <QJSValue>
 #include <QDockWidget>
 #include "mscore/plugin/qmlplugin.h"
 #include "mscore/plugin/pluginManager.h"
@@ -84,15 +85,33 @@ private slots:
   auto preview=o.previewExpression(settings.filePath("workspace.json"),{},scope);QVERIFY2(preview["ok"].toBool(),qPrintable(preview["error"].toString()));QVERIFY(mscore->currentScore()!=s);QCOMPARE(o.analysisRevision(),rev);QVERIFY(o.returnWorkflowSource()["ok"].toBool());QCOMPARE(mscore->currentScore(),static_cast<Score*>(s));
   double old=s->tempomap()->tempo(480)*60;QVariantMap c{{"revision",rev},{"scope",scope},{"tempos",QVariantList{QVariantMap{{"tick",480},{"oldBpm",old},{"bpm",old*2}}}},{"keepDuration",true}};int undo=s->undoStack()->getCurIdx();QVERIFY(o.applyExpression(c).contains("error"));QCOMPARE(s->undoStack()->getCurIdx(),undo);
  }
+ void fingerprintAndReadonlyBaseline(){
+  auto s=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(s);mscore->setCurrentScoreView(mscore->appendScore(s));PluginAPI::Score w(s);PluginAPI::ScoreObserver o;o.setScore(&w);
+  auto state=s->state();auto first=o.workflowFingerprint(0,1,o.analysisRevision());QVERIFY(!first.contains("error"));QCOMPARE(first["measures"].toList().size(),1);QVERIFY(s->state()==state);
+  QString path=settings.filePath("baseline.mscz");auto r=o.copyWorkflowScore(path,o.analysisRevision());QVERIFY(r["ok"].toBool());QVERIFY(o.openWorkflowScore(path,true,r["sha256"].toString())["ok"].toBool());auto base=mscore->currentScore();QVERIFY(base!=s);QVERIFY(base->readOnly());
+  PluginAPI::Score wb(base);PluginAPI::ScoreObserver ob;ob.setScore(&wb);auto duplicate=ob.workflowFingerprint(0,1,ob.analysisRevision());QCOMPARE(duplicate["context"],first["context"]);QCOMPARE(duplicate["measures"].toList().first().toMap()["hash"],first["measures"].toList().first().toMap()["hash"]);
+  QVERIFY(ob.copyWorkflowScore(path,ob.analysisRevision(),true).contains("error"));QVERIFY(!ParameterEdit::writeTapTempo(base,480,120,false,nullptr));QVERIFY(ob.applyExpression({}).contains("error"));
+  QVERIFY(ob.openWorkflowScore(path,true,"tampered").contains("error"));
+  mscore->setCurrentScoreView(mscore->scores().indexOf(s));auto note=toChord(s->firstMeasure()->first(SegmentType::ChordRest)->element(4))->notes().front();s->startCmd();note->undoChangeProperty(Pid::VELO_OFFSET,12);s->endCmd();
+  QVERIFY(o.workflowFingerprint(0,1,first["revision"].toString()+"invalid").contains("error"));auto changed=o.workflowFingerprint(0,1,o.analysisRevision());QVERIFY(changed["measures"].toList().first().toMap()["hash"]!=first["measures"].toList().first().toMap()["hash"]);
+ }
  void realWorkflowPanels(){
   auto score=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);mscore->setCurrentScoreView(mscore->appendScore(score));mscore->resize(1200,850);mscore->show();
-  for(QString name:{"ReferencePlayer","PerformanceExpression"}){
+  for(QString name:{"ReferencePlayer","PerformanceExpression","ArrangementVariants"}){
    QString path=QString(TESTROOT)+"/share/plugins/"+name+"/"+name+"_MS3.qml";PluginDescription description;description.path=path;QVERIFY2(collectPluginMetaInformation(&description),qPrintable(path));mscore->registerPlugin(&description);mscore->pluginTriggered(path);QTest::qWait(120);
    QmlPlugin* root=nullptr;
-   for(auto w:QGuiApplication::allWindows()){auto view=qobject_cast<QQuickView*>(w);auto panel=view?qobject_cast<QmlPlugin*>(view->rootObject()):nullptr;if(panel&&panel->property("menuPath").toString().contains(name=="ReferencePlayer"?"Reference Player":"Performance Expression"))root=panel;}
+   for(auto w:QGuiApplication::allWindows()){auto view=qobject_cast<QQuickView*>(w);auto panel=view?qobject_cast<QmlPlugin*>(view->rootObject()):nullptr;if(panel&&panel->property("menuPath").toString().contains(name=="ReferencePlayer"?"Reference Player":name=="PerformanceExpression"?"Performance Expression":"Arrangement Variants"))root=panel;}
    QVERIFY(root);QVERIFY(root->property("observer").value<QObject*>());root->setPanelFloating(true);QTest::qWait(30);QVERIFY(root->panelFloating());root->setPanelFloating(false);QTest::qWait(30);
    if(name=="ReferencePlayer")QVERIFY(root->property("media").value<QObject*>()->property("available").toBool());
-   else QVERIFY(root->property("workerSource").toString().size()>1000);
+   else if(name=="PerformanceExpression")QVERIFY(root->property("workerSource").toString().size()>1000);
+   else {
+    root->setProperty("workspace",QUrl::fromLocalFile(settings.filePath("variants.json")).toString());QVERIFY(QMetaObject::invokeMethod(root,"newGroup"));QTRY_VERIFY(root->property("groupIndex").toInt()==0&&!root->property("busy").toBool());
+    auto groups=root->property("groups").value<QJSValue>().toVariant().toList();QCOMPARE(groups.size(),1);QCOMPARE(groups[0].toMap()["entries"].toList().size(),2);
+    QVERIFY(QFile::exists(settings.filePath("variants.json")));QVERIFY(mscore->currentScore()!=score);
+    QVERIFY(QMetaObject::invokeMethod(root,"saveActive"));QVERIFY(QMetaObject::invokeMethod(root,"duplicate"));QTRY_VERIFY(!root->property("busy").toBool());
+    groups=root->property("groups").value<QJSValue>().toVariant().toList();QCOMPARE(groups[0].toMap()["entries"].toList().size(),3);
+    QVERIFY(QMetaObject::invokeMethod(root,"load",Q_ARG(QVariant,QVariant(QUrl::fromLocalFile(settings.filePath("variants.json")).toString()))));QTRY_VERIFY(!root->property("busy").toBool());QVERIFY(mscore->currentScore()!=score);
+   }
   }
  }
  void rawMidiAtomicCopy(){

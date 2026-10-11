@@ -203,3 +203,4 @@ Tap 工作区迁移	mscore/workspace.cpp	if (uiVersion < 4)	1113	一次性添加
 演奏表达	mscore/workflow/workflowexpression.cpp	ScoreObserver::applyExpression	43	只读工作流值桥	mtest/mscore/p1native
 演奏表达	mscore/workflow/workflowexpression.cpp	ScoreObserver::copyWorkflowScore	82	只读工作流值桥	mtest/mscore/p1native
 演奏表达	mscore/workflow/tapwrite.cpp	showTapWriteDialog	20	只读工作流值桥	mtest/mscore/p1native
+演奏表达	mscore/workflow/workflowvariants.cpp	ScoreObserver::workflowFingerprint	12	只读工作流值桥	mtest/mscore/p1native
