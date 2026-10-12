@@ -35,7 +35,7 @@ MuseScore {
  function resolveEntry(e){return Project.fileUrl(Project.resolve(workspace,e.path))}
  function refresh(){
   if(!observer)return;
-  observer.score=curScore;var info=observer.workflowInfo();if(info.error){status=info.error;return}currentInfo=info;active=null;
+  observer.score=curScore;var info=typeof observer.workflowStatus==="function"?observer.workflowStatus():observer.workflowInfo();if(info.error){status=info.error;return}currentInfo=info;active=null;
   if(group)for(var i=0;i<group.entries.length;++i){var e=group.entries[i],paths=[Project.resolve(workspace,e.path)].concat(e.aliases||[]);for(var j=0;j<paths.length;++j)if(local(paths[j])===local(info.file))active=e;}
  }
  function fileName(kind){return Project.directory(workspace)+kind+"-"+Date.now()+"-"+Math.floor(Math.random()*1000000)+".mscz"}
@@ -61,7 +61,7 @@ MuseScore {
   var f=fingerprint;Array.prototype.push.apply(f.measures,p.measures);f.staves=p.staves;if(nextMeasure===0)f.context=p.context;fingerprint=f;nextMeasure=p.next;
   if(p.done){paging.stop();busy=false;var g=Project.copy(group);
    if(queryAction==="baseline"){g.baseline=Project.copy(fingerprint);setGroup(g);saveManifest();switchTo(1,false)}
-   else if(active){var c=Rules.compare(g.baseline,fingerprint,g.scope);for(var i=0;i<g.entries.length;++i)if(g.entries[i].id===active.id)g.entries[i].comparison=c;setGroup(g);status=c.same?"同条件比较 · 段内 "+c.inside+" 小节改变":c.reasons.join("；")}
+   else if(active){var c=Rules.compare(g.baseline,fingerprint,g.scope);for(var i=0;i<g.entries.length;++i)if(g.entries[i].id===active.id){c.revision=queryRevision;g.entries[i].comparison=c;}setGroup(g);status=c.same?"同条件比较 · 段内 "+c.inside+" 小节改变":c.reasons.join("；")}
   }
  }
  function switchTo(index,audition){
@@ -87,9 +87,13 @@ MuseScore {
  }
  function load(url){paging.stop();busy=false;try{var p=Project.read(observer,url).variants;if(!p||!p.groups.length)throw new Error("没有方案工作区");workspace=String(url);groups=p.groups;groupIndex=Math.max(0,Math.min(p.groupIndex||0,groups.length-1));selected=p.selected||0;groups.forEach(function(g){g.entries.forEach(function(e){e.aliases=[];e.savedRevision=""})});switchTo(selected,false)}catch(e){fail(e)}}
  function saved(e){return active&&active.id===e.id?(observer&&observer.analysisRevision()===e.savedRevision):true}
+ function comparisonText(e){
+  if(!e.comparison||(active&&active.id===e.id&&e.comparison.revision!==currentInfo.revision))return "比较待检查";
+  return e.comparison.same?"同条件比较":e.comparison.reasons.join("；");
+ }
  onRun:{if(typeof newScoreObserver!=="function"){fail("需要 P1 方案宿主");return}observer=newScoreObserver();observer.score=curScore;refresh()}
- onScoreStateChanged:if(!switching){refresh();if(busy&&observer.analysisRevision()!==queryRevision){paging.stop();busy=false;status="谱面变化，比较待更新"}}
- onVisibleChanged:if(!visible){paging.stop();busy=false}
+ onScoreStateChanged:if(!switching&&visible){refresh();if(busy&&observer.analysisRevision()!==queryRevision){paging.stop();busy=false;status="谱面变化，比较待更新"}}
+ onVisibleChanged:{if(!visible){paging.stop();busy=false}else if(observer)refresh()}
  Timer {id:paging;interval:1;repeat:true;onTriggered:root.page()}
  Rectangle {anchors.fill:parent;color:theme.background}
  ColumnLayout {anchors.fill:parent;anchors.margins:8;spacing:6
@@ -105,7 +109,7 @@ MuseScore {
   }
   ListView {visible:!root.compact;Layout.fillWidth:true;Layout.fillHeight:true;Layout.minimumHeight:100;clip:true;model:root.group?root.group.entries:[];currentIndex:root.selected;ScrollBar.vertical:ScrollBar {}
    delegate:ItemDelegate {width:parent.width;height:55;highlighted:index===root.selected
-    text:modelData.name+" · "+(modelData.baseline?"只读基准":root.saved(modelData)?"已保存工作区":"未保存工作区")+"\n"+(modelData.comparison?(modelData.comparison.same?"同条件比较":modelData.comparison.reasons.join("；")):"比较待检查")
+    text:modelData.name+" · "+(modelData.baseline?"只读基准":root.saved(modelData)?"已保存工作区":"未保存工作区")+"\n"+root.comparisonText(modelData)
     onClicked:root.selected=index;onDoubleClicked:root.switchTo(index,false)
    }
   }

@@ -37127,5 +37127,93 @@ Tap BPM: %2</source>
         <source> · staff %1</source>
         <translation> · 谱表 %1</translation>
     </message>
+    <message>
+        <source>Outside selected measures / unmapped source</source>
+        <translation>范围外小节／来源未映射</translation>
+    </message>
+    <message>
+        <source>Voice not selected</source>
+        <translation>未选择此声部</translation>
+    </message>
+    <message>
+        <source>Preserved by user melody / voice protection</source>
+        <translation>用户保护的旋律／声部</translation>
+    </message>
+    <message>
+        <source>Source measure / staff / voice</source>
+        <translation>来源小节／谱表／声部</translation>
+    </message>
+    <message>
+        <source>Whole score</source>
+        <translation>全谱</translation>
+    </message>
+    <message>
+        <source>From measure (file order)</source>
+        <translation>起始小节（文件顺序）</translation>
+    </message>
+    <message>
+        <source>Through measure</source>
+        <translation>结束小节</translation>
+    </message>
+    <message>
+        <source>Crop voices</source>
+        <translation>裁剪声部</translation>
+    </message>
+    <message>
+        <source>Protect voices</source>
+        <translation>保护声部</translation>
+    </message>
+    <message>
+        <source>Protect highest onset line in each piano part</source>
+        <translation>保护各钢琴部分的最高起音线</translation>
+    </message>
+    <message>
+        <source>Choose at least one voice and a valid measure range.</source>
+        <translation>请选择至少一个声部及有效的小节范围。</translation>
+    </message>
+    <message>
+        <source>Stop playback and wait for rendering before preparing MIDI.</source>
+        <translation>请停播并等待渲染结束，再准备 MIDI。</translation>
+    </message>
+    <message>
+        <source>Measure range does not exist in %1. Adjust the range for this export.</source>
+        <translation>%1 中没有该小节范围，请为本次导出调整范围。</translation>
+    </message>
+    <message>
+        <source>Explicit voices for %1</source>
+        <translation>%1 的具体声部</translation>
+    </message>
+    <message>
+        <source>Crop and protect individual staff voices. These selections apply to this score in this export session; the common range/voice preset remains separate.</source>
+        <translation>按谱表选择裁剪或保护声部。此选择仅用于本谱的本次导出；通用范围／声部预设单独保存。</translation>
+    </message>
+    <message>
+        <source>Staff / voice</source>
+        <translation>谱表／声部</translation>
+    </message>
+    <message>
+        <source>Crop</source>
+        <translation>裁剪</translation>
+    </message>
+    <message>
+        <source>Protect</source>
+        <translation>保护</translation>
+    </message>
+    <message>
+        <source>Staff %1 · voice %2</source>
+        <translation>谱表 %1 · 声部 %2</translation>
+    </message>
+    <message>
+        <source>Choose at least one voice.</source>
+        <translation>请选择至少一个声部。</translation>
+    </message>
+    <message>
+        <source>Staff voices…</source>
+        <translation>谱表声部…</translation>
+    </message>
+    <message>
+        <source>Range / voices / protection…</source>
+        <translation>范围／声部／保护…</translation>
+    </message>
 </context>
 </TS>

@@ -14,6 +14,7 @@
 #include "libmscore/tempoexpression.h"
 #include "libmscore/repeatlist.h"
 #include <QFutureWatcher>
+#include <QElapsedTimer>
 #include <QtConcurrent>
 #include <QUrl>
 #include <QCache>
@@ -50,6 +51,10 @@ QVariantMap ScoreObserver::savePerformanceSource(const QString& source,const QSt
  QSaveFile output(path);if(!output.open(QIODevice::WriteOnly)||output.write(bytes)!=bytes.size()||!output.commit())return {{"error","cannot save raw MIDI; previous file preserved"}};
  return {{"ok",true}};
 }
+QVariantMap ScoreObserver::workflowStatus() {
+ if(!_score)return {{"error","no-score"}};auto master=_score->masterScore();
+ return {{"revision",analysisRevision()},{"file",master->fileInfo()->absoluteFilePath()},{"name",master->name()},{"dirty",master->dirty()},{"readOnly",master->readOnly()}};
+}
 QVariantMap ScoreObserver::workflowInfo() {
  if(!_score)return {{"error","no-score"}};
  if(playing() || (seq&&!seq->backgroundRenderingIdle()))return {{"error","playing-or-rendering"}};
@@ -58,17 +63,18 @@ QVariantMap ScoreObserver::workflowInfo() {
  return {{"revision",analysisRevision()},{"file",master->fileInfo()->absoluteFilePath()},{"name",master->name()},{"dirty",master->dirty()},{"readOnly",master->readOnly()},{"repeats",repeats}};
 }
 QVariantMap ScoreObserver::performanceRange(int start,int end,int firstTrack,int endTrack,int fromTick,int limit,const QString& expected) {
+ QElapsedTimer work;work.start();
  // Bounded cache shared by independent workflow observers, invalidated by native content state.
- struct Cache {QPointer<Ms::Score> score;ScoreContentState state;QCache<QString,QVariantMap> pages{64};};static Cache cache;
+ struct Cache {QPointer<Ms::Score> score;ScoreContentState state;TempoMap clock;QVector<QPair<int,int>> curves;QCache<QString,QVariantMap> pages{64};};static Cache cache;
  const QString revision=analysisRevision();
  if(!_score||(!expected.isEmpty()&&revision!=expected)||playing())return {{"error","stale-or-playing"}};
  const auto state=_score->masterScore()->state();
- if(cache.score!=_score||cache.state!=state){cache.score=_score;cache.state=state;cache.pages.clear();}
+ if(cache.score!=_score||cache.state!=state){cache.score=_score;cache.state=state;cache.pages.clear();cache.clock=*_score->tempomap();cache.clock.setRelTempo(1.0);cache.curves.clear();for(auto curve:TempoExpression::curves(_score->masterScore()))cache.curves.append({curve->tick().ticks(),curve->tick2().ticks()});}
  QString key=QString("%1:%2:%3:%4:%5:%6").arg(start).arg(end).arg(firstTrack).arg(endTrack).arg(fromTick).arg(limit);
- if(auto saved=cache.pages.object(key)){auto value=*saved;value.insert("revision",revision);return value;}
+ if(auto saved=cache.pages.object(key)){auto value=*saved;value.insert("revision",revision);value.insert("milliseconds",double(work.nsecsElapsed())/1000000);return value;}
  auto page=analysisRange(start,end,firstTrack,endTrack,fromTick,limit,expected);
  if(page.contains("error"))return page;
- TempoMap scoreClock=*_score->tempomap();scoreClock.setRelTempo(1.0);
+ const auto& scoreClock=cache.clock;
  QVariantList notes;QSet<const Chord*> visited;
  for(auto v:page.value("notes").toList()){
   auto n=v.toMap();auto note=resolve(n);if(!note)continue;
@@ -80,7 +86,7 @@ QVariantMap ScoreObserver::performanceRange(int start,int end,int firstTrack,int
   n.insert("protected",manual);n.insert("protection",manual?"manual velocity / play events":"");
   bool tempoProtected=false;
   auto segment=note->chord()->segment();for(auto e:segment->annotations())if(e->isTempoText())tempoProtected=true;
-  for(auto curve:TempoExpression::curves(_score->masterScore()))if(n.value("tick").toInt()>=curve->tick().ticks()&&n.value("tick").toInt()<curve->tick2().ticks())tempoProtected=true;
+  for(auto curve:cache.curves)if(n.value("tick").toInt()>=curve.first&&n.value("tick").toInt()<curve.second)tempoProtected=true;
   n.insert("tempoProtected",tempoProtected);n.insert("bpm",_score->tempomap()->tempo(n.value("tick").toInt())*60);
   notes.append(n);
   auto chord=note->chord();
@@ -94,7 +100,7 @@ QVariantMap ScoreObserver::performanceRange(int start,int end,int firstTrack,int
    }++gi;}
   }
  }
- page.insert("notes",notes);cache.pages.insert(key,new QVariantMap(page));return page;
+ page.insert("notes",notes);page.insert("milliseconds",double(work.nsecsElapsed())/1000000);cache.pages.insert(key,new QVariantMap(page));return page;
 }
 QVariantMap ScoreObserver::navigateWorkflow(const QVariantMap& range,bool audition) {
  if(!_score||!mscore||!mscore->currentScoreView()||mscore->currentScoreView()->score()!=_score)return {{"error","select the requested score tab first"}};

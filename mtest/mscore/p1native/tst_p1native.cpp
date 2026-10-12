@@ -4,6 +4,14 @@
 #include <QSaveFile>
 #include <QQuickView>
 #include <QJSValue>
+#include <QDomDocument>
+#include <QSpinBox>
+#include <QCheckBox>
+#include <QPushButton>
+#include <QDialog>
+#include <QTreeWidget>
+#include <QTableView>
+#include "mscore/midicrop/midicroppanel.h"
 #include <QDockWidget>
 #include "mscore/plugin/qmlplugin.h"
 #include "mscore/plugin/pluginManager.h"
@@ -22,6 +30,10 @@
 #include "libmscore/excerpt.h"
 #include "libmscore/image.h"
 #include "libmscore/part.h"
+#include "libmscore/pedal.h"
+#include "audio/exports/exportmidi.h"
+#include "audio/exports/midigatefile.h"
+#include "libmscore/synthesizerstate.h"
 #include "mscore/performanceeditor/parameteredit.h"
 static void initP1Resources(){Q_INIT_RESOURCE(musescorefonts_Petaluma);}
 using namespace Ms;
@@ -94,6 +106,41 @@ private slots:
   QVERIFY(ob.openWorkflowScore(path,true,"tampered").contains("error"));
   mscore->setCurrentScoreView(mscore->scores().indexOf(s));auto note=toChord(s->firstMeasure()->first(SegmentType::ChordRest)->element(4))->notes().front();s->startCmd();note->undoChangeProperty(Pid::VELO_OFFSET,12);s->endCmd();
   QVERIFY(o.workflowFingerprint(0,1,first["revision"].toString()+"invalid").contains("error"));auto changed=o.workflowFingerprint(0,1,o.analysisRevision());QVERIFY(changed["measures"].toList().first().toMap()["hash"]!=first["measures"].toList().first().toMap()["hash"]);
+ }
+ void exportSourceRangeVoiceAndMelody(){
+  std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx"));QVERIFY(score);
+  auto pedal=new Pedal(score.get());pedal->setTick(Fraction::fromTicks(0));pedal->setTicks(Fraction::fromTicks(1800));pedal->setTrack(4);pedal->setTrack2(4);score->addSpanner(pedal);
+  score->firstMeasure()->setRepeatCount(2);score->firstMeasure()->setRepeatEnd(true);
+  ExportMidi exporter(score.get());exporter.collectGateData=true;QBuffer buffer;buffer.open(QIODevice::WriteOnly);QVERIFY(exporter.write(&buffer,true,true,mscore->synthesizerState()));
+  auto data=exporter.gateData;QVERIFY(data.notes.size()>=12);bool repeated=false;int mapped=0;for(auto n:data.notes)if(n.known){++mapped;QVERIFY(n.sourceTick==0||n.sourceTick==480);QCOMPARE(n.sourceMeasure,1);if(n.on>=1920)repeated=true;}QVERIFY(mapped>=12);QVERIFY(repeated);
+  MidiGateProcessor processor;MidiGateOptions gate;gate.jitter=0;gate.scoreStart=0;gate.scoreEnd=1920;gate.protectMelody=true;auto rows=processor.process(data,gate);int cropped=0,protectedCount=0;
+  for(auto n:rows){if(n.melody){QCOMPARE(n.newOff,n.off);QCOMPARE(n.reason,QString("protected-melody"));++protectedCount;}else if(n.newOff<n.off)++cropped;}QVERIFY(cropped>0);QVERIFY(protectedCount>0);
+  gate.scoreStart=1920;gate.scoreEnd=3840;rows=processor.process(data,gate);for(auto n:rows)QCOMPARE(n.newOff,n.off);
+  gate.scoreStart=0;gate.scoreEnd=1920;gate.protectMelody=false;gate.tracks={4};rows=processor.process(data,gate);cropped=0;for(auto n:rows){if(n.voice!=4){QCOMPARE(n.newOff,n.off);QCOMPARE(n.reason,QString("unselected-voice"));}else if(n.newOff<n.off)++cropped;}QVERIFY(cropped>0);
+  gate.protectedTracks={4};rows=processor.process(data,gate);for(auto n:rows)QCOMPARE(n.newOff,n.off);
+ }
+ void cropRangePreferencesAndExplicitVoices(){
+  std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx"));QVERIFY(score);MidiCropPanel panel(nullptr,[&]{return QList<Score*>{score.get()};});panel.show();
+  auto settingsButton=panel.findChild<QPushButton*>("midiCropSettingsButton");QVERIFY(settingsButton);bool configured=false;
+  QTimer::singleShot(50,&panel,[&]{for(auto w:QApplication::topLevelWidgets())if(auto d=qobject_cast<QDialog*>(w))if(d->objectName()=="midiCropSettings"){auto from=d->findChild<QSpinBox*>("cropFromMeasure"),until=d->findChild<QSpinBox*>("cropUntilMeasure");if(from&&until){from->setValue(1);until->setValue(1);d->findChild<QCheckBox*>("cropProtectMelody")->setChecked(true);configured=true;}d->accept();}});settingsButton->click();QVERIFY(configured);
+  auto gate=panel.options(score.get()).gate;QCOMPARE(gate.scoreStart,0);QCOMPARE(gate.scoreEnd,1920);QVERIFY(gate.protectMelody);MidiCropPanel restored(nullptr,[&]{return QList<Score*>{score.get()};});QVERIFY(restored.options(score.get()).gate.protectMelody);QCOMPARE(restored.options(score.get()).gate.scoreEnd,1920);
+  auto compare=panel.findChild<QPushButton*>("midiCropCompare");QVERIFY(compare);QTimer timer;timer.setInterval(50);int stage=0,tries=0;bool done=false;
+  connect(&timer,&QTimer::timeout,&panel,[&]{++tries;for(auto w:QApplication::topLevelWidgets())if(auto d=qobject_cast<QDialog*>(w)){
+   if(d->objectName()=="midiCropStaffVoices"&&stage==1){auto tree=d->findChild<QTreeWidget*>("cropStaffVoicesTree");if(tree&&tree->topLevelItemCount()>=8){for(int i=0;i<tree->topLevelItemCount();++i){auto row=tree->topLevelItem(i);row->setCheckState(1,i==4?Qt::Checked:Qt::Unchecked);row->setCheckState(2,i==4?Qt::Checked:Qt::Unchecked);}stage=2;d->accept();}}
+   else if(d->objectName()=="midiCropComparison"){
+    if(stage==0){stage=1;QTimer::singleShot(30,&panel,[&]{for(auto w:QApplication::topLevelWidgets())if(auto nested=qobject_cast<QDialog*>(w))if(nested->objectName()=="midiCropStaffVoices"){auto tree=nested->findChild<QTreeWidget*>("cropStaffVoicesTree");if(tree&&tree->topLevelItemCount()>=8){for(int i=0;i<tree->topLevelItemCount();++i){auto row=tree->topLevelItem(i);row->setCheckState(1,i==4?Qt::Checked:Qt::Unchecked);row->setCheckState(2,i==4?Qt::Checked:Qt::Unchecked);}stage=2;nested->accept();}else nested->reject();}});if(auto b=d->findChild<QPushButton*>("midiCropStaffVoicesButton"))b->click();}
+    else if(stage==2){auto table=d->findChild<QTableView*>();if(table&&table->model()->rowCount()>0){auto out=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");if(!out.isEmpty())d->grab().save(out+"/midi-range-protection.png");done=true;d->accept();}}
+    if(tries>100)d->reject();
+   }
+  }});timer.start();compare->click();timer.stop();QVERIFY(done);gate=panel.options(score.get()).gate;QVERIFY(gate.tracks==QSet<int>{4});QVERIFY(gate.protectedTracks==QSet<int>{4});panel.hide();
+ }
+ void completePerformancePagingBudget(){
+  QFile fixture(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(fixture.open(QIODevice::ReadOnly));QDomDocument xml;QVERIFY(xml.setContent(fixture.readAll()));auto source=xml.documentElement().firstChildElement("Score");
+  for(auto staff=source.firstChildElement("Staff");!staff.isNull();staff=staff.nextSiblingElement("Staff")){auto original=staff.firstChildElement("Measure");for(int i=2;i<=1000;++i){auto m=original.cloneNode(true).toElement();m.setAttribute("number",i);auto voice=m.firstChildElement("voice");voice.removeChild(voice.firstChildElement("Clef"));voice.removeChild(voice.firstChildElement("TimeSig"));staff.appendChild(m);}}
+  QFile input(settings.filePath("large-performance.mscx"));QVERIFY(input.open(QIODevice::WriteOnly));input.write(xml.toByteArray());input.close();std::unique_ptr<MasterScore> score(mscore->readScore(input.fileName()));QVERIFY(score);PluginAPI::Score w(score.get());PluginAPI::ScoreObserver o;o.setScore(&w);QVERIFY(!o.workflowInfo().contains("error"));
+  int at=0,count=0,pages=0,batch=12;double worst=0;auto revision=o.analysisRevision();QElapsedTimer timer;timer.start();
+  while(true){auto page=o.performanceRange(0,score->lastMeasure()->endTick().ticks(),0,8,at,batch,revision);QVERIFY(!page.contains("error"));auto notes=page["notes"].toList();count+=notes.size();for(auto n:notes)QVERIFY(n.toMap().contains("velocityBase"));worst=qMax(worst,page["milliseconds"].toDouble());if(page["milliseconds"].toDouble()>2)batch=qMax(1,batch/2);else if(page["milliseconds"].toDouble()<.8)batch=qMin(32,batch+1);++pages;if(page["done"].toBool())break;QVERIFY(page["nextTick"].toInt()>at);at=page["nextTick"].toInt();QVERIFY(pages<5000);}
+  QCOMPARE(count,6000);qInfo("P1 complete expression reads: 1000 bars / %d notes / %d pages, peak %.3f ms, total %.3f ms",count,pages,worst,double(timer.nsecsElapsed())/1000000.);
  }
  void realWorkflowPanels(){
   auto score=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);mscore->setCurrentScoreView(mscore->appendScore(score));mscore->resize(1200,850);mscore->show();

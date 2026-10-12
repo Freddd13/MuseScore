@@ -22,6 +22,7 @@
 #include "libmscore/key.h"
 #include "libmscore/lyrics.h"
 #include "libmscore/measure.h"
+#include "libmscore/segment.h"
 #include "libmscore/part.h"
 #include "libmscore/rehearsalmark.h"
 #include "libmscore/repeatlist.h"
@@ -350,7 +351,16 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                                 tag.track = staffIdx + 1;
                                                 tag.on = pauseMap.addPauseTicks(i->first);
                                                 tag.pitch = (!exportRPNs && event.portamento()) ? event.note()->pitch() : event.pitch();
-                                                tag.channel = channel; tag.staff = staffIdx; tag.voice = note->chord()->track();
+                                                tag.channel = channel; tag.staff = staffIdx; tag.voice = staffIdx*VOICES+note->voice();
+                                                tag.sourceTick = note->chord()->tick().ticks();
+                                                tag.sourceMeasure = note->chord()->measure()->no()+1;
+                                                int highest = note->ppitch();
+                                                auto onset = note->chord()->segment();
+                                                for(int t=part->startTrack();t<part->endTrack();++t) {
+                                                      auto element=onset->element(t);if(!element||!element->isChord())continue;
+                                                      for(auto candidate:toChord(element)->notes())if(!candidate->tieBack())highest=qMax(highest,candidate->ppitch());
+                                                      }
+                                                tag.melody = note->ppitch()>=highest;
                                                 tag.partName = part->instrumentName(note->tick());
                                                 tag.piano = part->instrumentId(note->tick()).contains("piano", Qt::CaseInsensitive);
                                                 tag.manual = note->chord()->playEventType() == PlayEventType::User || event.discard() || event.portamento() || note->chord()->isGrace() || event.pitch()!=note->ppitch() || note->chord()->tremolo();

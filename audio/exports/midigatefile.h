@@ -7,6 +7,8 @@ namespace Ms {
 // Tags captured during normal render conversion, before source pointers are discarded.
 struct MidiGateSource {
       int track=0,on=0,pitch=0,channel=0,staff=-1,voice=-1;
+      int sourceTick=-1,sourceMeasure=-1;
+      bool melody=false;
       QString partName;
       bool piano=false,manual=false;
       };

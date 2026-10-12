@@ -114,3 +114,7 @@ P1 B1：演奏 MIDI 容错对应；薄宿主接口在mscore/workflow，纯规则
 P1 B2：表达保护写回、独立副本与Tap写谱；薄宿主接口在mscore/workflow，纯规则／工作区在share/plugins/PerformanceExpression。测试mtest/mscore/p1native及插件P1/tests。
 
 P1 C：多方案试写工作区；薄宿主接口在mscore/workflow，纯规则／工作区在share/plugins/PerformanceExpression。测试mtest/mscore/p1native及插件P1/tests。
+
+P1 D：MIDI范围、声部及旋律保护；薄宿主接口在mscore/workflow，纯规则／工作区在share/plugins/PerformanceExpression。测试mtest/mscore/p1native及插件P1/tests。
+
+[P1 0.31 最终验证](P1_VALIDATION.md)：183通过及实测预算；人工素材验收边界明确列出。

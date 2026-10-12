@@ -4,6 +4,7 @@
 #include "libmscore/score.h"
 #include "libmscore/part.h"
 #include "libmscore/staff.h"
+#include "libmscore/measure.h"
 #include "libmscore/synthesizerstate.h"
 #include "mscore/musescore.h"
 #include "mscore/preferences.h"
@@ -21,6 +22,9 @@ QString reasonText(const QString& code) {
       static const QMap<QString,QString> names {
             {"pedal-release",MidiCropPanel::tr("Earlier release within the same pedal")},
             {"unselected",MidiCropPanel::tr("Instrument not selected")},
+            {"outside-range",MidiCropPanel::tr("Outside selected measures / unmapped source")},
+            {"unselected-voice",MidiCropPanel::tr("Voice not selected")},
+            {"protected-melody",MidiCropPanel::tr("Preserved by user melody / voice protection")},
             {"unknown-source",MidiCropPanel::tr("Source not uniquely identified")},
             {"manual-performance",MidiCropPanel::tr("Manual performance / grace / ornament")},
             {"ambiguous-retrigger",MidiCropPanel::tr("Ambiguous same-pitch retrigger")},
@@ -91,10 +95,10 @@ class GateModel : public QAbstractTableModel {
       MidiGateProcessor clock;
       GateModel(QObject* parent):QAbstractTableModel(parent) {}
       int rowCount(const QModelIndex& p={}) const override {return p.isValid()?0:visible.size();}
-      int columnCount(const QModelIndex& p={}) const override {return p.isValid()?0:5;}
+      int columnCount(const QModelIndex& p={}) const override {return p.isValid()?0:6;}
       QVariant headerData(int section,Qt::Orientation orientation,int role) const override {
             if(role!=Qt::DisplayRole || orientation!=Qt::Horizontal)return {};
-            return QStringList{MidiCropPanel::tr("Note"),MidiCropPanel::tr("Occurrence (ticks)"),MidiCropPanel::tr("Original ms"),MidiCropPanel::tr("New ms"),MidiCropPanel::tr("Reason")}.value(section);
+            return QStringList{MidiCropPanel::tr("Note"),MidiCropPanel::tr("Occurrence (ticks)"),MidiCropPanel::tr("Original ms"),MidiCropPanel::tr("New ms"),MidiCropPanel::tr("Source measure / staff / voice"),MidiCropPanel::tr("Reason")}.value(section);
             }
       QVariant data(const QModelIndex& index,int role) const override {
             if(!index.isValid() || role!=Qt::DisplayRole)return {};
@@ -104,6 +108,7 @@ class GateModel : public QAbstractTableModel {
                   case 1:return n.on;
                   case 2:return qRound(clock.durationMs(n.on,n.off));
                   case 3:return qRound(clock.durationMs(n.on,n.newOff));
+                  case 4:return n.sourceMeasure<0?QString("?"):QString("%1 / %2 / %3").arg(n.sourceMeasure).arg(n.staff+1).arg(n.voice%4+1);
                   default:return reasonText(n.reason);
                   }
             }
@@ -118,11 +123,16 @@ MidiCropPanel::MidiCropPanel(QWidget* parent,std::function<QList<Score*>()> scor
       auto layout=new QVBoxLayout(this);layout->setContentsMargins(0,6,0,0);
       _enabled=new QCheckBox(tr("Humanized release: conservative pedal mode"),this);
       _enabled->setChecked(preferences.getBool("export/midi/cropEnabled"));layout->addWidget(_enabled);
-      auto buttons=new QHBoxLayout;auto config=new QPushButton(tr("Release settings…"),this);auto preview=new QPushButton(tr("Compare…"),this);preview->setObjectName("midiCropCompare");
+      auto buttons=new QHBoxLayout;
+      auto config=new QPushButton(tr("Release settings…"),this);config->setObjectName("midiCropSettingsButton");auto preview=new QPushButton(tr("Compare…"),this);preview->setObjectName("midiCropCompare");
       buttons->addWidget(config);buttons->addWidget(preview);buttons->addStretch();layout->addLayout(buttons);
       _original=new QCheckBox(tr("Also export original MIDI"),this);_original->setChecked(preferences.getBool("export/midi/cropOriginal"));layout->addWidget(_original);
       _gate.lengthRatio=preferences.getDouble("export/midi/cropLength");_gate.nextAttackRatio=preferences.getDouble("export/midi/cropNext");
       _gate.minimumMs=preferences.getDouble("export/midi/cropMinimumMs");_gate.jitter=preferences.getDouble("export/midi/cropJitter");_gate.seed=preferences.getInt("export/midi/cropSeed");
+      _fromMeasure=preferences.getInt("export/midi/cropFromMeasure");_untilMeasure=preferences.getInt("export/midi/cropUntilMeasure");_gate.protectMelody=preferences.getBool("export/midi/cropProtectMelody");
+      const QString voiceText=preferences.getString("export/midi/cropVoices"),protectText=preferences.getString("export/midi/cropProtectedVoices");
+      for(auto v:voiceText.split(',',Qt::SkipEmptyParts))if(v.toInt()>=0&&v.toInt()<4)_gate.voices.insert(v.toInt());
+      for(auto v:protectText.split(',',Qt::SkipEmptyParts))if(v.toInt()>=0&&v.toInt()<4)_gate.protectedVoices.insert(v.toInt());
       connect(_enabled,&QCheckBox::toggled,this,[this](bool){savePreferences();});
       connect(_original,&QCheckBox::toggled,this,[this](bool){savePreferences();});
       connect(config,&QPushButton::clicked,this,&MidiCropPanel::settings);
@@ -132,27 +142,40 @@ bool MidiCropPanel::enabled() const {return _enabled->isChecked();}
 bool MidiCropPanel::includeOriginal() const {return _original->isChecked();}
 MidiExportOptions MidiCropPanel::options(Score* score) const {
       MidiExportOptions result;result.crop=enabled();result.gate=_gate;
+      if(_fromMeasure>0){result.gate.scoreStart=INT_MAX;result.gate.scoreEnd=INT_MAX;int bar=1;for(auto m=score->firstMeasure();m;m=m->nextMeasure(),++bar){if(bar==_fromMeasure)result.gate.scoreStart=m->tick().ticks();if(bar==_untilMeasure)result.gate.scoreEnd=m->endTick().ticks();}if(_untilMeasure<_fromMeasure||_untilMeasure>score->nmeasures())result.gate.scoreStart=result.gate.scoreEnd=INT_MAX;}
+      result.gate.tracks=_tracks.value(score);result.gate.protectedTracks=_protectedTracks.value(score);
       result.gate.excluded=_exclusions.value(score);result.gate.staves=_staves.value(score);return result;
       }
 void MidiCropPanel::savePreferences() const {
+      preferences.setPreference("export/midi/cropFromMeasure",_fromMeasure);preferences.setPreference("export/midi/cropUntilMeasure",_untilMeasure);preferences.setPreference("export/midi/cropProtectMelody",_gate.protectMelody);
+      auto text=[](const QSet<int>& values){QList<int> list=values.values();std::sort(list.begin(),list.end());QStringList result;for(int v:list)result<<QString::number(v);return result.join(',');};
+      preferences.setPreference("export/midi/cropVoices",text(_gate.voices));preferences.setPreference("export/midi/cropProtectedVoices",text(_gate.protectedVoices));
       preferences.setPreference("export/midi/cropEnabled",enabled());preferences.setPreference("export/midi/cropOriginal",includeOriginal());
       preferences.setPreference("export/midi/cropLength",_gate.lengthRatio);preferences.setPreference("export/midi/cropNext",_gate.nextAttackRatio);
       preferences.setPreference("export/midi/cropMinimumMs",_gate.minimumMs);preferences.setPreference("export/midi/cropJitter",_gate.jitter);preferences.setPreference("export/midi/cropSeed",int(_gate.seed));
       }
 void MidiCropPanel::settings() {
-      QDialog dialog(this);dialog.setWindowTitle(tr("Conservative MIDI release"));auto form=new QFormLayout(&dialog);
+      QDialog dialog(this);dialog.setObjectName("midiCropSettings");dialog.setWindowTitle(tr("Conservative MIDI release"));auto form=new QFormLayout(&dialog);
       auto length=new QDoubleSpinBox(&dialog);length->setRange(10,100);length->setValue(_gate.lengthRatio*100);length->setSuffix(" %");form->addRow(tr("Original length"),length);
       auto next=new QDoubleSpinBox(&dialog);next->setRange(10,100);next->setValue(_gate.nextAttackRatio*100);next->setSuffix(" %");form->addRow(tr("Next attack interval"),next);
       auto minimum=new QSpinBox(&dialog);minimum->setRange(1,5000);minimum->setValue(int(_gate.minimumMs));minimum->setSuffix(" ms");form->addRow(tr("Minimum gate"),minimum);
       auto jitter=new QDoubleSpinBox(&dialog);jitter->setRange(0,5);jitter->setValue(_gate.jitter*100);jitter->setSuffix(" %");form->addRow(tr("Release jitter ± (0 disables)"),jitter);
       auto seed=new QSpinBox(&dialog);seed->setRange(0,INT_MAX);seed->setValue(int(_gate.seed));form->addRow(tr("Repeatable seed"),seed);
+      auto from=new QSpinBox(&dialog),until=new QSpinBox(&dialog);from->setObjectName("cropFromMeasure");until->setObjectName("cropUntilMeasure");from->setRange(0,99999);until->setRange(0,99999);from->setSpecialValueText(tr("Whole score"));until->setSpecialValueText(tr("Whole score"));from->setValue(_fromMeasure);until->setValue(_untilMeasure);form->addRow(tr("From measure (file order)"),from);form->addRow(tr("Through measure"),until);
+      auto voiceRow=new QWidget(&dialog),protectRow=new QWidget(&dialog);auto voiceLayout=new QHBoxLayout(voiceRow),protectLayout=new QHBoxLayout(protectRow);voiceLayout->setContentsMargins(0,0,0,0);protectLayout->setContentsMargins(0,0,0,0);QVector<QCheckBox*> voices,protectedVoices;
+      for(int i=0;i<4;++i){auto v=new QCheckBox(QString::number(i+1),voiceRow),p=new QCheckBox(QString::number(i+1),protectRow);v->setChecked(_gate.voices.isEmpty()||_gate.voices.contains(i));p->setChecked(_gate.protectedVoices.contains(i));voiceLayout->addWidget(v);protectLayout->addWidget(p);voices.append(v);protectedVoices.append(p);}
+      form->addRow(tr("Crop voices"),voiceRow);form->addRow(tr("Protect voices"),protectRow);auto melody=new QCheckBox(tr("Protect highest onset line in each piano part"),&dialog);melody->setObjectName("cropProtectMelody");melody->setChecked(_gate.protectMelody);form->addRow(melody);
       auto info=new QLabel(tr("Only piano notes with both release times in the same supported pedal window are shortened. Onsets and controllers remain unchanged."),&dialog);info->setWordWrap(true);form->addRow(info);
       auto buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,&dialog);form->addRow(buttons);
       connect(buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
-      if(dialog.exec()==QDialog::Accepted) {_gate.lengthRatio=length->value()/100.;_gate.nextAttackRatio=next->value()/100.;_gate.minimumMs=minimum->value();_gate.jitter=jitter->value()/100.;_gate.seed=quint32(seed->value());savePreferences();}
+      if(dialog.exec()==QDialog::Accepted) {
+            QSet<int> selected,protectedSet;for(int i=0;i<4;++i){if(voices[i]->isChecked())selected.insert(i);if(protectedVoices[i]->isChecked())protectedSet.insert(i);}if(selected.isEmpty()||(from->value()>0&&until->value()<from->value())){QMessageBox::warning(this,tr("MIDI release"),tr("Choose at least one voice and a valid measure range."));return;}
+            _fromMeasure=from->value();_untilMeasure=_fromMeasure?until->value():0;_gate.voices=selected;_gate.protectedVoices=protectedSet;_gate.protectMelody=melody->isChecked();
+            _gate.lengthRatio=length->value()/100.;_gate.nextAttackRatio=next->value()/100.;_gate.minimumMs=minimum->value();_gate.jitter=jitter->value()/100.;_gate.seed=quint32(seed->value());savePreferences();}
       }
 bool MidiCropPanel::write(Score* score,const QString& path,const QString& original) {
-      if(seq && seq->isPlaying()) {QMessageBox::information(this,tr("MIDI release"),tr("Stop playback before preparing MIDI."));return false;}
+      if(seq && (seq->isPlaying()||!seq->backgroundRenderingIdle())) {QMessageBox::information(this,tr("MIDI release"),tr("Stop playback and wait for rendering before preparing MIDI."));return false;}
+      if(_fromMeasure>0&&(_untilMeasure>score->nmeasures()||_untilMeasure<_fromMeasure)){QMessageBox::warning(this,tr("MIDI release"),tr("Measure range does not exist in %1. Adjust the range for this export.").arg(score->title()));return false;}
       ExportMidi exporter(score);QBuffer buffer;buffer.open(QIODevice::WriteOnly);
       if(!exporter.write(&buffer,preferences.getBool(PREF_IO_MIDI_EXPANDREPEATS),preferences.getBool(PREF_IO_MIDI_EXPORTRPNS),mscore->synthesizerState(),options(score)))return false;
       auto store=[&](const QString& name,const QByteArray& bytes) {QSaveFile f(name);if(!f.open(QIODevice::WriteOnly) || f.write(bytes)!=bytes.size() || !f.commit()) {QMessageBox::warning(this,tr("MIDI export"),tr("Could not write %1: %2").arg(name,f.errorString()));return false;}return true;};
@@ -162,11 +185,22 @@ bool MidiCropPanel::write(Score* score,const QString& path,const QString& origin
             }
       return store(path,buffer.data());
       }
+void MidiCropPanel::voiceSelection(Score* score) {
+      QDialog dialog(this);dialog.setObjectName("midiCropStaffVoices");dialog.setWindowTitle(tr("Explicit voices for %1").arg(score->title()));dialog.resize(510,420);auto layout=new QVBoxLayout(&dialog);
+      auto label=new QLabel(tr("Crop and protect individual staff voices. These selections apply to this score in this export session; the common range/voice preset remains separate."),&dialog);label->setWordWrap(true);layout->addWidget(label);
+      auto tree=new QTreeWidget(&dialog);tree->setObjectName("cropStaffVoicesTree");tree->setColumnCount(3);tree->setHeaderLabels({tr("Staff / voice"),tr("Crop"),tr("Protect")});layout->addWidget(tree);
+      const auto selected=_tracks.value(score),protect=_protectedTracks.value(score);QVector<QTreeWidgetItem*> rows;
+      for(int staff=0;staff<score->nstaves();++staff)for(int voice=0;voice<VOICES;++voice){int track=staff*VOICES+voice;auto row=new QTreeWidgetItem(tree,{tr("Staff %1 · voice %2").arg(staff+1).arg(voice+1)});row->setData(0,Qt::UserRole,track);row->setCheckState(1,selected.isEmpty()||selected.contains(track)?Qt::Checked:Qt::Unchecked);row->setCheckState(2,protect.contains(track)?Qt::Checked:Qt::Unchecked);rows.append(row);}
+      tree->header()->setSectionResizeMode(0,QHeaderView::Stretch);auto buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,&dialog);layout->addWidget(buttons);connect(buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
+      if(dialog.exec()!=QDialog::Accepted)return;QSet<int> crop,protectedSet;for(auto row:rows){int track=row->data(0,Qt::UserRole).toInt();if(row->checkState(1)==Qt::Checked)crop.insert(track);if(row->checkState(2)==Qt::Checked)protectedSet.insert(track);}if(crop.isEmpty()){QMessageBox::warning(this,tr("MIDI release"),tr("Choose at least one voice."));return;}_tracks[score]=crop;_protectedTracks[score]=protectedSet;
+      }
 void MidiCropPanel::compare() {
-      if(seq && seq->isPlaying()) {QMessageBox::information(this,tr("MIDI release"),tr("Stop playback before preparing a comparison."));return;}
+      if(seq && (seq->isPlaying()||!seq->backgroundRenderingIdle())) {QMessageBox::information(this,tr("MIDI release"),tr("Stop playback and wait for rendering before preparing MIDI."));return;}
       const auto scores=_scores();if(scores.isEmpty())return;
       QDialog dialog(this);dialog.setObjectName("midiCropComparison");dialog.setWindowTitle(tr("MIDI release comparison"));dialog.resize(920,650);
       auto layout=new QVBoxLayout(&dialog);auto bar=new QHBoxLayout;
+      auto specific=new QPushButton(tr("Staff voices…"),&dialog);specific->setObjectName("midiCropStaffVoicesButton");bar->addWidget(specific);
+      auto config=new QPushButton(tr("Range / voices / protection…"),&dialog);bar->addWidget(config);
       auto scoreBox=new QComboBox(&dialog);for(auto score:scores)scoreBox->addItem(score->title());bar->addWidget(scoreBox);
       auto part=new QComboBox(&dialog);bar->addWidget(part);auto filter=new QComboBox(&dialog);filter->addItems({tr("All"),tr("Shortened"),tr("Preserved")});bar->addWidget(filter);
       auto display=new QComboBox(&dialog);display->addItems({tr("Overlay"),tr("Stacked")});bar->addWidget(display);
@@ -206,7 +240,9 @@ void MidiCropPanel::compare() {
       connect(table->selectionModel(),&QItemSelectionModel::currentRowChanged,&dialog,[&](const QModelIndex& index,const QModelIndex&){roll->selected=index.row();if(index.isValid())roll->horizontalScrollBar()->setValue(qMax(0,int(roll->notes[index.row()].on*roll->scale)-20));roll->refresh();});
       connect(exclude,&QPushButton::clicked,&dialog,[&] {const auto index=table->currentIndex();if(!index.isValid())return;const auto& n=rows[model->visible[index.row()]];auto& set=_exclusions[scores[scoreBox->currentIndex()]];if(set.contains(n.id))set.remove(n.id);else set.insert(n.id);calculate();});
       connect(recompute,&QPushButton::clicked,&dialog,calculate);
-      connect(reset,&QPushButton::clicked,&dialog,[&] {_gate=MidiGateOptions();_exclusions[scores[scoreBox->currentIndex()]].clear();savePreferences();calculate();});
+      connect(config,&QPushButton::clicked,&dialog,[&]{settings();calculate();});
+      connect(specific,&QPushButton::clicked,&dialog,[&]{voiceSelection(scores[scoreBox->currentIndex()]);calculate();});
+      connect(reset,&QPushButton::clicked,&dialog,[&] {_gate=MidiGateOptions();_fromMeasure=_untilMeasure=0;_tracks[scores[scoreBox->currentIndex()]].clear();_protectedTracks[scores[scoreBox->currentIndex()]].clear();_exclusions[scores[scoreBox->currentIndex()]].clear();savePreferences();calculate();});
       connect(close,&QPushButton::clicked,&dialog,&QDialog::accept);
       QTimer::singleShot(0,&dialog,load);dialog.exec();
       // Worker owns copies only; cancellation does not wait for audio or score state.

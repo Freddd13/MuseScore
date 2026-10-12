@@ -29,6 +29,8 @@ MuseScore {
  property int token:0
  property int midiToken:0
  property int nextTick:0
+ property int batchSize:12
+ property real worstBatch:0
  property int selected:-1
  property bool busy:false
  property bool stale:false
@@ -63,8 +65,9 @@ MuseScore {
  }
  function slice(){
   if(!visible||observer.playing||observer.analysisRevision()!==revision){cancel();stale=true;status="任务暂停／谱面变化";return}
-  var page=observer.performanceRange(scope.start,scope.end,scope.firstTrack,scope.endTrack,nextTick,12,revision);
+  var page=observer.performanceRange(scope.start,scope.end,scope.firstTrack,scope.endTrack,nextTick,batchSize,revision);
   if(page.error){cancel();fail(page.error);return}
+  worstBatch=Math.max(worstBatch,page.milliseconds||0);if(page.milliseconds>2)batchSize=Math.max(1,Math.floor(batchSize/2));else if(page.milliseconds<.8)batchSize=Math.min(32,batchSize+1);
   Array.prototype.push.apply(collecting,page.notes||[]);nextTick=page.nextTick;
   if(page.done){notes=collecting;collecting=[];paging.stop();runAlignment()}
  }
@@ -154,6 +157,7 @@ MuseScore {
    Layout.fillWidth:true
    Label {text:"演奏表达";font.bold:true;color:theme.text}
    Item {Layout.fillWidth:true}
+   Desk.DeskButton {text:"返回";visible:root.compact&&root.previewing;onClicked:root.returnOriginal()}
    Desk.DeskButton {text:"导入 MIDI";enabled:!root.busy;onClicked:midiDialog.open()}
    Desk.DeskButton {text:"项目";onClicked:projectMenu.open()}
    Desk.DeskButton {text:"悬浮";onClicked:{if(typeof root.setPanelFloating==="function")root.setPanelFloating(!root.panelFloating)}}

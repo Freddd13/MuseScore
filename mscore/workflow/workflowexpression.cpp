@@ -109,9 +109,11 @@ QVariantMap ScoreObserver::openWorkflowScore(const QString& filename,bool baseli
   if(baseline&&!score->property("kumoWorkflowOwned").toBool())return {{"error","an open original cannot become a read-only baseline"}};
   mscore->setCurrentScoreView(mscore->scores().indexOf(score));return {{"ok",true},{"path",path}};
  }
- auto score=mscore->openScore(path,true,true);
+ // Workflow files are already native copies; bypass optional legacy style migration.
+ auto score=mscore->readScore(path);
  if(!score)return {{"error","cannot open independent score"}};
  score->masterScore()->QObject::setProperty("kumoWorkflowOwned",true);score->masterScore()->setReadOnly(baseline);
+ mscore->setCurrentScoreView(mscore->appendScore(score));
  return {{"ok",true},{"path",path}};
 }
 QVariantMap ScoreObserver::previewExpression(const QString& workspace,const QVariantMap& candidate,const QVariantMap& scope){

@@ -12,16 +12,19 @@ class MidiCropPanel : public QWidget {
       QCheckBox* _enabled;
       QCheckBox* _original;
       MidiGateOptions _gate;
+      int _fromMeasure=0,_untilMeasure=0;
       std::function<QList<Score*>()> _scores;
       QMap<Score*,QSet<QString>> _exclusions;
       QMap<Score*,QSet<int>> _staves;
+      QMap<Score*,QSet<int>> _tracks,_protectedTracks;
       void settings();
       void compare();
+      void voiceSelection(Score*);
    public:
       MidiCropPanel(QWidget*,std::function<QList<Score*>()>);
       bool enabled() const;
       bool includeOriginal() const;
-      void clearSessions() { _exclusions.clear(); _staves.clear(); }
+      void clearSessions() { _exclusions.clear(); _staves.clear(); _tracks.clear(); _protectedTracks.clear(); }
       void savePreferences() const;
       MidiExportOptions options(Score*) const;
       bool write(Score*,const QString&,const QString& original);

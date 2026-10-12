@@ -18,12 +18,18 @@ struct MidiGateOptions {
       quint32 seed = 13013;
       QSet<int> staves; // empty = all recognized piano staves
       QSet<QString> excluded;
+      int scoreStart=-1,scoreEnd=-1; // physical score ticks; unrolled MIDI time stays untouched
+      QSet<int> tracks,protectedTracks; // explicit staff+voice; empty selection = all
+      QSet<int> voices,protectedVoices; // local voice numbers 0..3
+      bool protectMelody=false;
       };
 struct MidiExportOptions { bool crop = false; MidiGateOptions gate; };
 struct MidiGateNote {
       QString id, partName;
       int track = 0, offOrdinal = -1, staff = -1, voice = -1;
       int port = 0, channel = 0, pitch = 60, on = 0, off = 0, newOff = 0;
+      int sourceTick=-1,sourceMeasure=-1;
+      bool melody=false;
       bool piano = false, known = false, manual = false, ambiguous = false;
       QString reason;
       };
@@ -103,6 +109,11 @@ class MidiGateProcessor {
                   auto preserve=[&](const char* reason){n.reason=QString::fromLatin1(reason);};
                   if(!n.piano || (!option.staves.isEmpty()&&!option.staves.contains(n.staff))) {preserve("unselected");continue;}
                   if(!n.known || n.offOrdinal<0) {preserve("unknown-source");continue;}
+                  if(option.scoreStart>=0&&(n.sourceTick<option.scoreStart||n.sourceTick>=option.scoreEnd)) {preserve("outside-range");continue;}
+                  if(!option.tracks.isEmpty()&&!option.tracks.contains(n.voice)) {preserve("unselected-voice");continue;}
+                  if(option.protectedTracks.contains(n.voice)) {preserve("protected-melody");continue;}
+                  if(!option.voices.isEmpty()&&(n.voice<0||!option.voices.contains(n.voice%4))) {preserve("unselected-voice");continue;}
+                  if((option.protectMelody&&n.melody)||(n.voice>=0&&option.protectedVoices.contains(n.voice%4))) {preserve("protected-melody");continue;}
                   if(n.manual) {preserve("manual-performance");continue;}
                   if(n.ambiguous || n.off<=n.on) {preserve("ambiguous-retrigger");continue;}
                   if(option.excluded.contains(n.id)) {preserve("excluded");continue;}
