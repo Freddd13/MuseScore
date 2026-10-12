@@ -216,7 +216,12 @@ class TestP0Native : public QObject {
             for(auto pair:QVector<QPair<int,int>>{{360,67},{360,71},{240,74}}){input.setDuration(TDuration(Fraction::fromTicks(pair.first),true));NoteVal value(pair.second);sample->startCmd();QVERIFY(sample->addPitch(value,false));sample->endCmd();}
             input.setNoteEntryMode(false);auto view=mscore->currentScoreView();QVERIFY(view);mscore->resize(1100,700);mscore->show();view->resize(950,500);view->show();
             for(bool coherent:{false,true}){InputNotation::setCoherentStems(coherent);sample->setLayoutAll();sample->doLayout();sample->update();mscore->endCmd();QTest::qWait(30);
-                  const auto image=view->grab();QVERIFY(!image.isNull());QVERIFY(image.save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath(coherent?"input-332-coherent.png":"input-332-native.png")));}
+                  QCOMPARE(view->score(),static_cast<Score*>(sample));view->setOffset(0,0);
+                  auto chord=toChord(sample->findCR(Fraction(),0));QVERIFY(chord);view->adjustCanvasPosition(chord->upNote(),false);QTest::qWait(30);
+                  const auto image=view->grab();QVERIFY(!image.isNull());const auto pixels=image.toImage();int ink=0;
+                  for(int y=0;y<pixels.height();++y)for(int x=0;x<pixels.width();++x){const auto color=pixels.pixelColor(x,y);if(color.red()<80&&color.green()<80&&color.blue()<80)++ink;}
+                  QVERIFY2(ink>500,"Screenshot must contain the score, not just a blank page");
+                  QVERIFY(image.save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath(coherent?"input-332-coherent.png":"input-332-native.png")));}
             mscore->setCurrentScoreView(previousView);if(!previouslyVisible)mscore->hide();
             }
 };
