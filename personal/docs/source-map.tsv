@@ -1,9 +1,9 @@
 topic	path	symbol	line	role	tests
 启动	main/main.cpp	int main(	56	资源与应用入口	-
 模块装配	main/modulessetup.cpp	void ModulesSetup::setup()	52	可选模块注册	-
-主应用初始化	mscore/musescore.cpp	int runApplication(	8847	应用初始化与CLI	-
-命令分发	mscore/musescore.cpp	void MuseScore::cmd(QAction* a)	6853	状态检查与事务	-
-主窗口更新	mscore/musescore.cpp	void MuseScore::endCmd(bool undoRedo)	6931	UI与插件结束通知	-
+主应用初始化	mscore/musescore.cpp	int runApplication(	8852	应用初始化与CLI	-
+命令分发	mscore/musescore.cpp	void MuseScore::cmd(QAction* a)	6858	状态检查与事务	-
+主窗口更新	mscore/musescore.cpp	void MuseScore::endCmd(bool undoRedo)	6936	UI与插件结束通知	-
 快捷键	mscore/shortcut.cpp	Shortcut::getShortcut(	4428	命令注册与查询	-
 视图命令	mscore/scoreview.cpp	void ScoreView::cmd(const char* s)	2254	视图本地命令表	-
 事件与输入模式	mscore/events.cpp	void ScoreView::changeState(ViewState s)	1162	交互状态切换	-
@@ -31,8 +31,8 @@ MasterScore模型	libmscore/score.h	class MasterScore :	1301	总谱共享状态�
 翻转与跨谱表beam	libmscore/edit.cpp	void Score::cmdFlip()	1656	方向循环	mtest/libmscore/beam
 交换声部	libmscore/edit.cpp	void Score::cmdExchangeVoice(	3078	逻辑声部分配	mtest/libmscore/exchangevoices
 钢琴拆谱表	libmscore/score.cpp	void Score::splitStaff(	2573	按音高分拆Staff	mtest/libmscore/splitstaff
-总体排版	libmscore/layout.cpp	void Score::doLayout()	5267	全谱布局	mtest/libmscore/layout
-范围排版	libmscore/layout.cpp	void Score::doLayoutRange(	5287	增量布局	mtest/libmscore/layout_elements
+总体排版	libmscore/layout.cpp	void Score::doLayout()	5270	全谱布局	mtest/libmscore/layout
+范围排版	libmscore/layout.cpp	void Score::doLayoutRange(	5290	增量布局	mtest/libmscore/layout_elements
 连续视图排版	libmscore/layoutlinear.cpp	void Score::layoutLinear(	187	连续布局	-
 beam布局	libmscore/beam.cpp	void Beam::layout()	514	连梁与跨谱表	mtest/libmscore/beam
 属性检查器	mscore/inspector/inspectorBase.cpp	void InspectorBase::valueChanged(	392	多选属性事务	-
@@ -98,10 +98,10 @@ SF2文件跳转	audio/midi/fluid/sfont.cpp	void SFont::safe_fseek(qint64 ofs)	18
 自动节奏策略	libmscore/inputrhythm.cpp	bool InputRhythm::normalize	61	局部链比较/重组/数值选区与光标恢复	mtest/libmscore/inputrhythm
 复杂对象保护	libmscore/inputrhythm.cpp	bool InputRhythm::eligible	42	自定义事件和复杂附着保守跳过	mtest/libmscore/inputrhythm
 和弦输入延音链	libmscore/inputrhythm.cpp	Note* InputRhythm::addToChain	160	新音高覆盖整链/延音/逻辑光标	mtest/libmscore/inputrhythm
-自动记谱开关	mscore/musescore.cpp	QAction* autoRhythm	2267	工具菜单/默认true/应用偏好	mtest/mscore/pluginhost
+自动记谱开关	mscore/musescore.cpp	QAction* autoRhythm	2271	工具菜单/默认true/应用偏好	mtest/mscore/pluginhost
 卷帘记谱输入	mscore/pianoroll/pianoview.cpp	QVector<Note*> PianoView::addNote	4037	明确输入与普通粘贴分开/重新查找片段	mtest/mscore/pluginhost
 rhythm-rules	libmscore/durationtype.cpp	std::vector<TDuration> toRhythmicDurationList	526	Simple/compound meter duration spelling; see personal guide 13	mtest/libmscore/inputrhythm
-restored-rhythm-menu	mscore/musescore.cpp	void MuseScore::updateMenus()	2748	Restore personal action into old workspace menus	mtest/mscore/pluginhost
+restored-rhythm-menu	mscore/musescore.cpp	void MuseScore::updateMenus()	2753	Restore personal action into old workspace menus	mtest/mscore/pluginhost
 text-font-fallback	libmscore/textbase.cpp	QFont TextFragment::font(	851	ScoreText music font vs ordinary Qt font merging	mtest/libmscore/text
 music-text-fallback	libmscore/sym.cpp	const char* ScoreFont::fallbackTextFont()	7156	Bravura Text fallback; not CJK title fallback	-
 harmony-regions	share/plugins/HarmonyAssistant/Timeline.js	function createBuilder	47	Numeric interval builder and manual overlays	mtest/mscore/scoreobserver
@@ -130,7 +130,7 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 独立纵向视窗	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::zoomVertical	171	音高/参数各自缩放/滚动条同步	mtest/mscore/performanceeditor
 滚轮力度	mscore/performanceeditor/performancewheel.cpp	bool PerformanceEditor::wheelVelocity	26	单音细粗调/端点锁定/临时模式与原生预览	mtest/mscore/performanceeditor
 滚轮撤销段	mscore/performanceeditor/performancewheel.cpp	void PerformanceEditor::finishWheel	13	300ms合并/生命周期与一次提交	mtest/mscore/performanceeditor
-个人工具栏	mscore/musescore.cpp	void MuseScore::populateAlternativeOperations	710	Evolution其他选项栏复用演奏编辑器QAction	mtest/mscore/performanceeditor
+个人工具栏	mscore/musescore.cpp	void MuseScore::populateAlternativeOperations	714	Evolution其他选项栏复用演奏编辑器QAction	mtest/mscore/performanceeditor
 个人启动标识	mscore/mssplashscreen.cpp	_miscText(QString	54	上游版本与Kumo分支/作者/个人版本	mtest/mscore/performanceeditor
 个人帮助标识	mscore/musescoredialogs.cpp	AboutBoxDialog::AboutBoxDialog()	144	关于/复制版本/个人标签链接	mtest/mscore/performanceeditor
 个人版本生成	personal/branding.cmake	file(STRINGS	3	单一VERSION源/独立生成头/自动重配置	mtest/mscore/performanceeditor
@@ -171,7 +171,7 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 谱带鼠标隔离	mscore/performanceeditor/performanceoverlay.cpp	bool PerformanceEditor::overlayEvent	52	完整frame阻断／原生双向选音	mtest/mscore/performanceeditor
 力度柱宽	mscore/performanceeditor/performancesettings.cpp	bool PerformanceAppearance::edit	94	1–8逻辑像素／取消和默认／独立设置	mtest/mscore/performanceeditor
 谱带重叠回归	mtest/mscore/performanceeditor/performance_controls_tests.inc	void reaperStemsAndStripSelection	62	双谱行和弦／真实选择拖拽／一次Undo	mtest/mscore/performanceeditor
-独立谱带入口	mscore/musescore.cpp	auto bandAction = new QAction	1993	共享菜单／工具栏Action与面板同步	mtest/mscore/performanceeditor
+独立谱带入口	mscore/musescore.cpp	auto bandAction = new QAction	1997	共享菜单／工具栏Action与面板同步	mtest/mscore/performanceeditor
 独立谱带生命周期	mscore/performanceeditor/performanceeditor.cpp	bool PerformanceEditor::surfacesActive() const	748	面板或谱带激活／关闭停刷	mtest/mscore/performanceeditor
 hand-bracket-geometry	libmscore/symbol.cpp	QPainterPath Symbol::handPath	106	Optional SMuFL hand geometry in spatium	mtest/mscore/performanceeditor/handsymbol_tests.inc
 hand-bracket-grips	libmscore/symbol.cpp	void Symbol::startEditDrag	154	Native Undo and cancellable endpoint preview	mtest/mscore/performanceeditor/handsymbol_tests.inc
@@ -217,3 +217,6 @@ MIDI导出	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::voiceSelection	188	�
 速度与工作流	mscore/taptempo/tapmark.cpp	void showTapMarkDialog	221	选中速度标记的临时预览与一次保存	mtest/mscore/p1native; mtest/mscore/p0native
 速度与工作流	mscore/taptempo/tapmark.cpp	QString tapTempoText	27	保留拍单位／说明文字的数字更新	mtest/mscore/p1native; mtest/mscore/p0native
 速度与工作流	mscore/workflow/workflowvariants.cpp	QVariantMap ScoreObserver::workflowFingerprint	15	比较实际MIDI路由，默认等价写法一致	mtest/mscore/p1native; mtest/mscore/p0native
+输入净谱	libmscore/inputnotation.cpp	bool joinTiedChords	33	完整延音、同小节与手动分组保护	mtest/libmscore/inputrhythm; mtest/libmscore/beam; mtest/mscore/p0native
+输入净谱	libmscore/inputnotation.cpp	void coordinateTieStems	48	紧凑普通音组的自动方向协调	mtest/libmscore/inputrhythm; mtest/libmscore/beam; mtest/mscore/p0native
+输入净谱	mscore/inputnotationmenu.cpp	void addInputNotationMenu	13	工具菜单、设置记忆及停止播放后排版	mtest/libmscore/inputrhythm; mtest/libmscore/beam; mtest/mscore/p0native

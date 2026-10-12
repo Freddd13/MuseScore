@@ -5,6 +5,8 @@
 #include "mtest/testutils.h"
 #include "libmscore/score.h"
 #include "libmscore/inputrhythm.h"
+#include "libmscore/inputnotation.h"
+#include "libmscore/beam.h"
 #include "libmscore/chord.h"
 #include "libmscore/note.h"
 #include "libmscore/measure.h"
@@ -63,8 +65,15 @@ class TestInputRhythm : public QObject, public MTest {
             }
 private slots:
       void initTestCase() { initMTest(); QVERIFY(dir.isValid()); }
-      void init() { InputRhythm::setEnabled(true); }
-      void cleanup() { InputRhythm::setEnabled(false); }
+      void init() { InputRhythm::setEnabled(true); InputNotation::setTiedBeams(false); InputNotation::setCoherentStems(false); }
+      void cleanup() { InputRhythm::setEnabled(false); InputNotation::setTiedBeams(false); InputNotation::setCoherentStems(false); }
+#ifdef Q_MOC_RUN
+      void quarterChangedAfterDottedQuarter();
+      void threeThreeTwoStemsAndManualSettings();
+      void manualNoBeamSurvivesDurationChanges();
+#else
+#include "input_notation_tests.inc"
+#endif
       void grouping_data()
             {
             QTest::addColumn<int>("n");QTest::addColumn<int>("d");QTest::addColumn<int>("start");

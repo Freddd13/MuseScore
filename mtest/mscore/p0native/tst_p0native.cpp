@@ -16,6 +16,10 @@
 #include "mtest/testutils.h"
 #include "mscore/musescore.h"
 #include "mscore/preferences.h"
+#include "mscore/inputrhythmpreference.h"
+#include "libmscore/inputnotation.h"
+#include "libmscore/inputrhythm.h"
+#include "mscore/scoreview.h"
 #include "mscore/shortcut.h"
 #include "mscore/plugin/api/scoreobserver.h"
 #include "mscore/plugin/api/score.h"
@@ -64,6 +68,18 @@ class TestP0Native : public QObject {
             QVERIFY(settings.isValid());QCoreApplication::setOrganizationName("MuseScoreRegression");QCoreApplication::setApplicationName("P0Native");
             QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,settings.path());dataPath=settings.path();
             MScore::noGui=true;noSeq=true;converterMode=true;initMuseScoreResources();initP0Resources();QStringList arguments;MuseScore::init(arguments);QVERIFY(mscore);
+            }
+      void notationMenusAndPreference()
+            {
+            auto join=mscore->findChild<QAction*>("auto-tie-beams");auto stems=mscore->findChild<QAction*>("coherent-tie-stems");
+            QVERIFY(join);QVERIFY(stems);QVERIFY(!join->isChecked());QVERIFY(stems->isChecked());
+            auto menu=Workspace::findMenuFromString("menu-tools");QVERIFY(menu);QVERIFY(menu->actions().contains(join));
+            menu->popup(QPoint(20,20));QTest::qWait(30);menu->setActiveAction(join);QTest::qWait(20);
+            QTest::mouseClick(menu,Qt::LeftButton,Qt::NoModifier,menu->actionGeometry(join).center());
+            QTRY_VERIFY(join->isChecked());QVERIFY(InputNotation::tiedBeams());QVERIFY(preferences.getBool(PREF_SCORE_TIED_BEAMS));
+            join->trigger();QVERIFY(!InputNotation::tiedBeams());QVERIFY(!preferences.getBool(PREF_SCORE_TIED_BEAMS));
+            stems->trigger();QVERIFY(!InputNotation::coherentStems());QVERIFY(!preferences.getBool(PREF_SCORE_COHERENT_TIE_STEMS));
+            stems->trigger();QVERIFY(InputNotation::coherentStems());QVERIFY(preferences.getBool(PREF_SCORE_COHERENT_TIE_STEMS));
             }
       void tapUsesSharedActionAndFixedGeometry() {
             auto action=getAction("tap-tempo");QVERIFY(action);QVERIFY(!action->autoRepeat());
@@ -191,6 +207,18 @@ class TestP0Native : public QObject {
             panel->setPanelFloating(true);QVERIFY(panel->panelFloating());panel->setPanelFloating(false);
             }
       void cleanupTestCase() {mscore->hide();}
-      };
+            void notationPictures()
+            {
+            auto previousView=mscore->currentScoreView();const bool previouslyVisible=mscore->isVisible();
+            auto sample=mscore->readScore(QString(TESTROOT)+"/mtest/libmscore/inputrhythm/blank.mscx");QVERIFY(sample);
+            mscore->setCurrentScoreView(mscore->appendScore(sample));InputRhythm::setEnabled(true);
+            auto& input=sample->inputState();input.setTrack(0);input.setSegment(sample->firstMeasure()->first(SegmentType::ChordRest));input.setLastSegment(input.segment());input.setNoteEntryMode(true);
+            for(auto pair:QVector<QPair<int,int>>{{360,67},{360,71},{240,74}}){input.setDuration(TDuration(Fraction::fromTicks(pair.first),true));NoteVal value(pair.second);sample->startCmd();QVERIFY(sample->addPitch(value,false));sample->endCmd();}
+            input.setNoteEntryMode(false);auto view=mscore->currentScoreView();QVERIFY(view);mscore->resize(1100,700);mscore->show();view->resize(950,500);view->show();
+            for(bool coherent:{false,true}){InputNotation::setCoherentStems(coherent);sample->setLayoutAll();sample->doLayout();sample->update();mscore->endCmd();QTest::qWait(30);
+                  const auto image=view->grab();QVERIFY(!image.isNull());QVERIFY(image.save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath(coherent?"input-332-coherent.png":"input-332-native.png")));}
+            mscore->setCurrentScoreView(previousView);if(!previouslyVisible)mscore->hide();
+            }
+};
 QTEST_MAIN(TestP0Native)
 #include "tst_p0native.moc"

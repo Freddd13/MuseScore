@@ -123,6 +123,8 @@
 #include "libmscore/score.h"
 #include "libmscore/inputrhythm.h"
 #include "inputrhythmpreference.h"
+#include "inputnotationmenu.h"
+#include "libmscore/inputnotation.h"
 #include "libmscore/scorediff.h"
 #include "libmscore/scoreOrder.h"
 #include "libmscore/segment.h"
@@ -504,6 +506,8 @@ void updateExternalValuesFromPreferences() {
       MScore::warnPitchRange = preferences.getBool(PREF_SCORE_NOTE_WARNPITCHRANGE);
       MScore::disableMouseEntry = preferences.getBool(PREF_SCORE_NOTE_INPUT_DISABLE_MOUSE_INPUT);
       InputRhythm::setEnabled(preferences.getBool(PREF_SCORE_NOTE_INPUT_AUTO_RHYTHM));
+      InputNotation::setTiedBeams(preferences.getBool(PREF_SCORE_TIED_BEAMS));
+      InputNotation::setCoherentStems(preferences.getBool(PREF_SCORE_COHERENT_TIE_STEMS));
       if (mscore) {
             if (auto action = mscore->findChild<QAction*>("auto-rhythmic-input"))
                   action->setChecked(InputRhythm::enabled());
@@ -2274,6 +2278,7 @@ MuseScore::MuseScore()
             preferences.setPreference(PREF_SCORE_NOTE_INPUT_AUTO_RHYTHM, enabled);
             InputRhythm::setEnabled(enabled);
             });
+      addInputNotationMenu(menuTools);
       menuTools->addAction(getAction("resequence-rehearsal-marks"));
       menuTools->addAction(getAction("unroll-repeats"));
       menuTools->addSeparator();

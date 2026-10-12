@@ -16,6 +16,7 @@
 #include "articulation.h"
 #include "barline.h"
 #include "beam.h"
+#include "inputnotation.h"
 #include "bracket.h"
 #include "box.h"
 #include "chord.h"
@@ -2892,6 +2893,7 @@ void Score::createBeams(LayoutContext& lc, Measure* measure)
                               }
                         }
 
+                  if ((bm == Beam::Mode::BEGIN || bm == Beam::Mode::AUTO) && InputNotation::joinTiedChords(prev,cr)) bm = Beam::Mode::MID;
                   prev = cr;
 
                   // if chord has hooks and is 2nd element of a cross-measure value
@@ -2972,6 +2974,7 @@ void Score::createBeams(LayoutContext& lc, Measure* measure)
                         a1->removeDeleteBeam(false);
                   }
             }
+      InputNotation::coordinateTieStems(measure);
       }
 
 static bool measureMayHaveBeamsJoinedIntoNext(const Measure* measure)

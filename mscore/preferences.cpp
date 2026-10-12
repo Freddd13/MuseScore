@@ -259,6 +259,8 @@ void Preferences::init(bool storeInMemoryOnly)
             {PREF_SCORE_NOTE_WARNPITCHRANGE,                       new BoolPreference(true, false)},
             {PREF_SCORE_NOTE_INPUT_DISABLE_MOUSE_INPUT,            new BoolPreference(false, true)},
             {PREF_SCORE_NOTE_INPUT_AUTO_RHYTHM,                    new BoolPreference(true, false)},
+            {PREF_SCORE_TIED_BEAMS, new BoolPreference(false, false)},
+            {PREF_SCORE_COHERENT_TIE_STEMS, new BoolPreference(true, false)},
             {PREF_SCORE_STYLE_DEFAULTSTYLEFILE,                    new StringPreference("", false)},
             {PREF_SCORE_STYLE_PARTSTYLEFILE,                       new StringPreference("", false)},
             {PREF_UI_CANVAS_BG_USECOLOR,                           new BoolPreference(true, false)},

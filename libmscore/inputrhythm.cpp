@@ -46,7 +46,7 @@ bool InputRhythm::eligible(ChordRest* cr)
             || (cr->beamMode() != Beam::Mode::AUTO && cr->beamMode() != Beam::Mode::NONE))
             return false;
       if (cr->isRest()) return !toRest(cr)->isGap();
-      if (!cr->isChord()) return false;
+      if (!cr->isChord() || cr->beamMode() != Beam::Mode::AUTO) return false;
       Chord* c = toChord(cr);
       if (c->playEventType() == PlayEventType::User || !c->graceNotes().empty()
             || c->tremolo() || c->arpeggio() || !c->articulations().empty())
