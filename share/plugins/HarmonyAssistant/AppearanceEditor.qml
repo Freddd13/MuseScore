@@ -60,14 +60,15 @@ Column {
         ColorOption {width:parent.width; caption:modelData.name; value:configuration[modelData.key]; onEdited:editor.option(modelData.key,color); onChooseRequested:editor.chooseColor(modelData.key,value)}
     }
     DeskSwitch {text:"优先保留原谱和弦 / 级数"; checked:configuration.respectExistingHarmony; onToggled:if(checked!==configuration.respectExistingHarmony)editor.option("respectExistingHarmony",checked)}
+    DeskSwitch {text:"避让其它谱面内容"; objectName:"harmonyAvoidScoreContent"; checked:configuration.avoidScoreContent; onToggled:if(checked!==configuration.avoidScoreContent)editor.option("avoidScoreContent",checked)}
     DeskSwitch {text:"记号背景遮罩"; checked:configuration.chordMask; onToggled:if(checked!==configuration.chordMask)editor.option("chordMask",checked)}
     DeskSwitch {text:"小节开头重述所属和弦";checked:configuration.repeatBars;onToggled:if(checked!==configuration.repeatBars)editor.option("repeatBars",checked)}
     RowLayout {width:parent.width
         UiLabel {text:"级数字体";color:theme.muted;font.pixelSize:11}
         TextField {text:configuration.degreeFont;Layout.fillWidth:true;maximumLength:64;onEditingFinished:if(text.trim().length)editor.option("degreeFont",text.trim())}
     }
-    UiLabel {width:parent.width; text:"记号对齐和弦变化的时间位置；关闭遮罩后只显示文字，仍避让原谱，当前记号以文字色高亮。"; color:theme.muted; font.pixelSize:10; wrapMode:Text.Wrap}
-    UiLabel {width:parent.width; text:"同位置已有原谱和弦时，分析留在面板，谱面只补充级数；已有罗马级数时只补充和弦。关闭可同时显示，仍会避让。编辑框始终优先。"; color:theme.muted; font.pixelSize:10; wrapMode:Text.Wrap}
+    UiLabel {width:parent.width; text:"记号对齐和弦变化的时间位置；默认在最上层显示；相邻记号重叠时上下排列。避让和遮罩分别开关，横向位置始终对应和弦变化。"; color:theme.muted; font.pixelSize:10; wrapMode:Text.Wrap}
+    UiLabel {width:parent.width; text:"同位置已有原谱和弦时，分析留在面板，谱面只补充级数；已有罗马级数时只补充和弦。关闭后可同时显示原谱和分析结果。开启避让时也会保护正在编辑的文字。"; color:theme.muted; font.pixelSize:10; wrapMode:Text.Wrap}
     DeskSwitch {text:"强调含调外音的和弦"; checked:configuration.chromaticAccent; onToggled:if(checked!==configuration.chromaticAccent)editor.option("chromaticAccent",checked)}
-    UiLabel {width:parent.width; text:"小调兼容属和弦及导音和弦；强调色表示模板含调外音，不代表唯一和声解释。记号在同一系统统一高度，过密时省略；双击可跳转面板。"; color:theme.muted; font.pixelSize:10; wrapMode:Text.Wrap}
+    UiLabel {width:parent.width; text:"小调兼容属和弦及导音和弦；强调色表示模板含调外音，不代表唯一和声解释。不冲突的记号保持同一高度，过密时上下排列；双击可跳转面板。"; color:theme.muted; font.pixelSize:10; wrapMode:Text.Wrap}
 }

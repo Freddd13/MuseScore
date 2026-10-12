@@ -1128,6 +1128,7 @@ void ScoreView::paintEvent(QPaintEvent* ev)
 
       drawAnchorLines(vp);
       PerformanceEditor::paintForView(this, vp);
+      paintTopChordPreview(vp);
       }
 
 //---------------------------------------------------------
@@ -1483,7 +1484,7 @@ void ScoreView::paint(const QRect& r, QPainter& p)
             const auto protectedArea=previewEditBounds();
             _notePreviewLayers.forEachChord([&](const NotePreviewEntry& entry, bool active) {
                   const auto box=entry.chordBox.translated(entry.anchor);
-                  if (!box.intersects(fr) || box.intersects(protectedArea)) return;
+                  if (entry.onTop || !box.intersects(fr) || box.intersects(protectedArea)) return;
                   p.save();p.translate(box.topLeft());
                   if (entry.chordMask) {
                         p.setPen(Qt::NoPen);

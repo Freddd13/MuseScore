@@ -40,6 +40,7 @@ struct NotePreviewEntry {
       QColor highlightColor = QColor("#0043ce");
       QColor highlightBackground = QColor("#d0e2ff");
       bool chordMask = true;
+      bool onTop = false, avoidScoreContent = true;
       const Element* sourceAnchor = nullptr; // opaque identity for destruction cleanup only
       int chordTick = -1;
       int chordUntil = 0;
@@ -55,6 +56,7 @@ struct NotePreviewEntry {
                   && primaryBox == other.primaryBox && secondaryBox == other.secondaryBox
                   && chordColor == other.chordColor && highlightColor == other.highlightColor
                   && highlightBackground == other.highlightBackground && chordMask == other.chordMask
+                  && onTop == other.onTop && avoidScoreContent == other.avoidScoreContent
                   && sourceAnchor == other.sourceAnchor
                   && chordTick == other.chordTick && chordUntil == other.chordUntil
                   && annotationTrack == other.annotationTrack && activationTarget == other.activationTarget;
@@ -119,6 +121,26 @@ inline QRectF findPreviewChordBox(QRectF candidate,const QRectF& page,const QVec
             if (!page.contains(candidate)) return {};
             }
       return {};
+      }
+
+
+// Screen annotations keep their exact rhythmic x, even when the preferred row
+// cannot fit above a page's title. Never omit an opted-in annotation.
+inline QRectF stackVisiblePreviewChord(QRectF preferred,const QRectF& page,const QVector<QRectF>& own,qreal gap)
+      {
+      auto lift=[&](QRectF candidate,bool up){
+            for(int step=0;step<=own.size();++step){qreal next=candidate.top();
+                  for(const auto& obstacle:own)if(obstacle.adjusted(-gap,-gap,gap,gap).intersects(candidate))
+                        next=up?qMin(next,obstacle.top()-gap-candidate.height()):qMax(next,obstacle.bottom()+gap);
+                  if(next==candidate.top())return candidate;candidate.moveTop(next);
+                  }
+            return candidate;
+            };
+      auto above=lift(preferred,true);if(above.top()>=page.top())return above;
+      auto below=lift(preferred,false);if(below.bottom()<=page.bottom())return below;
+      // Extreme density can extend past the page; the score can still be panned.
+      // This is a temporary display layer and never changes page layout or PDF.
+      return above;
       }
 
 class NotePreviewLayers {

@@ -15,7 +15,7 @@ MuseScore {
     UiTheme {id:theme}
     menuPath: "Plugins.Harmony Assistant"
     description: "钢琴和声助手：持续音识别、级数、音程功能与可选谱面配色。"
-    version: "1.5.0"
+    version: "1.6.0"
     requiresScore: true
     pluginType: "dock"
     dockArea: "right"
@@ -67,7 +67,8 @@ MuseScore {
     property bool analysisDirty: true
     property string pendingFileAction: ""
     property string pendingExport: ""
-    property int preferredRibbonHeight: 140
+    property int preferredRibbonHeight: 44
+    property bool ribbonContentHeight: true
     property string detailPanelTitle:"和声助手 · 详细面板"
     property color detailPanelBackground:theme.background
     property bool started: false
@@ -247,7 +248,7 @@ MuseScore {
             d.chordColor=configuration.chromaticAccent && frame.chromatic ? configuration.chromaticColor : configuration.chordColor
             d.highlightColor=configuration.highlightColor;d.highlightBackground=configuration.highlightBackground
             d.preferExistingHarmony=configuration.respectExistingHarmony
-            d.chordMask=configuration.chordMask
+            d.chordMask=configuration.chordMask;d.onTop=true;d.avoidScoreContent=configuration.avoidScoreContent
         } else d.chord=configuration.chordContent===0 ? frame.chord : configuration.chordContent===1 ? frame.degree : frame.chord+" · "+frame.degree
         return d
     }
@@ -1000,6 +1001,30 @@ MuseScore {
         property bool opened:visible
         function open(){visible=true; requestActivate()}
     }
+    Window {
+        id:ribbonMenuWindow;objectName:"harmonyRibbonMenuWindow";width:230;height:positionOnly?(configuration.ribbonAlign===3?188:148):112
+        visible:false;flags:Qt.Popup|Qt.FramelessWindowHint;color:theme.background
+        property bool positionOnly:true
+        function openAt(item,position){positionOnly=position;var point=item.mapToGlobal(0,item.height);x=point.x;y=point.y;show();raise();requestActivate()}
+        Column {
+            id:menuColumn;x:8;y:8;width:parent.width-16;spacing:4
+            Column {
+                width:parent.width;visible:ribbonMenuWindow.positionOnly;spacing:4
+                Repeater {model:["靠左","居中","靠右","自定位置"];delegate:DeskButton {
+                    objectName:"harmonyRibbonAlign"+index;width:parent.width;text:modelData;checked:configuration.ribbonAlign===index
+                    onClicked:{root.setRibbonPosition(index);ribbonMenuWindow.hide()}
+                }}
+                Slider {width:parent.width;visible:configuration.ribbonAlign===3;from:0;to:100;value:configuration.ribbonPosition
+                    onMoved:{var c=JSON.parse(JSON.stringify(configuration));c.ribbonPosition=Math.round(value);root.configuration=Preferences.clean(c);configurationTimer.restart()}}
+            }
+            Column {
+                width:parent.width;visible:!ribbonMenuWindow.positionOnly;spacing:4
+                DeskButton {objectName:"harmonyRibbonMarkerList";width:parent.width;text:root.unplacedMarkers.length?"记号列表（有待检查项）":"记号列表";enabled:root.advancedNative;onClicked:{ribbonMenuWindow.hide();markerWindow.show();markerWindow.raise();markerWindow.requestActivate()}}
+                DeskButton {width:parent.width;text:"详细窗口";onClicked:{ribbonMenuWindow.hide();root.openDetailWindow()}}
+                DeskButton {width:parent.width;text:"悬浮这个面板";enabled:typeof root.setPanelFloating==="function";onClicked:{ribbonMenuWindow.hide();root.setPanelFloating(true)}}
+            }
+        }
+    }
     Timer {id:refreshTimer; interval:55; onTriggered:refreshSelection()}
     Timer {id:buildTimer; interval:10; repeat:true; onTriggered:buildChunk()}
     Timer {id:playbackTimer; interval:16; onTriggered:followNativePosition()}
@@ -1290,42 +1315,32 @@ MuseScore {
             visible:root.ribbon; anchors.fill:parent; clip:true
             Item {
                 id:ribbonGroup; objectName:"harmonyRibbonGroup"
-                width:{var available=Math.max(100,parent.width-ribbonControls.width-36);return available>=630 ? 630 : Math.min(320,available)}
-                height:parent.height-24
-                anchors.verticalCenter:parent.verticalCenter
+                width:Math.min(850,Math.max(100,parent.width-ribbonControls.width-36))
+                height:Math.min(38,parent.height-4);anchors.verticalCenter:parent.verticalCenter
                 x:{var maximum=Math.max(12,parent.width-ribbonControls.width-width-36);
                     return configuration.ribbonAlign===0 ? 12 : configuration.ribbonAlign===2 ? maximum :
-                        configuration.ribbonAlign===3 ? 12+(maximum-12)*configuration.ribbonPosition/100 : Math.max(12,Math.min(maximum,(parent.width-width)/2))}
+                        configuration.ribbonAlign===3 ? 12+(maximum-12)*configuration.ribbonPosition/100 : Math.max(12,Math.min(maximum,(parent.width-ribbonControls.width-width)/2))}
                 RowLayout {
-                    anchors.fill:parent; spacing:16
-                    Column {
-                        Layout.preferredWidth:ribbonTones.visible ? 244 : ribbonGroup.width; Layout.alignment:Qt.AlignVCenter; spacing:2
-                        StableLabel {text:root.summaryChordText; color:root.summaryInk; horizontalAlignment:ribbonTones.visible ? Text.AlignLeft : Text.AlignHCenter; font.pixelSize:Math.min(32,Math.max(18,root.height*.22)); font.bold:true}
-                        StableLabel {text:root.summaryDegreeText+" · "+positionText; color:muted; horizontalAlignment:ribbonTones.visible ? Text.AlignLeft : Text.AlignHCenter; font.pixelSize:11}
-                    }
-                    Flow {
-                        id:ribbonTones; visible:ribbonGroup.width>=540; Layout.fillWidth:true; Layout.alignment:Qt.AlignVCenter; spacing:6
-                        Repeater {model:root.summaryToneRows; delegate:Rectangle {
-                            width:42; height:30; color:theme.field; radius:1
-                            Rectangle {x:0;y:8;width:3;height:14;color:modelData.present?modelData.color:"#d0d0d0"}
-                            UiLabel {anchors.centerIn:parent; text:modelData.label; color:modelData.present?ink:muted; font.pixelSize:12}
+                    anchors.fill:parent;spacing:10
+                    StableLabel {objectName:"harmonyRibbonChord";text:root.summaryChordText;color:root.summaryInk;font.pixelSize:22;font.bold:true;Layout.preferredWidth:Math.min(240,Math.max(70,ribbonGroup.width*.4));Layout.alignment:Qt.AlignVCenter}
+                    StableLabel {text:root.summaryDegreeText;color:root.summaryInk;font.pixelSize:13;Layout.preferredWidth:Math.min(80,ribbonGroup.width*.22);Layout.alignment:Qt.AlignVCenter}
+                    StableLabel {text:(configuration.summaryMode===0?"实时":"所属和弦")+" · "+positionText;color:muted;font.pixelSize:11;visible:ribbonGroup.width>360;Layout.fillWidth:true;Layout.alignment:Qt.AlignVCenter}
+                    Row {
+                        id:ribbonTones;visible:ribbonGroup.width>=760;spacing:3;Layout.alignment:Qt.AlignVCenter
+                        Repeater {model:root.summaryToneRows;delegate:Rectangle {
+                            width:26;height:24;color:theme.field;radius:1
+                            Rectangle{x:0;y:5;width:2;height:14;color:modelData.present?modelData.color:"#d0d0d0"}
+                            UiLabel{anchors.centerIn:parent;text:modelData.label;color:modelData.present?ink:muted;font.pixelSize:11}
                         }}
                     }
                 }
             }
-            Column {
-                id:ribbonControls; width:112; anchors.right:parent.right; anchors.rightMargin:12; anchors.verticalCenter:parent.verticalCenter; spacing:4
-                DeskComboBox {width:parent.width; model:["靠左","居中","靠右","自定位置"]; currentIndex:configuration.ribbonAlign; implicitHeight:28; font.pixelSize:11; onActivated:root.setRibbonPosition(currentIndex)}
-                RowLayout {
-                    width:parent.width;spacing:4
-                    DeskButton {Layout.fillWidth:true;implicitWidth:50;text:"详情";checked:root.dualDetailActive;visible:typeof root.showDetailPanel==="function";onClicked:root.toggleDetailPanel();ToolTip.visible:hovered;ToolTip.text:"显示／隐藏右侧详情"}
-                    DeskButton {Layout.fillWidth:true;implicitWidth:50;text:root.unplacedMarkers.length ? "记号 !" : "记号";enabled:root.advancedNative;onClicked:{markerWindow.show();markerWindow.raise();markerWindow.requestActivate()}}
-                }
-                RowLayout {
-                    width:parent.width; spacing:4
-                    DeskButton {Layout.fillWidth:true; text:"窗口"; onClicked:root.openDetailWindow(); implicitHeight:28; font.pixelSize:11}
-                    DeskButton {Layout.fillWidth:true; text:"悬浮"; visible:typeof root.setPanelFloating==="function"; onClicked:root.setPanelFloating(true); implicitHeight:28; font.pixelSize:11}
-                }
+            Row {
+                id:ribbonControls;spacing:4;width:230;anchors.right:parent.right;anchors.rightMargin:12;anchors.verticalCenter:parent.verticalCenter
+                DeskButton {id:ribbonAlignmentButton;objectName:"harmonyRibbonAlignment";width:98;text:["靠左","居中","靠右","自定位置"][configuration.ribbonAlign]+" ▾";onClicked:ribbonMenuWindow.openAt(ribbonAlignmentButton,true)}
+                DeskButton {width:58;text:"详情";checked:root.dualDetailActive;visible:typeof root.showDetailPanel==="function";onClicked:root.toggleDetailPanel();ToolTip.visible:hovered;ToolTip.text:"显示／隐藏右侧详情"}
+                DeskButton {id:ribbonMoreButton;objectName:"harmonyRibbonMore";width:58;text:"更多";onClicked:ribbonMenuWindow.openAt(ribbonMoreButton,false)}
+
             }
         }
     }

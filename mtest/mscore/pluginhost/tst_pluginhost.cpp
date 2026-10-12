@@ -8,6 +8,7 @@
 #include <QJSValue>
 #include <QTemporaryDir>
 #include <QSettings>
+#include <functional>
 #include <QLabel>
 #include "mscore/mssplashscreen.h"
 #include "mscore/musescoredialogs.h"
@@ -166,7 +167,7 @@ class TestPluginHost : public QObject {
             for(auto window:QGuiApplication::allWindows()) {
                   auto view=qobject_cast<QQuickView*>(window);
                   auto root=view ? qobject_cast<QmlPlugin*>(view->rootObject()) : nullptr;
-                  if(root && root->version()=="1.5.0") {panel=root;panelView=view;break;}
+                  if(root && root->menuPath()=="Plugins.Harmony Assistant") {panel=root;panelView=view;break;}
                   }
             for(auto candidate:main->findChildren<QDockWidget*>())
                   if(candidate->windowTitle()=="Harmony Assistant") {dock=candidate;break;}
@@ -236,11 +237,22 @@ class TestPluginHost : public QObject {
             score->doLayout(); // includes deletion of System / StaffLines, not just Notes
             observer->setScorePreview(descriptors);
             main->addDockWidget(Qt::TopDockWidgetArea,dock);
-            main->resizeDocks({dock},{140},Qt::Vertical);
+            main->resizeDocks({dock},{70},Qt::Vertical);
             QTest::qWait(80);
             QCOMPARE(panel->panelPlacement(),QString("top"));
             main->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("top.png"));
             QVERIFY(panel->property("ribbon").toBool());
+            QVERIFY(panel->height()>=36);QVERIFY(panel->height()<90);
+            auto compactChord=panel->findChild<QQuickItem*>("harmonyRibbonChord");QVERIFY(compactChord);
+            const auto chordRect=compactChord->mapRectToItem(panel,QRectF(0,0,compactChord->width(),compactChord->height()));
+            QVERIFY(chordRect.top()>=0);QVERIFY(chordRect.bottom()<=panel->height());
+            auto align=panel->findChild<QQuickItem*>("harmonyRibbonAlignment");QVERIFY(align);
+            QTest::mouseClick(panelView,Qt::LeftButton,Qt::NoModifier,align->mapToScene(QPointF(align->width()/2,align->height()/2)).toPoint());
+            auto popup=panel->findChild<QQuickWindow*>("harmonyRibbonMenuWindow");QVERIFY(popup);QTRY_VERIFY(popup->isVisible());
+            std::function<QQuickItem*(QQuickItem*)> findLeft=[&](QQuickItem* item)->QQuickItem*{if(item->objectName()=="harmonyRibbonAlign0")return item;for(auto child:item->childItems())if(auto found=findLeft(child))return found;return nullptr;};
+            auto left=findLeft(popup->contentItem());QVERIFY(left);
+            QTest::mouseClick(popup,Qt::LeftButton,Qt::NoModifier,left->mapToScene(QPointF(left->width()/2,left->height()/2)).toPoint());
+            QTRY_COMPARE(panel->property("configuration").value<QJSValue>().property("ribbonAlign").toInt(),0);QTRY_VERIFY(!popup->isVisible());
             QTRY_VERIFY(panel->detailPanelVisible());
             auto details=main->findChild<QDockWidget*>("kumoPanel/HarmonyAssistant_MS3/details");QVERIFY(details);
             QCOMPARE(main->dockWidgetArea(details),Qt::RightDockWidgetArea);
@@ -509,6 +521,15 @@ class TestPluginHost : public QObject {
             QCOMPARE(observer.previewStatus().value("hidden").toInt(),1);
             const auto unplaced=observer.previewStatus().value("unplaced").toList();
             QCOMPARE(unplaced.size(),1);QCOMPARE(unplaced.front().toMap().value("tick").toInt(),0);
+            first["onTop"]=true;first["avoidScoreContent"]=false;
+            observer.setScorePreview({first});QCOMPARE(observer.previewStatus().value("hidden").toInt(),0);
+            QVERIFY(observer.previewStatus().value("unplaced").toList().isEmpty());
+            const auto topImage=view->grab().toImage();observer.setActiveScorePreview(0);QVERIFY(topImage!=view->grab().toImage());
+            score->setPrinting(true);const auto printing=view->grab().toImage();observer.clearAllPreviews();QCOMPARE(view->grab().toImage(),printing);score->setPrinting(false);
+            first["chord"]="Cmaj7(#11)/E";first["chordScale"]=1.;first["degree"]="I";
+            second["onTop"]=true;second["avoidScoreContent"]=false;second["degree"]="V";
+            observer.setScorePreview({first,second});QCOMPARE(observer.previewStatus().value("hidden").toInt(),0);observer.setActiveScorePreview(60);
+            view->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("chord-on-top.png"));
             main->hide();
             }
       };

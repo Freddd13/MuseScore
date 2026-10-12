@@ -493,6 +493,7 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
             if (entry.chord.isEmpty() && entry.degree.isEmpty()) continue;
             entry.annotationTrack=note->staff()->part()->startTrack();entry.activationTarget=this;
             entry.sourceAnchor=note;entry.chordMask=value.value("chordMask",true).toBool();
+            entry.onTop=value.value("onTop",false).toBool();entry.avoidScoreContent=value.value("avoidScoreContent",true).toBool();
             entry.label.clear();entry.labelBox={};entry.color={};entry.active=false;entry.bounds={};
             // This anchor belongs to the change's system, even if its sustained source note is on a prior line.
             const QPointF position(x,system->staffYpage(entry.annotationTrack/VOICES));
@@ -562,12 +563,13 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
                         if (owner==this) obstacles+=_baseChordBoxes.value(page);
                         const QRectF corridor(preferred.left()-gap,pageBounds.top(),preferred.width()+2*gap,
                               qMax(qreal(0),preferred.bottom()-pageBounds.top()+gap));
-                        for (const auto element:page->items(corridor)) {
+                        if(entry.avoidScoreContent)for (const auto element:page->items(corridor)) {
                               if (!element->visible() || element->isPage() || element->isSystem() || element->isMeasure()) continue;
                               const auto box=element->pageBoundingRect();
                               if (!box.isEmpty())obstacles.append(box);
                               }
-                        const auto placed=findPreviewChordBox(preferred,pageBounds,obstacles,gap);
+                        auto placed=entry.avoidScoreContent?findPreviewChordBox(preferred,pageBounds,obstacles,gap):stackVisiblePreviewChord(preferred,pageBounds,chordBoxes[page],gap);
+                        if(placed.isEmpty()&&entry.onTop)placed=stackVisiblePreviewChord(preferred,pageBounds,chordBoxes[page],gap);
                         entry.chordBox=placed.isEmpty() ? QRectF() : placed.translated(-positions[index]);
                         if (placed.isEmpty()) {
                               ++hidden;

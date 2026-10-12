@@ -352,6 +352,9 @@ class TestScoreObserver : public QObject, public MTest {
             const auto second=findPreviewChordBox(preferred,page,together,1);
             QVERIFY(!second.isEmpty());QCOMPARE(second.x(),preferred.x());QVERIFY(!second.intersects(placed));
             QVERIFY(findPreviewChordBox(preferred,page,{QRectF(0,0,500,350)},1).isEmpty());
+            const QRectF nearTitle(120,3,160,30);const auto next=stackVisiblePreviewChord(nearTitle,page,{nearTitle},1);
+            QVERIFY(!next.isEmpty());QCOMPARE(next.x(),nearTitle.x());QVERIFY(!next.intersects(nearTitle));
+            const auto wide=stackVisiblePreviewChord(QRectF(120,20,900,30),page,{},1);QVERIFY(!wide.isEmpty());QCOMPARE(wide.x(),120.);
             }
 
       void boundedPedalMetadataAndNativeRenderingIsolation()

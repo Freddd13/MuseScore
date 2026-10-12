@@ -212,3 +212,5 @@ MIDI导出	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::voiceSelection	188	�
 使用修复	mscore/workflow/scoreworkflow.cpp	ScoreObserver::navigateWorkflow	110	具体音符选择和定位	mtest/mscore/p1native
 演奏编辑	mscore/performanceeditor/performanceux.cpp	PerformanceEditor::setupUsabilityControls	41	演奏编辑器操作、显示及筛选入口	mtest/mscore/performanceeditor
 演奏编辑	mscore/performanceeditor/performanceux.cpp	PerformanceEditor::rebuildVisibleScoreNotes	131	视口力度显示与最近音滚轮	mtest/mscore/performanceeditor
+和弦显示	mscore/workflow/chordoverlay.cpp	void ScoreView::paintTopChordPreview	6	最上层临时和弦；不进入打印	mtest/mscore/pluginhost; mtest/mscore/scoreobserver
+和弦显示	mscore/notepreview.h	inline QRectF stackVisiblePreviewChord	129	自己的和弦上下排列，保持拍位	mtest/mscore/pluginhost; mtest/mscore/scoreobserver

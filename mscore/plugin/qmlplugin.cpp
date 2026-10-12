@@ -15,6 +15,7 @@
 #include <QDockWidget>
 #include <QMainWindow>
 #include <QTimer>
+#include <QStyle>
 #include <QQuickWindow>
 #include <QApplication>
 #include <QCloseEvent>
@@ -44,7 +45,7 @@ void QmlPlugin::attachPanelDock(QDockWidget* dock)
                   QTimer::singleShot(0,this,[this,preferred]() {
                         if (!_panelDock || _panelDock->isFloating()) return;
                         if (auto main=qobject_cast<QMainWindow*>(_panelDock->parentWidget()))
-                              main->resizeDocks({_panelDock.data()},{qBound(80,preferred,400)},Qt::Vertical);
+                              main->resizeDocks({_panelDock.data()},{qBound(40,preferred,400)+(property("ribbonContentHeight").toBool()?_panelDock->style()->pixelMetric(QStyle::PM_TitleBarHeight):0)},Qt::Vertical);
                         });
             };
       connect(dock, &QDockWidget::dockLocationChanged, this, location);
