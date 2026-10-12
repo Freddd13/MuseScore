@@ -44,27 +44,39 @@ TapTempo* TapTempo::instance(QWidget* owner) {
       auto value = owner->findChild<TapTempo*>("tapTempo", Qt::FindDirectChildrenOnly);
       return value ? value : new TapTempo(owner);
       }
+QWidget* TapTempo::createTapControl(QWidget* parent) {
+      auto button = new TapButton(parent); button->setDefaultAction(getAction("tap-tempo"));
+      button->setText(tr("Tap · 点击一拍")); button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon); return button;
+      }
+void TapTempo::populateUnits(QComboBox* unit) {
+      for (const auto& item : QVector<QPair<QString,double>>{{tr("十六分音符"),.25},{tr("八分音符"),.5},
+                  {tr("附点八分音符"),.75},{tr("四分音符"),1.},{tr("附点四分音符"),1.5},
+                  {tr("二分音符"),2.},{tr("附点二分音符"),3.},{tr("全音符"),4.}})
+            unit->addItem(item.first,item.second);
+      }
 void TapTempo::tap() {
+      emit tapRecorded(_clock.elapsed());
       if (_estimate.add(_clock.elapsed())) update();
       if (!_button) {auto owner=qobject_cast<QWidget*>(parent());if(owner)createButton(owner,getAction("tap-tempo"))->hide();}
-      if (_button && !_button->isVisible() && _button->menu())_button->menu()->popup(qobject_cast<QWidget*>(parent())->mapToGlobal(QPoint(120,60)));
+      if (_button && !_button->isVisible() && _button->menu() && !parent()->findChild<QWidget*>("tapMarkDialog"))
+            _button->menu()->popup(qobject_cast<QWidget*>(parent())->mapToGlobal(QPoint(120,60)));
       }
 void TapTempo::update() {
       const double bpm = _estimate.bpm(_quarterBeats)*_multiplier;
       if (_button) _button->setText(bpm > 0 ? QString("TAP · %1").arg(bpm,0,'f',0) : QString("TAP · —"));
-      if (_value) _value->setText(bpm > 0 ? tr("Quarter BPM: %1\nTap BPM: %2").arg(bpm,0,'f',1).arg(bpm/_quarterBeats,0,'f',1) : tr("Tap at least four beats"));
-      if (_status) _status->setText(tr("%1 · %2 taps").arg(!_estimate.ready()?tr("Starting"):_estimate.stable()?tr("Stable"):tr("Unstable")).arg(_estimate.count()));
+      if (_value) _value->setText(bpm > 0 ? tr("四分音符：%1 BPM\n点击单位：%2 BPM").arg(bpm,0,'f',1).arg(bpm/_quarterBeats,0,'f',1) : tr("请至少点击四拍"));
+      if (_status) _status->setText(tr("%1 · 已点击 %2 次").arg(!_estimate.ready()?tr("正在起步"):_estimate.stable()?tr("点击稳定"):tr("点击间隔不均匀")).arg(_estimate.count()));
       if (_apply) {
             const bool following = seq && seq->isPlaying() && seq->independentMetronomeFollowPlayback();
             _apply->setEnabled(_estimate.ready() && seq && bpm >= 20. && bpm <= 400. && !following);
-            _apply->setToolTip(following ? tr("Metronome is following the score") : tr("Independent metronome range: 20–400 quarter BPM"));
+            _apply->setToolTip(following ? tr("节拍器正在跟随乐谱播放；停止后可设置独立速度。") : tr("独立节拍器可设置20–400四分音符BPM。"));
             }
       }
 QWidget* TapTempo::createButton(QWidget* parent, QAction* action) {
       auto button = new TapButton(parent); _button = button;
       action->setAutoRepeat(false);
-      button->setDefaultAction(action); button->setToolButtonStyle(Qt::ToolButtonTextOnly);
-      button->setFixedWidth(qMax(112, button->fontMetrics().horizontalAdvance("TAP · 9999")+32));
+      button->setDefaultAction(action); button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+      button->setFixedWidth(qMax(112, button->fontMetrics().horizontalAdvance("TAP · 9999")+54));
       button->setAccessibleName(tr("Tap tempo"));
       button->setPopupMode(QToolButton::MenuButtonPopup);
       auto menu = new QMenu(button); button->setMenu(menu);
@@ -72,13 +84,12 @@ QWidget* TapTempo::createButton(QWidget* parent, QAction* action) {
       auto value = new QLabel(body); _value = value; grid->addWidget(value,0,0,1,3);
       auto status = new QLabel(body); _status = status; grid->addWidget(status,1,0,1,3);
       auto unit = new QComboBox(body);
-      unit->addItem(tr("Eighth note"),.5); unit->addItem(tr("Quarter note"),1.);
-      unit->addItem(tr("Dotted quarter"),1.5); unit->addItem(tr("Half note"),2.); unit->setCurrentIndex(unit->findData(_quarterBeats));
+      populateUnits(unit); unit->setCurrentIndex(unit->findData(_quarterBeats));
       grid->addWidget(unit,2,0,1,3);
-      auto half = new QPushButton("÷2",body); auto twice = new QPushButton("×2",body); auto reset = new QPushButton(tr("Reset"),body);
+      auto half = new QPushButton("÷2",body); auto twice = new QPushButton("×2",body); auto reset = new QPushButton(tr("重新测量"),body);
       grid->addWidget(half,3,0); grid->addWidget(twice,3,1); grid->addWidget(reset,3,2);
       auto tap = new TapButton(body);tap->setDefaultAction(action);tap->setText(tr("TAP")); grid->addWidget(tap,4,0,1,3);
-      auto apply = new QPushButton(tr("Set independent metronome"),body); _apply=apply; grid->addWidget(apply,5,0,1,3);
+      auto apply = new QPushButton(tr("设为独立节拍器"),body); _apply=apply; grid->addWidget(apply,5,0,1,3);
       auto write = new QPushButton(tr("写入指定谱面位置…"),body);grid->addWidget(write,6,0,1,3);
       connect(write,&QPushButton::clicked,this,[this]{const double bpm=_estimate.bpm(_quarterBeats)*_multiplier;if(_estimate.ready()&&bpm>=5&&bpm<=999)showTapWriteDialog(mscore->currentScore(),bpm);});
       connect(menu,&QMenu::aboutToShow,write,[this,write]{const double bpm=_estimate.bpm(_quarterBeats)*_multiplier;write->setEnabled(_estimate.ready()&&bpm>=5&&bpm<=999&&mscore->currentScore()&&(!seq||(!seq->isPlaying()&&seq->backgroundRenderingIdle())));});

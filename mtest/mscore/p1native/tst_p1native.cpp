@@ -9,6 +9,14 @@
 #include <QCheckBox>
 #include <QPushButton>
 #include <QDialog>
+#include <QComboBox>
+#include <QLabel>
+#include "mscore/scoreview.h"
+#include "mscore/shortcut.h"
+#include "mscore/taptempo/tapmark.h"
+#include "mscore/taptempo/taptempo.h"
+#include "libmscore/tempoexpression.h"
+#include "libmscore/textline.h"
 #include <QTreeWidget>
 #include <QTableView>
 #include "mscore/midicrop/midicroppanel.h"
@@ -29,10 +37,12 @@
 #include "libmscore/undo.h"
 #include "libmscore/tempotext.h"
 #include "libmscore/tempo.h"
+#include "libmscore/xml.h"
 #include "libmscore/audio.h"
 #include "libmscore/excerpt.h"
 #include "libmscore/image.h"
 #include "libmscore/part.h"
+#include "libmscore/instrument.h"
 #include "libmscore/pedal.h"
 #include "audio/exports/exportmidi.h"
 #include "audio/exports/midigatefile.h"
@@ -49,6 +59,12 @@ private slots:
   QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,settings.path());dataPath=settings.path();
   MScore::noGui=true;noSeq=true;converterMode=true;initMuseScoreResources();initP1Resources();QStringList args;MuseScore::init(args);QVERIFY(mscore);
  }
+#ifdef Q_MOC_RUN
+ void tapMarkPreviewCancelAndSave();
+ void tapMarkRestoreAndRitProtection();
+#else
+#include "tap_mark_tests.inc"
+#endif
  void compatibleSnapshot(){
   std::unique_ptr<MasterScore> s(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx"));QVERIFY(s);PluginAPI::Score wrapped(s.get());PluginAPI::ScoreObserver o;o.setScore(&wrapped);
   auto info=o.workflowInfo();QVERIFY(!info.contains("error"));auto scope=o.analysisScope(true);auto rev=o.analysisRevision();
@@ -104,7 +120,12 @@ private slots:
   auto s=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(s);mscore->setCurrentScoreView(mscore->appendScore(s));PluginAPI::Score w(s);PluginAPI::ScoreObserver o;o.setScore(&w);
   auto state=s->state();auto first=o.workflowFingerprint(0,1,o.analysisRevision());QVERIFY(!first.contains("error"));QCOMPARE(first["measures"].toList().size(),1);QVERIFY(s->state()==state);
   QString path=settings.filePath("baseline.mscz");auto r=o.copyWorkflowScore(path,o.analysisRevision());QVERIFY(r["ok"].toBool());QVERIFY(o.openWorkflowScore(path,true,r["sha256"].toString())["ok"].toBool());auto base=mscore->currentScore();QVERIFY(base!=s);QVERIFY(base->readOnly());
-  PluginAPI::Score wb(base);PluginAPI::ScoreObserver ob;ob.setScore(&wb);auto duplicate=ob.workflowFingerprint(0,1,ob.analysisRevision());QCOMPARE(duplicate["context"],first["context"]);QCOMPARE(duplicate["measures"].toList().first().toMap()["hash"],first["measures"].toList().first().toMap()["hash"]);
+  PluginAPI::Score wb(base);PluginAPI::ScoreObserver ob;ob.setScore(&wb);auto duplicate=ob.workflowFingerprint(0,1,ob.analysisRevision());
+  QCOMPARE(duplicate["context"],first["context"]);QCOMPARE(duplicate["measures"].toList().first().toMap()["hash"],first["measures"].toList().first().toMap()["hash"]);
+  auto part=s->parts().front();auto channel=part->instrument()->channel(0);int mapping=channel->channel();QVERIFY(mapping>=0);
+  const int oldPort=s->midiPort(mapping),oldChannel=s->midiChannel(mapping);
+  s->updateMidiMapping(channel,part,2,3);auto changedRouting=o.workflowFingerprint(0,1,o.analysisRevision());QVERIFY(changedRouting["context"]!=first["context"]);
+  s->updateMidiMapping(channel,part,oldPort,oldChannel);auto restored=o.workflowFingerprint(0,1,o.analysisRevision());QCOMPARE(restored["context"],first["context"]);
   QVERIFY(ob.copyWorkflowScore(path,ob.analysisRevision(),true).contains("error"));QVERIFY(!ParameterEdit::writeTapTempo(base,480,120,false,nullptr));QVERIFY(ob.applyExpression({}).contains("error"));
   QVERIFY(ob.openWorkflowScore(path,true,"tampered").contains("error"));
   mscore->setCurrentScoreView(mscore->scores().indexOf(s));auto note=toChord(s->firstMeasure()->first(SegmentType::ChordRest)->element(4))->notes().front();s->startCmd();note->undoChangeProperty(Pid::VELO_OFFSET,12);s->endCmd();

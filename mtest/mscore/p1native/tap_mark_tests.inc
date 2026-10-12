@@ -1,0 +1,60 @@
+// Used inside TestP1Native: real controls, score state and one undo operation.
+ void tapMarkPreviewCancelAndSave(){
+  QVERIFY(!getAction("tap-tempo")->icon().isNull());
+  auto score=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);
+  mscore->setCurrentScoreView(mscore->appendScore(score));auto view=mscore->currentScoreView();QVERIFY(view);
+  mscore->resize(1100,780);mscore->show();view->resize(900,600);view->show();QTest::qWait(50);
+  auto segment=score->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest);QVERIFY(segment);
+  auto mark=new TempoText(score);mark->setParent(segment);mark->setTrack(0);mark->setFollowText(false);mark->setTempo(2.);
+  const QString original="Andante <sym>metNoteQuarterUp</sym><sym>metAugmentationDot</sym> = 80";
+  mark->setXmlText(original);score->startCmd();score->undoAddElement(mark);score->endCmd();mscore->endCmd();
+  const int before=score->undoStack()->getCurIdx();const bool dirty=score->dirty();
+  auto measure=[&](int step){for(int i=0;i<4;++i)QVERIFY(QMetaObject::invokeMethod(TapTempo::instance(mscore),"tapRecorded",Q_ARG(qint64,qint64(i)*step)));};
+  score->select(mark);score->update();mscore->endCmd();getAction("inspector")->setChecked(true);mscore->cmd(getAction("inspector"));QTest::qWait(40);
+  auto openTap=mscore->findChild<QPushButton*>("tempoTapMark");QVERIFY(openTap);QVERIFY(openTap->isVisible());
+  QTest::mouseClick(openTap,Qt::LeftButton);QTest::qWait(20);auto dialog=mscore->findChild<QDialog*>("tapMarkDialog");QVERIFY(dialog);
+  auto unit=dialog->findChild<QComboBox*>("tapMarkUnit");QVERIFY(unit);QCOMPARE(unit->currentData().toDouble(),1.5);
+  QCOMPARE(unit->count(),8);
+  measure(600);auto save=dialog->findChild<QPushButton*>("tapMarkSave");QVERIFY(save);QVERIFY(save->isEnabled());
+  auto value=dialog->findChild<QLabel*>("tapMarkValue");QVERIFY(value);QVERIFY(value->text().contains("150.00"));
+  QCOMPARE(mark->xmlText(),original);QCOMPARE(mark->tempo(),2.);QCOMPARE(score->undoStack()->getCurIdx(),before);QCOMPARE(score->dirty(),dirty);
+  auto image=view->grab();QVERIFY(!image.isNull());image.save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath("tap-preview.png"));
+  dialog->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath("tap-dialog.png"));
+  QTest::keyClick(dialog,Qt::Key_Escape);QTest::qWait(20);QVERIFY(!mscore->findChild<QDialog*>("tapMarkDialog"));
+  QCOMPARE(mark->xmlText(),original);QCOMPARE(score->undoStack()->getCurIdx(),before);
+  showTapMarkDialog(mark);measure(600);dialog=mscore->findChild<QDialog*>("tapMarkDialog");QVERIFY(dialog);
+  save=dialog->findChild<QPushButton*>("tapMarkSave");QTest::mouseClick(save,Qt::LeftButton);QTest::qWait(20);
+  QCOMPARE(score->undoStack()->getCurIdx(),before+1);QVERIFY(std::abs(mark->tempo()-2.5)<.001);
+  QVERIFY(mark->xmlText().contains("Andante"));QVERIFY(mark->xmlText().contains("metAugmentationDot"));QVERIFY(mark->xmlText().contains("100.00"));
+  EditData edit;score->undoRedo(true,&edit);QCOMPARE(mark->xmlText(),original);QCOMPARE(mark->tempo(),2.);
+  score->undoRedo(false,&edit);QVERIFY(std::abs(mark->tempo()-2.5)<.001);
+  showTapMarkDialog(mark);measure(500);dialog=mscore->findChild<QDialog*>("tapMarkDialog");QVERIFY(dialog);
+  score->startCmd();static_cast<Element*>(mark)->undoChangeProperty(Pid::TEXT,QString("changed"));score->endCmd();QTest::qWait(150);
+  QVERIFY(!dialog->findChild<QPushButton*>("tapMarkSave")->isEnabled());
+  QVERIFY(dialog->findChild<QLabel*>("tapMarkStatus")->text().contains(QString::fromUtf8("目标已改变")));dialog->reject();QTest::qWait(20);
+  QCOMPARE(tapTempoText("Allegro",120),QString("Allegro <sym>metNoteQuarterUp</sym> = 120.00"));
+  QCOMPARE(tapTempoText("Allegro",120,false),QString("Allegro"));
+ }
+ void tapMarkRestoreAndRitProtection(){
+  auto score=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);mscore->setCurrentScoreView(mscore->appendScore(score));
+  auto segment=score->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest);QVERIFY(segment);
+  auto mark=new TempoText(score);mark->setParent(segment);mark->setTrack(0);mark->setXmlText("a tempo");mark->setProperty(Pid::TEMPO_RESTORE_MODE,1);
+  score->startCmd();score->undoAddElement(mark);score->endCmd();const int before=score->undoStack()->getCurIdx();
+  showTapMarkDialog(mark);auto dialog=mscore->findChild<QDialog*>("tapMarkDialog");QVERIFY(dialog);
+  for(int i=0;i<4;++i)QVERIFY(QMetaObject::invokeMethod(TapTempo::instance(mscore),"tapRecorded",Q_ARG(qint64,qint64(i)*500)));
+  QVERIFY(!dialog->findChild<QPushButton*>("tapMarkSave")->isEnabled());QCOMPARE(mark->restoreMode(),1);QCOMPARE(score->undoStack()->getCurIdx(),before);dialog->reject();QTest::qWait(20);
+  score->startCmd();static_cast<Element*>(mark)->undoChangeProperty(Pid::TEMPO_RESTORE_MODE,3);score->endCmd();
+  showTapMarkDialog(mark);dialog=mscore->findChild<QDialog*>("tapMarkDialog");QVERIFY(dialog);
+  for(int i=0;i<4;++i)QVERIFY(QMetaObject::invokeMethod(TapTempo::instance(mscore),"tapRecorded",Q_ARG(qint64,qint64(i)*400)));
+  QVERIFY(dialog->findChild<QPushButton*>("tapMarkSave")->isEnabled());QTest::keyClick(dialog,Qt::Key_Return);QTest::qWait(20);
+  QCOMPARE(mark->restoreMode(),3);QCOMPARE(mark->xmlText(),QString("a tempo"));QCOMPARE(mark->tempo(),2.5);
+  QString error;QVERIFY2(ParameterEdit::tempoCurve(score,960,1440,nullptr,false,&error),qPrintable(error));
+  auto curves=TempoExpression::curves(score);QVERIFY(!curves.isEmpty());auto line=curves.back();const double oldStart=line->ritStartBpm(),oldTarget=line->ritTarget();
+  showTapMarkDialog(line);dialog=mscore->findChild<QDialog*>("tapMarkDialog");QVERIFY(dialog);
+  auto endpoint=dialog->findChild<QComboBox*>("tapMarkEndpoint");QVERIFY(endpoint);endpoint->setCurrentIndex(1);
+  for(int i=0;i<4;++i)QVERIFY(QMetaObject::invokeMethod(TapTempo::instance(mscore),"tapRecorded",Q_ARG(qint64,qint64(i)*500)));
+  auto save=dialog->findChild<QPushButton*>("tapMarkSave");QVERIFY(save->isEnabled());QCOMPARE(line->ritStartBpm(),oldStart);QCOMPARE(line->ritTarget(),oldTarget);
+  const int undo=score->undoStack()->getCurIdx();QTest::mouseClick(save,Qt::LeftButton);QTest::qWait(20);
+  QCOMPARE(score->undoStack()->getCurIdx(),undo+1);QCOMPARE(line->ritStartBpm(),oldStart);QCOMPARE(line->ritTargetMode(),1);QCOMPARE(line->ritTarget(),120.);
+  EditData edit;score->undoRedo(true,&edit);QCOMPARE(line->ritTarget(),oldTarget);QCOMPARE(line->ritTargetMode(),0);
+ }

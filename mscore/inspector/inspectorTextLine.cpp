@@ -18,6 +18,7 @@
 #include "../performanceeditor/parameteredit.h"
 #include "../musescore.h"
 #include <QPushButton>
+#include "../taptempo/tapmark.h"
 
 namespace Ms {
 
@@ -60,12 +61,16 @@ InspectorTextLine::InspectorTextLine(QWidget* parent)
             QString error; ParameterEdit::tempoCurve(line->score(), line->tick().ticks(), line->tick2().ticks(), line, true, &error);
             mscore->showMessage(error, 8000);
             });
+      auto tap = new QPushButton(tr("用 Tap 设置起速／终速…"), ttl.panel); tap->setObjectName("ritTapMark");
+      grid->addWidget(tap, grid->rowCount(), 0, 1, 3);
+      connect(tap, &QPushButton::clicked, this, [this] { showTapMarkDialog(inspector->element()); });
       mapSignals(il, ppList);
       }
 void InspectorTextLine::postInit()
       {
       auto element = inspector->element(); auto line = element->isTextLine() ? toTextLine(element) : static_cast<TextLine*>(element->propertyDelegate(Pid::RIT_PLAY));
       if (!line) return;
+      findChild<QPushButton*>("ritTapMark")->setEnabled(line->ritEnabled());
       findChild<QCheckBox*>("ritPlay")->setEnabled(line->systemFlag() && line->ritEnabled());
       for (const auto& name : {"ritTargetMode", "ritTarget", "ritCurve", "ritStartBpm"}) findChild<QWidget*>(name)->setEnabled(line->ritEnabled());
       findChild<QPushButton*>("ritReplaceRange")->setEnabled(line->systemFlag());

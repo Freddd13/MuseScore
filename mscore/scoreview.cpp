@@ -24,6 +24,7 @@
 #include "scoreaccessibility.h"
 #include "scoretab.h"
 #include "scoreview.h"
+#include "taptempo/tapmark.h"
 #include "performanceeditor/performanceeditor.h"
 #include "seq.h"
 #include "splitstaff.h"
@@ -326,6 +327,9 @@ void ScoreView::objectPopup(const QPoint& pos, Element* obj)
       a->setEnabled(obj->isEditable());
 
       createElementPropertyMenu(obj, popup);
+      if (obj->isTempoText() || (obj->isTextLine() && static_cast<TextLine*>(obj)->ritEnabled())
+          || (obj->isTextLineSegment() && static_cast<TextLine*>(obj->propertyDelegate(Pid::RIT_PLAY))->ritEnabled()))
+            popup->addAction(tr("用 Tap 设置速度…"))->setData("tap-mark");
 
       popup->addSeparator();
       a = popup->addAction(tr("Help"));
@@ -340,6 +344,7 @@ void ScoreView::objectPopup(const QPoint& pos, Element* obj)
       if (a == 0)
             return;
       const QByteArray& cmd(a->data().toByteArray());
+      if (cmd == "tap-mark") { showTapMarkDialog(obj); return; }
       if (cmd == "cut" || cmd =="copy" || cmd == "paste" || cmd == "paste-clone" || cmd == "swap"
          || cmd == "delete" || cmd == "time-delete") {
             // these actions are already activated

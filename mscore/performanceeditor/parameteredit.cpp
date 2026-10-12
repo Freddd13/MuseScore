@@ -1,4 +1,5 @@
 #include "parameteredit.h"
+#include "../taptempo/tapmark.h"
 #include "mscore/seq.h"
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
@@ -107,16 +108,8 @@ static bool temposImpl(Score* score, const QMap<int, double>& bpm, int unlockedT
                   }
             else {
                   point.text->undoSetFollowText(false);
-                  QString text = point.text->xmlText();
-                  const QRegularExpression number("(=\\s*)([0-9]+(?:[.,][0-9]+)?)");
-                  const auto match = number.match(text);
-                  if (match.hasMatch()) {
-                        // Preserve the beat unit, dots and explanatory text.
-                        const double factor = TempoText::findTempoValue(text);
-                        const double beat = factor > 0 ? factor * 60.0 : 1.0;
-                        text.replace(match.capturedStart(2), match.capturedLength(2), QString::number(point.bpm / beat, 'f', 2));
-                        static_cast<Element*>(point.text)->undoChangeProperty(Pid::TEXT, text);
-                        }
+                  const QString text = tapTempoText(point.text->xmlText(), point.bpm, visibleNew);
+                  static_cast<Element*>(point.text)->undoChangeProperty(Pid::TEXT, text);
                   point.text->undoSetTempo(point.bpm / 60.0);
                   }
             }

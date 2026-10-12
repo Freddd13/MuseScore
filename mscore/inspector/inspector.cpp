@@ -13,6 +13,7 @@
 #include <QStackedWidget>
 #include <QPushButton>
 #include "scrubproperty.h"
+#include "../taptempo/tapmark.h"
 #include "envelopeinspector.h"
 #include "freeslurinspector.h"
 #include "libmscore/symbol.h"
@@ -1308,6 +1309,10 @@ InspectorTempoText::InspectorTempoText(QWidget* parent)
    : InspectorTextBase(parent)
       {
       tt.setupUi(addWidget());
+      auto tap = new QPushButton(tr("用 Tap 设置速度…"), tt.panel); tap->setObjectName("tempoTapMark");
+      auto tapGrid = qobject_cast<QGridLayout*>(tt.panel->layout());
+      tapGrid->addWidget(tap, tapGrid->rowCount(), 0, 1, 3);
+      connect(tap, &QPushButton::clicked, this, [this] { showTapMarkDialog(inspector->element()); });
       auto grid = qobject_cast<QGridLayout*>(tt.panel->layout());
       _restoreMode = new QComboBox(tt.panel); _restoreMode->setObjectName("tempoRestoreMode");
       _restoreMode->addItems({tr("普通速度"), tr("a tempo：恢复上次渐变前"), tr("Tempo primo：恢复曲首"), tr("恢复到指定 BPM")});

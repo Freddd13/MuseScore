@@ -3,6 +3,8 @@
 #include "mscore/seq.h"
 #include "libmscore/measure.h"
 #include "libmscore/part.h"
+#include "libmscore/instrument.h"
+#include <QRegularExpression>
 #include "libmscore/xml.h"
 #include "libmscore/spannermap.h"
 #include "libmscore/spanner.h"
@@ -30,6 +32,21 @@ QVariantMap ScoreObserver::workflowFingerprint(int from,int limit,const QString&
   ++index;measure=measure->nextMeasure();if(timer.nsecsElapsed()>2000000)break;
  }
  QByteArray context;QBuffer config(&context);config.open(QIODevice::WriteOnly);if(from==0){XmlWriter xml(_score,&config);for(auto part:_score->parts())part->write(xml);_score->style().save(xml,false);}
+ // Saving a score checks whether its MIDI routing can be omitted as a default.
+ // Compare the actual routing, rather than that transient serialization choice.
+ if(from==0){
+  QByteArray routing;bool complete=true;
+  for(auto part:_score->parts())for(auto channel:part->instrument()->channel()){
+   int index=channel->channel();auto master=_score->masterScore();
+   if(index<0||size_t(index)>=master->midiMapping().size()){complete=false;break;}
+   routing+=QByteArray::number(master->midiPort(index))+","+QByteArray::number(master->midiChannel(index))+";";
+  }
+  if(complete){
+   QString xml=QString::fromUtf8(context);
+   static const QRegularExpression optionalRoute("[ \t]*<midi(?:Port|Channel)>[0-9]+</midi(?:Port|Channel)>\\r?\\n");
+   xml.remove(optionalRoute);context=xml.toUtf8();context+="\nActualMidiRouting:"+routing;
+  }
+ }
  return {{"context",from==0?QString::fromLatin1(QCryptographicHash::hash(context,QCryptographicHash::Sha256).toHex()):QString()},{"measures",rows},{"staves",_score->nstaves()},{"next",index},{"done",measure==nullptr},{"milliseconds",double(timer.nsecsElapsed())/1000000}};
 }
 }}

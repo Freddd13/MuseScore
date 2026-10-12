@@ -3363,7 +3363,8 @@ Shortcut Shortcut::_sc[] = {
          "tap-tempo",
          QT_TRANSLATE_NOOP("action","Tap BPM"),
          QT_TRANSLATE_NOOP("action","Tap tempo"),
-         QT_TRANSLATE_NOOP("action","Estimate tempo without changing the score")
+         QT_TRANSLATE_NOOP("action","Estimate tempo without changing the score"),
+         Icons::countin_ICON
          },
       {
          MsWidget::MAIN_WINDOW,

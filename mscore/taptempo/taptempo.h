@@ -10,6 +10,8 @@ class QMenu;
 class QLabel;
 class QPushButton;
 class QWidget;
+class QComboBox;
+namespace Ms { class Element; }
 namespace Ms {
 class TapTempo : public QObject {
       Q_OBJECT
@@ -25,6 +27,11 @@ class TapTempo : public QObject {
       explicit TapTempo(QObject* parent);
       static TapTempo* instance(QWidget* owner);
       QWidget* createButton(QWidget* parent, QAction* action);
+      QWidget* createTapControl(QWidget* parent);
+      static void populateUnits(QComboBox*);
+   signals:
+      void tapRecorded(qint64 monotonicMs);
+   public:
       void tap();
       };
 }
