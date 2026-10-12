@@ -1,5 +1,7 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performancesettings.h"
+#include "libmscore/mscore.h"
+#include <QCheckBox>
 #include <QSettings>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -30,7 +32,7 @@ PerformanceAppearance::PerformanceAppearance()
       }
 QColor PerformanceAppearance::noteColor(int value, int track) const
       {
-      if (mode == 1) return voices[track % 4];
+      if (mode == 1) return followNativeVoices ? MScore::selectColor[track % 4] : voices[track % 4];
       if (mode == 2) return staves[(track / 4) % 8];
       value = qBound(1, value, 127);
       // Only 127 legal Note-on velocities: convert the factory hue ramp once.
@@ -71,6 +73,7 @@ void PerformanceAppearance::load()
       const std::array<QColor, 8> oldStaves {{oldVoices[0], oldVoices[1], oldVoices[2], oldVoices[3], QColor("#ddba62"), QColor("#72c4c9"), QColor("#d783a9"), QColor("#97b576")}};
       const std::array<QColor, RoleCount> previousColors {{QColor("#333333"), QColor("#464646"), QColor("#3b3b3b"), QColor("#626262"), QColor("#e5e5e5"), QColor("#ffffff"), QColor("#a4d39a"), QColor("#d2a874"), QColor("#99afba"), QColor("#b2a5bd")}};
       const std::array<QColor, 4> previousGradient {{QColor("#8194a6"), QColor("#94a987"), QColor("#b3ad83"), QColor("#bc958c")}};
+      followNativeVoices=settings.value("followNativeVoices",voices==PerformanceAppearance().voices||voices==oldVoices).toBool();
       const bool original = colors == oldColors && gradient == oldGradient && voices == oldVoices && staves == oldStaves;
       const bool previous = colors == previousColors && gradient == previousGradient && voices == PerformanceAppearance().voices && staves == PerformanceAppearance().staves;
       if ((original || previous) && stops == std::array<int, 4>{{1, 43, 85, 127}}) {
@@ -84,6 +87,7 @@ void PerformanceAppearance::save() const
       for (int i = 0; i < RoleCount; ++i) settings.setValue(QString("role%1").arg(i), colors[i].name());
       for (int i = 0; i < 4; ++i) { settings.setValue(QString("gradient%1").arg(i), gradient[i].name()); settings.setValue(QString("voice%1").arg(i), voices[i].name()); settings.setValue(QString("stop%1").arg(i), stops[i]); }
       for (int i = 0; i < 8; ++i) settings.setValue(QString("staff%1").arg(i), staves[i].name());
+      settings.setValue("followNativeVoices", followNativeVoices);
       settings.setValue("mode", mode);
       settings.setValue("velocityWidth", velocityWidth);
       }
@@ -113,16 +117,17 @@ bool PerformanceAppearance::edit(QWidget* parent)
             int row = add(QObject::tr("力度渐变 %1").arg(i + 1), draft.gradient[i]);
             stopSpins[i] = new QSpinBox; stopSpins[i]->setRange(1, 127); stopSpins[i]->setValue(draft.stops[i]); stopSpins[i]->setEnabled(i == 1 || i == 2); grid->addWidget(stopSpins[i], row, 2);
             }
-      for (int i = 0; i < 4; ++i) add(QObject::tr("声部 %1").arg(i + 1), draft.voices[i]);
+      auto nativeVoices=new QCheckBox(QObject::tr("声部颜色跟随 MuseScore"));nativeVoices->setChecked(draft.followNativeVoices);grid->addWidget(nativeVoices,grid->rowCount(),0,1,2);
+      for (int i = 0; i < 4; ++i) add(QObject::tr("自选声部色 %1").arg(i + 1), draft.voices[i]);
       for (int i = 0; i < 8; ++i) add(QObject::tr("谱表色 %1").arg(i + 1), draft.staves[i]);
       auto update = [&buttons] { for (const auto& pair : buttons) { pair.first->setText(pair.second->name()); pair.first->setStyleSheet(QString("background:%1; color:%2").arg(pair.second->name(), pair.second->lightness() > 140 ? "black" : "white")); } };
       update();
       auto box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::RestoreDefaults); outer->addWidget(box);
-      QObject::connect(box->button(QDialogButtonBox::RestoreDefaults), &QPushButton::clicked, &dialog, [&] { draft = PerformanceAppearance(); width->setValue(draft.velocityWidth); for (int i = 0; i < 4; ++i) stopSpins[i]->setValue(draft.stops[i]); update(); });
+      QObject::connect(box->button(QDialogButtonBox::RestoreDefaults), &QPushButton::clicked, &dialog, [&] { draft = PerformanceAppearance(); nativeVoices->setChecked(true); width->setValue(draft.velocityWidth); for (int i = 0; i < 4; ++i) stopSpins[i]->setValue(draft.stops[i]); update(); });
       QObject::connect(box, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
       QObject::connect(box, &QDialogButtonBox::accepted, &dialog, [&] {
             if (stopSpins[1]->value() >= stopSpins[2]->value() || stopSpins[1]->value() <= 1 || stopSpins[2]->value() >= 127) { QMessageBox::information(&dialog, QObject::tr("力度渐变"), QObject::tr("渐变位置须按 1 < 中间值 < 127 递增。")); return; }
-            for (int i = 0; i < 4; ++i) draft.stops[i] = stopSpins[i]->value(); draft.velocityWidth = width->value(); dialog.accept();
+            for (int i = 0; i < 4; ++i) draft.stops[i] = stopSpins[i]->value(); draft.velocityWidth = width->value(); draft.followNativeVoices=nativeVoices->isChecked(); dialog.accept();
             });
       if (dialog.exec() != QDialog::Accepted) return false;
       *this = draft; save(); return true;

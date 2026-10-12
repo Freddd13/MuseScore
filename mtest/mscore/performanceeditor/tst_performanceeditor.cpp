@@ -2,6 +2,7 @@
 #include <QTemporaryDir>
 #include <QSettings>
 #include <QComboBox>
+#include <QTableWidget>
 #include <QAbstractItemView>
 #include <QCheckBox>
 #include <QDoubleSpinBox>
@@ -513,7 +514,7 @@ class TestPerformanceEditor : public QObject, public MTest {
             PerformanceSelection::apply(score, {}, nullptr); editor->selectionChanged();
             wheel(view, head, 120); QTRY_COMPARE(note->veloOffset(), 39); QVERIFY(score->selection().isNone()); QCOMPARE(score->playPos().ticks(), 1440);
             PerformanceSelection::apply(score, {note}, note); editor->selectionChanged();
-            axis->setCurrentIndex(1); editor->convertSelected(Note::ValueType::OFFSET_VAL); QTest::qWait(80); const int raw = note->veloOffset();
+            editor->findChild<QCheckBox*>("performanceActualVelocity")->setChecked(false); axis->setCurrentIndex(1); editor->convertSelected(Note::ValueType::OFFSET_VAL); QTest::qWait(80); const int raw = note->veloOffset();
             wheel(view, head, 120); QTRY_COMPARE(note->veloOffset(), raw + 1); QCOMPARE(note->veloType(), Note::ValueType::OFFSET_VAL);
             wheel(view, head, 120); QVERIFY(timer->isActive()); editor->flushPending(); QVERIFY(!timer->isActive()); QVERIFY(!editor->hasPending()); QCOMPARE(note->veloOffset(), raw + 2);
             toggle->setChecked(false); for (auto check : editor->findChildren<QCheckBox*>()) check->setChecked(false); axis->setCurrentIndex(0);
@@ -818,6 +819,7 @@ class TestPerformanceEditor : public QObject, public MTest {
             QVERIFY(looped); getAction("loop")->setChecked(false);
             sequence->stopWait(); sequence->waitForStoppedRendering(); QApplication::processEvents();
             }
+      void editorUsabilityRepairs();
 #ifdef Q_MOC_RUN
       void keyboardContoursAndCompactParameterLayout();
       void reaperStemsAndStripSelection();
@@ -872,6 +874,7 @@ class TestPerformanceEditor : public QObject, public MTest {
             {
             if (!qEnvironmentVariableIsSet("PERFORMANCE_BENCHMARK")) return;
             QVERIFY(Ms::mscore); auto main = Ms::mscore; auto editor = main->findChild<PerformanceEditor*>(); QVERIFY(editor);
+            editor->findChild<QComboBox*>("performanceParameter")->setCurrentIndex(0);editor->findChild<QComboBox*>("performanceAxis")->setCurrentIndex(0);editor->findChild<QComboBox*>("performanceScope")->setCurrentIndex(2);
             auto notes = editor->findChild<QWidget*>("performanceNoteCanvas"); auto parameter = editor->findChild<QWidget*>("performanceParameterCanvas"); QVERIFY(notes); QVERIFY(parameter);
             for (int wanted : {10000, 50000}) {
                   QByteArray xml("<?xml version=\"1.0\"?><museScore version=\"3.02\"><Score><Division>480</Division><Part>");
@@ -961,6 +964,12 @@ class TestPerformanceEditor : public QObject, public MTest {
                   QWheelEvent finalWheel(hit, notes->mapToGlobal(hit), QPoint(), QPoint(0, -120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false); QApplication::sendEvent(notes, &finalWheel); QVERIFY(editor->hasPending());
                   timer.start(); QVERIFY(QMetaObject::invokeMethod(editor->findChild<QTimer*>("performanceWheelTimer"), "timeout", Qt::DirectConnection)); QApplication::processEvents();
                   qInfo("Performance velocity wheel %d notes: single native commit/cache refresh %.2f ms", all.size(), timer.nsecsElapsed() / 1e6); QVERIFY(!editor->hasPending()); wheelToggle->setChecked(false);
+                  QVector<double> nearestSamples;editor->findChild<QComboBox*>("performanceAxis")->setCurrentIndex(0);view->repaint();
+                  const auto head=view->matrix().mapRect(all.front()->canvasBoundingRect()).center();
+                  for(int frame=0;frame<40;++frame){QWheelEvent nearest(head,view->mapToGlobal(head.toPoint()),QPoint(),QPoint(0,frame%2?120:-120),Qt::NoButton,Qt::AltModifier|Qt::ShiftModifier,Qt::NoScrollPhase,false);
+                        timer.start();QApplication::sendEvent(view,&nearest);nearestSamples.append(timer.nsecsElapsed()/1e6);if(!frame)QVERIFY(editor->hasPending());}
+                  QTest::keyClick(view,Qt::Key_Escape);QVERIFY(!editor->hasPending());std::sort(nearestSamples.begin(),nearestSamples.end());
+                  qInfo("Performance closest score note %d notes: GUI wheel handler P95 %.3f ms, max %.3f ms",all.size(),nearestSamples[37],nearestSamples.back());
                   // Separate inactive callback work from native score rendering. The
                   // same score and runtime exercise all personal surface states.
                   editor->findChild<QAction*>("performanceBandHeight48")->trigger();
@@ -993,6 +1002,7 @@ class TestPerformanceEditor : public QObject, public MTest {
                   }
             }
       };
+#include "editor_usability_tests.inc"
 #include "grace_playback_tests.inc"
 #include "accent_inspector_tests.inc"
 #include "envelope_editor_tests.inc"

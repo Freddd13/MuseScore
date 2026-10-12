@@ -91,6 +91,28 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       bool _trackingOwned = false, _trackingBefore = false;
       bool _overBand = false, _rangePanning = false, _noteGesture = false;
       bool _cycleOnClick = false;
+      bool _gestureMoved = false;
+      double _dragSensitivity = 1.;
+      bool _relativeActual = false;
+      int _keyboardMode = 1;
+      QSet<int> _disabledTracks, _usedPitches;
+      bool _peekHeld=false, _peekAll=false, _closestWheelActive=false;
+      int _peekKey=0;
+      QVector<QPair<int,QRectF>> _visibleScoreNotes;
+      QTransform _visibleScoreMatrix;
+      QRect _visibleScoreRect;
+      ScoreContentState _visibleScoreState;
+      void setupUsabilityControls();
+      void showTrackFilter();
+      void quickFilter(int mode);
+      void rebuildPitchRows();
+      void rebuildVisibleScoreNotes();
+      bool peekKeyEvent(QObject*,QEvent*);
+      int keyboardPitch(QPointF) const;
+      void paintOriginalVelocity(QPainter&,const QRectF&,bool);
+      friend class PerformancePeekKeys;
+      bool _bandResizing=false;
+      int _bandResizeHeight=0;
       QVector<int> _pressedCandidates;
       QToolButton* _followButton = nullptr;
       PerformanceViewport _viewport;
@@ -243,6 +265,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
    signals:
       void scoreBandChanged(bool);
    public:
+      QSize minimumSizeHint() const override { return QSize(260,240); }
       explicit PerformanceEditor(QWidget* parent = nullptr);
       ~PerformanceEditor() override;
       void setView(ScoreView*);

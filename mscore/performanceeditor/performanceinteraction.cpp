@@ -26,7 +26,7 @@
 #include <cmath>
 namespace Ms {
 bool PerformanceEditor::hasNoteValue(const NoteInfo& note) const
-      { return note.base >= 0 || (_axis->currentIndex() ? note.type == Note::ValueType::OFFSET_VAL : note.type == Note::ValueType::USER_VAL); }
+      { return note.base >= 0 || (rangeKind()==1 ? note.type == Note::ValueType::OFFSET_VAL : note.type == Note::ValueType::USER_VAL); }
 bool PerformanceEditor::noteEditable(const NoteInfo& note) const
       { return note.enabled && note.audible && hasNoteValue(note); }
 void PerformanceEditor::rebuildFilter()
@@ -38,9 +38,10 @@ void PerformanceEditor::rebuildFilter()
       for (auto& note : _notes) {
             const bool oldScope = note.inScope, oldEnabled = note.enabled;
             note.inScope = _scope->currentIndex() == 2 || (_scope->currentIndex() == 0 ? note.part == part : note.track / VOICES == _contextTrack / VOICES);
-            note.enabled = note.inScope && staffEnabled(note.track) && (_voiceMask & (1 << (note.track % VOICES))) && (!_voice->currentIndex() || note.track % VOICES == _voice->currentIndex() - 1);
+            note.enabled = note.inScope && staffEnabled(note.track) && !_disabledTracks.contains(note.track) && (_voiceMask & (1 << (note.track % VOICES))) && (!_voice->currentIndex() || note.track % VOICES == _voice->currentIndex() - 1);
             changed |= oldScope != note.inScope || oldEnabled != note.enabled;
             }
+      rebuildPitchRows();_visibleScoreNotes.clear();_visibleScoreRect=QRect();
       _selectionRefreshNeeded = false; _hover = -1; updateSelection(); if (changed) { invalidateVisual(); invalidateOverlay(); }
       }
 void PerformanceEditor::selectIndices(const QVector<int>& indices, Qt::KeyboardModifiers modifiers, bool preserveGroup)
@@ -92,11 +93,15 @@ QVector<int> PerformanceEditor::hits(QPointF point, bool parameter, bool onScore
                   const int i = onScore ? _systemIndices[position] : position;
                   const auto it = _notes.cbegin() + i;
                   if (noteEditable(*it) && std::abs(xForNote(i, onScore) - point.x()) < 7
-                        && point.y() >= qMax(lane.top(), yForValue(noteValue(i), lane, onScore)) - 7 && point.y() <= lane.bottom() + 5) result.append(i);
+                        && ((it->selected&&point.y()>=lane.top()-7)||point.y() >= qMax(lane.top(), yForValue(noteValue(i), lane, onScore)) - 7) && point.y() <= lane.bottom() + 5) result.append(i);
                   }
             }
-      std::stable_sort(result.begin(), result.end(), [this, point, parameter, lane, onScore](int a, int b) {
+      int nearestTick=-1;double nearestColumn=1e20;
+      if(parameter)for(int i:result){double d=std::abs(xForNote(i,onScore)-point.x());if(d<nearestColumn){nearestColumn=d;nearestTick=_notes[i].tick;}}
+      std::stable_sort(result.begin(), result.end(), [this, point, parameter, lane, onScore,nearestTick](int a, int b) {
             if (parameter) {
+                  const bool chosenA=_notes[a].tick==nearestTick&&_notes[a].selected,chosenB=_notes[b].tick==nearestTick&&_notes[b].selected;
+                  if(chosenA!=chosenB)return chosenA;
                   const int da = qRound(std::abs(yForValue(noteValue(a), lane, onScore) - point.y())), db = qRound(std::abs(yForValue(noteValue(b), lane, onScore) - point.y()));
                   if ((da <= 7) != (db <= 7)) return da <= 7;
                   if (onScore && da <= 7 && db <= 7) {
@@ -107,7 +112,6 @@ QVector<int> PerformanceEditor::hits(QPointF point, bool parameter, bool onScore
                         if (ea != eb) return ea < eb;
                         }
                   else if (da != db && (da <= 7 || db <= 7)) return da < db;
-                  if (_notes[a].selected != _notes[b].selected) return _notes[a].selected;
                   if (da != db) return da < db;
                   }
             else if (_notes[a].selected != _notes[b].selected) return _notes[a].selected;
@@ -168,9 +172,9 @@ void PerformanceEditor::zoomVertical(bool notes, double factor)
       {
       pauseFollow(); cancelGesture();
       if (notes) {
-            const double middle = _viewport.topPitch - _noteCanvas->height() / (2 * _viewport.rowHeight);
+            const double middle = _viewport.pitchIndex(_viewport.topPitch) - _noteCanvas->height() / (2 * _viewport.rowHeight);
             _viewport.rowHeight = qBound(2.0, _viewport.rowHeight * factor, 36.0);
-            _viewport.topPitch = middle + _noteCanvas->height() / (2 * _viewport.rowHeight);
+            _viewport.topPitch = _viewport.pitchAtIndex(middle + _noteCanvas->height() / (2 * _viewport.rowHeight));
             }
       else {
             const auto range = _viewport.ranges[rangeKind()];
@@ -201,28 +205,29 @@ QString PerformanceEditor::noteTooltip(int i) const
       {
       const auto& note = _notes[i]; const auto edit = _pending.value(note.note, {note.type, note.raw});
       auto actual = [this,&note](Note::ValueType type, int raw) {
-            if(note.base<0) return QObject::tr("基准待停播");
+            if(note.base<0) return QObject::tr("原力度需停播读取");
             const auto range=generatedVelocityRange(note,type,raw);
             return range.first==range.second ? QString::number(range.first) : QString("%1–%2").arg(range.first).arg(range.second);
             };
-      return tr("记谱：%1\n实音：%2 · MIDI %3\n%4 · 谱表 %5 · 声部 %6\n小节拍位 %7 · 时值 %8\n已保存：%9%10 · 实际 MIDI %11\n当前预览：%12%13 · 实际 MIDI %14（整数舍入）")
+      return tr("记谱：%1\n实音：%2 · MIDI %3\n%4 · 谱表 %5 · 声部 %6\n小节拍位 %7 · 时值 %8\n已保存：%9%10 · 实际 MIDI %11\n当前预览：%12%13 · 实际 MIDI %14（整数舍入）\n原力度：%15 · 按原力度计算的增减：%16")
             .arg(note.written, note.name).arg(note.pitch).arg(note.instrument).arg(note.track / VOICES + 1).arg(note.track % VOICES + 1)
             .arg(note.position, note.duration).arg(note.raw).arg(note.type == Note::ValueType::OFFSET_VAL ? " %" : "")
             .arg(actual(note.type, note.raw)).arg(edit.raw).arg(edit.type == Note::ValueType::OFFSET_VAL ? " %" : "")
-            .arg(actual(edit.type, edit.raw));
+            .arg(actual(edit.type, edit.raw)).arg(note.base<0?tr("需停播读取"):QString::number(note.base))
+            .arg(note.base<0?tr("需停播读取"):QString::number(edit.type==Note::ValueType::OFFSET_VAL?edit.raw:NoteVelocity::offsetFor(note.base,NoteVelocity::effective(note.base,edit.type,edit.raw)))+"%");
       }
 void PerformanceEditor::centerPitch(bool selection, bool full)
       {
       if (!_noteCanvas) return;
       pauseFollow(); int low = 127, high = 0; bool found = false;
       for (const auto& note : _notes) if (note.enabled && (!selection || note.selected)) { low = qMin(low, note.pitch); high = qMax(high, note.pitch); found = true; }
-      if (!selection && _score && _score->nstaves() && _scope->currentIndex() != 2) {
+      if (!selection && _viewport.pitchRows.isEmpty() && _score && _score->nstaves() && _scope->currentIndex() != 2) {
             const auto instrument = _score->staff(_contextTrack / VOICES)->part()->instrument(Fraction::fromTicks(qMax(0, _playTick)));
             low = qBound(0, instrument->minPitchP(), 127); high = qBound(low, instrument->maxPitchP(), 127); found = true;
             }
       if (!found) { low = 48; high = 72; }
-      if (full) _viewport.rowHeight = qBound(2.0, double(_noteCanvas->height()) / (high - low + 7), 24.0);
-      _viewport.topPitch = (low + high) / 2.0 + _noteCanvas->height() / _viewport.rowHeight / 2 - 0.5;
+      if (full) _viewport.rowHeight = qBound(2.0, double(_noteCanvas->height()) / (_viewport.pitchIndex(high) - _viewport.pitchIndex(low) + 7), 24.0);
+      _viewport.topPitch = _viewport.pitchAtIndex((_viewport.pitchIndex(low) + _viewport.pitchIndex(high)) / 2 + _noteCanvas->height() / _viewport.rowHeight / 2 - .5);
       surfaceResized(PerformanceSurface::Notes);
       }
 void PerformanceEditor::resetRange(bool dataRange)
@@ -347,7 +352,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
             const double factor = wheel->angleDelta().y() > 0 ? 1.2 : 1 / 1.2;
             if (wheel->modifiers() & Qt::ControlModifier) {
                   if ((wheel->modifiers() & Qt::ShiftModifier) || wheel->position().x() < PerformanceViewport::gutter) {
-                        if (notes) { const double pitch = _viewport.topPitch - wheel->position().y() / _viewport.rowHeight; _viewport.rowHeight = qBound(2.0, _viewport.rowHeight * factor, 36.0); _viewport.topPitch = pitch + wheel->position().y() / _viewport.rowHeight; }
+                        if (notes) { const double pitch = _viewport.pitchIndex(_viewport.topPitch) - wheel->position().y() / _viewport.rowHeight; _viewport.rowHeight = qBound(2.0, _viewport.rowHeight * factor, 36.0); _viewport.topPitch = _viewport.pitchAtIndex(pitch + wheel->position().y() / _viewport.rowHeight); }
                         else _viewport.zoomRange(rangeKind(), factor, valueForY(wheel->position().y(), laneRect()));
                         }
                   else {
@@ -358,7 +363,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
                         }
                   }
             else if (wheel->modifiers() & Qt::ShiftModifier) _scroll->setValue(_scroll->value() - wheel->angleDelta().y() * DIVISION / 120);
-            else if (notes) _viewport.topPitch += wheel->angleDelta().y() / 40.0;
+            else if (notes) _viewport.topPitch = _viewport.pitchAtIndex(_viewport.pitchIndex(_viewport.topPitch)+wheel->angleDelta().y() / 40.0);
             else if (wheel->position().x() < PerformanceViewport::gutter) _viewport.zoomRange(rangeKind(), factor, valueForY(wheel->position().y(), laneRect()));
             else { auto r = _viewport.ranges[rangeKind()]; _viewport.panRange(rangeKind(), wheel->angleDelta().y() / 120.0 * (r.maximum - r.minimum) / 8); }
             surfaceResized(PerformanceSurface::Notes); invalidateVisual(); return true;
@@ -372,7 +377,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
             if (!_noteTips) { QToolTip::hideText(); return true; }
             if (!candidates.isEmpty()) QToolTip::showText(help->globalPos(), noteTooltip(candidates.front()), static_cast<QWidget*>(object));
             else if (notes && help->pos().x() < PerformanceViewport::gutter) {
-                  const int pitch = PerformanceKeyboard::pitchAt(help->pos(), _viewport.topPitch, _viewport.rowHeight, PerformanceViewport::gutter);
+                  const int pitch = keyboardPitch(help->pos());
                   if (pitch < 0) { QToolTip::hideText(); return true; }
                   static const char* names[] = {"C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"};
                   QToolTip::showText(help->globalPos(), tr("实音 %1%2 · MIDI %3").arg(QString::fromUtf8(names[pitch % 12])).arg(pitch / 12 - 1).arg(pitch), _noteCanvas);
@@ -408,7 +413,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
                         menu.exec(mouse->globalPos()); return true;
                         }
                   if (mouse->button() != Qt::LeftButton) return false;
-                  if (notes && mouse->x() < PerformanceViewport::gutter) { const int pitch = PerformanceKeyboard::pitchAt(mouse->pos(), _viewport.topPitch, _viewport.rowHeight, PerformanceViewport::gutter); if (pitch >= 0) auditionPitch(pitch); return true; }
+                  if (notes && mouse->x() < PerformanceViewport::gutter) { const int pitch = keyboardPitch(mouse->pos()); if (pitch >= 0) auditionPitch(pitch); return true; }
                   if (mouse->modifiers() & Qt::AltModifier && !candidates.isEmpty() && parameter) { cycleHit(candidates); return true; }
                   if (notes) {
                         pauseFollow();
@@ -436,7 +441,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
             }
       if (event->type() == QEvent::MouseButtonDblClick) {
             auto mouse = static_cast<QMouseEvent*>(event);
-            if (mouse->button() == Qt::LeftButton && mouse->x() >= PerformanceViewport::gutter && (!parameter || _parameter->currentIndex() == 0)) {
+            if (mouse->button() == Qt::LeftButton && mouse->modifiers()==Qt::NoModifier && mouse->x() >= PerformanceViewport::gutter && (!parameter || _parameter->currentIndex() == 0)) {
                   cancelSurfaceGesture(); cancelGesture(); buildGeometry(); const auto candidates = hits(mouse->pos(), parameter);
                   seek(candidates.isEmpty() ? tickForX(mouse->x(), false) : _notes[candidates.front()].tick); togglePlayback(true); return true;
                   }

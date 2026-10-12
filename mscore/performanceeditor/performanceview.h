@@ -21,6 +21,12 @@ struct PerformanceViewport {
       static constexpr int rightMargin = 14;
       static constexpr int parameterPadding = 6;
       double pixelsPerQuarter = 72, rowHeight = 12, topPitch = 72;
+      QVector<int> pitchRows;
+      double pitchIndex(double pitch) const;
+      double pitchAtIndex(double index) const;
+      double pitchY(double pitch) const { return (pitchIndex(topPitch)-pitchIndex(pitch))*rowHeight; }
+      double rowMaximum() const { return pitchRows.isEmpty()?127:pitchRows.size()-1; }
+      bool showsPitch(int pitch) const { return pitchRows.isEmpty()||pitchRows.contains(pitch); }
       std::array<PerformanceRange, 4> ranges {{{1, 127}, {-100, 100}, {5, 240}, {0, 127}}};
       static PerformanceRange limits(int kind);
       void zoomRange(int kind, double factor, double anchor, bool keepBaseline = true);

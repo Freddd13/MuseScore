@@ -5,6 +5,7 @@
 #include "libmscore/system.h"
 #include "libmscore/measure.h"
 #include <QPainter>
+#include <QSettings>
 #include <QFontMetrics>
 #include <QComboBox>
 #include <QCheckBox>
@@ -20,7 +21,7 @@ namespace Ms {
 void PerformanceEditor::syncOverlayTracking()
       {
       if (!_view) return;
-      const bool needed = overlayAllowed() && (_handles->isChecked() || _band->isChecked() || _wheelButton->isChecked());
+      const bool needed = overlayAllowed() && (_handles->isChecked() || _band->isChecked() || _wheelButton->isChecked() || _peekHeld);
       if (needed) {
             if (!_trackingOwned) { _trackingBefore = _view->hasMouseTracking(); _trackingOwned = true; }
             _view->setMouseTracking(true);
@@ -50,6 +51,10 @@ void PerformanceEditor::overlayViewChanged()
       }
 bool PerformanceEditor::overlayEvent(QEvent* event)
       {
+      if(_bandResizing){
+            if(event->type()==QEvent::MouseMove){auto mouse=static_cast<QMouseEvent*>(event);invalidateOverlay();_bandHeight=qBound(48,_bandResizeHeight+(_bandFollowsSystem?1:-1)*(mouse->y()-qRound(_press.y())),240);_view->update();return true;}
+            if(event->type()==QEvent::MouseButtonRelease){_bandResizing=false;QSettings().setValue("performanceEditor/bandHeight",_bandHeight);qApp->removeEventFilter(this);_view->releaseMouse();_view->unsetCursor();return true;}
+            }
       if (_scoreRangePanning) {
             if (event->type() == QEvent::MouseMove) {
                   auto mouse = static_cast<QMouseEvent*>(event); const auto r = _scoreViewport.ranges[rangeKind()];
@@ -61,6 +66,7 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
       if (event->type() == QEvent::MouseButtonPress && _band->isChecked() && !_dirty && !_scoreLane.isEmpty()) {
             auto mouse = static_cast<QMouseEvent*>(event);
             if (mouse->button() == Qt::LeftButton) {
+                  if(QRectF(_scoreFrame.left(),(_bandFollowsSystem?_scoreFrame.bottom():_scoreFrame.top())-4,_scoreFrame.width(),8).contains(mouse->pos())){finishWheel();cancelGesture();_bandResizing=true;_bandResizeHeight=_bandHeight;_press=mouse->pos();qApp->installEventFilter(this);_view->setCursor(Qt::SizeVerCursor);_view->grabMouse();return true;}
                   for (int i = 0; i < 6; ++i) if (_scoreControls[i].contains(mouse->pos())) { scoreRangeControl(i); return true; }
                   if (_scoreAxis.contains(mouse->pos()) && rangeKind() != 3) { finishWheel(); cancelGesture(); _scoreRangePanning = true; _last = mouse->pos(); qApp->installEventFilter(this); _view->setCursor(Qt::ClosedHandCursor); _view->grabMouse(); return true; }
                   }
@@ -87,7 +93,7 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
             if (pointer && _scoreFrame.contains(point)) { scheduleRefresh(); return true; }
             return false;
             }
-      if (!_handles->isChecked() && !_band->isChecked() && !_wheelButton->isChecked()) return false;
+      if (!_handles->isChecked() && !_band->isChecked() && !_wheelButton->isChecked() && !_peekHeld) return false;
       if (event->type() == QEvent::Leave && !_dragging) { _overBand = false; updateHover(-1); invalidateOverlay(); }
       if (event->type() == QEvent::MouseMove && !_dragging) {
             auto mouse = static_cast<QMouseEvent*>(event);
@@ -106,6 +112,7 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
                   }
             if (hover >= 0 && !_notes[hover].enabled) hover = -1;
             updateHover(hover);
+            if(_peekHeld)invalidateOverlay();
             if (_overBand || before) {
                   for (double x : {old.x(), _overlayPointer.x()}) _view->update(QRect(qRound(x) - 3, qRound(_scoreLane.top()) - 24, 7, qRound(_scoreLane.height()) + 30));
                   _view->setCursor(_overBand ? Qt::CrossCursor : Qt::ArrowCursor);
@@ -182,6 +189,7 @@ QRectF PerformanceEditor::scoreBandLane() const
             const double frameBottom = frameTop + 26 + _bandHeight + 5;
             const double nextTop = _nextSystemTop > 0 ? matrix.map(QPointF(0, _nextSystemTop)).y() - 8 : _view->height();
             if (frameTop >= 4 && frameBottom <= qMin(double(_view->height() - 12), nextTop)) top = frameTop + 26;
+            else if(nextTop-frameTop>=_bandHeight+31)top=qBound(30.,frameTop+26,double(_view->height()-_bandHeight-12));
             }
       return QRectF(left, top, right - left, _bandHeight);
       }
@@ -199,20 +207,23 @@ void PerformanceEditor::paintOverlay(QPainter& painter)
       QRegion damage;
       painter.save(); painter.resetTransform(); painter.setRenderHint(QPainter::Antialiasing);
       QVector<int> handles = _selectedIndices;
+      if(_peekHeld){rebuildVisibleScoreNotes();for(auto item:_visibleScoreNotes)if(noteEditable(_notes[item.first])&&(_peekAll||QLineF(item.second.center(),_overlayPointer).length()<160)&&!handles.contains(item.first))handles.append(item.first);}
       if (_hover >= 0 && !handles.contains(_hover)) handles.append(_hover);
-      if (_handles->isChecked() || _band->isChecked()) for (int i : handles) {
-            if (i < 0 || i >= _notes.size()) continue;
-            const auto& note = _notes[i]; const QRectF bounds = _view->matrix().mapRect(note.bounds);
+      QVector<QPair<int,QRectF>> handleBounds;
+      for(int i:handles)if(i>=0&&i<_notes.size())handleBounds.append({i,_view->matrix().mapRect(_notes[i].bounds)});
+      if(_peekHeld)for(auto item:_visibleScoreNotes)if(noteEditable(_notes[item.first])&&(_peekAll||QLineF(item.second.center(),_overlayPointer).length()<160)&&!handleBounds.contains(item))handleBounds.append(item);
+      if (_handles->isChecked() || _band->isChecked() || _peekHeld) for (auto item : handleBounds) {
+            const int i=item.first;const auto& note = _notes[i]; const QRectF bounds = item.second;
             if (!_view->rect().intersects(bounds.toRect())) continue;
             const QColor color = _pending.contains(note.note) ? _appearance.colors[PerformanceAppearance::Preview] : scoreNoteColor(i);
             if (i == _hover || (_band->isChecked() && note.selected)) {
                   painter.setPen(QPen(color, 2, i == _hover ? Qt::DashLine : Qt::SolidLine)); painter.setBrush(Qt::NoBrush); painter.drawRoundedRect(bounds.adjusted(-3, -3, 3, 3), 2, 2);
                   damage |= bounds.adjusted(-5, -5, 5, 5).toAlignedRect();
                   }
-            if (!_handles->isChecked() || _parameter->currentIndex() != 0) continue;
+            if ((!_handles->isChecked()&&!_peekHeld) || _parameter->currentIndex() != 0 || !noteEditable(note)) continue;
             const QPointF handle = bounds.topRight() + QPointF(12, -12);
             painter.setPen(QPen(color, 2)); painter.setBrush(note.audible ? QBrush(Qt::white) : Qt::NoBrush); painter.drawEllipse(handle, 5, 5);
-            if (_view->matrix().m11() > 0.5) painter.drawText(handle + QPointF(8, -4), QString::number(noteValue(i)) + (_axis->currentIndex() ? "%" : ""));
+            painter.drawText(handle + QPointF(8, -4), QString::number(noteValue(i)) + (rangeKind()==1 ? "%" : ""));
             damage |= QRectF(handle - QPointF(8, 20), QSizeF(95, 30)).toAlignedRect();
             }
       _scoreLane = _scoreAxis = _scoreFrame = QRectF(); _scoreControls.fill(QRectF());
@@ -231,7 +242,7 @@ void PerformanceEditor::paintOverlay(QPainter& painter)
             QString label = tr("当前谱行 · %1").arg(_parameter->currentText());
             if (focus >= 0) {
                   const auto& note = _notes[focus]; label += QString(" · %1").arg(note.name);
-                  if (_parameter->currentIndex() == 0) label += QString(" · %1%2").arg(noteValue(focus)).arg(_axis->currentIndex() ? "%" : " MIDI");
+                  if (_parameter->currentIndex() == 0) label += QString(" · %1%2").arg(noteValue(focus)).arg(rangeKind()==1 ? "%" : " MIDI");
                   else if (_parameter->currentIndex() == 1) {
                         double bpm = _score->tempo(Fraction::fromTicks(note.tick)) * 60; auto draft = _tempoDraft.upperBound(note.tick);
                         if (draft != _tempoDraft.cbegin()) {

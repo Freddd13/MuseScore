@@ -345,8 +345,8 @@
             QVERIFY(PerformanceSelection::apply(score, {grace}, grace)); editor->selectionChanged(); editor->setSelectedValue(64); QTest::qWait(30);
             QVERIFY(PerformanceSelection::apply(score, {target}, target)); editor->selectionChanged(); QTest::qWait(20);
             QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, QPoint(graceX, y)); QTest::qWait(20); QVERIFY(grace->selected()); QVERIFY(!target->selected());
-            // Nearby but visibly distinct stems must use their nearest actual
-            // endpoint, not let the old selected neighbour steal a drag/cycle.
+            // In the same onset column, dragging keeps the selected note even
+            // when the other endpoint is slightly nearer. Clicks can still pick it.
             const double delta = other->canvasBoundingRect().center().x() + 6 / matrix.m11() - second->canvasBoundingRect().center().x();
             score->startCmd(); second->undoChangeProperty(Pid::OFFSET, second->offset() + QPointF(delta, 0)); score->endCmd(); score->doLayout(); QTest::qWait(40);
             const double secondX = view->matrix().mapRect(second->canvasBoundingRect()).center().x(); QVERIFY(std::abs(secondX - otherX) < 7);
@@ -354,7 +354,7 @@
             QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, QPoint(otherX, y));
             QMouseEvent nearMove(QEvent::MouseMove, QPointF(otherX, y - 8), Qt::NoButton, Qt::LeftButton, Qt::NoModifier); QApplication::sendEvent(view, &nearMove);
             QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier, QPoint(otherX, y - 8)); QTest::qWait(30);
-            QVERIFY(other->selected()); QVERIFY(!second->selected()); QVERIFY(other->customizeVelocity(NoteVelocity::referenceBase(other)) > 64); QCOMPARE(second->customizeVelocity(NoteVelocity::referenceBase(second)), 64);
+            QVERIFY(second->selected()); QVERIFY(!other->selected()); QVERIFY(second->customizeVelocity(NoteVelocity::referenceBase(second)) > 64); QCOMPARE(other->customizeVelocity(NoteVelocity::referenceBase(other)), 64);
             score->undoRedo(true, &ed); QTest::qWait(35); const int afterGrace = score->undoStack()->getCurIdx();
             // Follow the native lowest visible staff/ink edge; placement is purely
             // screen geometry and cannot move the native score or playback cursor.

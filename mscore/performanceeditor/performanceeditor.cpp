@@ -6,6 +6,7 @@
 #include <QSplitter>
 #include <QToolButton>
 #include <QSettings>
+#include <QScopedValueRollback>
 #include <QElapsedTimer>
 #include "mscore/musescore.h"
 #include "mscore/scoreview.h"
@@ -62,11 +63,12 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _noteTips = QSettings().value("performanceEditor/noteTooltips", true).toBool();
       _keyboardNames = QSettings().value("performanceEditor/keyboardNames", true).toBool();
       _scoreVoiceColors = QSettings().value("performanceEditor/scoreVoiceColors", true).toBool();
-      _bandHeight = qBound(48, QSettings().value("performanceEditor/bandHeight", 48).toInt(), 144);
+      _bandHeight = qBound(48, QSettings().value("performanceEditor/bandHeight", 48).toInt(), 240);
       _bandFollowsSystem = QSettings().value("performanceEditor/bandFollowsSystem", false).toBool();
       editors.append(this);
       setObjectName("performanceEditor");
       auto layout = new QVBoxLayout(this);
+      layout->setSizeConstraint(QLayout::SetNoConstraint);
       layout->setContentsMargins(6, 4, 6, 4);
       auto row = new QGridLayout; _topRow = row;
       auto combo = [this, row](const QStringList& labels, const char* name) {
@@ -77,7 +79,8 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _scope = combo({tr("当前乐器"), tr("当前谱表"), tr("全谱")}, "performanceScope");
       _voice = combo({tr("声部 1–4"), "1", "2", "3", "4"}, "performanceVoice"); row->removeWidget(_voice); _voice->hide();
       auto voiceButton = new QToolButton(this); voiceButton->setText(tr("声部…")); voiceButton->setPopupMode(QToolButton::InstantPopup);
-      auto voiceMenu = new QMenu(voiceButton); voiceButton->setMenu(voiceMenu);
+      auto voiceMenu = new QMenu(voiceButton); voiceMenu->setObjectName("performanceVoiceMenu"); voiceButton->setMenu(voiceMenu);
+      connect(voiceMenu,&QMenu::aboutToShow,this,[this,voiceMenu]{for(int v=0;v<4;++v){QSignalBlocker block(voiceMenu->actions()[v]);voiceMenu->actions()[v]->setChecked(_voiceMask&(1<<v));}QSignalBlocker block(voiceMenu->actions()[4]);voiceMenu->actions()[4]->setChecked(_ghostVoices);});
       for (int v = 0; v < 4; ++v) {
             auto action = voiceMenu->addAction(tr("声部 %1").arg(v + 1)); action->setCheckable(true); action->setChecked(true);
             connect(action, &QAction::toggled, this, [this, v](bool on) { cancelGesture(); _voiceMask = on ? _voiceMask | (1 << v) : _voiceMask & ~(1 << v); rebuildFilter(); });
@@ -159,7 +162,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       auto placement = displayMenu->addMenu(tr("谱行带位置")); placement->setObjectName("performanceBandPlacement");
       auto placementGroup = new QActionGroup(this);
       for (int mode = 0; mode < 2; ++mode) {
-            auto action = placement->addAction(mode ? tr("当前谱行下方（放不下时回到底部）") : tr("固定在视口底部"));
+            auto action = placement->addAction(mode ? tr("跟随选中／播放谱行下方") : tr("固定在视口底部"));
             action->setObjectName(QString("performanceBandPosition%1").arg(mode)); action->setCheckable(true); action->setChecked(_bandFollowsSystem == bool(mode)); placementGroup->addAction(action);
             connect(action, &QAction::triggered, this, [this, mode] { finishWheel(); cancelGesture(); invalidateOverlay(); _bandFollowsSystem = bool(mode); QSettings().setValue("performanceEditor/bandFollowsSystem", _bandFollowsSystem); if (_view) _view->update(); });
             }
@@ -197,7 +200,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       paneControls(noteLayout, true);
       _noteCanvas = new PerformanceCanvas(this, PerformanceSurface::Notes); _noteCanvas->installEventFilter(this); noteLayout->addWidget(_noteCanvas, 1);
       _pitchScroll = new QScrollBar(Qt::Vertical, _noteCanvas); _pitchScroll->setRange(0, 12700);
-      connect(_pitchScroll, &QScrollBar::valueChanged, this, [this](int value) { pauseFollow(); _viewport.topPitch = 127 - value / 100.0; invalidateVisual(); });
+      connect(_pitchScroll, &QScrollBar::valueChanged, this, [this](int value) { pauseFollow(); _viewport.topPitch = _viewport.pitchAtIndex(_viewport.rowMaximum() - value / 100.0); invalidateVisual(); });
       _splitter->addWidget(noteArea);
       auto parameterArea = new QWidget(_splitter); auto areaLayout = new QVBoxLayout(parameterArea); areaLayout->setContentsMargins(0, 0, 0, 0); areaLayout->setSpacing(0);
       _ruler = new PerformanceCanvas(this, PerformanceSurface::Ruler); _ruler->installEventFilter(this); areaLayout->addWidget(_ruler);
@@ -222,7 +225,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       for (auto box : {_scope, _voice}) connect(box, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { cancelGesture(); rebuildFilter(); });
       connect(_parameter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { QSignalBlocker blocker(_tool); _tool->setCurrentIndex(0); });
       for (auto box : {_axis, _parameter, _tool}) connect(box, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
-            finishWheel(); cancelGesture(); _selectedCurve = nullptr; _curveIndex = -1;
+            _visibleScoreRect=QRect();finishWheel(); cancelGesture(); _selectedCurve = nullptr; _curveIndex = -1;
             const bool velocity = _parameter->currentIndex() == 0;
             _pedalGrid->setVisible(_parameter->currentIndex() == 2); _tool->setEnabled(_parameter->currentIndex() != 2);
             _tool->setItemText(0, _parameter->currentIndex() == 1 ? tr("节点 · 点按添加") : tr("拖动"));
@@ -239,10 +242,10 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             findChild<QPushButton*>("performanceWriteValue")->setText(velocity ? tr("写入选中") : tr("写入速度节点"));
             _number->setEnabled(_parameter->currentIndex() != 2);
             _number->setVisible(_parameter->currentIndex() != 2);
-            _number->setSuffix(velocity && _axis->currentIndex() ? " %" : QString());
+            _number->setSuffix(velocity && rangeKind()==1 ? " %" : QString());
             _number->setPrefix(_parameter->currentIndex() == 1 ? "BPM " : QString());
-            _number->setRange(velocity ? (_axis->currentIndex() ? NoteVelocity::minOffset : 1) : 5,
-                  velocity ? (_axis->currentIndex() ? NoteVelocity::maxOffset : 127) : 999);
+            _number->setRange(velocity ? (rangeKind()==1 ? NoteVelocity::minOffset : 1) : 5,
+                  velocity ? (rangeKind()==1 ? NoteVelocity::maxOffset : 127) : 999);
             _number->setDecimals(velocity ? 0 : 2);
             resizeEvent(nullptr); updateSelection(); status(); invalidateVisual(); if (_view) _view->update();
             });
@@ -258,7 +261,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       connect(&_playTimer, &QTimer::timeout, this, &PerformanceEditor::updatePlayhead);
       _moveTimer.setSingleShot(true); _moveTimer.setInterval(16);
       connect(&_moveTimer, &QTimer::timeout, this, &PerformanceEditor::drainGesture);
-      applyAppearance(); status();
+      setupUsabilityControls(); applyAppearance(); status();
       }
 
 void PerformanceEditor::resizeEvent(QResizeEvent*)
@@ -269,12 +272,16 @@ void PerformanceEditor::resizeEvent(QResizeEvent*)
             if (!grid) continue;
             const bool rememberOrder = widgets.isEmpty();
             while (auto item = grid->takeAt(0)) { if (rememberOrder && item->widget()) widgets.append(item->widget()); delete item; }
-            int cellWidth = 1;
-            for (auto widget : widgets) if (!widget->isHidden()) cellWidth = qMax(cellWidth, widget->minimumSizeHint().width());
-            const int spacing = qMax(6, grid->horizontalSpacing());
-            const int columns = qBound(1, (width() - 12 + spacing) / (cellWidth + spacing), widgets.size());
-            int cell = 0;
-            for (auto widget : widgets) if (!widget->isHidden()) { grid->addWidget(widget, cell / columns, cell % columns); ++cell; }
+            // Pack using each control's width. One long caption must not give
+            // every button the same large cell and push the score out of view.
+            for(int column=0;column<grid->columnCount();++column){grid->setColumnMinimumWidth(column,0);grid->setColumnStretch(column,0);}
+            grid->setHorizontalSpacing(0);const int unit=8,columns=qMax(1,(width()-12)/unit);int row=0,column=0;
+            for(auto widget:widgets)if(!widget->isHidden()){
+                  const int span=qBound(1,(widget->minimumSizeHint().width()+13)/unit,columns);
+                  if(column&&column+span>columns){++row;column=0;}
+                  grid->addWidget(widget,row,column,1,span,Qt::AlignLeft);column+=span;
+                  }
+            for(int c=0;c<columns;++c)grid->setColumnMinimumWidth(c,unit);
             }
       }
 
@@ -302,7 +309,7 @@ void PerformanceEditor::setView(ScoreView* view)
       for (auto& boundaries : _pedalBoundaries) boundaries.clear();
       _selectedTempoTick = _tempoPointTick = _unlockedTempo = -1;
       _tempoCurves.clear(); _tempoPlot.clear(); _selectedCurve = nullptr; _curveIndex = -1;
-      _excludedStaves.clear(); rebuildStaffMenu();
+      _peekHeld=false;_disabledTracks.clear();_visibleScoreNotes.clear();_visibleScoreRect=QRect();_usedPitches.clear();_excludedStaves.clear(); rebuildStaffMenu();
       _notes.clear(); _segments.clear(); _tempos.clear(); _pedals.clear(); _noteIndex.clear(); _layoutIndex.clear(); _selectedIndices.clear(); _systemIndices.clear();
       _system = nullptr; _hover = -1; _snapshotDegraded = false; _intervals.clear(); _measures.clear(); invalidateVisual();
       if (_score) {
@@ -483,7 +490,7 @@ void PerformanceEditor::updateSelection()
 
 void PerformanceEditor::refreshLayout()
       {
-      _layoutIndex.clear();
+      _visibleScoreNotes.clear();_visibleScoreRect=QRect(); _layoutIndex.clear();
       for (auto& note : _notes) { note.bounds = note.note->canvasBoundingRect(); note.system = note.note->chord()->measure()->system(); if (note.system) _layoutIndex.insert(note.system); }
       for (auto& segment : _segments) if (segment.segment) { segment.position = segment.segment->canvasPos(); segment.system = segment.segment->measure()->system(); if (segment.system) _layoutIndex.insert(segment.system); }
       if (!_segments.isEmpty() && !_segments.back().segment && _score->lastMeasure()) { auto measure = _score->lastMeasure(); _segments.back().system = measure->system(); _segments.back().position = measure->canvasPos() + QPointF(measure->width(), 0); }
@@ -569,8 +576,8 @@ void PerformanceEditor::status(const QString& message)
       {
       const QString mode = _parameter->currentIndex() == 1 ? tr("四分音符 BPM · 实际速度阶梯")
             : (_parameter->currentIndex() == 2 ? tr("原生延音踏板 · CC64 开/关")
-                  : (_axis->currentIndex() ? tr("相对整数百分比") : tr("参考 Note-on 力度 1–127")));
-      const QString baseline = _snapshotDegraded ? tr(" · 播放中首次打开：基准待停播；仅编辑原相对%／绝对MIDI模式") : QString();
+                  : (rangeKind()==1 ? tr("在原力度上增减百分比") : tr("MIDI 力度 1–127")));
+      const QString baseline = _snapshotDegraded ? tr(" · 播放中首次打开：原力度需停播读取；仅编辑原相对%／绝对MIDI模式") : QString();
       const QString pending = hasPending() ? tr(" · %1 音、%2 参数预览中；原生属性尚未提交").arg(_pending.size()).arg(_propertyPending.size()) : QString();
       _status->setText(message.isEmpty() ? (_score ? mode + baseline + pending + tr(" · 可编辑选音 %1 · Ctrl 选音／缩放时间 · Ctrl+Shift 缩放纵向").arg(_selectedIndices.size()) : tr("打开乐谱后使用演奏编辑器。")) : message);
       }
@@ -584,8 +591,8 @@ double PerformanceEditor::noteValue(int index) const
       {
       const auto& note = _notes[index];
       const auto edit = _pending.value(note.note, {note.type, note.raw});
-      if (note.base < 0) return _axis->currentIndex() ? edit.raw : qBound(1, edit.raw, 127);
-      if (!_axis->currentIndex()) return NoteVelocity::effective(note.base, edit.type, edit.raw);
+      if (note.base < 0) return rangeKind()==1 ? edit.raw : qBound(1, edit.raw, 127);
+      if (!_axis->currentIndex()||_relativeActual) return NoteVelocity::effective(note.base, edit.type, edit.raw);
       return edit.type == Note::ValueType::OFFSET_VAL ? edit.raw : NoteVelocity::offsetFor(note.base, edit.raw);
       }
 
@@ -594,20 +601,21 @@ void PerformanceEditor::setNoteValue(int index, double value, bool report)
       const auto& note = _notes[index];
       if (!noteEditable(note)) return;
       const auto type = _pending.value(note.note, {note.type, note.raw}).type;
-      const int raw = _axis->currentIndex() ? qBound(NoteVelocity::minOffset, qRound(value), NoteVelocity::maxOffset) : qBound(1, qRound(value), 127);
-      if (note.base < 0 && (_axis->currentIndex() ? type != Note::ValueType::OFFSET_VAL : type != Note::ValueType::USER_VAL)) return;
+      const bool relative=_axis->currentIndex()&&!_relativeActual;
+      const int raw = relative ? qBound(NoteVelocity::minOffset, qRound(value), NoteVelocity::maxOffset) : qBound(1, qRound(value), 127);
+      if (note.base < 0 && (relative ? type != Note::ValueType::OFFSET_VAL : type != Note::ValueType::USER_VAL)) return;
       const int stored = note.base < 0 ? raw : (type == Note::ValueType::OFFSET_VAL
-            ? (_axis->currentIndex() ? raw : NoteVelocity::offsetFor(note.base, raw))
-            : (_axis->currentIndex() ? NoteVelocity::effective(note.base, Note::ValueType::OFFSET_VAL, raw) : raw));
+            ? (relative ? raw : NoteVelocity::offsetFor(note.base, raw))
+            : (relative ? NoteVelocity::effective(note.base, Note::ValueType::OFFSET_VAL, raw) : raw));
       if (type == note.type && stored == note.raw) _pending.remove(note.note);
       else _pending.insert(note.note, {type, stored});
       if (!report) return;
-      if (note.base < 0) { status(tr("预览 %1%2 · 实际 MIDI 基准待停播；原生属性尚未提交。 ").arg(stored).arg(type == Note::ValueType::OFFSET_VAL ? " %" : " MIDI")); return; }
+      if (note.base < 0) { status(tr("预览 %1%2 · 实际 MIDI 原力度需停播读取；原生属性尚未提交。 ").arg(stored).arg(type == Note::ValueType::OFFSET_VAL ? " %" : " MIDI")); return; }
       const int actual = NoteVelocity::effective(note.base, type, stored);
       const auto actualRange=generatedVelocityRange(note,type,stored);
       const QString range = actualRange.first != actualRange.second || !note.generatedVelocities.isEmpty()
             ? tr(" · 实际发声 MIDI %1–%2").arg(actualRange.first).arg(actualRange.second) : QString();
-      status(tr("音高 %1 · 基准 %2 · 保存 %3%4 · MIDI %5%6")
+      status(tr("音高 %1 · 原力度 %2 · 保存 %3%4 · MIDI %5%6")
             .arg(note.pitch).arg(note.base).arg(stored).arg(type == Note::ValueType::OFFSET_VAL ? "%" : "")
             .arg(actual).arg((!_axis->currentIndex() && actual != raw ? tr("（整数百分比舍入：目标 %1）").arg(raw) : QString()) + range));
       }
@@ -615,7 +623,7 @@ void PerformanceEditor::setNoteValue(int index, double value, bool report)
 void PerformanceEditor::convertSelected(Note::ValueType type)
       {
       finishWheel(); if (_dirty) refresh(); pauseFollow();
-      if (_snapshotDegraded) { status(tr("模式转换需要停播后建立力度基准。")); return; }
+      if (_snapshotDegraded) { status(tr("模式转换需要停播后建立原力度。")); return; }
       for (int index : selectedNotes()) {
             const auto& note = _notes[index];
             const auto old = _pending.value(note.note, {note.type, note.raw});
@@ -738,7 +746,7 @@ bool PerformanceEditor::overlayAllowed() const
             && !_view->editMode() && !_view->noteEntryMode();
       }
 bool PerformanceEditor::surfacesActive() const
-      { return isVisible() || (_band->isChecked() && _view && _view->isVisible()); }
+      { return isVisible() || ((_band->isChecked()||_peekHeld||_closestWheelActive||(_wheelIndex>=0&&_wheelSurface==_view)) && _view && _view->isVisible()); }
 bool PerformanceEditor::scoreBandEnabled() const
       { return _band->isChecked(); }
 void PerformanceEditor::setScoreBandEnabled(bool enabled)
@@ -819,9 +827,12 @@ void PerformanceEditor::beginGesture(QPointF point, QRectF rect, bool onScore, i
       if (_parameter->currentIndex() && (_score->isPlaying() || (seq && (seq->isPlaying() || !seq->backgroundRenderingIdle())))) { status(tr("速度与踏板请停播后编辑。")); return; }
       pauseFollow();
       _gestureBefore = _pending; _tempoDraft.clear(); _gestureLane = rect; _press = _last = point;
-      _noteGesture = false; _cycleOnClick = false; _scoreGesture = onScore; _dragging = true; _anchor = forcedAnchor; _offsetDrag = false; _unlockedTempo = -1;
+      _noteGesture = false; _cycleOnClick = false; _gestureMoved=false; _pressedCandidates.clear(); _scoreGesture = onScore; _dragging = true; _anchor = forcedAnchor; _offsetDrag = false; _unlockedTempo = -1;
       if (_parameter->currentIndex() == 0) {
-            double distance = 13;
+            if(_tool->currentIndex()==0){_pressedCandidates=hits(point,true,onScore);if(forcedAnchor<0&&!_pressedCandidates.isEmpty())_anchor=_pressedCandidates.front();
+                  _cycleOnClick=_anchor>=0&&_notes[_anchor].selected&&_selectedIndices.size()==1&&_pressedCandidates.size()>1&&std::abs(yForValue(noteValue(_pressedCandidates[1]),rect,onScore)-yForValue(noteValue(_anchor),rect,onScore))<3;
+                  }
+            double distance = _anchor>=0 ? -1 : 13;
             const int from = tickForX(rect.left() - 32, onScore), until = tickForX(rect.right() + 32, onScore);
             auto first = std::lower_bound(_notes.cbegin(), _notes.cend(), from, [](const NoteInfo& n, int t) { return n.tick < t; });
             const int begin = onScore ? 0 : int(first - _notes.cbegin());
@@ -887,6 +898,9 @@ void PerformanceEditor::beginGesture(QPointF point, QRectF rect, bool onScore, i
 void PerformanceEditor::moveGesture(QPointF point)
       {
       if (!_dragging) return;
+      const bool moved=QLineF(_press,point).length()>=qMin(4,QApplication::startDragDistance());
+      if(!_gestureMoved&&!moved&&_offsetDrag)return;
+      _gestureMoved|=moved;
       QElapsedTimer gestureTimer; gestureTimer.start();
       if (_curveIndex >= 0) moveTempoCurve(point);
       else if (_parameter->currentIndex() == 2) {
@@ -902,7 +916,7 @@ void PerformanceEditor::moveGesture(QPointF point)
             }
       else if (_offsetDrag) {
             const auto range = (_scoreGesture ? _scoreViewport : _viewport).ranges[rangeKind()];
-            const double delta = _noteGesture ? (_press.y() - point.y()) * (range.maximum - range.minimum) / qMax(1.0, _gestureLane.height()) : valueForY(point.y(), _gestureLane, _scoreGesture) - valueForY(_press.y(), _gestureLane, _scoreGesture);
+            const double delta = (_noteGesture ? (_press.y() - point.y()) * (range.maximum - range.minimum) / qMax(1.0, _gestureLane.height()) : valueForY(point.y(), _gestureLane, _scoreGesture) - valueForY(_press.y(), _gestureLane, _scoreGesture))*_dragSensitivity;
             for (int index : _dragTargets) setNoteValue(index, _dragOriginal.value(index) + delta, false);
             }
       else {
@@ -967,7 +981,11 @@ void PerformanceEditor::finishGesture()
       {
       if (!_dragging) return;
       drainGesture();
-      if (_cycleOnClick && QLineF(_press, _last).length() < 3) { const auto candidates = _pressedCandidates; cancelGesture(); cycleHit(candidates); return; }
+      if (!_gestureMoved&&_parameter->currentIndex()==0&&_tool->currentIndex()==0&&_pressedCandidates.size()>1) {
+            const auto candidates=_pressedCandidates;const bool cycle=_cycleOnClick;int target=_anchor;double nearest=1e20;
+            for(int i:candidates){double distance=QLineF(_press,QPointF(xForNote(i,_scoreGesture),yForValue(noteValue(i),_gestureLane,_scoreGesture))).length();if(distance<nearest){nearest=distance;target=i;}}
+            cancelGesture();if(cycle)cycleHit(candidates);else{selectIndices({target},Qt::NoModifier);updateHover(target);}return;
+            }
       _dragging = false; qApp->removeEventFilter(this);
       if (_view) _view->releaseMouse(); _canvas->releaseMouse(); _noteCanvas->releaseMouse();
       if (_parameter->currentIndex() == 0) applyPending();
@@ -995,6 +1013,7 @@ void PerformanceEditor::finishGesture()
 
 void PerformanceEditor::cancelGesture()
       {
+      if(_bandResizing){_bandHeight=_bandResizeHeight;_bandResizing=false;qApp->removeEventFilter(this);if(_view){_view->releaseMouse();_view->unsetCursor();_view->update();}}
       if (_scoreRangePanning) { _scoreRangePanning = false; qApp->removeEventFilter(this); if (_view) { _view->releaseMouse(); _view->unsetCursor(); } }
       _moveTimer.stop(); _moveQueued = false;
       if (!_dragging) return;
@@ -1009,7 +1028,7 @@ void PerformanceEditor::cancelGesture()
 
 bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       {
-      if (_scoreRangePanning && (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress)
+      if ((_scoreRangePanning||_bandResizing) && (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress)
             && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
             event->accept(); if (event->type() == QEvent::KeyPress) cancelGesture(); return true;
             }
@@ -1033,6 +1052,8 @@ bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
             QTimer::singleShot(0, this, [this] { syncOverlayTracking(); syncTransport(); scheduleRefresh(); invalidateOverlay(); });
             return false;
             }
+      const bool closestWheel=onScore&&event->type()==QEvent::Wheel&&(static_cast<QWheelEvent*>(event)->modifiers()&(Qt::AltModifier|Qt::ShiftModifier))==(Qt::AltModifier|Qt::ShiftModifier);
+      QScopedValueRollback<bool> wheelScope(_closestWheelActive,closestWheel);
       if (onScore && !overlayAllowed()) return false;
       if (onScore && overlayEvent(event)) return true;
       if (event->type() == QEvent::ShortcutOverride && _dragging && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) { event->accept(); return true; }

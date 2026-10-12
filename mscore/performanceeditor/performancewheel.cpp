@@ -26,8 +26,9 @@ void PerformanceEditor::cancelWheel()
 bool PerformanceEditor::wheelVelocity(QWheelEvent* wheel, bool notes, bool onScore)
       {
       const auto modifiers = wheel->modifiers();
-      const bool temporary = !onScore && (modifiers & Qt::AltModifier);
-      if ((modifiers & Qt::ControlModifier) || (onScore && (modifiers & Qt::AltModifier)) || (!_wheelButton->isChecked() && !temporary)
+      const bool closest=onScore&&(modifiers&Qt::AltModifier)&&(modifiers&Qt::ShiftModifier);
+      const bool temporary = closest||(!onScore && (modifiers & Qt::AltModifier));
+      if ((modifiers & Qt::ControlModifier) || (onScore && (modifiers & Qt::AltModifier)&&!closest) || (!_wheelButton->isChecked() && !temporary)
             || !_score || _score->readOnly() || _dragging || _parameter->currentIndex() != 0) return false;
       // A new wheel event can arrive before the queued post-commit refresh.
       // Resolve that snapshot first instead of interpreting the event as scrolling.
@@ -40,7 +41,10 @@ bool PerformanceEditor::wheelVelocity(QWheelEvent* wheel, bool notes, bool onSco
       int target = -1;
       // Keep a stationary wheel burst attached to its first endpoint even when
       // the edited endpoint moves away. Moving to another note releases it.
-      if (_wheelIndex >= 0 && _wheelSurface == surface && QLineF(point, _wheelPoint).length() <= 4) target = _wheelIndex;
+      if (_wheelIndex >= 0 && _wheelSurface == surface && (closest||QLineF(point, _wheelPoint).length() <= 4)) target = _wheelIndex;
+      else if(closest){
+            rebuildVisibleScoreNotes();double best=1e20;for(auto item:_visibleScoreNotes){double d=QLineF(point,item.second.center()).length();if(d<best&&noteEditable(_notes[item.first])){best=d;target=item.first;}}
+            }
       else if (onScore) {
             // The explicit wheel mode edits native note heads without prior selection.
             // Alt belongs to ScoreView navigation; score editing requires the mode.
@@ -56,6 +60,7 @@ bool PerformanceEditor::wheelVelocity(QWheelEvent* wheel, bool notes, bool onSco
       else {
             buildGeometry(); const auto candidates = hits(point, !notes); if (!candidates.isEmpty()) target = candidates.front();
             }
+      if(closest&&target<0){status(tr("当前视口没有可编辑的音，请显示目标谱行或调整筛选。"));wheel->accept();return true;}
       if (target < 0 || !noteEditable(_notes[target])) return false;
       const int delta = wheel->angleDelta().y(); const int pixels = wheel->pixelDelta().y();
       if (!delta && !pixels) return false; // Do not swallow horizontal-only trackpads.
@@ -73,8 +78,8 @@ bool PerformanceEditor::wheelVelocity(QWheelEvent* wheel, bool notes, bool onSco
       _wheelRemainder += delta ? delta / 120.0 : pixels / 15.0;
       const int steps = int(std::trunc(_wheelRemainder)); _wheelRemainder -= steps;
       if (steps) {
-            const auto limit = PerformanceViewport::limits(_axis->currentIndex() ? 1 : 0);
-            _wheelValue = qBound(limit.minimum, _wheelValue + steps * ((modifiers & Qt::ShiftModifier) ? 8 : 1), limit.maximum);
+            const auto limit = PerformanceViewport::limits(rangeKind());
+            _wheelValue = qBound(limit.minimum, _wheelValue + steps * (((modifiers & Qt::ShiftModifier)&&!closest) ? 8 : 1), limit.maximum);
             setNoteValue(target, _wheelValue, false); updateHover(target);
             repaintWheelTarget(target); surface->update(wheelBadge(surface).adjusted(-2, -2, 2, 2).toAlignedRect());
             }
@@ -82,8 +87,8 @@ bool PerformanceEditor::wheelVelocity(QWheelEvent* wheel, bool notes, bool onSco
       }
 QRectF PerformanceEditor::wheelBadge(QWidget* surface) const
       {
-      return QRectF(qBound(0.0, _wheelPoint.x() + 10, double(qMax(0, surface->width() - 88))),
-            qBound(0.0, _wheelPoint.y() - 25, double(qMax(0, surface->height() - 24))), 84, 22);
+      return QRectF(qBound(0.0, _wheelPoint.x() + 10, double(qMax(0, surface->width() - 236))),
+            qBound(0.0, _wheelPoint.y() - 25, double(qMax(0, surface->height() - 24))), 232, 22);
       }
 void PerformanceEditor::paintWheelBadge(QPainter& painter, QWidget* surface) const
       {
@@ -91,7 +96,7 @@ void PerformanceEditor::paintWheelBadge(QPainter& painter, QWidget* surface) con
       const auto badge = wheelBadge(surface);
       painter.save(); painter.fillRect(badge, _appearance.colors[PerformanceAppearance::Background]);
       painter.setPen(_appearance.colors[PerformanceAppearance::Preview]); painter.drawRect(badge);
-      painter.drawText(badge, Qt::AlignCenter, QString::number(noteValue(_wheelIndex), 'f', 0) + (_axis->currentIndex() ? " %" : " MIDI")); painter.restore();
+      const auto& note=_notes[_wheelIndex];painter.drawText(badge, Qt::AlignCenter, tr("%1 · 谱表 %2／声部 %3 · %4%5").arg(note.name).arg(note.track/VOICES+1).arg(note.track%VOICES+1).arg(noteValue(_wheelIndex),0,'f',0).arg(rangeKind()==1 ? " %" : " MIDI")); painter.restore();
       }
 void PerformanceEditor::repaintWheelTarget(int index)
       {

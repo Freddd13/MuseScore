@@ -11,6 +11,7 @@ struct PerformanceAppearance {
       std::array<QColor, 4> gradient, voices;
       std::array<QColor, 8> staves;
       std::array<int, 4> stops {{1, 43, 85, 127}};
+      bool followNativeVoices = true;
       int mode = 0;
       int velocityWidth = 3;
       PerformanceAppearance();

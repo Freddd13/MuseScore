@@ -17,7 +17,7 @@ QString pitchName(int pitch)
       }
 }
 int PerformanceEditor::rangeKind() const
-      { return _parameter->currentIndex() == 0 ? _axis->currentIndex() : _parameter->currentIndex() + 1; }
+      { return _parameter->currentIndex() == 0 ? (_relativeActual?0:_axis->currentIndex()) : _parameter->currentIndex() + 1; }
 void PerformanceEditor::updateSurfaces()
       { if (_canvas) _canvas->update(); if (_noteCanvas) _noteCanvas->update(); if (_ruler) _ruler->update(); }
 void PerformanceEditor::invalidateVisual()
@@ -28,12 +28,13 @@ void PerformanceEditor::surfaceResized(PerformanceSurface surface)
       if (_valueScroll && _canvas) _valueScroll->setGeometry(_canvas->width() - PerformanceViewport::rightMargin, 0, PerformanceViewport::rightMargin, _canvas->height());
       if (surface == PerformanceSurface::Notes && _pitchScroll) {
             const double rows = _noteCanvas->height() / _viewport.rowHeight;
-            _viewport.topPitch = qBound(qMin(127.0, rows - 1), _viewport.topPitch, 127.0);
+            const double maximum=_viewport.rowMaximum();
+            _viewport.topPitch = _viewport.pitchAtIndex(qBound(qMin(maximum, rows - 1), _viewport.pitchIndex(_viewport.topPitch), maximum));
             QSignalBlocker block(_pitchScroll);
             _pitchScroll->setGeometry(_noteCanvas->width() - PerformanceViewport::rightMargin, 0, PerformanceViewport::rightMargin, _noteCanvas->height());
-            _pitchScroll->setRange(0, qMax(0, qRound((128 - rows) * 100)));
+            _pitchScroll->setRange(0, qMax(0, qRound((_viewport.rowMaximum()+1 - rows) * 100)));
             _pitchScroll->setPageStep(qRound(rows * 100)); _pitchScroll->setSingleStep(100);
-            _pitchScroll->setValue(qRound((127 - _viewport.topPitch) * 100));
+            _pitchScroll->setValue(qRound((_viewport.rowMaximum() - _viewport.pitchIndex(_viewport.topPitch)) * 100));
             }
       const int span = qMax(1, qRound(qMax(10, _canvas->width() - PerformanceViewport::gutter - PerformanceViewport::rightMargin) * DIVISION / _viewport.pixelsPerQuarter));
       _scroll->setPageStep(span); _scroll->setRange(0, qMax(0, _endTick - span));
@@ -45,13 +46,13 @@ void PerformanceEditor::buildGeometry()
       _geometryRevision = _visualRevision; _noteGeometry.clear();
       if (!_noteCanvas || _notes.isEmpty()) return;
       const int high = qMin(127, int(std::ceil(_viewport.topPitch)));
-      const int low = qMax(0, int(std::floor(_viewport.topPitch - _noteCanvas->height() / _viewport.rowHeight)));
+      const int low = qMax(0, int(std::floor(_viewport.pitchAtIndex(_viewport.pitchIndex(_viewport.topPitch) - _noteCanvas->height() / _viewport.rowHeight))));
       const int from = tickForX(PerformanceViewport::gutter, false), until = tickForX(_noteCanvas->width() - PerformanceViewport::rightMargin, false);
       for (int index : _intervals.query(from, until, low, high)) {
             const auto& note = _notes[index];
-            if (!note.inScope || (!note.enabled && !_ghostVoices)) continue;
+            if (!note.inScope || (!note.enabled && !_ghostVoices) || !_viewport.showsPitch(note.pitch)) continue;
             const double x = xForTick(note.tick, false), end = xForTick(qMax(note.tick + 1, note.end), false);
-            _noteGeometry.append({index, QRectF(x, (_viewport.topPitch - note.pitch) * _viewport.rowHeight + 1, qMax(2.0, end - x - 1), qMax(1.0, _viewport.rowHeight - 2))});
+            _noteGeometry.append({index, QRectF(x, _viewport.pitchY(note.pitch) + 1, qMax(2.0, end - x - 1), qMax(1.0, _viewport.rowHeight - 2))});
             }
       }
 void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface surface)
@@ -60,25 +61,29 @@ void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface su
       QWidget* widget = surface == PerformanceSurface::Notes ? static_cast<QWidget*>(_noteCanvas) : (surface == PerformanceSurface::Ruler ? static_cast<QWidget*>(_ruler) : _canvas);
       painter.fillRect(widget->rect(), c[PerformanceAppearance::Background]);
       if (surface == PerformanceSurface::Notes) {
-            const int low = qMax(0, int(_viewport.topPitch - widget->height() / _viewport.rowHeight) - 2);
+            const int low = qMax(0, int(_viewport.pitchAtIndex(_viewport.pitchIndex(_viewport.topPitch) - widget->height() / _viewport.rowHeight)) - 2);
             const int high = qMin(127, int(std::ceil(_viewport.topPitch)) + 2);
             for (int pitch = low; pitch <= high; ++pitch) {
-                  const double y = (_viewport.topPitch - pitch) * _viewport.rowHeight;
+                  if(!_viewport.showsPitch(pitch))continue;
+                  const double y = _viewport.pitchY(pitch);
                   painter.fillRect(QRectF(PerformanceViewport::gutter, y, widget->width() - PerformanceViewport::gutter - PerformanceViewport::rightMargin, _viewport.rowHeight), c[PerformanceKeyboard::isBlack(pitch) ? PerformanceAppearance::AccidentalRow : PerformanceAppearance::NaturalRow]);
                   painter.setPen(c[PerformanceAppearance::Grid]); painter.drawLine(QPointF(PerformanceViewport::gutter, y), QPointF(widget->width() - PerformanceViewport::rightMargin, y));
                   }
             painter.save(); painter.setClipRect(QRectF(0, 0, PerformanceViewport::gutter, widget->height()));
             for (bool black : {false, true}) for (int pitch = low; pitch <= high; ++pitch) {
-                  if (PerformanceKeyboard::isBlack(pitch) != black) continue;
+                  if (PerformanceKeyboard::isBlack(pitch) != black || !_viewport.showsPitch(pitch)) continue;
                   painter.setPen(QPen(QColor(black ? "#161616" : "#777777"), 1)); painter.setBrush(QColor(black ? "#161616" : "#f1f1f1"));
-                  painter.drawPolygon(PerformanceKeyboard::shape(pitch, _viewport.topPitch, _viewport.rowHeight, PerformanceViewport::gutter));
+                  if(_keyboardMode==1&&!_usedPitches.contains(pitch))painter.setOpacity(.28);
+                  if(_keyboardMode==2&&!_viewport.pitchRows.isEmpty())painter.drawRect(QRectF(0,_viewport.pitchY(pitch),PerformanceViewport::gutter*(black?.58:1.),_viewport.rowHeight));
+                  else painter.drawPolygon(PerformanceKeyboard::shape(pitch, _viewport.topPitch, _viewport.rowHeight, PerformanceViewport::gutter));
                   if (_keyboardNames && (_viewport.rowHeight >= 10 || pitch % 12 == 0)) {
                         painter.setPen(black ? QColor("#ededed") : QColor("#292929"));
                         QFont font = painter.font(); font.setPixelSize(qBound(7, int(_viewport.rowHeight * .82), 12)); painter.setFont(font);
-                        const double y = (_viewport.topPitch - pitch) * _viewport.rowHeight;
+                        const double y = _viewport.pitchY(pitch);
                         painter.drawText(QRectF(black ? 2 : PerformanceViewport::gutter * .58 + 2, y,
-                              PerformanceViewport::gutter * (black ? .58 : .42) - 4, _viewport.rowHeight), Qt::AlignVCenter | Qt::AlignRight, pitchName(pitch));
+                              PerformanceViewport::gutter * (black ? .58 : .42) - 4, _viewport.rowHeight), Qt::AlignVCenter | Qt::AlignHCenter, pitchName(pitch));
                         }
+                  painter.setOpacity(1);
                   }
             painter.restore();
             }
@@ -125,6 +130,7 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
       painter.save(); painter.setClipRect(rect.adjusted(-2, -3, 2, 0), Qt::IntersectClip);
       const int parameter = _parameter->currentIndex();
       if (parameter == 0) {
+            if(_relativeActual)paintOriginalVelocity(painter,rect,onScore);
             const auto active = painter.clipBoundingRect().intersected(rect.adjusted(-8, -8, 8, 8));
             int from = tickForX(active.left() - 8, onScore), until = tickForX(active.right() + 8, onScore);
             auto first = std::lower_bound(_notes.cbegin(), _notes.cend(), from, [](const NoteInfo& n, int t) { return n.tick < t; });
@@ -302,7 +308,7 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
             // Overlap count uses identical native tick/pitch coordinates, never time shifts.
             if (_hover >= 0) {
                   int count = 0; for (const auto& g : _noteGeometry) if (_notes[g.index].enabled && _notes[g.index].tick == _notes[_hover].tick && _notes[g.index].pitch == _notes[_hover].pitch) ++count;
-                  if (count > 1) { painter.setPen(c[PerformanceAppearance::Text]); painter.drawText(QPointF(xForTick(_notes[_hover].tick, false) + 3, (_viewport.topPitch - _notes[_hover].pitch) * _viewport.rowHeight - 3), tr("×%1 · 右键选音").arg(count)); }
+                  if (count > 1) { painter.setPen(c[PerformanceAppearance::Text]); painter.drawText(QPointF(xForTick(_notes[_hover].tick, false) + 3, _viewport.pitchY(_notes[_hover].pitch) - 3), tr("×%1 · 右键选音").arg(count)); }
                   }
             }
       else if (surface == PerformanceSurface::Parameter) {

@@ -8,6 +8,22 @@
 #include <algorithm>
 #include <cmath>
 namespace Ms {
+double PerformanceViewport::pitchIndex(double pitch) const
+      {
+      if(pitchRows.isEmpty()) return pitch;
+      if(pitch<=pitchRows.front()) return pitch-pitchRows.front();
+      for(int i=1;i<pitchRows.size();++i) if(pitch<=pitchRows[i]) return i-1+(pitch-pitchRows[i-1])/double(pitchRows[i]-pitchRows[i-1]);
+      return pitchRows.size()-1+pitch-pitchRows.back();
+      }
+double PerformanceViewport::pitchAtIndex(double index) const
+      {
+      if(pitchRows.isEmpty()) return index;
+      if(index<=0) return pitchRows.front()+index;
+      int i=int(index);
+      if(i>=pitchRows.size()-1) return pitchRows.back()+index-(pitchRows.size()-1);
+      return pitchRows[i]+(index-i)*(pitchRows[i+1]-pitchRows[i]);
+      }
+
 bool PerformanceKeyboard::isBlack(int pitch)
       { const int key = pitch % 12; return key == 1 || key == 3 || key == 6 || key == 8 || key == 10; }
 QPolygonF PerformanceKeyboard::shape(int pitch, double topPitch, double rowHeight, double width)
