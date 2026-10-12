@@ -10,6 +10,7 @@ import "../HarmonyAssistant/Harmony.js" as Harmony
 import "Rules.js" as Rules
 
 MuseScore {
+    property string preferredPanelGroup: "rightTools"
     id:root
     menuPath:"Plugins.Arrangement Check"
     description:"编配检查：和声疑点、基础对位与上下文可弹性；只读分析。"

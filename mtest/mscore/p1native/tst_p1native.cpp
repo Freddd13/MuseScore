@@ -13,6 +13,9 @@
 #include <QTableView>
 #include "mscore/midicrop/midicroppanel.h"
 #include <QDockWidget>
+#include <QDataStream>
+#include <QtMath>
+#include "mscore/workflow/paneldock.h"
 #include "mscore/plugin/qmlplugin.h"
 #include "mscore/plugin/pluginManager.h"
 #include <QCryptographicHash>
@@ -161,6 +164,38 @@ private slots:
    }
   }
  }
+
+ void panelPositionAndTabs(){
+  QMainWindow main;main.resize(800,600);auto inspector=new QDockWidget("Inspector",&main);inspector->setObjectName("inspector");main.addDockWidget(Qt::RightDockWidgetArea,inspector);
+  auto dock=new QDockWidget("Tools",&main);QVERIFY(arrangeWorkflowDock(&main,dock,"repair-position-test","rightTools",Qt::RightDockWidgetArea));QVERIFY(main.tabifiedDockWidgets(inspector).contains(dock));
+  main.show();QTest::qWait(30);main.addDockWidget(Qt::LeftDockWidgetArea,dock);dock->show();QTest::qWait(300);dock->close();delete dock;
+  auto reopened=new QDockWidget("Tools",&main);QVERIFY(arrangeWorkflowDock(&main,reopened,"repair-position-test","rightTools",Qt::RightDockWidgetArea));QCOMPARE(main.dockWidgetArea(reopened),Qt::LeftDockWidgetArea);
+ }
+ void realPanelMouseActions(){
+  auto score=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);mscore->setCurrentScoreView(mscore->appendScore(score));mscore->resize(1250,900);mscore->show();
+  auto open=[&](QString folder,QString title)->QmlPlugin*{
+   const QString path=QString(TESTROOT)+"/share/plugins/"+folder+"/"+folder+"_MS3.qml";PluginDescription d;d.path=path;if(!collectPluginMetaInformation(&d))return nullptr;mscore->registerPlugin(&d);mscore->pluginTriggered(path);QTest::qWait(100);
+   for(auto w:QGuiApplication::allWindows()){auto view=qobject_cast<QQuickView*>(w);auto root=view?qobject_cast<QmlPlugin*>(view->rootObject()):nullptr;if(root&&root->property("menuPath").toString().endsWith(title))return root;}return nullptr;
+  };
+  auto click=[](QmlPlugin* root,const char* name){QTest::qWait(60);auto item=root->findChild<QQuickItem*>(name);if(!item||!item->isVisible()||!item->isEnabled())return false;auto where=item->mapToScene(QPointF(item->width()/2,item->height()/2));qInfo()<<name<<where<<root->window()->size()<<root->size();if(!QRectF(QPointF(),root->window()->size()).contains(where))return false;QTest::mouseClick(root->window(),Qt::LeftButton,Qt::NoModifier,where.toPoint());return true;};
+  auto expression=open("PerformanceExpression","Performance Expression");QVERIFY(expression);expression->setPanelFloating(true);expression->window()->resize(520,800);expression->focusPanel();QTest::qWait(100);
+  auto observer=qobject_cast<PluginAPI::ScoreObserver*>(expression->property("observer").value<QObject*>());QVERIFY(observer);
+  auto info=observer->workflowInfo(),scope=observer->analysisScope(false);auto page=observer->performanceRange(scope["start"].toInt(),scope["end"].toInt(),0,score->ntracks(),0,32,observer->analysisRevision());auto notes=page["notes"].toList();QVERIFY(notes.size()>1);auto n=notes[1].toMap();
+  QVariantList performance;for(int i=0;i<notes.size();++i){auto note=notes[i].toMap();performance.append(QVariantMap{{"id",QString("m%1").arg(i)},{"pitch",note["pitch"]},{"seconds",note["scoreSeconds"]},{"velocity",72}});}
+  auto row=QVariantMap{{"original",n},{"tick",n["tick"]},{"track",n["track"]},{"index",n["index"]},{"pitch",n["pitch"]},{"seconds",n["scoreSeconds"]},{"scoreId",n["id"]},{"midiId","m1"},{"confirmed",false},{"confidence",.7},{"status","待确认"}};
+  expression->setProperty("scope",scope);expression->setProperty("info",info);expression->setProperty("notes",notes);expression->setProperty("midi",QVariantMap{{"notes",performance},{"sha256","test"}});expression->setProperty("revision",observer->analysisRevision());expression->setProperty("result",QVariantMap{{"matches",QVariantList{row}},{"pending",1},{"missing",QVariantList{}},{"extra",QVariantList{}}});expression->setProperty("selected",0);QTest::qWait(30);
+  QVERIFY(click(expression,"expressionLocate"));QCOMPARE(score->selection().noteList().size(),1);QCOMPARE(score->selection().noteList()[0]->pitch(),n["writtenPitch"].toInt());QVERIFY(expression->property("status").toString().contains("已选中"));
+  QVERIFY(click(expression,"expressionConfirm"));QTRY_VERIFY(!expression->property("busy").toBool());QVERIFY(expression->property("status").toString().contains("已确认"));
+  expression->setProperty("workspace",QUrl::fromLocalFile(settings.filePath("expression.json")).toString());QVERIFY(click(expression,"expressionOriginalAudition"));QVERIFY(mscore->currentScore()!=score);QVERIFY(expression->property("status").toString().contains("声音设备"));QVERIFY(click(expression,"expressionStop"));QTRY_VERIFY2(expression->property("status").toString().contains("试听已停止"),qPrintable(expression->property("status").toString()));expression->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath("return-debug.png"));QVERIFY(click(expression,"expressionReturn"));QTRY_VERIFY2(expression->property("status").toString().contains("已返回原谱"),qPrintable(expression->property("status").toString()));QCOMPARE(mscore->currentScore(),score);QTest::qWait(100);
+  expression->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath("manual-expression.png"));
+  auto reference=open("ReferencePlayer","Reference Player");QVERIFY(reference);reference->setPanelFloating(true);reference->window()->resize(900,600);reference->focusPanel();auto media=reference->property("media").value<QObject*>();QVERIFY(media);
+  QFile wav(settings.filePath("reference.wav"));QVERIFY(wav.open(QIODevice::WriteOnly));QDataStream stream(&wav);stream.setByteOrder(QDataStream::LittleEndian);stream.writeRawData("RIFF",4);stream<<quint32(36+288000);stream.writeRawData("WAVEfmt ",8);stream<<quint32(16)<<quint16(1)<<quint16(1)<<quint32(48000)<<quint32(96000)<<quint16(2)<<quint16(16);stream.writeRawData("data",4);stream<<quint32(288000);QByteArray pcm;QDataStream samples(&pcm,QIODevice::WriteOnly);samples.setByteOrder(QDataStream::LittleEndian);for(int i=0;i<144000;++i)samples<<qint16(qSin(i*2*M_PI*440/48000.)*(2000+1500*qSin(i*2*M_PI*2/48000.)));stream.writeRawData(pcm.constData(),pcm.size());wav.close();
+  QVERIFY(QMetaObject::invokeMethod(media,"open",Q_ARG(QString,QUrl::fromLocalFile(wav.fileName()).toString())));QTRY_VERIFY(media->property("duration").toDouble()>2500);
+  reference->setProperty("associations",QVariantList{QVariantMap{{"name","第1小节"},{"start",0},{"end",scope["end"]},{"firstTrack",0},{"from",500},{"until",1500},{"stale",false}}});QTest::qWait(50);auto list=reference->findChild<QQuickItem*>("referenceAssociations");QVERIFY(list);auto point=list->mapToScene(QPointF(25,20));QTest::mouseClick(reference->window(),Qt::LeftButton,Qt::NoModifier,point.toPoint());QCOMPARE(reference->property("a").toDouble(),500.);QCOMPARE(reference->property("b").toDouble(),1500.);
+  QVERIFY(click(reference,"referenceLocate"));QVERIFY(reference->property("status").toString().contains("已跳到"));media->setProperty("volume",0.);QVERIFY(click(reference,"referencePlayAssociation"));QTRY_VERIFY(media->property("playing").toBool());QTRY_VERIFY(!media->property("playing").toBool());QVERIFY(reference->property("status").toString().contains("片段播放结束"));
+  reference->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath("manual-reference.png"));
+ }
+
  void rawMidiAtomicCopy(){
   PluginAPI::ScoreObserver o;auto source=settings.filePath("source.mid"),copy=settings.filePath("copy.mid");QFile f(source);QVERIFY(f.open(QIODevice::WriteOnly));QByteArray data=QByteArray::fromHex("4d546864000000060000000101e04d54726b0000000400ff2f00");f.write(data);f.close();
   auto hash=QString::fromLatin1(QCryptographicHash::hash(data,QCryptographicHash::Sha256).toHex());

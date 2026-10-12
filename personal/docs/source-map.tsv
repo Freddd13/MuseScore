@@ -198,12 +198,15 @@ Tap 工作区迁移	mscore/workspace.cpp	if (uiVersion < 4)	1113	一次性添加
 原曲参考	mscore/referenceaudio/mediasession.cpp	ReferenceMediaSession::play	72	独立音频会话	Muse3Plugins/P1/tests/tst_media.cpp
 原曲参考	mscore/referenceaudio/audioreader.cpp	bool stream	58	可取消解码及保调	Muse3Plugins/P1/tests/tst_media.cpp
 工作流	mscore/workflow/midiinput.cpp	QVariantMap readPerformanceMidi	23	只读范围与值数据	mtest/mscore/p1native
-工作流	mscore/workflow/scoreworkflow.cpp	ScoreObserver::performanceRange	65	只读范围与值数据	mtest/mscore/p1native
-工作流	mscore/workflow/scoreworkflow.cpp	ScoreObserver::workflowInfo	58	只读范围与值数据	mtest/mscore/p1native
+工作流	mscore/workflow/scoreworkflow.cpp	ScoreObserver::performanceRange	70	只读范围与值数据	mtest/mscore/p1native
+工作流	mscore/workflow/scoreworkflow.cpp	ScoreObserver::workflowInfo	63	只读范围与值数据	mtest/mscore/p1native
 工作流	mscore/workflow/workflowexpression.cpp	ScoreObserver::applyExpression	43	隔离副本／受保护写入	mtest/mscore/p1native
 工作流	mscore/workflow/workflowexpression.cpp	ScoreObserver::copyWorkflowScore	82	隔离副本／受保护写入	mtest/mscore/p1native
 工作流	mscore/workflow/tapwrite.cpp	showTapWriteDialog	20	隔离副本／受保护写入	mtest/mscore/p1native
 工作流	mscore/workflow/workflowvariants.cpp	ScoreObserver::workflowFingerprint	13	只读范围与值数据	mtest/mscore/p1native
 MIDI导出	audio/exports/midigate.h	QVector<MidiGateNote> process	80	范围／声部／旋律保护的导出副本	mtest/mscore/p1native
 MIDI导出	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::voiceSelection	188	范围／声部／旋律保护的导出副本	mtest/mscore/p1native
-工作流	mscore/workflow/scoreworkflow.cpp	ScoreObserver::workflowStatus	54	只读范围与值数据	mtest/mscore/p1native
+工作流	mscore/workflow/scoreworkflow.cpp	ScoreObserver::workflowStatus	59	只读范围与值数据	mtest/mscore/p1native
+使用修复	mscore/workflow/paneldock.cpp	bool arrangeWorkflowDock	40	面板标签组和位置保存	mtest/mscore/p1native
+使用修复	mscore/workflow/scoreworkflow.cpp	ScoreObserver::stopWorkflowPlayback	54	停止本次试听	mtest/mscore/p1native
+使用修复	mscore/workflow/scoreworkflow.cpp	ScoreObserver::navigateWorkflow	110	具体音符选择和定位	mtest/mscore/p1native

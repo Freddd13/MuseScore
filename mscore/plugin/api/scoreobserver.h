@@ -98,6 +98,7 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE void cancelReadOnlyJob();
       Q_INVOKABLE QString analysisRevision();
       Q_INVOKABLE QVariantMap workflowStatus();
+      Q_INVOKABLE QVariantMap stopWorkflowPlayback();
       Q_INVOKABLE QVariantMap workflowFingerprint(int from,int limit,const QString& expected);
       Q_INVOKABLE QVariantMap returnWorkflowSource();
       Q_INVOKABLE QVariantMap previewExpression(const QString& workspace,const QVariantMap& candidate,const QVariantMap& scope);

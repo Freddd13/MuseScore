@@ -10,6 +10,7 @@ import QtQuick.Dialogs 1.3
 import QtQuick.Window 2.2
 
 MuseScore {
+    property string preferredPanelGroup: "rightTools"
     id: root
     UiTheme {id:theme}
     menuPath: "Plugins.Harmony Assistant"

@@ -118,3 +118,5 @@ P1 C：多方案试写工作区；薄宿主接口在mscore/workflow，纯规则�
 P1 D：MIDI范围、声部及旋律保护；薄宿主接口在mscore/workflow，纯规则／工作区在share/plugins/PerformanceExpression。测试mtest/mscore/p1native及插件P1/tests。
 
 [P1 0.31 最终验证](P1_VALIDATION.md)：183通过及实测预算；人工素材验收边界明确列出。
+
+0.32：按功能使用的[用户说明](../USER_GUIDE.md)，面板与操作修复位于mscore/workflow/paneldock及独立插件目录。

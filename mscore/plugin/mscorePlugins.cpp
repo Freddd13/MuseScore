@@ -21,6 +21,7 @@
 #include "config.h"
 #include "preferences.h"
 #include "qmlplugin.h"
+#include "mscore/workflow/paneldock.h"
 #include "qmlpluginengine.h"
 #include "pluginManager.h"
 
@@ -475,13 +476,14 @@ void MuseScore::pluginTriggered(QString pp)
                   QWidget* w = QWidget::createWindowContainer(view);
                   dock->setWidget(w);
                   addDockWidget(area, dock);
+                  const bool restored=arrangeWorkflowDock(this,dock,QFileInfo(pp).completeBaseName(),p->property("preferredPanelGroup").toString(),area);
                   p->attachPanelDock(dock);
                   const Qt::Orientation orientation =
                      (area == Qt::RightDockWidgetArea || area == Qt::LeftDockWidgetArea)
                      ? Qt::Vertical
                      : Qt::Horizontal;
                   const int size = (orientation == Qt::Vertical) ? view->initialSize().height() : view->initialSize().width();
-                  resizeDocks({ dock }, { size }, orientation);
+                  if(!restored)resizeDocks({ dock }, { size }, orientation);
                   connect(engine, SIGNAL(quit()), dock, SLOT(close()));
                   dock->show();
                   }

@@ -11,6 +11,7 @@
 //=============================================================================
 
 #include "qmlplugin.h"
+#include "mscore/workflow/paneldock.h"
 #include <QDockWidget>
 #include <QMainWindow>
 #include <QTimer>
@@ -73,8 +74,8 @@ void QmlPlugin::showDetailPanel(bool visible)
       if (!_detailDock) {
             QString title=property("detailPanelTitle").toString();
             if (title.isEmpty()) title=_panelDock->windowTitle()+tr(" - Details");
-            _detailDock=new QDockWidget(title,main);_detailDock->setObjectName("pluginDetailDock");
-            _detailWindow=new QQuickWindow();_detailWindow->setObjectName("pluginDetailWindow");
+            _detailDock=new QDockWidget(title,main);_detailDock->setObjectName(_panelDock->objectName()+"/details");
+            _detailWindow=new QQuickWindow();_detailWindow->setObjectName(_panelDock->objectName()+"/detailWindow");
             const QColor background=property("detailPanelBackground").value<QColor>();
             _detailWindow->setColor(background.isValid() ? background : QApplication::palette().color(QPalette::Window));
             _detailDock->setWidget(QWidget::createWindowContainer(_detailWindow));
@@ -85,7 +86,8 @@ void QmlPlugin::showDetailPanel(bool visible)
             // The container owns its QWindow; close the auxiliary surface with the plugin root.
             connect(this,&QObject::destroyed,_detailDock,&QDockWidget::deleteLater);
             main->addDockWidget(Qt::RightDockWidgetArea,_detailDock);
-            main->resizeDocks({_detailDock.data()},{360},Qt::Horizontal);
+            const bool restored=arrangeWorkflowDock(main,_detailDock,_panelDock->objectName()+"/details",property("preferredPanelGroup").toString(),Qt::RightDockWidgetArea);
+            if(!restored)main->resizeDocks({_detailDock.data()},{360},Qt::Horizontal);
             emit panelDetailChanged();
             }
       _detailDock->show();_detailDock->raise();

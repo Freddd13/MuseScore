@@ -242,7 +242,7 @@ class TestPluginHost : public QObject {
             main->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("top.png"));
             QVERIFY(panel->property("ribbon").toBool());
             QTRY_VERIFY(panel->detailPanelVisible());
-            auto details=main->findChild<QDockWidget*>("pluginDetailDock");QVERIFY(details);
+            auto details=main->findChild<QDockWidget*>("kumoPanel/HarmonyAssistant_MS3/details");QVERIFY(details);
             QCOMPARE(main->dockWidgetArea(details),Qt::RightDockWidgetArea);
             QVERIFY(panel->detailPanelHost());
             QCOMPARE(panel->findChildren<PluginAPI::ScoreObserver*>().size(),1);
@@ -277,7 +277,7 @@ class TestPluginHost : public QObject {
             main->addDockWidget(Qt::RightDockWidgetArea,dock);QTest::qWait(50);
             QCOMPARE(panel->panelPlacement(),QString("right"));
             dock->close();QTest::qWait(50);
-            QTRY_VERIFY(main->findChildren<QDockWidget*>("pluginDetailDock").isEmpty());
+            QTRY_VERIFY(main->findChildren<QDockWidget*>("kumoPanel/HarmonyAssistant_MS3/details").isEmpty());
             // Repeated open/close must not retain previews or dereference a destroyed dock.
             main->pluginTriggered(plugin);QTest::qWait(50);
             // This fixture deliberately skips main()'s workspace/audio initialization.

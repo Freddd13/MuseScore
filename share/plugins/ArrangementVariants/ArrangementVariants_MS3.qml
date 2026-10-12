@@ -5,8 +5,10 @@ import QtQuick.Dialogs 1.3 as Files
 import MuseScore 3.0
 import "../HarmonyAssistant" as Desk
 import "../WorkflowCommon/Workspace.js" as Project
+import "../WorkflowCommon/ActionMessages.js" as Messages
 import "Variants.js" as Rules
 MuseScore {
+    property string preferredPanelGroup: "rightTools"
  id:root
  menuPath:"Plugins.Arrangement Variants";description:"试写方案：独立完整谱副本、原生标签页切换、范围比较和试听。"
  version:"1.0.0";requiresScore:true;pluginType:"dock";dockArea:"right";implicitWidth:400;implicitHeight:560
@@ -30,7 +32,7 @@ MuseScore {
  property var group:groupIndex>=0&&groupIndex<groups.length?groups[groupIndex]:null
  property var active:null
  Desk.UiTheme {id:theme}
- function fail(e){status=String(e);busy=false}
+ function fail(e){status=Messages.readable(e);busy=false}
  function local(path){return Project.path(path).replace(/\\/g,"/").toLowerCase()}
  function resolveEntry(e){return Project.fileUrl(Project.resolve(workspace,e.path))}
  function refresh(){
@@ -40,7 +42,7 @@ MuseScore {
  }
  function fileName(kind){return Project.directory(workspace)+kind+"-"+Date.now()+"-"+Math.floor(Math.random()*1000000)+".mscz"}
  function setGroup(g){var a=Project.copy(groups);a[groupIndex]=g;groups=a;dirty=true}
- function saveManifest(){try{Project.writeModule(observer,workspace,"variants",{groups:groups,groupIndex:groupIndex,selected:selected},currentInfo);dirty=false;status="工作区已原子保存 · 上次成功文件保留";return true}catch(e){fail(e);return false}}
+ function saveManifest(){try{Project.writeModule(observer,workspace,"variants",{groups:groups,groupIndex:groupIndex,selected:selected},currentInfo);dirty=false;status="项目已保存；之前保存的方案文件仍保留。";return true}catch(e){fail(e);return false}}
  function newGroup(){
   if(!workspace){pendingGroup=true;saveDialog.open();return}
   refresh();if(currentInfo.error||observer.playing){fail("先停止播放／渲染");return}
@@ -48,8 +50,8 @@ MuseScore {
   var base=fileName("baseline"),a=fileName("variant"),rev=observer.analysisRevision();
   var first=observer.copyWorkflowScore(Project.fileUrl(base),rev,false);if(first.error){fail(first.error);return}
   var second=observer.copyWorkflowScore(Project.fileUrl(a),rev,false);if(second.error){fail(second.error);return}
-  var all=Project.copy(groups);all.push({name:"第"+scope.firstMeasure+"–"+scope.lastMeasure+"小节",scope:scope,occurrence:1,source:currentInfo.file,entries:[Rules.newEntry("原始基准",Project.relative(workspace,base),true,first.sha256,""),Rules.newEntry("A · 试写",Project.relative(workspace,a),false,second.sha256,"")],baseline:null});groups=all;groupIndex=all.length-1;selected=1;
-  readFingerprint("baseline");status="已保留原谱；生成完整副本耗时 "+Math.round(first.milliseconds+second.milliseconds)+"ms";
+  var all=Project.copy(groups);all.push({name:"第"+scope.firstMeasure+"–"+scope.lastMeasure+"小节",scope:scope,occurrence:1,source:currentInfo.file,entries:[Rules.newEntry("原始版本",Project.relative(workspace,base),true,first.sha256,""),Rules.newEntry("A · 试写",Project.relative(workspace,a),false,second.sha256,"")],baseline:null});groups=all;groupIndex=all.length-1;selected=1;
+  readFingerprint("baseline");status="已建立原始版本和可编辑方案 A。原谱没有改变。";
  }
  function readFingerprint(action){
   if(busy)return;if(observer.playing){fail("停播后检查比较条件");return}
@@ -109,7 +111,7 @@ MuseScore {
   }
   ListView {visible:!root.compact;Layout.fillWidth:true;Layout.fillHeight:true;Layout.minimumHeight:100;clip:true;model:root.group?root.group.entries:[];currentIndex:root.selected;ScrollBar.vertical:ScrollBar {}
    delegate:ItemDelegate {width:parent.width;height:55;highlighted:index===root.selected
-    text:modelData.name+" · "+(modelData.baseline?"只读基准":root.saved(modelData)?"已保存工作区":"未保存工作区")+"\n"+root.comparisonText(modelData)
+    text:modelData.name+" · "+(modelData.baseline?"原始版本，不作修改":root.saved(modelData)?"已保存工作区":"未保存工作区")+"\n"+root.comparisonText(modelData)
     onClicked:root.selected=index;onDoubleClicked:root.switchTo(index,false)
    }
   }

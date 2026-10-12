@@ -51,6 +51,11 @@ QVariantMap ScoreObserver::savePerformanceSource(const QString& source,const QSt
  QSaveFile output(path);if(!output.open(QIODevice::WriteOnly)||output.write(bytes)!=bytes.size()||!output.commit())return {{"error","cannot save raw MIDI; previous file preserved"}};
  return {{"ok",true}};
 }
+QVariantMap ScoreObserver::stopWorkflowPlayback() {
+ if(seq&&seq->isPlaying())seq->stopWait();
+ if(seq&&(!seq->backgroundRenderingIdle()||seq->isPlaying()))return {{"error","waiting for stop/render"}};
+ return {{"ok",true}};
+}
 QVariantMap ScoreObserver::workflowStatus() {
  if(!_score)return {{"error","no-score"}};auto master=_score->masterScore();
  return {{"revision",analysisRevision()},{"file",master->fileInfo()->absoluteFilePath()},{"name",master->name()},{"dirty",master->dirty()},{"readOnly",master->readOnly()}};
@@ -109,6 +114,7 @@ QVariantMap ScoreObserver::navigateWorkflow(const QVariantMap& range,bool auditi
  auto segment=_score->tick2segment(Fraction::fromTicks(tick),false,SegmentType::ChordRest);
  if(!segment||track<0||track>=_score->ntracks())return {{"error","invalid range"}};
  auto element=segment->element(track);if(!element)for(int t=track;t<_score->ntracks()&&!element;++t)element=segment->element(t);
+ if(range.contains("index")){auto note=resolve(range);if(!note)return {{"error","stale note; read the score again"}};element=note;}
  if(element){_score->select(element,SelectType::SINGLE,track/VOICES);view->adjustCanvasPosition(element,false);}
  view->moveCursor(Fraction::fromTicks(tick));
  if(audition){
