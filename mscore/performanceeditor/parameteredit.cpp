@@ -132,7 +132,7 @@ bool writeTapTempo(Score* score,int tick,double bpm,bool selectedExisting,QStrin
  return temposImpl(score,{{tick,bpm}},selectedExisting?tick:-1,error,true,false,true);
 }
 
-bool tempoCurve(Score* input, int from, int until, TextLine* target, bool replace, QString* error)
+bool tempoCurve(Score* input, int from, int until, TextLine* target, bool replace, QString* error, const TextLine* prototype)
       {
       if (!editable(input)) return false;
       auto score = input->masterScore();
@@ -156,8 +156,10 @@ bool tempoCurve(Score* input, int from, int until, TextLine* target, bool replac
                         }
             }
       if (!target) {
-            target = new TextLine(score, true); target->setTrack(0); target->setTick(Fraction::fromTicks(from)); target->setTicks(Fraction::fromTicks(until - from));
-            target->setBeginText("rit."); target->setContinueText("(rit.)"); target->setBeginFontStyle(FontStyle::Italic); target->setLineStyle(Qt::DashLine);
+            target = prototype ? prototype->clone() : new TextLine(score, true);
+            target->eraseSpannerSegments(); target->setScore(score); target->setParent(nullptr); target->setSystemFlag(true);
+            target->setTrack(0); target->setTick(Fraction::fromTicks(from)); target->setTicks(Fraction::fromTicks(until - from));
+            if(!prototype){target->setBeginText("rit."); target->setContinueText("(rit.)"); target->setBeginFontStyle(FontStyle::Italic); target->setLineStyle(Qt::DashLine);}
             target->setProperty(Pid::RIT_MODE, true); target->setProperty(Pid::RIT_PLAY, true); score->undoAddElement(target);
             }
       else {
@@ -201,7 +203,7 @@ bool detachTempoCurve(TextLine* target, QString* error)
       auto score = target->score(); score->startCmd(); target->undoChangeProperty(Pid::RIT_PLAY, false); score->endCmd(); return true;
       }
 
-bool restoreTempo(Score* input, int tick, QString* error)
+bool restoreTempo(Score* input, int tick, QString* error, const TempoText* prototype)
       {
       if (!editable(input)) return false;
       auto score = input->masterScore(); auto segment = score->tick2segment(Fraction::fromTicks(tick), false, SegmentType::ChordRest);
@@ -212,7 +214,7 @@ bool restoreTempo(Score* input, int tick, QString* error)
       for (auto annotation : segment->annotations()) if (annotation->isTempoText()) {
             if (error) *error = QObject::tr("这里已有速度标记，请先明确编辑或删除它。"); return false;
             }
-      auto text = new TempoText(score); text->setTrack(0); text->setParent(segment); text->setFollowText(false); text->setXmlText("a tempo"); text->setProperty(Pid::TEMPO_RESTORE_MODE, 1);
+      auto text = prototype ? prototype->clone() : new TempoText(score); text->setScore(score); text->setTrack(0); text->setParent(segment); text->setFollowText(false); if(!prototype)text->setXmlText("a tempo"); text->setProperty(Pid::TEMPO_RESTORE_MODE, 1);
       score->startCmd(); score->undoAddElement(text); score->endCmd(); return true;
       }
 

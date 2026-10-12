@@ -20,6 +20,7 @@
 // For menus in the menu bar, like File, Edit, and View, see mscore/musescore.cpp
 
 #include "menus.h"
+#include "temposymbols.h"
 #include "musescore.h"
 #include "palette.h"
 #include "scoreview.h"
@@ -1588,6 +1589,7 @@ PalettePanel* MuseScore::newTempoPalettePanel(bool defaultPalettePanel)
                   sp->append(tt, qApp->translate("Palette", tp.name), QString(), 1.5);
                   }
             }
+      appendPlayableTempoSymbols(sp);
       sp->setMoreElements(false);
 
       return sp;

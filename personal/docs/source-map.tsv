@@ -113,7 +113,7 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 播放预览提交	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::applyPending	651	渲染空闲提交与外部改谱保护	mtest/mscore/performanceeditor
 力度事务	mscore/performanceeditor/parameteredit.cpp	bool velocities(	121	原生 Note 属性事务	mtest/mscore/performanceeditor
 速度事务	mscore/performanceeditor/parameteredit.cpp	bool tempos(	122	TempoText 批编辑与可见标记保护	mtest/mscore/performanceeditor
-踏板事务	mscore/performanceeditor/parameteredit.cpp	bool pedal(	219	原生区间与同 Part 重叠校验	mtest/mscore/performanceeditor
+踏板事务	mscore/performanceeditor/parameteredit.cpp	bool pedal(	221	原生区间与同 Part 重叠校验	mtest/mscore/performanceeditor
 逐音力度基准	libmscore/notevelocity.cpp	int referenceBase(	19	逐谱表/事件/演奏法基准	mtest/mscore/performanceeditor
 速度重建边界	libmscore/score.cpp	void Score::beginTempoEdit()	418	撤销/重做批量重建	mtest/mscore/performanceeditor
 播放同步	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::updatePlayhead	257	Seq当前时刻/反复映射/稳定滚页	mtest/mscore/performanceeditor
@@ -220,3 +220,6 @@ MIDI导出	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::voiceSelection	188	�
 输入净谱	libmscore/inputnotation.cpp	bool joinTiedChords	33	完整延音、同小节与手动分组保护	mtest/libmscore/inputrhythm; mtest/libmscore/beam; mtest/mscore/p0native
 输入净谱	libmscore/inputnotation.cpp	void coordinateTieStems	48	紧凑普通音组的自动方向协调	mtest/libmscore/inputrhythm; mtest/libmscore/beam; mtest/mscore/p0native
 输入净谱	mscore/inputnotationmenu.cpp	void addInputNotationMenu	13	工具菜单、设置记忆及停止播放后排版	mtest/libmscore/inputrhythm; mtest/libmscore/beam; mtest/mscore/p0native
+速度符号面板	mscore/temposymbols.cpp	void appendPlayableTempoSymbols	14	补齐速度格子，保留已有内容	mtest/mscore/p1native
+速度符号面板	mscore/temposymbols.cpp	bool applyPlayableTempoSymbol	58	双击的范围、播放与冲突检查	mtest/mscore/p1native
+速度符号面板	mscore/temposymbols.cpp	bool applyPlayableTempoDrop	66	拖放位置与小节末尾范围	mtest/mscore/p1native

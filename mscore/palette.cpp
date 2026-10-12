@@ -13,6 +13,7 @@
 #include "globals.h"
 #include "musescore.h"
 #include "palette.h"
+#include "temposymbols.h"
 #include "preferences.h"
 #include "scoreaccessibility.h"
 #include "scoreview.h"
@@ -567,6 +568,8 @@ bool Palette::applyPaletteElement(Element* element, Qt::KeyboardModifiers modifi
       if (element == 0)
             return false;
 
+      if (isPlayableTempoSymbol(element))
+            return applyPlayableTempoSymbol(element);
       if (element->isSpanner())
             TourHandler::startTour("spanner-drop-apply");
 

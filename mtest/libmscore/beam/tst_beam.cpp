@@ -139,4 +139,3 @@ void TestBeam::flipBeamStemDir()
       }
 QTEST_MAIN(TestBeam)
 #include "tst_beam.moc"
-

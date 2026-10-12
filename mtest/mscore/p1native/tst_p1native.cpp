@@ -13,6 +13,9 @@
 #include <QLabel>
 #include "mscore/scoreview.h"
 #include "mscore/shortcut.h"
+#include "mscore/temposymbols.h"
+#include "mscore/palette.h"
+#include "mscore/palette/palettetree.h"
 #include "mscore/taptempo/tapmark.h"
 #include "mscore/taptempo/taptempo.h"
 #include "libmscore/tempoexpression.h"
@@ -60,9 +63,11 @@ private slots:
   MScore::noGui=true;noSeq=true;converterMode=true;initMuseScoreResources();initP1Resources();QStringList args;MuseScore::init(args);QVERIFY(mscore);
  }
 #ifdef Q_MOC_RUN
+ void playableTempoPaletteReadAndApply();
  void tapMarkPreviewCancelAndSave();
  void tapMarkRestoreAndRitProtection();
 #else
+#include "tempo_palette_tests.inc"
 #include "tap_mark_tests.inc"
 #endif
  void compatibleSnapshot(){

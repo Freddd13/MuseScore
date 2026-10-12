@@ -13,6 +13,7 @@
 #include "musescore.h"
 #include "continuouspanel.h"
 #include "scoreview.h"
+#include "temposymbols.h"
 #include "tourhandler.h"
 
 #include "libmscore/element.h"
@@ -425,6 +426,12 @@ void ScoreView::dropEvent(QDropEvent* event)
       editData.pos       = pos;
       editData.modifiers = event->keyboardModifiers();
 
+      if (editData.dropElement && isPlayableTempoSymbol(editData.dropElement)) {
+            const bool changed=applyPlayableTempoDrop(editData.dropElement,pos);
+            delete editData.dropElement;editData.dropElement=nullptr;setDropTarget(nullptr);
+            if(changed)event->acceptProposedAction();else event->ignore();
+            if(noteEntryMode())moveCursor();return;
+            }
       if (editData.dropElement) {
             bool firstStaffOnly = false;
             bool applyUserOffset = false;

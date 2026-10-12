@@ -18,6 +18,7 @@
 //=============================================================================
 
 #include "palettetree.h"
+#include "../temposymbols.h"
 
 #include "globals.h"
 #include "musescore.h"
@@ -425,6 +426,7 @@ bool PalettePanel::read(XmlReader& e)
 
       if (_type == Type::Unknown)
             _type = guessType();
+      appendPlayableTempoSymbols(this);
 
       return true;
       }
