@@ -12,9 +12,34 @@ MuseScore {
  id:root
  menuPath:"Plugins.Performance Expression"
  description:"演奏表达：错漏音容错对应、力度与 rubato 的保护候选。"
- version:"1.0.0";requiresScore:true;pluginType:"dock";dockArea:"right"
+ version:"1.1.0";requiresScore:true;pluginType:"dock";dockArea:"right"
  implicitWidth:440;implicitHeight:720
  property var observer:null
+ property var editorContext:null
+ property var audioProject:null
+ property bool auditionAudio:false
+ function publishComparison(){
+  if(!observer||typeof observer.setEditorComparison!=="function"||stale)return;
+  observer.setEditorComparison({revision:revision,result:result,candidate:candidate||{},selectedScoreId:selected>=0&&selected<result.matches.length?result.matches[selected].scoreId:"",scope:scope});
+ }
+ function editorRequest(action,scoreId,midiId){
+  if(stale||busy)return;var index=result.matches.findIndex(function(m){return m.scoreId===scoreId});if(index>=0)selected=index;
+  if(action==="select"){publishComparison();return;}
+  if(action==="confirm"){confirm();return;}
+  if(action==="anchor"){anchor();return;}
+  if(action==="connect"){
+   if(!scoreId||!midiId){status="先在编辑器点一个谱面音和一个演奏音，再连接。";return;}
+   var list=Project.copy(links).filter(function(v){return v.scoreId!==scoreId&&v.midiId!==midiId});list.push({scoreId:scoreId,midiId:midiId});links=list;dirtyProject=true;pendingMatch=scoreId;pendingFeedback="已连接选定的两个音；乐谱没有改变。";runAlignment();return;
+  }
+  if(action==="unlink"){
+   if(index<0)return;var m=result.matches[index],list=Project.copy(links).filter(function(v){return v.scoreId!==scoreId});list.push({scoreId:scoreId,midiId:m.midiId,disabled:true});links=list;dirtyProject=true;pendingFeedback="已解除这对音的对应。";runAlignment();
+  }
+ }
+ onResultChanged:publishComparison()
+ onCandidateChanged:publishComparison()
+ onSelectedChanged:publishComparison()
+ onStatusChanged:{if(editorContext)editorContext.feedback=status}
+ Connections {target:root.editorContext;ignoreUnknownSignals:true;onRequested:root.editorRequest(action,scoreId,midiId)}
  property string workerSource:""
  property var midi:null
  property var scope:({})
@@ -127,9 +152,13 @@ MuseScore {
   if(!workspace){pendingFeedback=useCandidate?"试听拟采用结果":"试听原版";saveDialog.open();status="先选择项目保存位置，试听用的乐谱也放在那里。";return}
   if(typeof observer.previewExpression!=="function"){status="副本试听接口尚不可用";return}
   previewing=true;
-  var r=observer.previewExpression(workspace,useCandidate?candidate:({}),scope);if(r.error){previewing=false;fail(r.error)}else status=r.warning?Messages.readable(r.warning):"正在试听。原谱没有改变；停止后可返回原谱。";
+  var range=Project.copy(scope);
+  if(auditionAudio&&audioProject&&audioProject.available){var settings=audioProject.playbackSettings,track=audioProject.tracks[settings.selectedTrack||0],leader=track&&track.associations[settings.selectedAssociation||0];if(!leader){previewing=false;status="请先在原曲参考中选择一条关联。";return;}range.reference={tracks:audioProject.tracks,leader:leader,mode:settings.mode||0,speed:settings.speed||1,volume:settings.volume===undefined?.5:settings.volume,fade:settings.fade!==false,occurrence:occurrence};}
+  var r=observer.previewExpression(workspace,useCandidate?candidate:({}),range);if(r.error){previewing=false;fail(r.error)}else status=r.warning?Messages.readable(r.warning):"正在试听。原谱没有改变；停止后可返回原谱。";
  }
  onRun:{
+  if(typeof newWorkflowContext==="function")editorContext=newWorkflowContext();
+  if(typeof newReferenceProject==="function")audioProject=newReferenceProject();
   if(typeof newScoreObserver!=="function"){status="需要支持 P1 的 Kumo 版本";return}
   observer=newScoreObserver();observer.score=curScore;
   workerSource=observer.readTextFile(String(Qt.resolvedUrl("Alignment.js")));
@@ -176,7 +205,7 @@ MuseScore {
   GridLayout {
    visible:!root.compact;columns:2;Layout.fillWidth:true
    Desk.DeskComboBox {Layout.fillWidth:true;model:["按谱演奏（允许错漏）","任意音高敲击音序"];currentIndex:root.mode;onActivated:{root.mode=currentIndex;root.candidate=null}}
-   Desk.DeskComboBox {Layout.fillWidth:true;model:["所选声部组","最高音旋律","指定谱表 voice"];currentIndex:root.role;onActivated:{root.role=currentIndex;root.candidate=null}}
+   Desk.DeskComboBox {Layout.fillWidth:true;model:["所选声部组","最高音旋律","指定谱表和声部"];currentIndex:root.role;onActivated:{root.role=currentIndex;root.candidate=null}}
    Desk.DeskSpinBox {visible:root.role===2;from:root.scope.firstTrack||0;to:Math.max(from,(root.scope.endTrack||1)-1);value:root.selectedTrack;onValueModified:root.selectedTrack=value}
    Label {text:"反复第几次（0=全部）";color:theme.muted}
    Desk.DeskSpinBox {from:0;to:99;value:root.occurrence;onValueModified:root.occurrence=value}
@@ -243,6 +272,7 @@ MuseScore {
    Desk.DeskButton {text:"生成拟采用结果";enabled:!root.busy&&!root.stale;onClicked:root.build()}
    Desk.DeskButton {objectName:"expressionOriginalAudition";text:"试听原版";enabled:!root.busy;onClicked:root.audition(false)}
    Desk.DeskButton {text:"试听拟采用结果";enabled:root.candidate!==null&&!root.busy;onClicked:root.audition(true)}
+   CheckBox {text:"试听时播放参考音频";enabled:root.audioProject&&root.audioProject.available;checked:root.auditionAudio;onClicked:root.auditionAudio=checked}
    Desk.DeskButton {objectName:"expressionStop";text:"停止试听";visible:root.previewing;onClicked:root.stopAudition()}
    Desk.DeskButton {text:"差异／应用";enabled:root.candidate!==null;onClicked:changes.open()}
   }

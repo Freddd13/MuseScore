@@ -4,6 +4,7 @@ set (PLUGIN_API_SRC
     ${PROJECT_SOURCE_DIR}/mscore/workflow/paneldock.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/referencefactory.h
     ${PROJECT_SOURCE_DIR}/mscore/workflow/referencefactory.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/referenceworkflow.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/midiinput.h
     ${PROJECT_SOURCE_DIR}/mscore/workflow/midiinput.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/scoreworkflow.cpp

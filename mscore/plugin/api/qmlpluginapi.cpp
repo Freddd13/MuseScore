@@ -22,6 +22,7 @@
 #include "score.h"
 #include "scoreobserver.h"
 #include "mscore/workflow/referencefactory.h"
+#include "mscore/workflow/workflowcontext.h"
 #include "selection.h"
 #include "shortcut.h"
 #include "tie.h"
@@ -265,7 +266,10 @@ void PluginAPI::log2(const QString& txt, const QString& txt2)
 ///   Not enabled currently (so excluded from plugin docs)
 //---------------------------------------------------------
 
-QObject* PluginAPI::newReferenceMedia() { return Ms::createReferenceMedia(this); }
+QObject* PluginAPI::newReferenceMedia() { auto media=Ms::createReferenceMedia(this);media->setProperty("kumoReferenceOwned",true);return media; }
+void PluginAPI::releaseReferenceMedia(QObject* media) { if(media&&media->parent()==this&&media->property("kumoReferenceOwned").toBool())media->deleteLater(); }
+QObject* PluginAPI::newReferenceProject() { return Ms::referenceProject(); }
+QObject* PluginAPI::newWorkflowContext() { return Ms::workflowContext(); }
 
 QObject* PluginAPI::newScoreObserver()
       {

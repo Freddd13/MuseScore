@@ -3366,6 +3366,24 @@ Shortcut Shortcut::_sc[] = {
          QT_TRANSLATE_NOOP("action","Estimate tempo without changing the score"),
          Icons::countin_ICON
          },
+        {
+           MsWidget::MAIN_WINDOW,
+           STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
+           "reference-audio-play",
+           QT_TRANSLATE_NOOP("action","播放／停止选定原曲片段"),
+           QT_TRANSLATE_NOOP("action","播放／停止选定原曲片段"),
+           QT_TRANSLATE_NOOP("action","在原曲参考中选择音轨和片段后，独立播放音频"),
+           Icons::play_ICON
+           },
+        {
+           MsWidget::MAIN_WINDOW,
+           STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
+           "reference-joint-play",
+           QT_TRANSLATE_NOOP("action","联合播放／停止"),
+           QT_TRANSLATE_NOOP("action","联合播放／停止"),
+           QT_TRANSLATE_NOOP("action","按照原曲参考里选定的方式播放乐谱和参加播放的音轨"),
+           Icons::play_ICON
+           },
       {
          MsWidget::MAIN_WINDOW,
          STATE_DISABLED | STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY | STATE_EDIT,

@@ -27,6 +27,7 @@
 #include "preferences.h"
 #include "scoreview.h"
 #include "seq.h"
+#include "workflow/referencebus.h"
 #include "synthcontrol.h"
 
 #include "audio/midi/msynthesizer.h"
@@ -605,7 +606,7 @@ void Seq::guiStop()
       if (!cs)
             return;
 
-      int tck = cs->repeatList().utick2tick(cs->utime2utick(qreal(playFrame) / qreal(MScore::sampleRate)));
+      int tck = cs->repeatList().utick2tick(cs->utime2utick(referenceScoreTime(qreal(playFrame) / qreal(MScore::sampleRate))));
       cs->setPlayPos(Fraction::fromTicks(tck));
       cs->update();
       emit stopped();
@@ -739,7 +740,7 @@ void Seq::processMessages()
                         if (!cs)
                               continue;
                         if (playFrame != 0) {
-                              int utick = cs->utime2utick(qreal(playFrame) / qreal(MScore::sampleRate));
+                              int utick = cs->utime2utick(referenceScoreTime(qreal(playFrame) / qreal(MScore::sampleRate)));
                               cs->tempomap()->setRelTempo(msg.realVal);
                               playFrame = cs->utick2utime(utick) * MScore::sampleRate;
                               if (cachedPrefs.jackTimeBaseMaster && cachedPrefs.useJackTransport)
@@ -1187,6 +1188,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
       float* p = buffer;
 
       processMessages();
+      ReferenceAudioPeriod referencePeriod(buffer,framesPerPeriod,playFrame,state==Transport::PLAY && !inCountIn);
 
       updateIndependentMetronomeFollowState();
 
@@ -1214,6 +1216,9 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
             //
             unsigned framePos = 0; // frame currently being processed relative to the first frame of this call to Seq::process
             int periodEndFrame = *pPlayFrame + framesPerPeriod; // the ending frame (relative to start of playback) of the period being processed by this call to Seq::process
+            const int referenceStopTick=inCountIn?-1:referenceEndTick();
+            const int referenceStopFrame=referenceStopTick<0?-1:int(referenceOutputTime(PlaybackTiming::time(cs,referenceStopTick))*MScore::sampleRate);
+            if(referenceStopFrame>=0)periodEndFrame=qMin(periodEndFrame,referenceStopFrame);
             int scoreEndUTick = cs->repeatList().tick2utick(cs->lastMeasure()->endTick().ticks());
             while (*pPlayPos != pEventsEnd) {
                   int playPosUTick = (*pPlayPos)->first;
@@ -1233,7 +1238,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                               }
                         }
                   else {
-                        qreal playPosSeconds = PlaybackTiming::time(cs, playPosUTick);
+                        qreal playPosSeconds = referenceOutputTime(PlaybackTiming::time(cs, playPosUTick));
                         int playPosFrame = playPosSeconds * MScore::sampleRate;
                         if (playPosFrame >= periodEndFrame)
                               break;
@@ -1342,8 +1347,10 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                   }
             if (framesRemain) {
                   if (cs->playMode() == PlayMode::SYNTHESIZER) {
-                        metronome(framesRemain, p, inCountIn);
-                        _synti->process(framesRemain, p);
+                        const unsigned before=referenceStopFrame<0?framesRemain:unsigned(qBound(0,referenceStopFrame-*pPlayFrame,int(framesRemain)));
+                        if(before){metronome(before,p,inCountIn);_synti->process(before,p);}
+                        if(referenceStopFrame>=0&&*pPlayFrame+int(before)>=referenceStopFrame){stopNotes(-1,true);stopTransport();}
+                        if(before<framesRemain)_synti->process(framesRemain-before,p+before*2);
 
                         independentMetronome(framesRemain, p);
 
@@ -1594,8 +1601,8 @@ void Seq::ensureBufferAsync(int utick)
 
 int Seq::getCurTick()
       {
-      if (_preRollTarget >= 0 && playFrame < PlaybackTiming::time(cs, _preRollTarget) * MScore::sampleRate) return _preRollTarget;
-      return cs->utime2utick(qreal(playFrame) / qreal(MScore::sampleRate));
+      if (_preRollTarget >= 0 && playFrame < referenceOutputTime(PlaybackTiming::time(cs, _preRollTarget)) * MScore::sampleRate) return _preRollTarget;
+      return cs->utime2utick(referenceScoreTime(qreal(playFrame) / qreal(MScore::sampleRate)));
       }
 
 //---------------------------------------------------------
@@ -1631,7 +1638,7 @@ void Seq::setPos(int utick)
 
       int from = _preparedStartTarget == utick ? _preparedStartTick : utick;
       _preRollTarget = from < utick ? utick : -1;
-      playFrame = PlaybackTiming::time(cs, from) * MScore::sampleRate;
+      playFrame = referenceOutputTime(PlaybackTiming::time(cs, from)) * MScore::sampleRate;
       playPos = events.lower_bound(from);
       mutex.unlock();
       }

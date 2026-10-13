@@ -138,7 +138,7 @@ function align(input) {
     });
     usedScore={};usedMidi={};matches.forEach(function(v){usedScore[v.scoreId]=true;usedMidi[v.midiId]=true});
     matches.sort(function(a,b){return (a.original.alignmentTick||a.tick)-(b.original.alignmentTick||b.tick)||a.track-b.track||a.index-b.index});
-    return {matches:matches,missing:score.filter(function(n){return !n.tieBack&&!usedScore[n.id]}),extra:performance.filter(function(n){return !usedMidi[n.id]}),segments:segments,cacheKey:input.cacheKey||"",pending:matches.filter(function(v){return !v.confirmed&&v.confidence<.8}).length,scale:scale};
+    return {matches:matches,displayMatches:matches.slice().sort(function(a,b){return a.tick-b.tick||a.track-b.track||a.index-b.index}),missing:score.filter(function(n){return !n.tieBack&&!usedScore[n.id]}),extra:performance.filter(function(n){return !usedMidi[n.id]}),segments:segments,cacheKey:input.cacheKey||"",pending:matches.filter(function(v){return !v.confirmed&&v.confidence<.8}).length,scale:scale};
 }
 function candidates(input) {
     var result=clone(input.result),config=input.config||{},strength=(config.strength===undefined?50:config.strength)/100,velocity=[],tempos=[],kept=[],confirmed=result.matches.filter(function(m){return m.confirmed||m.confidence>=.8}),unlock=config.unlocked||[];
@@ -199,5 +199,6 @@ function candidates(input) {
         }
     }
     velocity.forEach(function(v){if(v.graceIndex===undefined)delete v.graceIndex});
-    return {revision:input.revision,scope:input.scope,keepDuration:config.keepDuration!==false,velocity:velocity,tempos:tempos,kept:kept,protect:true};
+    var velocityById={};velocity.forEach(function(v){velocityById[v.id]=v});
+    return {revision:input.revision,scope:input.scope,keepDuration:config.keepDuration!==false,velocity:velocity,velocityById:velocityById,tempos:tempos,kept:kept,protect:true};
 }

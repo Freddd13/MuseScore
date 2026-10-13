@@ -33,6 +33,8 @@ class PerformanceCanvas;
 class PerformanceEditor : public QWidget, public MuseScoreView {
       Q_OBJECT
       friend class PerformanceCanvas;
+      friend class WorkflowLanes;
+      QWidget* _workflowPanel=nullptr;
       struct GeneratedVelocity { int base; double factor; };
       struct NoteInfo {
             Note* note;

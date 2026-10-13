@@ -99,6 +99,11 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QString analysisRevision();
       Q_INVOKABLE QVariantMap workflowStatus();
       Q_INVOKABLE QVariantMap stopWorkflowPlayback();
+      Q_INVOKABLE QVariantMap referencePlan(const QVariantMap&);
+      Q_INVOKABLE QVariantMap startReferencePlayback(const QVariantMap&);
+      Q_INVOKABLE QVariantMap stopReferencePlayback();
+      Q_INVOKABLE QVariantMap setEditorComparison(const QVariantMap&);
+      Q_INVOKABLE QVariantMap setReferenceTracks(const QVariantList&);
       Q_INVOKABLE QVariantMap workflowFingerprint(int from,int limit,const QString& expected);
       Q_INVOKABLE QVariantMap returnWorkflowSource();
       Q_INVOKABLE QVariantMap previewExpression(const QString& workspace,const QVariantMap& candidate,const QVariantMap& scope);

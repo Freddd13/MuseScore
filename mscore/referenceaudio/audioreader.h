@@ -16,4 +16,6 @@ public:
 struct Segment {double start=0,end=0,speed=1;bool fade=false;};
 bool stream(const QString&,const Segment&,int,
  const std::function<bool(const float*,int)>&,const std::atomic_bool&,QString*);
+bool streamSequence(const QString&,const std::vector<Segment>&,int,
+ const std::function<bool(const float*,int)>&,const std::atomic_bool&,QString*);
 }

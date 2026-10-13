@@ -125,6 +125,9 @@
 #include "inputrhythmpreference.h"
 #include "inputnotationmenu.h"
 #include "libmscore/inputnotation.h"
+#include "inputnotationmenu.h"
+#include "workflow/referencefactory.h"
+#include "libmscore/inputnotation.h"
 #include "libmscore/scorediff.h"
 #include "libmscore/scoreOrder.h"
 #include "libmscore/segment.h"
@@ -2240,6 +2243,7 @@ MuseScore::MuseScore()
       menuTools->setObjectName("Tools");
 
       menuTools->addAction(getAction("tap-tempo"));
+      addReferenceActions(menuTools);
       menuTools->addAction(getAction("transpose"));
       menuTools->addSeparator();
       menuTools->addAction(getAction("explode"));

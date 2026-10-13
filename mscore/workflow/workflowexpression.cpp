@@ -4,7 +4,11 @@
 #include "mscore/plugin/api/score.h"
 #include "mscore/musescore.h"
 #include "mscore/scoreview.h"
+#include "mscore/scoretab.h"
+#include "libmscore/excerpt.h"
 #include "mscore/seq.h"
+#include "workflowcontext.h"
+#include "referencefactory.h"
 #include "mscore/performanceeditor/parameteredit.h"
 #include "libmscore/chord.h"
 #include "libmscore/note.h"
@@ -120,18 +124,26 @@ QVariantMap ScoreObserver::previewExpression(const QString& workspace,const QVar
  if(!_score||!idle())return {{"error","stop and wait for rendering"}};
  if(!candidate.isEmpty()&&candidate.value("revision").toString()!=analysisRevision())return {{"error","stale preview candidate"}};
  auto origin=_score;_workflowOriginal=origin;
+ int excerptIndex=-1;if(origin!=origin->masterScore()){for(int i=0;i<origin->masterScore()->excerpts().size();++i)if(origin->masterScore()->excerpts()[i]->partScore()==origin)excerptIndex=i;if(excerptIndex<0)return {{"error",tr("找不到这份分谱的来源，请回到总谱后试听。")}};}
  QString folder=QFileInfo(localFile(workspace)).absolutePath(),path=folder+"/expression-"+QUuid::createUuid().toString(QUuid::WithoutBraces)+".mscz";
  auto copied=copyWorkflowScore(path,analysisRevision(),false);if(copied.contains("error"))return copied;
  // Read/apply without selecting the copy; original panel/observer is still attached.
  auto preview=mscore->readScore(path);if(!preview)return {{"error","cannot read preview copy"}};
- PluginAPI::Score wrapped(preview);ScoreObserver local;local.setScore(&wrapped);local._workflowApplyingPreview=true;local.workflowInfo();
+ Ms::Score* previewScore=preview;if(excerptIndex>=0){if(excerptIndex>=preview->excerpts().size()){delete preview;return {{"error",tr("试听副本缺少对应分谱，请重新保存乐谱后再试。")}};}previewScore=preview->excerpts()[excerptIndex]->partScore();}
+ PluginAPI::Score wrapped(previewScore);ScoreObserver local;local.setScore(&wrapped);local._workflowApplyingPreview=true;local.workflowInfo();
  if(!candidate.isEmpty()){auto adjusted=candidate;adjusted["revision"]=local.analysisRevision();auto applied=local.applyExpression(adjusted);
   if(applied.contains("error")){delete preview;return applied;}}
  preview->QObject::setProperty("kumoWorkflowOwned",true);
  if(!candidate.isEmpty()){auto stored=local.copyWorkflowScore(path,local.analysisRevision(),true);if(stored.contains("error")){delete preview;return stored;}}
+ auto media=referenceProject();media->setProperty("expressionPreview",true);
  mscore->setCurrentScoreView(mscore->appendScore(preview));
- auto audition=new ScoreObserver(this);audition->_score=preview;
- auto range=audition->navigateWorkflow(scope,true);
+ if(previewScore!=preview)for(auto tab:mscore->findChildren<ScoreTab*>())if(tab->view()==mscore->currentScoreView()){tab->setCurrentScore(previewScore);break;}
+ workflowContext()->setPreview(origin,previewScore);
+ connect(previewScore,&QObject::destroyed,media,[previewScore,media]{if(workflowContext()->clearPreview(previewScore))media->setProperty("expressionPreview",false);});
+ auto audition=new ScoreObserver(this);audition->_score=previewScore;
+ QVariantMap range;
+ if(scope.contains("reference")){auto request=scope.value("reference").toMap();request["revision"]=audition->analysisRevision();request["start"]=scope.value("start");request["end"]=scope.value("end");auto plan=audition->referencePlan(request);range=plan.contains("error")?plan:audition->startReferencePlayback(plan);}
+ else range=audition->navigateWorkflow(scope,true);
  if(range.contains("error")){range.insert("warning",range.take("error"));range.insert("ok",true);}
  range.insert("path",path);return range;
 }
@@ -139,6 +151,6 @@ QVariantMap ScoreObserver::returnWorkflowSource(){
  if(!_workflowOriginal||!mscore)return {{"error","original score has been closed"}};
  if(seq&&seq->isPlaying())seq->stopWait();if(!idle())return {{"error","waiting for stop/render"}};
  int index=mscore->scores().indexOf(_workflowOriginal->masterScore());if(index<0)return {{"error","original tab no longer available"}};
- mscore->setCurrentScoreView(index);return {{"ok",true}};
+ workflowContext()->clearPreview();referenceProject()->setProperty("expressionPreview",false);mscore->setCurrentScoreView(index);if(mscore->currentScore()!=_workflowOriginal)for(auto tab:mscore->findChildren<ScoreTab*>())if(tab->view()==mscore->currentScoreView()){tab->setCurrentScore(_workflowOriginal);break;}return {{"ok",true}};
 }
 }}

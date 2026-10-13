@@ -237,3 +237,9 @@ MIDI松手	audio/exports/midigate.h	QVector<MidiGateNote> process(	104	受保护
 MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	232	真实秒数、选音、说明和前后占用	mtest/mscore/p0native; HarmonyAssistant/tests/test-context.cjs; ArrangementAssistant/tests/test-rules.cjs
 和弦上下文	share/plugins/HarmonyAssistant/Timeline.js	function evaluate(	96	新低音、残音、级进与相邻解释	mtest/mscore/p0native; HarmonyAssistant/tests/test-context.cjs; ArrangementAssistant/tests/test-rules.cjs
 和弦上下文	share/plugins/HarmonyAssistant/Harmony.js	function detectWeighted(	110	加权模板候选和歧义保留	mtest/mscore/p0native; HarmonyAssistant/tests/test-context.cjs; ArrangementAssistant/tests/test-rules.cjs
+联合音频输出	mscore/workflow/referencebus.cpp	void mixReferenceAudio(	48	准备好的音频和临时时间对应	mtest/mscore/p1native; Repairs/tests/tst_referenceproject.cpp
+多音轨媒体	mscore/referenceaudio/mediaproject.cpp	QVariantMap ReferenceMediaProject::start(	67	固定缓冲、后台处理与整体播放	mtest/mscore/p1native; Repairs/tests/tst_referenceproject.cpp
+连续保调	mscore/referenceaudio/audioreader.cpp	bool streamSequence(	58	连续片段共用处理器，不在内部对应点反复淡入	mtest/mscore/p1native; Repairs/tests/tst_referenceproject.cpp
+联合播放	mscore/workflow/referenceworkflow.cpp	QVariantMap ScoreObserver::referencePlan(	39	三种时间对应、反复出现和进入前文	mtest/mscore/p1native; Repairs/tests/tst_referenceproject.cpp
+编辑器对应	mscore/performanceeditor/workflowlanes.cpp	void WorkflowLanes::paintEvent(	42	可见音轨、对应与数值对比	mtest/mscore/p1native; Repairs/tests/tst_referenceproject.cpp
+共同项目	mscore/workflow/workflowcontext.h	class WorkflowContext	8	乐谱归属、结果更新和操作反馈	mtest/mscore/p1native; Repairs/tests/tst_referenceproject.cpp

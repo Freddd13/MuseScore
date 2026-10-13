@@ -1,5 +1,7 @@
 #include "performanceeditor.h"
 #include "performanceselection.h"
+#include "workflowlanes.h"
+#include "../workflow/workflowcontext.h"
 #include "libmscore/pitchspelling.h"
 #include "libmscore/sig.h"
 #include "libmscore/undo.h"
@@ -216,6 +218,9 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _splitter->restoreState(QSettings().value("performanceEditor/splitter").toByteArray());
       connect(_splitter, &QSplitter::splitterMoved, this, [this] { QSettings().setValue("performanceEditor/splitter", _splitter->saveState()); });
       _scroll = new QScrollBar(Qt::Horizontal, this); layout->addWidget(_scroll);
+      addWorkflowLanes(this,&_workflowPanel,_splitter);_splitter->addWidget(_workflowPanel);_workflowPanel->hide();
+      auto workflowButton=new QToolButton(this);workflowButton->setObjectName("performanceWorkflowToggle");workflowButton->setText(tr("音轨／演奏对应"));workflowButton->setCheckable(true);second->addWidget(workflowButton,second->count()/6,second->count()%6);
+      connect(workflowButton,&QToolButton::toggled,this,[this](bool show){_workflowPanel->setVisible(show);if(show)_splitter->setSizes({150,130,180});});
       _status = new QLabel(this); _status->setWordWrap(true); layout->addWidget(_status);
       _refreshTimer.setSingleShot(true);
       connect(&_refreshTimer, &QTimer::timeout, this, &PerformanceEditor::refresh);
@@ -483,6 +488,11 @@ void PerformanceEditor::updateSelection()
       findChild<QPushButton*>("performanceConvertRelative")->setEnabled(_parameter->currentIndex() == 0 && !_snapshotDegraded);
       findChild<QPushButton*>("performanceConvertAbsolute")->setEnabled(_parameter->currentIndex() == 0 && !_snapshotDegraded);
       updateSurfaces(); status();
+      if(_workflowPanel&&_workflowPanel->isVisible()&&!_selectedIndices.isEmpty()&&workflowContext()->current(_score)){
+            auto selected=_notes[_selectedIndices.front()];auto data=workflowContext()->expression();auto matches=data.value("result").toMap().value("displayMatches").toList();
+            auto it=std::lower_bound(matches.cbegin(),matches.cend(),selected.tick,[](const QVariant& v,int tick){return v.toMap().value("tick").toInt()<tick;});
+            for(;it!=matches.cend()&&it->toMap().value("tick").toInt()==selected.tick;++it){auto m=it->toMap();const auto& notes=selected.note->chord()->notes();int index=m.value("index").toInt();if(m.value("track").toInt()==selected.track&&index>=0&&index<int(notes.size())&&notes[size_t(index)]==selected.note){if(data.value("selectedScoreId")!=m.value("scoreId"))workflowContext()->expressionAction("select",m.value("scoreId").toString(),m.value("midiId").toString());break;}}
+            }
       if (_view && (_handles->isChecked() || _band->isChecked())) {
             _view->update();
             }

@@ -50,6 +50,8 @@ endif (BUILD_TELEMETRY_MODULE)
 
 if (SCRIPT_INTERFACE)
     include(${CMAKE_CURRENT_LIST_DIR}/plugin/plugin.cmake)
+else (SCRIPT_INTERFACE)
+    set(PLUGIN_API_SRC ${CMAKE_CURRENT_LIST_DIR}/workflow/referencefactory.cpp ${CMAKE_CURRENT_LIST_DIR}/workflow/referencefactory.h)
 endif (SCRIPT_INTERFACE)
 
 include(${PROJECT_SOURCE_DIR}/audiodrivers/audiodrivers.cmake)
@@ -255,7 +257,7 @@ add_library(mscoreapp STATIC
       timeline.cpp
       parteditbase.cpp playpanel.cpp selectionwindow.cpp
       measureproperties.cpp
-      seq.cpp textpalette.cpp
+      seq.cpp workflow/referencebus.cpp workflow/referencebus.h workflow/workflowcontext.cpp workflow/workflowcontext.h textpalette.cpp
       timedialog.cpp symboldialog.cpp shortcutcapturedialog.cpp
       radiobuttongroupbox.cpp simplebutton.cpp
       openfilelocation.cpp

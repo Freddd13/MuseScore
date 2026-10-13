@@ -12,6 +12,11 @@
 #include <QComboBox>
 #include <QLabel>
 #include "mscore/scoreview.h"
+#include "mscore/scoretab.h"
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <cmath>
 #include "mscore/shortcut.h"
 #include "mscore/temposymbols.h"
 #include "mscore/palette.h"
@@ -32,6 +37,11 @@
 #include <QCryptographicHash>
 #include "mtest/testutils.h"
 #include "mscore/musescore.h"
+#include "mscore/workflow/referencebus.h"
+#include "mscore/workflow/workflowcontext.h"
+#include "mscore/performanceeditor/performanceeditor.h"
+#include <QToolButton>
+#include <algorithm>
 #include "mscore/plugin/api/score.h"
 #include "mscore/plugin/api/scoreobserver.h"
 #include "libmscore/measure.h"
@@ -45,6 +55,7 @@
 #include "libmscore/excerpt.h"
 #include "libmscore/image.h"
 #include "libmscore/part.h"
+#include "libmscore/select.h"
 #include "libmscore/instrument.h"
 #include "libmscore/pedal.h"
 #include "audio/exports/exportmidi.h"
@@ -229,6 +240,11 @@ private slots:
   QFile g(copy);QVERIFY(g.open(QIODevice::ReadOnly));QCOMPARE(g.readAll(),data);
   QSignalSpy done(&o,&PluginAPI::ScoreObserver::performanceMidiReady);o.readPerformanceMidi(source);QTRY_COMPARE(done.count(),1);QVERIFY(!done[0][1].toMap().contains("error"));
  }
+ void referenceClockAndPlan();
+ void editorCorrespondenceSelection();
+ void multiTrackSaveRestore();
+ void excerptExpressionPreview();
 };
+#include "reference_tests.inc"
 QTEST_MAIN(TestP1Native)
 #include "tst_p1native.moc"

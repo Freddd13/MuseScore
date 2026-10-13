@@ -55,6 +55,22 @@ int Reader::channels()const{return s->compressed?s->mp3.channels:s->info.channel
 qint64 Reader::frames()const{return s->count;}
 qint64 Reader::read(float* b,qint64 n){return s->compressed?drmp3_read_pcm_frames_f32(&s->mp3,n,b):sf_readf_float(s->file,b,n);}
 bool Reader::seek(qint64 n){return s->compressed?bool(drmp3_seek_to_pcm_frame(&s->mp3,n)):sf_seek(s->file,n,SEEK_SET)>=0;}
+bool streamSequence(const QString& path,const std::vector<Segment>& segments,int outputRate,
+ const std::function<bool(const float*,int)>& sink,const std::atomic_bool& cancel,QString* error) {
+ if(segments.empty())return false;Reader reader;if(!reader.open(path,error,&cancel))return false;
+ const int rate=reader.rate(),channels=reader.channels();qint64 target=0,previous=-1;
+ for(auto seg:segments){qint64 begin=std::llround(seg.start*rate/1000),end=std::llround(seg.end*rate/1000);if(begin<0||end>reader.frames()||end<=begin||(previous>=0&&begin!=previous)||seg.speed<.5||seg.speed>1.5)return false;previous=end;target+=std::llround(double(end-begin)*outputRate/(rate*seg.speed));}
+ if(!reader.seek(std::llround(segments.front().start*rate/1000)))return false;
+ soundtouch::SoundTouch stretch;stretch.setChannels(2);stretch.setSampleRate(outputRate);stretch.setRate(double(rate)/outputRate);stretch.setSetting(SETTING_USE_QUICKSEEK,0);
+ std::vector<float> input(256*channels),stereo(512),out(8192);qint64 produced=0;
+ auto drain=[&](){while(!cancel){int count=stretch.receiveSamples(out.data(),4096);if(!count)break;int accepted=int(qMin<qint64>(count,target-produced));if(accepted<=0)break;
+  if(segments.front().fade)for(int f=0;f<accepted;++f){double gain=qMin(1.,qMin(double(produced+f)/qMax(1,outputRate/200),double(target-produced-f)/qMax(1,outputRate/200)));out[f*2]*=float(gain);out[f*2+1]*=float(gain);}
+  if(!sink(out.data(),accepted))return false;produced+=accepted;}return !cancel;};
+ for(auto seg:segments){stretch.setTempo(seg.speed);qint64 remaining=std::llround(seg.end*rate/1000)-std::llround(seg.start*rate/1000);
+  while(remaining>0&&!cancel){qint64 count=reader.read(input.data(),qMin<qint64>(256,remaining));if(count<=0)return false;remaining-=count;for(int f=0;f<count;++f)for(int c=0;c<2;++c)stereo[f*2+c]=input[f*channels+qMin(c,channels-1)];stretch.putSamples(stereo.data(),unsigned(count));if(!drain())return false;}
+ }
+ stretch.flush();return drain()&&!cancel;
+}
 bool stream(const QString& path,const Segment& seg,int outputRate,
  const std::function<bool(const float*,int)>& sink,const std::atomic_bool& cancel,QString* error) {
  Reader reader;if(!reader.open(path,error,&cancel))return false;

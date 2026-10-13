@@ -17,4 +17,6 @@ set(PERFORMANCEEDITOR_SRC
       ${CMAKE_CURRENT_LIST_DIR}/performanceux.cpp
       ${CMAKE_CURRENT_LIST_DIR}/tempocurves.cpp
       ${CMAKE_CURRENT_LIST_DIR}/envelopepreview.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/workflowlanes.h
+      ${CMAKE_CURRENT_LIST_DIR}/workflowlanes.cpp
       )
