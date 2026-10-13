@@ -9,6 +9,7 @@
 #include <QCheckBox>
 #include <QPushButton>
 #include <QDialog>
+#include <QInputDialog>
 #include <QComboBox>
 #include <QLabel>
 #include "mscore/scoreview.h"
@@ -32,6 +33,7 @@
 #include <QDataStream>
 #include <QtMath>
 #include "mscore/workflow/paneldock.h"
+#include "mscore/workflow/regionalpanel.h"
 #include "mscore/plugin/qmlplugin.h"
 #include "mscore/plugin/pluginManager.h"
 #include <QCryptographicHash>
@@ -56,8 +58,13 @@
 #include "libmscore/image.h"
 #include "libmscore/part.h"
 #include "libmscore/select.h"
+#include "libmscore/regionalvariants.h"
+#include "libmscore/spannermap.h"
+#include "thirdparty/qzip/qzipreader_p.h"
+#include "thirdparty/qzip/qzipwriter_p.h"
 #include "libmscore/instrument.h"
 #include "libmscore/pedal.h"
+#include "libmscore/fermata.h"
 #include "audio/exports/exportmidi.h"
 #include "audio/exports/midigatefile.h"
 #include "libmscore/synthesizerstate.h"
@@ -244,7 +251,15 @@ private slots:
  void editorCorrespondenceSelection();
  void multiTrackSaveRestore();
  void excerptExpressionPreview();
+ void regionalSwitchUndoAndSharedSettings();
+ void regionalSaveMainAndRestoreCurrent();
+ void regionalIndependentVoicesExpandImportAndExport();
+ void regionalRejectForeignVoiceAndKeepFile();
+ void regionalPanelMouseOperations();
+ void regionalNotationFixturesAndCrossBoundary();
+ void regionalResourcesLinkedPartsAndManualEvents();
 };
 #include "reference_tests.inc"
+#include "regional_tests.inc"
 QTEST_MAIN(TestP1Native)
 #include "tst_p1native.moc"

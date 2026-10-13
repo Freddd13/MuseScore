@@ -192,6 +192,7 @@ class UndoStack {
       void push1(UndoCommand*);
       void pop();
       void setClean();
+      void clearAfterLoad();
       bool canUndo() const          { return curIdx > 0;           }
       bool canRedo() const          { return curIdx < list.size(); }
       int state() const             { return stateList[curIdx];    }

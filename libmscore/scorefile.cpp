@@ -23,6 +23,8 @@
 #include "mscore.h"
 #include "measure.h"
 #include "revisions.h"
+#include "regionalvariants.h"
+#include <QSaveFile>
 #include "page.h"
 #include "part.h"
 #include "rest.h"
@@ -523,6 +525,13 @@ bool Score::saveCompressedFile(QFileInfo& info, bool onlySelection, bool createT
       {
       if (readOnly() && info == *masterScore()->fileInfo())
             return false;
+      if(!onlySelection&&isMaster()&&RegionalVariants::active(this)&&!RegionalVariants::writing()){
+            QSaveFile file(info.filePath());
+            if(!file.open(QIODevice::WriteOnly)){MScore::lastError=tr("不能打开方案保存位置：%1").arg(file.errorString());return false;}
+            if(!saveCompressedFile(&file,info.completeBaseName()+".mscx",false,createThumbnail))return false;
+            if(!file.commit()){MScore::lastError=tr("方案未能保存，原文件保留：%1").arg(file.errorString());return false;}
+            return true;
+            }
       QFile fp(info.filePath());
       if (!fp.open(QIODevice::WriteOnly)) {
             MScore::lastError = tr("Open File\n%1\nfailed: %2").arg(info.filePath(), strerror(errno));
@@ -582,6 +591,7 @@ QImage Score::createThumbnail()
 
 bool Score::saveCompressedFile(QIODevice* f, const QString& fn, bool onlySelection, bool doCreateThumbnail)
       {
+      if(!onlySelection&&isMaster()&&RegionalVariants::active(this)&&!RegionalVariants::writing())return RegionalVariants::save(this,f,fn,doCreateThumbnail);
       MQZipWriter uz(f);
 
       QBuffer cbuf;
@@ -675,6 +685,7 @@ bool Score::saveCompressedFile(QIODevice* f, const QString& fn, bool onlySelecti
 
 bool Score::saveFile(QFileInfo& info)
       {
+      if(!RegionalVariants::writing()&&RegionalVariants::active(this)){MScore::lastError=tr("这份乐谱含有分段方案，请保存为MSCZ。只要当前写法时，请用分段方案面板导出普通版副本。");return false;}
       if (readOnly() && info == *masterScore()->fileInfo())
             return false;
       if (info.suffix().isEmpty())
@@ -749,6 +760,7 @@ extern QString revision;
 
 bool Score::saveFile(QIODevice* f, bool msczFormat, bool onlySelection)
       {
+      if(!msczFormat&&!onlySelection&&!RegionalVariants::writing()&&RegionalVariants::active(this)){MScore::lastError=tr("请用MSCZ保存全部分段方案，或导出普通版副本。");return false;}
       XmlWriter xml(this, f);
       xml.setWriteOmr(msczFormat);
       xml.header();
@@ -884,6 +896,13 @@ Score::FileError MasterScore::loadCompressedMsc(QIODevice* io, bool ignoreVersio
       e.setDocName(masterScore()->fileInfo()->completeBaseName());
 
       FileError retval = read1(e, ignoreVersionError);
+      if(retval==FileError::FILE_NO_ERROR&&!RegionalVariants::writing()){
+            for(auto item:uz.fileInfoList())if(item.filePath=="Kumo/variants/index.json"){
+                  if(item.size>64*1024*1024){MScore::lastError=tr("方案材料过大，主乐谱没有被修改。");return FileError::FILE_BAD_FORMAT;}
+                  QString problem;if(!RegionalVariants::restore(this,uz.fileData(item.filePath),&problem)){MScore::lastError=problem;return FileError::FILE_BAD_FORMAT;}
+                  break;
+                  }
+            }
 
       QByteArray vbuf = uz.fileData("viewsettings.json"); // exists in Mu4 scores only
       if (!vbuf.isEmpty() && ignoreVersionError) {

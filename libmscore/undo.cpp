@@ -256,6 +256,14 @@ UndoStack::~UndoStack()
             c->cleanup(idx++ < curIdx);
       qDeleteAll(list);
       }
+void UndoStack::clearAfterLoad()
+      {
+      Q_ASSERT(!curCmd);
+      if(curCmd)return;
+      remove(0);
+      stateList.clear();stateList.push_back(0);
+      curIdx=0;cleanState=0;nextState=1;
+      }
 
 //---------------------------------------------------------
 //   beginMacro

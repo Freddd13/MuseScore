@@ -127,6 +127,7 @@
 #include "libmscore/inputnotation.h"
 #include "inputnotationmenu.h"
 #include "workflow/referencefactory.h"
+#include "workflow/regionalpanel.h"
 #include "libmscore/inputnotation.h"
 #include "libmscore/scorediff.h"
 #include "libmscore/scoreOrder.h"
@@ -2244,6 +2245,9 @@ MuseScore::MuseScore()
 
       menuTools->addAction(getAction("tap-tempo"));
       addReferenceActions(menuTools);
+#ifdef SCRIPT_INTERFACE
+      addRegionalVariantAction(menuTools);
+#endif
       menuTools->addAction(getAction("transpose"));
       menuTools->addSeparator();
       menuTools->addAction(getAction("explode"));
@@ -6867,6 +6871,9 @@ void MuseScore::cmd(QAction* a)
       MScore::setError(MS_NO_ERROR);
 
       QString cmdn(a->data().toString());
+#ifdef SCRIPT_INTERFACE
+      if(cmdn=="regional-variants"){showRegionalVariantPanel();return;}
+#endif
 
       if (MScore::debugMode)
             qDebug("MuseScore::cmd <%s>", qPrintable(cmdn));

@@ -11,14 +11,14 @@ MuseScore {
     property string preferredPanelGroup: "rightTools"
  id:root
  menuPath:"Plugins.Arrangement Variants";description:"试写方案：独立完整谱副本、原生标签页切换、范围比较和试听。"
- version:"1.0.0";requiresScore:true;pluginType:"dock";dockArea:"right";implicitWidth:400;implicitHeight:560
+ version:"1.1.0";requiresScore:true;pluginType:"dock";dockArea:"right";implicitWidth:400;implicitHeight:560
  property var observer:null
  property string workspace:""
  property var groups:[]
  property int groupIndex:-1
  property int selected:0
  property var currentInfo:({})
- property string status:"选择谱段并新建组；原谱与方案隔离"
+ property string status:"这里管理旧版完整副本。新编配可打开内置分段方案。"
  property bool busy:false
  property bool switching:false
  property bool pendingGroup:false
@@ -100,6 +100,7 @@ MuseScore {
  Rectangle {anchors.fill:parent;color:theme.background}
  ColumnLayout {anchors.fill:parent;anchors.margins:8;spacing:6
   RowLayout {Layout.fillWidth:true;Label {text:"试写方案";font.bold:true;color:theme.text}Item {Layout.fillWidth:true}
+   Desk.DeskButton {text:"内置分段方案";onClicked:root.cmd("regional-variants")}
    Desk.DeskButton {text:"新建组";enabled:!root.busy;onClicked:root.newGroup()}
    Desk.DeskButton {text:"项目";onClicked:projectMenu.open()}
    Desk.DeskButton {text:"悬浮";onClicked:if(typeof root.setPanelFloating==="function")root.setPanelFloating(!root.panelFloating)}

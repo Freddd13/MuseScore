@@ -243,3 +243,6 @@ MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	232	�
 联合播放	mscore/workflow/referenceworkflow.cpp	QVariantMap ScoreObserver::referencePlan(	39	三种时间对应、反复出现和进入前文	mtest/mscore/p1native; Repairs/tests/tst_referenceproject.cpp
 编辑器对应	mscore/performanceeditor/workflowlanes.cpp	void WorkflowLanes::paintEvent(	42	可见音轨、对应与数值对比	mtest/mscore/p1native; Repairs/tests/tst_referenceproject.cpp
 共同项目	mscore/workflow/workflowcontext.h	class WorkflowContext	8	乐谱归属、结果更新和操作反馈	mtest/mscore/p1native; Repairs/tests/tst_referenceproject.cpp
+分段方案	libmscore/regionalvariants.cpp	QVariantMap select(	597	压缩写法、声部范围、原生撤销和连线保护	mtest/mscore/p1native/regional_tests.inc
+方案保存	libmscore/regionalvariants.cpp	bool save(	674	普通主方案入口和本分支当前组合恢复	mtest/mscore/p1native/regional_tests.inc
+方案面板	mscore/workflow/regionalpanel.cpp	void showRegionalVariantPanel(	526	菜单、停靠、复制切换、旧文件和普通版导出	mtest/mscore/p1native/regional_tests.inc

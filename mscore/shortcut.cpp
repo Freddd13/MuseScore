@@ -3384,6 +3384,15 @@ Shortcut Shortcut::_sc[] = {
            QT_TRANSLATE_NOOP("action","按照原曲参考里选定的方式播放乐谱和参加播放的音轨"),
            Icons::play_ICON
            },
+        {
+           MsWidget::MAIN_WINDOW,
+           STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
+           "regional-variants",
+           QT_TRANSLATE_NOOP("action","分段试写方案"),
+           QT_TRANSLATE_NOOP("action","分段试写方案"),
+           QT_TRANSLATE_NOOP("action","在一个MSCZ中保留不同小节和声部的多种写法"),
+           Icons::play_ICON
+           },
       {
          MsWidget::MAIN_WINDOW,
          STATE_DISABLED | STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY | STATE_EDIT,
