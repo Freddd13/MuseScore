@@ -21,6 +21,7 @@
 
 #include "menus.h"
 #include "temposymbols.h"
+#include "handbracketsettings.h"
 #include "musescore.h"
 #include "palette.h"
 #include "scoreview.h"
@@ -832,10 +833,12 @@ PalettePanel* MuseScore::newFingeringPalettePanel()
             Articulation* s = new Articulation(i, gscore);
             sp->append(s, s->userName());
             }
+      loadHandBracketDefaults();
       for (auto id : {SymId::keyboardPlayWithLH,SymId::keyboardPlayWithRH}) {
             auto symbol=new Symbol(gscore);symbol->setSym(id);symbol->applyHandPreset();
-            sp->append(symbol,id==SymId::keyboardPlayWithLH ? QT_TRANSLATE_NOOP("Palette", "左手弹（可伸缩）") : QT_TRANSLATE_NOOP("Palette", "右手弹（可伸缩）"));
+            sp->append(symbol,id==SymId::keyboardPlayWithLH ? QT_TRANSLATE_NOOP("Palette", "左手弹（可伸缩）") : QT_TRANSLATE_NOOP("Palette", "右手弹（可伸缩）"),QString(),.65);
             }
+      completeHandBracketPalette(sp);
       return sp;
       }
 

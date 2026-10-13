@@ -21,6 +21,7 @@
 #include "staff.h"
 #include "system.h"
 #include "symbol.h"
+#include "handbracket.h"
 #include "sym.h"
 #include "xml.h"
 
@@ -46,6 +47,7 @@ Symbol::Symbol(const Symbol& s)
       _handH = s._handH;
       _handV = s._handV;
       _handWidth = s._handWidth;
+      _handBase=s._handBase;_handBaseValid=s._handBaseValid;_handLegacyAnchor=s._handLegacyAnchor;_handGeometryEdited=s._handGeometryEdited;
       }
 
 //---------------------------------------------------------
@@ -92,8 +94,9 @@ bool Symbol::handEnd() const
 void Symbol::applyHandPreset()
       {
       if (!handEligible()) return;
-      _handMode = true; _handH = handEnd() ? -2 : 2; _handV = -1;
-      _handWidth = .12; _handText = false;
+      const auto style=HandBracket::defaults(_sym);
+      _handMode=true;_handH=style.horizontal;_handV=style.vertical;_handWidth=style.width;_handText=style.text;
+      _handBaseValid=false;_handLegacyAnchor=false;_handGeometryEdited=false;
       }
 
 Segment* Symbol::segment() const
@@ -135,7 +138,7 @@ QRectF Symbol::handTextRect() const
 Shape Symbol::shape() const
       {
       if (!handBracket()) return BSymbol::shape();
-      const qreal unit = spatium() * mag(), pad = (_handWidth / 2 + .12) * unit;
+      const qreal unit = spatium() * mag(), pad = (_handWidth / 2 + .25) * unit;
       const qreal x = _handH * unit, y = _handV * unit, corner = handLeft() ? y : 0;
       Shape result;
       result.add(QRectF(-pad,qMin(qreal(0),y)-pad,2*pad,std::abs(y)+2*pad));
@@ -203,10 +206,14 @@ void Symbol::layout()
             stroke.setJoinStyle(Qt::MiterJoin); stroke.setCapStyle(Qt::SquareCap);
             QRectF box=stroke.createStroke(handPath()).boundingRect();
             if (_handText) box |= handTextRect(); setbbox(box);
-            QPointF position;
-            if (parent() && (parent()->isNote() || parent()->isChord())) {
-                  position.setX(-2.5 * spatium() * mag());
-                  if (parent()->isChord()) position += toChord(parent())->downNote()->pos();
+            const double unit=spatium()*mag();QPointF position;
+            if(parent() && (parent()->isNote() || parent()->isChord())) {
+                  if(_handBaseValid && (!offset().isNull() || !autoplace() || _handGeometryEdited))position=_handBase*unit;
+                  else if(_handLegacyAnchor && (!offset().isNull() || _handGeometryEdited)) {
+                        position=QPointF(-2.5*unit,0);if(parent()->isChord())position+=toChord(parent())->downNote()->pos();
+                        }
+                  else position=HandBracket::position(this);
+                  if(unit>0){_handBase=position/unit;_handBaseValid=true;}
                   }
             setPos(position); return;
             }
@@ -263,6 +270,7 @@ void Symbol::write(XmlWriter& xml) const
             xml.tag("font", _scoreFont->name());
       for (Pid id : {Pid::HAND_BRACKET_MODE,Pid::HAND_BRACKET_H,Pid::HAND_BRACKET_V,Pid::HAND_BRACKET_WIDTH,Pid::HAND_BRACKET_TEXT})
             writeProperty(xml,id);
+      if(handBracket() && _handBaseValid && (!offset().isNull() || !autoplace() || _handGeometryEdited))xml.tag("handAnchor",_handBase);
       BSymbol::writeProperties(xml);
       xml.etag();
       }
@@ -293,6 +301,9 @@ void Symbol::read(XmlReader& e)
                         }
                   setSym(symId);
                   }
+            else if (tag == "handAnchor") {
+                  const auto point=e.readPoint();if(std::isfinite(point.x()) && std::isfinite(point.y()) && std::abs(point.x())<=100 && std::abs(point.y())<=100) {_handBase=point;_handBaseValid=true;_handGeometryEdited=true;}
+                  }
             else if (tag == "font")
                   _scoreFont = ScoreFont::fontFactory(e.readElementText());
             else if (tag == "Symbol") {
@@ -319,6 +330,7 @@ void Symbol::read(XmlReader& e)
             else if (!BSymbol::readProperties(e))
                   e.unknown();
             }
+      _handLegacyAnchor=!_handBaseValid;
       setPos(pos);
       }
 
@@ -348,6 +360,7 @@ QVariant Symbol::getProperty(Pid propertyId) const
 
 bool Symbol::setProperty(Pid id, const QVariant& value)
       {
+      if(id==Pid::AUTOPLACE && value.toBool())_handGeometryEdited=false;
       const qreal number=value.toDouble();
       switch (id) {
             case Pid::HAND_BRACKET_MODE: _handMode=value.toBool();break;
@@ -355,6 +368,7 @@ bool Symbol::setProperty(Pid id, const QVariant& value)
             case Pid::HAND_BRACKET_H:
             case Pid::HAND_BRACKET_V:
                   if (!std::isfinite(number) || std::abs(number)>40) return false;
+                  if(number!=getProperty(id).toDouble())_handGeometryEdited=true;
                   if (id==Pid::HAND_BRACKET_H) _handH=number; else _handV=number;
                   break;
             case Pid::HAND_BRACKET_WIDTH:

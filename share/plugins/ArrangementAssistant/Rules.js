@@ -64,21 +64,33 @@ function handFor(s,n,tick) {
     var role=null;for(var i=0;i<s.roles.length;++i)if(s.roles[i].track===n.track)role=s.roles[i];
     var assigned=s.config.roles[String(n.track)];
     if(assigned && (assigned.hand==="left" || assigned.hand==="right"))return {hand:assigned.hand,source:"用户指定"};
-    var marks=s.data.hands||[],candidates=[],unpaired=false;
+    var marks=s.data.hands||[],candidates=[],uncertain=false;
+    function side(m) {return m.hand==="left" || m.left===true ? "left":"right";}
+    function isEnd(m) {return m.marker==="end" || m.end===true;}
+    function attached(m,n) {return m.index<0 || m.index===undefined || m.index===(n.attackIndex===undefined?n.index:n.attackIndex);}
     for(var i=0;i<marks.length;++i) {
-        var m=marks[i];if(m.track!==n.track)continue;
-        if(!m.bracket && m.tick===n.tick && (m.index<0 || m.index===n.index))candidates.push(m.left?"left":"right");
-        if(m.bracket && !m.end && m.tick<=tick) {
-            var endpoint=null;
-            for(var j=i+1;j<marks.length;++j)if(marks[j].track===m.track && marks[j].end && marks[j].left===m.left && marks[j].tick>=m.tick) {endpoint=marks[j];break;}
-            if(!endpoint)unpaired=true;
-            else if(tick<=endpoint.tick)candidates.push(m.left?"left":"right");
+        var m=marks[i];if(m.track!==n.track || isEnd(m))continue;
+        var endpoint=null;
+        for(var j=i+1;j<marks.length;++j) {
+            var next=marks[j];if(next.track!==m.track || side(next)!==side(m) || next.tick<m.tick)continue;
+            if(!isEnd(next))break;
+            endpoint=next;break;
         }
+        // Shape does not define musical scope. An unpaired mark identifies only its attached onset.
+        if(!endpoint) {
+            if(m.tick===n.attackTick && attached(m,n))candidates.push(side(m));
+            continue;
+        }
+        if(tick<m.tick || tick>endpoint.tick)continue;
+        if(tick===m.tick && !attached(m,n) || tick===endpoint.tick && !attached(endpoint,n))continue;
+        var group=(s.byTrack[n.track]||{})[n.attackTick]||[];
+        if(m.index>=0 && endpoint.index>=0 && group.length>1 && tick>m.tick && tick<endpoint.tick)uncertain=true;
+        else candidates.push(side(m));
     }
     var left=candidates.indexOf("left")>=0,right=candidates.indexOf("right")>=0;
     if(left && right)return {hand:"auto",source:"分手符号冲突，待确认"};
     if(left || right)return {hand:left?"left":"right",source:"分手符号"};
-    if(unpaired)return {hand:"auto",source:"分手范围缺少结束点，待确认"};
+    if(uncertain)return {hand:"auto",source:"分手标记之间有多个同时音，请确认所指声部"};
     return {hand:role && role.hand!=="auto"?role.hand:Math.floor(n.track/4)>Math.floor(s.data.scope.firstTrack/4)?"left":"right",source:"自动推断"};
 }
 function chordAt(s,tick) {
@@ -152,9 +164,9 @@ function counterpoint(s,frame) {
         if(!a.role.independent || !b.role.independent || a.role.uncertain || b.role.uncertain || !prev)continue;
         if(a.note.pitch===b.note.pitch && a.note.attackTick===b.note.attackTick)continue;
         var da=a.note.pitch-prev.a.pitch,db=b.note.pitch-prev.b.pitch;
-        if(!da || !db)continue;
+        if(a.note.attackTick===prev.a.attackTick && b.note.attackTick===prev.b.attackTick)continue;
         var before=perfect(prev.a,prev.b),after=perfect(a.note,b.note);
-        if(ruleEnabled(s.config,"parallel") && da*db>0 && before && before===after)issue(s,"counterpoint","parallel-"+after,tick,[a.note,b.note],"独立声部平行"+(after===5?"五度":"八度"),"前后均为拼写明确的纯音程；两个声部同向移动。"+(a.role.source==="自动推断"?"声部来自自动推断，可在角色设置中改为加倍。":""),s.config.style===1?"需核查":"注意");
+        if(ruleEnabled(s.config,"parallel") && da*db>0 && before && before===after)issue(s,"counterpoint","parallel-"+after,tick,[a.note,b.note],"独立声部平行"+(after===5?"五度":"八度"),"前一组："+Harmony.spelledName(prev.a.tpc,prev.a.pitch,false)+" / "+Harmony.spelledName(prev.b.tpc,prev.b.pitch,false)+"；当前："+Harmony.spelledName(a.note.tpc,a.note.pitch,false)+" / "+Harmony.spelledName(b.note.tpc,b.note.pitch,false)+"。前后均为拼写明确的纯音程；两个声部同向移动。"+(a.role.source==="自动推断"?"声部来自自动推断，可在角色设置中改为加倍。":""),s.config.style===1?"需核查":"注意");
         if(ruleEnabled(s.config,"crossing") && (prev.a.pitch-prev.b.pitch)*(a.note.pitch-b.note.pitch)<0)issue(s,"counterpoint","crossing",tick,[a.note,b.note],"声部发生交叉","前后上下位置互换；交叉可能是预期效果。","注意");
         else if(ruleEnabled(s.config,"overlap") && (a.note.pitch<prev.b.pitch && prev.a.pitch>prev.b.pitch || b.note.pitch>prev.a.pitch && prev.b.pitch<prev.a.pitch))
             issue(s,"counterpoint","overlap",tick,[a.note,b.note],"相邻位置出现声部重叠","一个声部进入另一声部先前占用的音区。","提示");
@@ -166,7 +178,7 @@ function counterpoint(s,frame) {
     for(i=0;i<lines.length;++i) {
         var line=lines[i],previous=s.previousLines[line.role.track];
         if(ruleEnabled(s.config,"leaps") && previous && previous.attackTick!==line.note.attackTick && Math.abs(previous.pitch-line.note.pitch)>12)
-            issue(s,"counterpoint","leap",tick,[line.note],"声部出现大跳","跳跃 "+Math.abs(previous.pitch-line.note.pitch)+" 半音；可核对后续方向及旋律意图。","提示");
+            issue(s,"counterpoint","leap",tick,[previous,line.note],"声部出现大跳","跳跃 "+Math.abs(previous.pitch-line.note.pitch)+" 半音；可核对后续方向及旋律意图。","提示");
         if(previous && previous.attackTick!==line.note.attackTick && s.config.tonic>=0 && ruleEnabled(s.config,"resolution") && Harmony.mod12(previous.pitch-s.config.tonic)===11 && line.note.pitch-previous.pitch!==1)
             issue(s,"counterpoint","resolution",tick,[line.note],"已确认调性下的导音去向", "用户已确认主音；导音未上行半音至主音。可能是有意离调或下行线条，请核对。",s.config.style===1?"注意":"提示");
         s.previousLines[line.role.track]=line.note;

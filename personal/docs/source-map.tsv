@@ -225,3 +225,7 @@ MIDI导出	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::voiceSelection	188	�
 速度符号面板	mscore/temposymbols.cpp	bool applyPlayableTempoDrop	66	拖放位置与小节末尾范围	mtest/mscore/p1native
 自由圆滑线	libmscore/freesluravoidance.cpp	AvoidanceResult avoid(	87	限次曲线候选、碰撞检查与锁定点保护	mtest/mscore/performanceeditor
 自由圆滑线	libmscore/freeslur.cpp	bool SlurSegment::displayedFreeNode(double	223	从当前显示位置添加和锁定节点	mtest/mscore/performanceeditor
+分手标记	libmscore/handbracket.cpp	QPointF position(	37	附着音附近的有限位置候选与碰撞检查	mtest/mscore/performanceeditor; ArrangementAssistant/tests/test-rules.cjs
+分手标记	mscore/handbracketsettings.cpp	void addHandBracketDefaultControls(	23	四种个人默认形状、设置读写与面板按钮	mtest/mscore/performanceeditor; ArrangementAssistant/tests/test-rules.cjs
+分手标记	mscore/handbracketsettings.cpp	void completeHandBracketPalette(	42	四种格子补齐与缩小显示	mtest/mscore/performanceeditor; ArrangementAssistant/tests/test-rules.cjs
+分手标记	mscore/plugin/api/arrangementsnapshot.cpp	auto handData	81	完整分手含义与附着音信息	mtest/mscore/performanceeditor; ArrangementAssistant/tests/test-rules.cjs

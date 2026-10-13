@@ -35,6 +35,9 @@ class Symbol : public BSymbol {
       bool _handMode = false, _handText = false, _handDragging = false;
       qreal _handH = 2, _handV = -1, _handWidth = .12;
       QPointF _handDragOriginal;
+      QPointF _handBase;
+      bool _handBaseValid=false,_handLegacyAnchor=false;
+      bool _handGeometryEdited=false;
       QPainterPath handPath() const;
       QFont handFont() const;
       QPointF handTextPosition() const;

@@ -81,7 +81,10 @@ QVariantMap ScoreObserver::analysisRange(int start,int end,int firstTrack,int en
       auto handData=[&](const ElementList& list,int tick,int track,int index) {
             for(const auto e:list)if(e->isSymbol()) {
                   const auto symbol=toSymbol(e);if(!symbol->handEligible())continue;
-                  hands.append(QVariantMap{{"tick",tick},{"track",track},{"index",index},{"left",symbol->handLeft()},{"end",symbol->handEnd()},{"bracket",symbol->handBracket()}});
+                  QVariantMap row{{"tick",tick},{"track",track},{"index",index},{"left",symbol->handLeft()},{"end",symbol->handEnd()},{"bracket",symbol->handBracket()},
+                        {"hand",symbol->handLeft()?"left":"right"},{"marker",symbol->handEnd()?"end":"start"},{"attached",index>=0?"note":"chord"}};
+                  if(index>=0 && symbol->parent() && symbol->parent()->isNote())row.insert("pitch",toNote(symbol->parent())->pitch());
+                  hands.append(row);
                   }
             };
       while(segment && segment->tick().ticks()<end) {

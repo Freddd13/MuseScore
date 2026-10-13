@@ -455,7 +455,7 @@ void TempoText::layout()
 
       // tempo text on first chordrest of measure should align over time sig if present
       //
-      if (autoplace() && s->rtick().isZero()) {
+      if (autoplace() && restoreMode()==0 && s->rtick().isZero()) {
             Segment* p = segment()->prev(SegmentType::TimeSig);
             if (p) {
                   rxpos() -= s->x() - p->x();

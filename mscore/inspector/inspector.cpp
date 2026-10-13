@@ -16,6 +16,7 @@
 #include "../taptempo/tapmark.h"
 #include "envelopeinspector.h"
 #include "freeslurinspector.h"
+#include "../handbracketsettings.h"
 #include "libmscore/symbol.h"
 #include "../performanceeditor/performanceeditor.h"
 
@@ -1468,6 +1469,7 @@ InspectorHandSymbol::InspectorHandSymbol(QWidget* parent)
                   }
             });
       auto hint=new QLabel(tr("正数向右／向下，负数向左／向上。双击记号后分别拖动横、竖端点；拖动整个记号改变偏移。数字名称可拖动，Shift精调、Esc取消。关闭折线模式恢复原字形。"),host);hint->setWordWrap(true);grid->addWidget(hint,4,0,1,3);
+      addHandBracketDefaultControls(host,grid,inspector);
       mapSignals({h,v,width,{Pid::HAND_BRACKET_MODE,0,_mode,nullptr},{Pid::HAND_BRACKET_TEXT,0,text,nullptr}},{});
       }
 

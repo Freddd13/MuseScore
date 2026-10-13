@@ -1,3 +1,5 @@
+#include "libmscore/handbracket.h"
+#include "mscore/handbracketsettings.h"
 #include <QStackedWidget>
 #include <QtTest/QtTest>
 #include <QTemporaryDir>
@@ -834,6 +836,8 @@ class TestPerformanceEditor : public QObject, public MTest {
 #endif
       void accentInspectorAndNativeDefault();
       void handSymbolModelAndPersistence();
+      void handSymbolPlacementAndDefaults();
+      void restoredTempoLayout();
       void handSymbolInspectorAndGrips();
       void freeSlurModelAndReflow();
       void freeSlurAutomaticGeometry();
