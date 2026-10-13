@@ -18,21 +18,22 @@ function bass(notes, tick) {
     var pool=sounding.length?sounding:notes;
     return pool.length?pool.reduce(function(a,b){return a.pitch<=b.pitch?a:b;}):null;
 }
-function describe(result, notes, tick, tonic, minor) {
-    var out=clone(result), b=bass(notes,tick), flats=[1,3,5,8,10].indexOf(tonic)>=0;
+function describe(result, notes, tick, tonic, minor, degreeMode, preferFlats) {
+    var out=clone(result), b=bass(notes,tick), flats=typeof preferFlats==="boolean"?preferFlats:[1,3,5,8,10].indexOf(tonic)>=0;
     out.bass=b?Harmony.mod12(b.pitch):-1;out.bassTpc=b?b.tpc:-1;
-    out.chord="";out.degree="";out.tonic=tonic;out.minor=minor;
+    out.chord="";out.degree="";out.tonic=tonic;out.minor=minor;out.inversion="未指定和弦";
     if(out.root>=0) {
         var rootNote=null;
         for(var i=0;i<notes.length;++i)if(Harmony.mod12(notes[i].pitch)===out.root){rootNote=notes[i];break;}
-        out.chord=(rootNote?Harmony.spelledName(rootNote.tpc,rootNote.pitch,flats):Harmony.pcName(out.root,flats))+Harmony.defs[out.definition].suffix;
+        out.chord=(out.rootSpelling|| (rootNote?Harmony.spelledName(rootNote.tpc,rootNote.pitch,flats):Harmony.pcName(out.root,flats)))+Harmony.defs[out.definition].suffix;
         if(b && out.bass!==out.root)out.chord+="/"+Harmony.spelledName(b.tpc,b.pitch,flats);
-        out.degree=Harmony.roman(tonic,minor,out.root,out.definition);
+        out.degree=Harmony.roman(tonic,minor,out.root,out.definition,degreeMode);
+        out.inversion=b?Harmony.inversion(Harmony.labelFor(out.bass,out.root,out.definition)):"低音未确定";
     }
     out.chromatic=Harmony.isChromatic(tonic,minor,out.root,out.definition);
     return out;
 }
-function signature(r) {return [r.root,r.definition,r.bass,r.tonic,r.minor].join(":");}
+function signature(r) {return [r.root,r.definition,r.bass,r.tonic,r.minor,r.chord,r.degree].join(":");}
 function partsFor(frame, fallback) {return frame.parts && frame.parts.length?frame.parts:[{startTrack:fallback,endTrack:1024}];}
 function tonicAt(frame, config) {
     if(config.manualKey)return Harmony.rootPcs[config.keyTonic];
@@ -46,7 +47,30 @@ function pedalAt(frame, part) {
 }
 function createBuilder(frames, config, fallbackPart) {
     return {frames:frames,config:clone(config),fallbackPart:fallbackPart,byPart:{},keys:[],
-        evidence:{},pedalResults:{},regions:[],phase:0,frameIndex:0,partIndex:0,rowIndex:0,previous:null,current:null};
+        evidence:{},pedalResults:{},ornaments:{},regions:[],phase:0,frameIndex:0,partIndex:0,rowIndex:0,previous:null,current:null};
+}
+function ornament(state,row,key,note) {
+    var onset=note.attackTick===undefined?note.tick:note.attackTick;
+    if(note.end===undefined || note.end-onset>480)return false;
+    var id=key+":"+note.track+":"+onset+":"+note.pitch;
+    if(state.ornaments[id]!==undefined)return state.ornaments[id];
+    var rows=state.byPart[key],lo=0,hi=rows.length;
+    while(lo<hi){var mid=(lo+hi)>>1;if(rows[mid].start<=onset)lo=mid+1;else hi=mid;}
+    var origin=Math.max(0,lo-1);
+    function adjacent(direction) {
+        for(var i=origin+direction,count=0;i>=0 && i<rows.length && count<4;i+=direction,++count) {
+            if(Math.abs(rows[i].start-onset)>960)break;
+            var attacks=rows[i].notes.filter(function(n){return n.track===note.track && (n.attackTick===undefined?n.tick:n.attackTick)===rows[i].start;});
+            if(attacks.length)return attacks.length===1?attacks[0]:null;
+        }
+        return null;
+    }
+    var before=adjacent(-1),after=adjacent(1),yes=false;
+    if(before && after) {
+        var into=note.pitch-before.pitch,out=after.pitch-note.pitch;
+        yes=into!==0 && out!==0 && Math.abs(into)<=2 && Math.abs(out)<=2 && (into*out>0 || before.pitch===after.pitch);
+    }
+    state.ornaments[id]=yes;return yes;
 }
 function ingest(state, frame, end) {
     var parts=partsFor(frame,state.fallbackPart);
@@ -71,13 +95,15 @@ function ingest(state, frame, end) {
 }
 function evaluate(state, row, key) {
     var config=state.config,tonic=tonicAt(row.frame,config),window=row.pedal,result;
+    var keyName=Harmony.rootNames[config.keyTonic]||Harmony.pcName(tonic,false),flats=config.manualKey?
+        keyName.indexOf("♭")>=0 || keyName.indexOf("♯")<0 && (config.keyMode===1?[0,2,5,7].indexOf(tonic)>=0:tonic===5):(row.frame.keySignature||0)<0;
     var pedalKey=window?key+":"+window.start+":"+window.end:"";
-    if(config.auto===false)result={root:Harmony.rootPcs[config.root],definition:config.quality,kind:"手动指定"};
+    if(config.auto===false)result={root:Harmony.rootPcs[config.root],rootSpelling:Harmony.rootNames[config.root],definition:config.quality,kind:"手动指定"};
     else if(window && config.pedalMode===0) {
         if(!state.pedalResults[pedalKey]) {
             var evidence=state.evidence[pedalKey];
             result=Harmony.detectWeighted(evidence.all,evidence.weights,null,tonic,config.keyMode===1,row.start);
-            state.pedalResults[pedalKey]=describe(result,evidence.representative.length?evidence.representative:evidence.all,row.start,tonic,config.keyMode===1);
+            state.pedalResults[pedalKey]=describe(result,evidence.representative.length?evidence.representative:evidence.all,row.start,tonic,config.keyMode===1,config.degreeMode,flats);
             state.pedalResults[pedalKey].kind="踏板区间 · "+(result.kind||"综合识别");
         }
         result=state.pedalResults[pedalKey];
@@ -93,14 +119,28 @@ function evaluate(state, row, key) {
             var note=row.notes[n],pc=Harmony.mod12(note.pitch),active=note.end===undefined||note.end>row.start;
             var oldAttack=(note.attackTick===undefined?note.tick:note.attackTick)<row.start;
             var weight=active?(strongAttack && attacks.length>=3 && oldAttack?.3:1):(strongAttack?.12:.3);
+            // A stepwise passing/neighbor tone does not automatically rename the accompaniment.
+            if(active && note.pitch>(heldBass?heldBass.pitch:note.pitch)+12 && ornament(state,row,key,note))weight*=.18;
             weights[pc]=Math.max(weights[pc]||0,weight);
         }
-        result=Harmony.detectWeighted(row.notes,weights,strongAttack?null:state.previous,tonic,config.keyMode===1,row.start);
+        var following=null,rows=state.byPart[key];
+        // The next attack contributes only where it is close enough to belong to this phrase.
+        for(var nextIndex=state.rowIndex;nextIndex<Math.min(rows.length,state.rowIndex+4);++nextIndex) {
+            var nextRow=rows[nextIndex];if(nextRow.start-row.start>960)break;
+            var nextAttack=nextRow.notes.filter(function(n){return (n.attackTick===undefined?n.tick:n.attackTick)===nextRow.start;});
+            if(nextAttack.length>=3) {following=Harmony.detect(nextAttack.map(function(n){return n.pitch;}));break;}
+        }
+        result=Harmony.detectWeighted(row.notes,weights,strongAttack?null:state.previous,tonic,config.keyMode===1,row.start,{bass:strongAttack?freshBass:null,next:following});
+        if(strongAttack && freshBass)result.harmonicBass=Harmony.mod12(freshBass.pitch);
     }
-    if(result.chord===undefined)result=describe(result,row.notes,row.start,tonic,config.keyMode===1);
-    if(!row.notes.length){state.current=null;state.previous=null;return;}
-    if(row.frame.imported)result=describe(row.frame,row.notes,row.start,tonic,config.keyMode===1);
-    if(result.root<0){state.current=null;return;}
+    if(result.chord===undefined)result=describe(result,row.notes,row.start,tonic,config.keyMode===1,config.degreeMode,flats);
+    if(!row.notes.length && config.auto!==false && !row.frame.imported){state.current=null;state.previous=null;return;}
+    if(row.frame.imported) {
+        result=describe(row.frame,row.notes,row.start,tonic,config.keyMode===1,config.degreeMode,flats);
+        if(row.frame.chord)result.chord=row.frame.chord;
+        if(row.frame.degree)result.degree=row.frame.degree;
+    }
+    if(result.root<0 && !(row.frame.imported && row.frame.chord)){state.current=null;return;}
     var current=state.current;
     var same=current && current.end===row.start && signature(current)===signature(result);
     if(window && config.pedalMode===0 && current && current.pedalStart===window.start)same=true;
@@ -190,3 +230,11 @@ function restore(edits, start, end, part) {
     return result;
 }
 function NumberIsInteger(value,min,max) {return typeof value==="number" && isFinite(value) && Math.floor(value)===value && value>=min && value<=max;}
+function workerBundle(sources) {
+    function module(name,source) {
+        var clean=source.replace(/^\.(pragma|import).*$/gm,""),names=[],match,pattern=/^(?:function|var)\s+([A-Za-z_$][\w$]*)/gm;
+        while((match=pattern.exec(clean)))if(names.indexOf(match[1])<0)names.push(match[1]);
+        return "var "+name+"=(function(){\n"+clean+"\nreturn {"+names.map(function(n){return n+":"+n}).join(",")+"};})();\n";
+    }
+    return "(function(){\n"+module("Harmony",sources.harmony)+module("Timeline",sources.timeline)+"return {regions:Timeline.build(input.frames,input.config,input.part,[])};})()";
+}

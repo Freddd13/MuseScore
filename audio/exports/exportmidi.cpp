@@ -19,6 +19,9 @@
 #include "libmscore/chordrest.h"
 #include "libmscore/chord.h"
 #include "libmscore/note.h"
+#include "libmscore/symbol.h"
+#include "libmscore/handbracket.h"
+#include "libmscore/fingering.h"
 #include "libmscore/key.h"
 #include "libmscore/lyrics.h"
 #include "libmscore/measure.h"
@@ -243,6 +246,7 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
 bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPNs, const SynthesizerState& synthState, const MidiExportOptions& options)
       {
       QVector<MidiGateSource> sources;
+      const auto handAssignments=(collectGateData || options.crop)?HandBracket::assignments(cs):QHash<const Note*,int>{};
       mf.tracks().clear();
       mf.setDivision(DIVISION);
       mf.setFormat(1);
@@ -360,6 +364,9 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                                       auto element=onset->element(t);if(!element||!element->isChord())continue;
                                                       for(auto candidate:toChord(element)->notes())if(!candidate->tieBack())highest=qMax(highest,candidate->ppitch());
                                                       }
+                                                tag.partId=part->startTrack();tag.handHint=staffIdx==part->startTrack()/VOICES?1:0;
+                                                tag.hand=handAssignments.value(note,-1);
+                                                for(auto e:note->el())if(e->isFingering()) {const auto text=toFingering(e)->plainText().trimmed();const int finger=text.toInt();if(text.size()==1 && finger>=1 && finger<=5){if(!tag.finger)tag.finger=finger;else if(tag.finger!=finger)tag.finger=-1;}}
                                                 tag.melody = note->ppitch()>=highest;
                                                 tag.partName = part->instrumentName(note->tick());
                                                 tag.piano = part->instrumentId(note->tick()).contains("piano", Qt::CaseInsensitive);

@@ -8,6 +8,7 @@ namespace Ms {
 struct MidiGateSource {
       int track=0,on=0,pitch=0,channel=0,staff=-1,voice=-1;
       int sourceTick=-1,sourceMeasure=-1;
+      int partId=-1,hand=-1,handHint=-1,finger=0;
       bool melody=false;
       QString partName;
       bool piano=false,manual=false;

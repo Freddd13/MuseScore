@@ -15,7 +15,7 @@ MuseScore {
     UiTheme {id:theme}
     menuPath: "Plugins.Harmony Assistant"
     description: "钢琴和声助手：持续音识别、级数、音程功能与可选谱面配色。"
-    version: "1.6.0"
+    version: "1.7.0"
     requiresScore: true
     pluginType: "dock"
     dockArea: "right"
@@ -37,6 +37,11 @@ MuseScore {
     property var analysisRegions: []
     property var automaticRegions: []
     property var regionBuilder: null
+    property string regionWorkerSource: ""
+    property int regionJobToken: 0
+    property string regionRevision: ""
+    property int regionFirstTrack: 0
+    property int regionEndTrack: 0
     property var unplacedMarkers: []
     property var unplacedIndex: ({})
     property var manualOverrides: []
@@ -180,7 +185,7 @@ MuseScore {
                         if(nearest)edit.notes=[Timeline.clone(nearest)]
                     }
                     if(command==="assign") {
-                        var info=Timeline.describe({root:Harmony.rootPcs[rootIndex],definition:qualityIndex},edit.notes,start,Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1)
+                        var info=Timeline.describe({root:Harmony.rootPcs[rootIndex],rootSpelling:Harmony.rootNames[rootIndex],definition:qualityIndex},edit.notes,start,Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,configuration.degreeMode)
                         if(bassIndex>0) {
                             info.bass=Harmony.rootPcs[bassIndex-1]
                             info.chord=info.chord.split("/")[0]+(info.bass!==info.root?"/"+Harmony.rootNames[bassIndex-1]:"")
@@ -297,17 +302,27 @@ MuseScore {
         if(!started || loadingConfiguration)return
         syncDetailPanel()
         configurationTimer.restart()
-        if(rebuild!==false) {analysisDirty=true; regionBuilder=null;analysisTimer.stop()}
+        if(rebuild!==false) {cancelRegionJob();analysisDirty=true; regionBuilder=null;analysisTimer.stop()}
         requestRefresh(false)
         if(advancedNative) {
             if(rebuild===false && !analysisDirty)applyScorePreview()
             else {observer.setScorePreview([]); scheduleAnalysis()}
         }
     }
+    function cancelRegionJob() {
+        if(regionJobToken && observer && typeof observer.cancelReadOnlyJob==="function")observer.cancelReadOnlyJob()
+        regionJobToken=0
+    }
+    function finishRegions(regions) {
+        automaticRegions=regions;regionBuilder=null;analysisDirty=false
+        rebuildRegions();analyze();applyScorePreview()
+        if(pendingExport.length){var action=pendingExport;pendingExport="";chooseFile(action)}
+    }
     function needsAnalysis() {return advancedNative && ((scoreColoring.checked && allColor.checked) || showChords.checked || showFunctions.checked || configuration.summaryMode===1 || configuration.detailMode===1 || pendingExport.length>0)}
     function scheduleAnalysis() {
-        if(!started || !surfaceActive || !curScore || !needsAnalysis() || analysisTimer.running || regionBuilder || !analysisDirty)return
+        if(!started || !surfaceActive || !curScore || !needsAnalysis() || analysisTimer.running || regionBuilder || regionJobToken || observer.playing || !analysisDirty)return
         setScope()
+        regionRevision=typeof observer.analysisRevision==="function"?observer.analysisRevision():""
         pendingRecords=[]
         analysisNextTick=0
         analysisTimer.start()
@@ -329,13 +344,15 @@ MuseScore {
             var name=nameOf(result.root)
             for(var i=0;i<notes.length;++i)if(Harmony.mod12(notes[i].pitch)===result.root){name=Harmony.spelledName(notes[i].tpc,notes[i].pitch,prefersFlats());break}
             chord=name+Harmony.defs[result.definition].suffix
-            degree=Harmony.roman(tonic,keyMode.currentIndex===1,result.root,result.definition)
+            degree=Harmony.roman(tonic,keyMode.currentIndex===1,result.root,result.definition,configuration.degreeMode)
         }
+        if(imported){if(typeof imported.chord==="string")chord=imported.chord;if(typeof imported.degree==="string")degree=imported.degree}
         return {tick:frame.tick,bar:frame.bar,beat:frame.beat,root:result.root,definition:result.definition,
-            chord:chord,degree:degree,notes:notes,parts:frame.parts,pedalWindows:frame.pedalWindows,scoreEnd:frame.scoreEnd,keySignature:frame.keySignature,imported:!!imported,chromatic:Harmony.isChromatic(tonic,keyMode.currentIndex===1,result.root,result.definition)}
+            chord:chord,degree:degree,notes:notes,parts:frame.parts,pedalWindows:frame.pedalWindows,scoreEnd:frame.scoreEnd,keySignature:frame.keySignature,imported:!!imported,chromatic:Harmony.isChromatic(tonic,keyMode.currentIndex===1,result.root,result.definition,configuration.degreeMode)}
     }
     function buildAnalysisChunk() {
         if(!curScore || !surfaceActive || !needsAnalysis())return
+        if(observer.playing){cancelRegionJob();analysisTimer.stop();analysisDirty=true;return}
         if(regionBuilder){buildRegionChunk();return}
         var batch=observer.analysisFrames(analysisNextTick,32,firstTrack,endTrack,pedalContext.checked,windowTicks())
         analysisFingerprint=batch.fingerprint || ""
@@ -344,16 +361,19 @@ MuseScore {
         analysisNextTick=batch.nextTick
         if(analysisNextTick>=0) {analysisTimer.start(); return}
         analysisRecords=pendingRecords;pendingRecords=[];loadCorrections()
+        if(regionWorkerSource.length && typeof observer.startReadOnlyJob==="function") {
+            regionFirstTrack=firstTrack;regionEndTrack=endTrack
+            regionJobToken=observer.startReadOnlyJob(regionWorkerSource,{frames:analysisRecords,config:collectPreferences(),part:firstTrack})
+            if(regionJobToken){matchText="正在判断前后和弦…";return}
+        }
         regionBuilder=Timeline.createBuilder(analysisRecords,collectPreferences(),firstTrack)
         buildRegionChunk()
     }
     function buildRegionChunk() {
         var startedAt=Date.now(),complete=false
-        for(var count=0;count<32 && Date.now()-startedAt<6;++count)if(Timeline.step(regionBuilder,1)){complete=true;break}
+        for(var count=0;count<32 && Date.now()-startedAt<2;++count)if(Timeline.step(regionBuilder,1)){complete=true;break}
         if(!complete){analysisTimer.start();return}
-        automaticRegions=regionBuilder.regions;regionBuilder=null;analysisDirty=false
-        rebuildRegions();analyze();applyScorePreview()
-        if(pendingExport.length){var action=pendingExport;pendingExport="";chooseFile(action)}
+        finishRegions(regionBuilder.regions)
     }
     function applyScorePreview() {
         if(!advancedNative)return
@@ -532,7 +552,7 @@ MuseScore {
         activeColorKeys = ({})
         undoPause = false
         timeline = []
-        analysisTimer.stop()
+        cancelRegionJob();analysisTimer.stop()
         manualOverrides=[];editUndo=[];editRedo=[];analysisRegions=[];automaticRegions=[];regionBuilder=null;loadedFingerprint="";manualNeedsReview=false;annotationTick=-1
         unplacedMarkers=[];unplacedIndex=({});placementNotice=""
         importedRecords = []
@@ -566,6 +586,7 @@ MuseScore {
     function requestRefresh(dirty) {
         if (!started || internalChange) return
         if (dirty) {
+            cancelRegionJob();analysisTimer.stop()
             cacheDirty = true
             buildTimer.stop()
             buildSegment = null
@@ -591,6 +612,7 @@ MuseScore {
         var oldFirst = firstTrack, oldEnd = endTrack
         setScope()
         if (oldFirst !== firstTrack || oldEnd !== endTrack) {
+            cancelRegionJob();analysisTimer.stop()
             saveCorrections();manualOverrides=[];editUndo=[];editRedo=[];loadedFingerprint="";manualNeedsReview=false
             analysisRegions=[];automaticRegions=[];regionBuilder=null;cacheDirty=true;analysisDirty=true;importedRecords=[];importedRegions=[];annotationTick=-1
             unplacedMarkers=[];unplacedIndex=({});placementNotice=""
@@ -750,7 +772,7 @@ MuseScore {
         chordText = chordRoot < 0 ? (currentPitches.length === 1 ? noteName(currentNotes[0]) : "—") :
                 rootName() + Harmony.defs[chordDefinition].suffix
         degreeText = Harmony.roman(Harmony.rootPcs[keyTonic.currentIndex], keyMode.currentIndex === 1,
-                                   chordRoot, chordDefinition)
+                                   chordRoot, chordDefinition,configuration.degreeMode)
         var voicing = []
         for (var i = 0; i < currentNotes.length; ++i) voicing.push(noteName(currentNotes[i]))
         voicingText = voicing.length ? voicing.join(" · ") : "—"
@@ -765,7 +787,10 @@ MuseScore {
             chordRoot=ownedRegion.root;chordDefinition=ownedRegion.definition
             chordText=ownedRegion.chord;degreeText=ownedRegion.degree
             matchText="所属和弦 · "+(ownedRegion.source==="manual"?"人工修正":ownedRegion.kind||"已识别")
-            inversionText=Harmony.inversion(Harmony.labelFor(ownedRegion.bass,chordRoot,chordDefinition))+" · 区间 ticks "+ownedRegion.start+"–"+ownedRegion.end
+            inversionText=(ownedRegion.inversion||Harmony.inversion(Harmony.labelFor(ownedRegion.bass,chordRoot,chordDefinition)))+(ownedRegion.bass>=0?" · 低音 "+Harmony.pcName(ownedRegion.bass,prefersFlats()):"")
+            var candidates=ownedRegion.alternatives||[]
+            alternativesText=candidates.length?"也可能是 "+candidates.map(function(a){return nameOf(a.root)+Harmony.defs[a.definition].suffix}).join(" / "):""
+            if(ownedRegion.harmonicBass!==undefined && ownedRegion.harmonicBass!==ownedRegion.bass)alternativesText+=(alternativesText.length?" · ":"")+"新伴奏低音 "+Harmony.pcName(ownedRegion.harmonicBass,prefersFlats())+"；较早低音仍在延续"
         }
         var roleNotes = configuration.detailMode===1 && ownedRegion ? ownedRegion.notes : contextNotes.length ? contextNotes : currentNotes
         toneRows = makeToneRows(chordRoot,chordDefinition,roleNotes)
@@ -923,6 +948,7 @@ MuseScore {
         var playing = observer.playing
         if (playing !== lastPlaying) {
             lastPlaying = playing
+            if(playing){cancelRegionJob();analysisTimer.stop();regionBuilder=null}
             if (!playing) {lastPlayTick = -1; requestRefresh(false); return}
         }
         if (playing && followPlayback.checked) {
@@ -943,6 +969,10 @@ MuseScore {
                 var saved=observer.loadConfiguration("HarmonyAssistant")
                 if(saved.schema)applyPreferences(saved)
             } else settingsStore.active=true
+        }
+        if(observer && typeof observer.startReadOnlyJob==="function" && typeof observer.readTextFile==="function") {
+            try {regionWorkerSource=Timeline.workerBundle({harmony:observer.readTextFile(String(Qt.resolvedUrl("Harmony.js"))),timeline:observer.readTextFile(String(Qt.resolvedUrl("Timeline.js")))})}
+            catch(error){noticeText="后台和弦计算未启用："+error;regionWorkerSource=""}
         }
         syncDetailPanel()
         requestRefresh(true)
@@ -968,12 +998,12 @@ MuseScore {
     }
     onSurfaceActiveChanged: {
         if (!started) return
-        if (!surfaceActive) {refreshTimer.stop(); playbackTimer.stop(); buildTimer.stop(); analysisTimer.stop();markerWindow.hide()}
+        if (!surfaceActive) {cancelRegionJob();refreshTimer.stop(); playbackTimer.stop(); buildTimer.stop(); analysisTimer.stop();markerWindow.hide()}
         else if(advancedNative) {analysisDirty=true; scheduleAnalysis()}
         if (surfaceActive) {followNativePosition(); requestRefresh(false)}
     }
     onRibbonChanged:syncDetailPanel()
-    Component.onDestruction: {if (started) {savePreferences();saveCorrections(); undoPause = false; restoreColors(true); if(advancedNative)observer.clearAllPreviews()}}
+    Component.onDestruction: {cancelRegionJob();if (started) {savePreferences();saveCorrections(); undoPause = false; restoreColors(true); if(advancedNative)observer.clearAllPreviews()}}
     Timer {id:configurationTimer; interval:350; onTriggered:savePreferences()}
     Timer {id:analysisTimer; interval:12; onTriggered:buildAnalysisChunk()}
     Loader {id:settingsStore; active:false; source:"SettingsStore.qml"; onLoaded:{if(item.payload.length){try{applyPreferences(JSON.parse(item.payload))}catch(error){noticeText="配置未读取："+error}}}}
@@ -1035,6 +1065,13 @@ MuseScore {
         onPositionChanged:{if(!playbackTimer.running)playbackTimer.start()}
         onScoreChanged:requestRefresh(true)
         onPreviewActivated:root.openAnnotation(tick,track)
+        onReadOnlyJobFinished: {
+            if(token!==root.regionJobToken)return
+            root.regionJobToken=0
+            if(!root.surfaceActive || !curScore || observer.playing || firstTrack!==root.regionFirstTrack || endTrack!==root.regionEndTrack || observer.analysisRevision()!==root.regionRevision) {root.analysisDirty=true;root.scheduleAnalysis();return}
+            if(result.error){root.analysisDirty=true;root.matchText="分析未完成";root.noticeText="和弦计算未完成："+result.error;return}
+            root.finishRegions(result.regions||[])
+        }
     }
     Connections {target:root; ignoreUnknownSignals:true; onPanelDetailClosed:root.detailPanelClosed()}
 
@@ -1221,6 +1258,11 @@ MuseScore {
                         UiLabel {text:"踏板内识别";color:muted;font.pixelSize:11}
                         DeskComboBox {model:["单个和弦","多个和弦"];currentIndex:configuration.pedalMode;Layout.fillWidth:true;onActivated:{var c=Timeline.clone(configuration);c.pedalMode=currentIndex;configuration=Preferences.clean(c);optionsChanged()}}
                     }
+                    RowLayout {width:parent.width
+                        UiLabel {text:"级数参照";color:muted;font.pixelSize:11}
+                        DeskComboBox {model:["当前调式","同名大调"];currentIndex:configuration.degreeMode;Layout.fillWidth:true;onActivated:{var c=Timeline.clone(configuration);c.degreeMode=currentIndex;configuration=Preferences.clean(c);rebuildRegions();updateTexts();optionsChanged()}}
+                    }
+                    UiLabel {width:parent.width;text:keyMode.currentIndex===1 ? (configuration.degreeMode===0?"小调第三、六、七级记为 III / VI / VII；升高导音记为 ♯VII。":"小调第三、六、七级相对同名大调记为 ♭III / ♭VI / ♭VII。") : "大调两种参照相同。";color:muted;font.pixelSize:10;wrapMode:Text.Wrap}
                     DeskSwitch {id:pedalContext; text:"踏板保持"; checked:true; enabled:advancedNative; onToggled:optionsChanged()}
                     RowLayout {
                         width:parent.width

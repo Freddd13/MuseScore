@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "readonlyanalysisjob.h"
+#include "pianohandanalysis.h"
 #include <QJSEngine>
 #include <QJSValue>
 #include <QElapsedTimer>
@@ -25,6 +26,7 @@ void ReadOnlyAnalysisJob::start(const QString& source,const QVariantMap& input) 
             QElapsedTimer timer;timer.start();QJSEngine engine;
             {QMutexLocker guard(&state->mutex);state->engine=&engine;}
             engine.globalObject().setProperty("input",engine.toScriptValue(input));
+            engine.globalObject().setProperty("PianoHands",engine.newQObject(new PianoHandAnalysis(&engine)));
             QJSValue value;
             if(!state->canceled.load())value=engine.evaluate(source,"arrangement-rules");
             {QMutexLocker guard(&state->mutex);state->engine=nullptr;}

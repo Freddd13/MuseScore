@@ -492,4 +492,3 @@ void FSymbol::setFont(const QFont& f)
       }
 
 }
-

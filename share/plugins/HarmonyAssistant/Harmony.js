@@ -107,16 +107,17 @@ function detect(pitches) {
     best.alternatives=alternatives;
     return best;
 }
-function detectWeighted(notes, weights, previous, tonic, minorKey, tick) {
+function detectWeighted(notes, weights, previous, tonic, minorKey, tick, hint) {
     var maximum=0,mask=0,bass=null,held=notes.filter(function(n){return n.end===undefined || n.end>tick;});
     var pool=held.length?held:notes;
     for(var p=0;p<pool.length;++p)if(!bass || pool[p].pitch<bass.pitch)bass=pool[p];
+    if(hint && hint.bass)bass=hint.bass;
     for(var pc in weights)maximum=Math.max(maximum,weights[pc]);
     if(!maximum)return {root:-1,definition:-1,kind:"空拍",alternatives:[]};
     var normalized=[];
     for(var i=0;i<12;++i){normalized[i]=(weights[i]||0)/maximum;if(normalized[i]>=.15)mask|=1<<i;}
-    if(bitCount(mask)<3)return detect(notes.map(function(n){return n.pitch;}));
-    var best=null,runner=null,scale=minorKey?[0,2,3,5,7,8,10]:[0,2,4,5,7,9,11];
+    if(bitCount(mask)<3)return detect(notes.filter(function(n){return normalized[mod12(n.pitch)]>=.15;}).map(function(n){return n.pitch;}));
+    var ranked=[],scale=minorKey?[0,2,3,5,7,8,10]:[0,2,4,5,7,9,11];
     for(var t=0;t<templates.length;++t) {
         var candidate=templates[t],definition=defs[candidate.definition],hits=bitCount(mask&candidate.mask);
         if(hits<3)continue;
@@ -134,18 +135,29 @@ function detectWeighted(notes, weights, previous, tonic, minorKey, tick) {
         }
         if(previous && previous.root===candidate.root)cost-=previous.definition===candidate.definition?.65:.3;
         if(scale.indexOf(mod12(candidate.root-tonic))<0)cost+=.12;
-        var result={root:candidate.root,definition:candidate.definition,cost:cost};
-        if(!best || cost<best.cost){runner=best;best=result;}else if(!runner||cost<runner.cost)runner=result;
+        ranked.push({root:candidate.root,definition:candidate.definition,cost:cost,rawCost:cost});
     }
+    ranked.sort(function(a,b){return a.cost-b.cost || a.definition-b.definition || a.root-b.root;});
+    var initial=ranked.length?ranked[0].cost:Infinity;
+    // Adjacent evidence only breaks a close tie; it cannot rescue a poorly fitting chord.
+    if(hint && hint.next && hint.next.root>=0)for(var c=0;c<ranked.length && ranked[c].rawCost-initial<.65;++c) {
+        var item=ranked[c],distance=mod12(item.root-hint.next.root);
+        if(item.root===hint.next.root && item.definition===hint.next.definition) {item.cost-=.12;item.context="相邻位置保留同一和弦";}
+        else if(distance===7 && [2,15,19,22,25,26,27].indexOf(item.definition)>=0) {item.cost-=.1;item.context="属和弦向下一和弦解决";}
+    }
+    ranked.sort(function(a,b){return a.cost-b.cost || a.definition-b.definition || a.root-b.root;});
+    var best=ranked[0],runner=ranked[1];
     if(!best || best.cost>6)return {root:-1,definition:-1,kind:"未确定和弦",alternatives:[]};
     best.alternatives=runner && runner.cost-best.cost<.65?[runner]:[];
     best.kind=best.alternatives.length?"上下文匹配 · 存在歧义":"上下文匹配";
+    if(best.context)best.kind+=" · "+best.context;
     return best;
 }
-function roman(tonic, minorKey, chordRoot, definition) {
+function roman(tonic, minorKey, chordRoot, definition, degreeMode) {
     if(chordRoot<0 || definition<0) return "—";
     // Conventional Roman numerals reference the parallel major: A minor uses ♭III, ♭VI, ♭VII.
     var map=["I","♭II","II","♭III","III","IV","♯IV","V","♭VI","VI","♭VII","VII"];
+    if(minorKey && degreeMode===0)map=["I","♭II","II","III","♯III","IV","♯IV","V","VI","♯VI","VII","♯VII"];
     var d=defs[definition], base=map[mod12(chordRoot-tonic)];
     return (d.minor?base.toLowerCase():base)+d.roman;
 }

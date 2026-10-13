@@ -111,6 +111,8 @@ QVariantMap ScoreObserver::analysisRange(int start,int end,int firstTrack,int en
                         row.insert("duration",cr->actualTicks().ticks());row.insert("performedTicks",note->playTicks());row.insert("onSeconds",_score->tempomap()->tick2time(attack));row.insert("endSeconds",_score->tempomap()->tick2time(logicalEnd));
                         row.insert("measure",m->no()+1);row.insert("beat",1.+double(at-m->tick().ticks())/(DIVISION*4./m->timesig().denominator()));
                         row.insert("grace",chord->isGrace());row.insert("rolled",chord->arpeggio()!=nullptr);
+                        const auto part=_score->staff(track/VOICES)->part();
+                        row.insert("partId",part->startTrack());row.insert("partName",part->instrumentName(Fraction::fromTicks(attack)));row.insert("piano",part->instrumentId(Fraction::fromTicks(attack)).contains("piano",Qt::CaseInsensitive));
                         row.insert("key",int(_score->staff(track/VOICES)->key(Fraction::fromTicks(at))));
                         QVariantList fingering;
                         for(const auto annotation:note->el())if(annotation->isFingering())fingering.append(toTextBase(annotation)->plainText());

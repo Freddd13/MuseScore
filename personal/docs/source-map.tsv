@@ -229,3 +229,11 @@ MIDI导出	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::voiceSelection	188	�
 分手标记	mscore/handbracketsettings.cpp	void addHandBracketDefaultControls(	23	四种个人默认形状、设置读写与面板按钮	mtest/mscore/performanceeditor; ArrangementAssistant/tests/test-rules.cjs
 分手标记	mscore/handbracketsettings.cpp	void completeHandBracketPalette(	42	四种格子补齐与缩小显示	mtest/mscore/performanceeditor; ArrangementAssistant/tests/test-rules.cjs
 分手标记	mscore/plugin/api/arrangementsnapshot.cpp	auto handData	81	完整分手含义与附着音信息	mtest/mscore/performanceeditor; ArrangementAssistant/tests/test-rules.cjs
+琴键与松手	libmscore/pianohands.h	inline Plan plan(	87	分手候选、个人跨度和指法约束	mtest/mscore/p0native; HarmonyAssistant/tests/test-context.cjs; ArrangementAssistant/tests/test-rules.cjs
+琴键与松手	libmscore/pianohands.h	inline bool releaseForHand(	55	有界保留音区搜索与少松键选择	mtest/mscore/p0native; HarmonyAssistant/tests/test-context.cjs; ArrangementAssistant/tests/test-rules.cjs
+分手范围	libmscore/handbracketanalysis.cpp	QHash<const Note*,int> assignments(	50	导出准备时读取分手语义和范围	mtest/mscore/p0native; HarmonyAssistant/tests/test-context.cjs; ArrangementAssistant/tests/test-rules.cjs
+编配检查	mscore/plugin/api/pianohandanalysis.cpp	QVariantMap PianoHandAnalysis::analyse(	9	后台数字数据、各钢琴独立保持与转场	mtest/mscore/p0native; HarmonyAssistant/tests/test-context.cjs; ArrangementAssistant/tests/test-rules.cjs
+MIDI松手	audio/exports/midigate.h	QVector<MidiGateNote> process(	104	受保护事件副本、占手释放与成组随机	mtest/mscore/p0native; HarmonyAssistant/tests/test-context.cjs; ArrangementAssistant/tests/test-rules.cjs
+MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	232	真实秒数、选音、说明和前后占用	mtest/mscore/p0native; HarmonyAssistant/tests/test-context.cjs; ArrangementAssistant/tests/test-rules.cjs
+和弦上下文	share/plugins/HarmonyAssistant/Timeline.js	function evaluate(	96	新低音、残音、级进与相邻解释	mtest/mscore/p0native; HarmonyAssistant/tests/test-context.cjs; ArrangementAssistant/tests/test-rules.cjs
+和弦上下文	share/plugins/HarmonyAssistant/Harmony.js	function detectWeighted(	110	加权模板候选和歧义保留	mtest/mscore/p0native; HarmonyAssistant/tests/test-context.cjs; ArrangementAssistant/tests/test-rules.cjs

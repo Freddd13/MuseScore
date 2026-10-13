@@ -53,7 +53,7 @@ add_library (libmscore STATIC
       score.cpp segment.cpp select.cpp shadownote.cpp slur.cpp freeslur.cpp freesluravoidance.cpp tie.cpp slurtie.cpp
       spacer.cpp spanner.cpp staff.cpp staffstate.cpp
       stafftextbase.cpp stafftext.cpp systemtext.cpp stafftype.cpp stem.cpp style.cpp symbol.cpp
-      sym.cpp system.cpp stringdata.cpp handbracket.cpp handbracket.h tempotext.cpp text.cpp
+      sym.cpp system.cpp stringdata.cpp handbracket.cpp handbracket.h handbracketanalysis.cpp tempotext.cpp text.cpp
       mmrestrange.cpp measurenumber.cpp measurenumberbase.cpp textbase.cpp textedit.cpp
       textframe.cpp textline.cpp textlinebase.cpp timesig.cpp
       tremolobar.cpp tremolo.cpp trill.cpp tuplet.cpp

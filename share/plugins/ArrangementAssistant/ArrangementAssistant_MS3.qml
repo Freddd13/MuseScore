@@ -14,7 +14,7 @@ MuseScore {
     id:root
     menuPath:"Plugins.Arrangement Check"
     description:"编配检查：和声疑点、基础对位与上下文可弹性；只读分析。"
-    version:"1.0.0"
+    version:"1.1.0"
     requiresScore:true
     pluginType:"dock"
     dockArea:"right"
@@ -278,6 +278,11 @@ MuseScore {
                 Repeater {model:[{key:"harmony",text:"和声疑点"},{key:"counterpoint",text:"基础对位"},{key:"playability",text:"上下文可弹性"},{key:"autoRefresh",text:"停播后自动刷新"},{key:"dualPanel",text:"顶部摘要 + 右侧详情"}]
                     Desk.DeskSwitch {text:modelData.text;checked:root.config[modelData.key];onClicked:{var c=Rules.clone(root.config);c[modelData.key]=checked;root.config=c;root.persist();root.syncDetail();root.markDirty()}}
                 }
+                RowLayout {
+                    Label {text:"最短按键参考（ms）";color:theme.text}
+                    Desk.DeskSpinBox {objectName:"arrangementMinimumHold";from:0;to:5000;value:root.config.minimumHoldMs===undefined?120:root.config.minimumHoldMs;onValueModified:{var c=Rules.clone(root.config);c.minimumHoldMs=value;root.config=c;root.persist();root.markDirty()}}
+                }
+                Label {text:"只用于判断旧音是否可以松开，不改时值或导出最小长度。";color:theme.muted;font.pixelSize:11;wrapMode:Text.WordWrap;Layout.fillWidth:true}
                 Desk.DeskComboBox {model:["摘要左对齐","摘要居中","摘要右对齐"];currentIndex:root.config.alignment;onActivated:{var c=Rules.clone(root.config);c.alignment=currentIndex;root.config=c;root.persist()}}
                 Desk.DeskComboBox {model:["调性未确认"].concat(Harmony.rootNames);currentIndex:root.config.tonic<0?0:Harmony.rootPcs.indexOf(root.config.tonic)+1;onActivated:{var c=Rules.clone(root.config);c.tonic=currentIndex?Harmony.rootPcs[currentIndex-1]:-1;root.config=c;root.persist();root.markDirty()}}
                 Desk.DeskSwitch {text:"已确认小调";enabled:root.config.tonic>=0;checked:root.config.minor;onClicked:{var c=Rules.clone(root.config);c.minor=checked;root.config=c;root.persist();root.markDirty()}}
