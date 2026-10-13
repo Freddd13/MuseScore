@@ -258,6 +258,7 @@ private slots:
  void regionalPanelMouseOperations();
  void regionalNotationFixturesAndCrossBoundary();
  void regionalResourcesLinkedPartsAndManualEvents();
+ void regionalAtomicFileSaveAndReopen();
 };
 #include "reference_tests.inc"
 #include "regional_tests.inc"

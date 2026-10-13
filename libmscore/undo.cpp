@@ -1551,7 +1551,7 @@ void SetUserBankController::flip(EditData*)
 //---------------------------------------------------------
 
 ChangeStaff::ChangeStaff(Staff* _staff,  bool _invisible, ClefTypeList _clefType,
-   qreal _userDist, Staff::HideMode _hideMode, bool _showIfEmpty, bool _cutaway, 
+   qreal _userDist, Staff::HideMode _hideMode, bool _showIfEmpty, bool _cutaway,
    bool _hideSystemBarLine, bool  _mergeMatchingRests)
       {
       staff       = _staff;

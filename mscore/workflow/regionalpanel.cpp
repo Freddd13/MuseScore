@@ -380,12 +380,17 @@ class RegionalPanel : public QWidget {
                         _status->setText(tr("请选择另一个文件名，保留当前文件中的全部方案。"));
                         return;
                   }
-            QSaveFile file(path);
-            if (!file.open(QIODevice::WriteOnly) ||
-                !RegionalVariants::exportOrdinary(score(), &file,
+            QByteArray archive;
+            QBuffer buffer(&archive);
+            buffer.open(QIODevice::WriteOnly);
+            if (!RegionalVariants::exportOrdinary(score(), &buffer,
                                                   QFileInfo(path).completeBaseName() + ".mscx",
-                                                  choice == tr("普通版主方案组合")) ||
-                !file.commit()) {
+                                                  choice == tr("普通版主方案组合"))) {
+                  _status->setText(MScore::lastError);
+                  return;
+            }
+            QSaveFile file(path);
+            if (!file.open(QIODevice::WriteOnly) || file.write(archive) != archive.size() || !file.commit()) {
                   _status->setText(
                       tr("副本未能保存：%1")
                           .arg(file.errorString().isEmpty() ? MScore::lastError : file.errorString()));
@@ -417,7 +422,9 @@ class RegionalPanel : public QWidget {
                   }
                   QStringList names;
                   for (auto value : groups)
-                        names << tr("%1 · %2").arg(names.size()+1).arg(value.toMap().value("name").toString());
+                        names << tr("%1 · %2")
+                                     .arg(names.size() + 1)
+                                     .arg(value.toMap().value("name").toString());
                   bool accepted = false;
                   auto chosen = QInputDialog::getItem(this, tr("旧方案组"), tr("导入哪一组写法？"), names, 0,
                                                       false, &accepted);
@@ -433,7 +440,10 @@ class RegionalPanel : public QWidget {
                   QString source = record.value("path").toString();
                   if (QFileInfo(source).isRelative())
                         source = QFileInfo(path).dir().absoluteFilePath(source);
-                  if(!QFileInfo(source).isFile()){failures<<tr("%1：找不到谱文件").arg(record.value("name").toString());continue;}
+                  if (!QFileInfo(source).isFile()) {
+                        failures << tr("%1：找不到谱文件").arg(record.value("name").toString());
+                        continue;
+                  }
                   auto expected = record.value("hash").toString();
                   if (!expected.isEmpty()) {
                         QFile file(source);

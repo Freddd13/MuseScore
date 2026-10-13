@@ -74,8 +74,11 @@ void TestP1Native::regionalSaveMainAndRestoreCurrent() {
       target.open(QIODevice::WriteOnly);
       QVERIFY2(s->saveCompressedFile(&target, "score.mscx", false, false), qPrintable(MScore::lastError));
       target.close();
-      QSaveFile compatibility(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath("regional-main-current.mscz"));
-      QVERIFY(compatibility.open(QIODevice::WriteOnly));QCOMPARE(compatibility.write(archive),qint64(archive.size()));QVERIFY(compatibility.commit());
+      QSaveFile compatibility(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS", settings.path()))
+                                  .filePath("regional-main-current.mscz"));
+      QVERIFY(compatibility.open(QIODevice::WriteOnly));
+      QCOMPARE(compatibility.write(archive), qint64(archive.size()));
+      QVERIFY(compatibility.commit());
       QVERIFY(s->state() == state);
       QCOMPARE(s->undoStack()->getCurIdx(), undo);
       QCOMPARE(first->veloOffset(), 19);
@@ -214,6 +217,30 @@ void TestP1Native::regionalRejectForeignVoiceAndKeepFile() {
       QVERIFY(!RegionalVariants::restore(s, QJsonDocument::fromVariant(data).toJson(), &problem));
       QVERIFY(!problem.isEmpty());
       QCOMPARE(RegionalVariants::state(s)["groups"].toList().size(), 1);
+}
+void TestP1Native::regionalAtomicFileSaveAndReopen() {
+      auto s = mscore->readScore(QString(TESTROOT) + "/mtest/mscore/p0native/longroot.mscx");
+      QVERIFY(s);
+      auto made = RegionalVariants::create(s, 0, s->firstMeasure()->endTick().ticks(), {4}, "文件保存");
+      QVERIFY(made["ok"].toBool());
+      const QString path = settings.filePath("all-variants.mscz");
+      QFileInfo info(path);
+      QVERIFY2(s->saveCompressedFile(info, false, false), qPrintable(MScore::lastError));
+      std::unique_ptr<MasterScore> reopened(mscore->readScore(path));
+      QVERIFY(reopened);
+      QVERIFY(RegionalVariants::active(reopened.get()));
+      QVERIFY2(s->saveCompressedFile(info, false, false), qPrintable(MScore::lastError));
+      QByteArray archive;
+      QBuffer buffer(&archive);
+      buffer.open(QIODevice::WriteOnly);
+      QVERIFY(RegionalVariants::exportOrdinary(s, &buffer, "ordinary.mscx", false));
+      QSaveFile output(settings.filePath("ordinary.mscz"));
+      QVERIFY(output.open(QIODevice::WriteOnly));
+      QCOMPARE(output.write(archive), qint64(archive.size()));
+      QVERIFY(output.commit());
+      std::unique_ptr<MasterScore> ordinary(mscore->readScore(output.fileName()));
+      QVERIFY(ordinary);
+      QVERIFY(!RegionalVariants::active(ordinary.get()));
 }
 void TestP1Native::regionalPanelMouseOperations() {
       QMenu menu;

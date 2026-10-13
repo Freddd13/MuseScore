@@ -526,9 +526,12 @@ bool Score::saveCompressedFile(QFileInfo& info, bool onlySelection, bool createT
       if (readOnly() && info == *masterScore()->fileInfo())
             return false;
       if(!onlySelection&&isMaster()&&RegionalVariants::active(this)&&!RegionalVariants::writing()){
+            // The ZIP writer closes its device; finish the archive before atomic replacement.
+            QByteArray archive;QBuffer buffer(&archive);buffer.open(QIODevice::WriteOnly);
+            if(!saveCompressedFile(&buffer,info.completeBaseName()+".mscx",false,createThumbnail))return false;
             QSaveFile file(info.filePath());
             if(!file.open(QIODevice::WriteOnly)){MScore::lastError=tr("不能打开方案保存位置：%1").arg(file.errorString());return false;}
-            if(!saveCompressedFile(&file,info.completeBaseName()+".mscx",false,createThumbnail))return false;
+            if(file.write(archive)!=archive.size()){MScore::lastError=tr("方案写入失败，原文件保留：%1").arg(file.errorString());return false;}
             if(!file.commit()){MScore::lastError=tr("方案未能保存，原文件保留：%1").arg(file.errorString());return false;}
             return true;
             }
