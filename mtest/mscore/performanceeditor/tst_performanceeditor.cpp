@@ -1,3 +1,4 @@
+#include <QStackedWidget>
 #include <QtTest/QtTest>
 #include <QTemporaryDir>
 #include <QSettings>
@@ -835,6 +836,10 @@ class TestPerformanceEditor : public QObject, public MTest {
       void handSymbolModelAndPersistence();
       void handSymbolInspectorAndGrips();
       void freeSlurModelAndReflow();
+      void freeSlurAutomaticGeometry();
+      void freeSlurBeamAvoidance();
+      void freeSlurAutomaticPersistence();
+      void freeSlurAutomaticControls();
       void freeSlurInspectorAndGrips();
       void envelopeInspectorAndPreview();
       void envelopeRealSequencer();

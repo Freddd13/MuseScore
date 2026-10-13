@@ -31,8 +31,11 @@ class SlurSegment final : public SlurTieSegment {
       QVector<QLineF> gripAnchorLines(Grip) const override;
       struct FreeGrips { int index; QPointF point,left,right; double leftScale,rightScale; };
       QVector<FreeGrips> _freeGrips;
+      QVector<FreeSlur::CurvePoint> _freeCurvePoints;
       QString _freeDragOriginal;
       bool _freeDragging = false;
+      int _freeCollisions = 0;
+      bool _freeLimited = false;
       bool computeFreeBezier(QPointF);
       bool editFreeNode(EditData&);
 
@@ -48,7 +51,11 @@ class SlurSegment final : public SlurTieSegment {
       void layoutSegment(const QPointF& p1, const QPointF& p2);
 
       bool isEdited() const;
+      int freeCollisions() const { return _freeCollisions; }
+      bool freeLimited() const { return _freeLimited; }
       bool edit(EditData&) override;
+      bool displayedFreeNode(int index,FreeSlurNode*) const;
+      bool displayedFreeNode(double position,FreeSlurNode*) const;
 
       Slur* slur() const { return toSlur(spanner()); }
 
@@ -74,6 +81,7 @@ class Slur final : public SlurTie {
 
       void slurPosChord(SlurPos*);
       bool _freeMode = false;
+      bool _freeAuto = false;
       QVector<FreeSlurNode> _freeNodes;
       QString _freeData = "[]";
 
@@ -101,6 +109,7 @@ class Slur final : public SlurTie {
       SlurTieSegment* newSlurTieSegment() override { return new SlurSegment(score()); }
       void reset() override;
       bool freeMode() const { return _freeMode; }
+      bool freeAuto() const { return _freeAuto; }
       const QVector<FreeSlurNode>& freeNodes() const { return _freeNodes; }
       QVariant getProperty(Pid) const override;
       QVariant propertyDefault(Pid) const override;

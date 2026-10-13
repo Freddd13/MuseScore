@@ -391,6 +391,7 @@ enum class Pid : short {
       HAND_BRACKET_V,
       HAND_BRACKET_WIDTH,
       HAND_BRACKET_TEXT,
+      FREE_SLUR_AUTO,
       END
       };
 

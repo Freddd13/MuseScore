@@ -164,9 +164,9 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 生成震音包络	libmscore/rendermidi.cpp	static void applyGeneratedEnvelope	1367	全范围生成事件、双音来源	mtest/libmscore/midi/envelope_playback_tests.inc
 包络检视器	mscore/inspector/envelopeinspector.h	inline std::vector<InspectorItem> envelopeInspectorControls	17	数字／名称拖拽、单事务预设	mtest/mscore/performanceeditor/envelope_editor_tests.inc
 实际发声范围	mscore/performanceeditor/envelopepreview.cpp	void PerformanceEditor::cacheGeneratedVelocity	7	停播缓存、双音按源、范围和预览	mtest/mscore/performanceeditor/envelope_editor_tests.inc
-自由曲线校验	libmscore/freeslur.cpp	bool decode	15	有限参数／规范化节点	mtest/mscore/performanceeditor/freeslur_tests.inc
-分段自由圆滑线	libmscore/freeslur.cpp	bool SlurSegment::computeFreeBezier	85	相对时间分配／共同导数／原生渐尖路径	mtest/mscore/performanceeditor/freeslur_tests.inc
-自由曲线拖动	libmscore/freeslur.cpp	void SlurSegment::endEditDrag	174	根属性一次Undo／分谱传播	mtest/mscore/performanceeditor/freeslur_tests.inc
+自由曲线校验	libmscore/freeslur.cpp	bool decode	21	有限参数／规范化节点	mtest/mscore/performanceeditor/freeslur_tests.inc
+分段自由圆滑线	libmscore/freeslur.cpp	bool SlurSegment::computeFreeBezier	115	相对时间分配／共同导数／原生渐尖路径	mtest/mscore/performanceeditor/freeslur_tests.inc
+自由曲线拖动	libmscore/freeslur.cpp	void SlurSegment::endEditDrag	264	根属性一次Undo／分谱传播	mtest/mscore/performanceeditor/freeslur_tests.inc
 自由曲线检视器	mscore/inspector/freeslurinspector.h	class FreeSlurInspector	13	数字／名称拖动／安全队列	mtest/mscore/performanceeditor/freeslur_tests.inc
 谱带鼠标隔离	mscore/performanceeditor/performanceoverlay.cpp	bool PerformanceEditor::overlayEvent	52	完整frame阻断／原生双向选音	mtest/mscore/performanceeditor
 力度柱宽	mscore/performanceeditor/performancesettings.cpp	bool PerformanceAppearance::edit	94	1–8逻辑像素／取消和默认／独立设置	mtest/mscore/performanceeditor
@@ -223,3 +223,5 @@ MIDI导出	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::voiceSelection	188	�
 速度符号面板	mscore/temposymbols.cpp	void appendPlayableTempoSymbols	14	补齐速度格子，保留已有内容	mtest/mscore/p1native
 速度符号面板	mscore/temposymbols.cpp	bool applyPlayableTempoSymbol	58	双击的范围、播放与冲突检查	mtest/mscore/p1native
 速度符号面板	mscore/temposymbols.cpp	bool applyPlayableTempoDrop	66	拖放位置与小节末尾范围	mtest/mscore/p1native
+自由圆滑线	libmscore/freesluravoidance.cpp	AvoidanceResult avoid(	87	限次曲线候选、碰撞检查与锁定点保护	mtest/mscore/performanceeditor
+自由圆滑线	libmscore/freeslur.cpp	bool SlurSegment::displayedFreeNode(double	223	从当前显示位置添加和锁定节点	mtest/mscore/performanceeditor

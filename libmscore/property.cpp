@@ -383,6 +383,7 @@ static constexpr PropertyMetaData propertyList[] = {
       { Pid::HAND_BRACKET_V, P_TYPE::REAL, true, "handBracketV", "hand bracket vertical length in spatium" },
       { Pid::HAND_BRACKET_WIDTH, P_TYPE::REAL, true, "handBracketWidth", "hand bracket line width in spatium" },
       { Pid::HAND_BRACKET_TEXT, P_TYPE::BOOL, true, "handBracketText", "hand bracket label" },
+      { Pid::FREE_SLUR_AUTO, P_TYPE::BOOL, true, "freeSlurAuto", "free slur automatic avoidance" },
       { Pid::END,                       P_TYPE::INT,            false, "++end++",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "<invalid property>")                            }
       };
 

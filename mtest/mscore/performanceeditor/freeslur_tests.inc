@@ -69,3 +69,87 @@ void TestPerformanceEditor::freeSlurInspectorAndGrips()
       panel=main->findChild<InspectorSlurTie*>();panel->grab().save("free-slur-inspector.png");view->startEdit(slur->frontSegment(),Grip(6));QTest::qWait(50);view->grab().save("free-slur-edit.png");view->changeState(ViewState::NORMAL);
       QVERIFY(saveScore(score,"free-slur-validation.mscx"));QVERIFY(main->savePdf(score,"free-slur.pdf"));QFile svg("free-slur.svg");QVERIFY(svg.open(QIODevice::WriteOnly));QVERIFY(main->saveSvg(score,&svg));svg.close();QVERIFY(QFileInfo("free-slur.pdf").size()>100);QVERIFY(QFileInfo("free-slur.svg").size()>100);
       }
+void TestPerformanceEditor::freeSlurAutomaticGeometry()
+      {
+      using FreeSlur::CurvePoint;
+      QVector<CurvePoint> line={{0,{0,0},{100,0}},{1,{100,0},{100,0}}};
+      QVector<QRectF> obstacles={{40,-4,20,8}};
+      const auto result=FreeSlur::avoid(line,obstacles,true,10);
+      QCOMPARE(result.collisions,0);QVERIFY(result.candidates>0);QCOMPARE(result.points.size(),2);
+      QCOMPARE(result.points.front().p,line.front().p);QCOMPARE(result.points.back().p,line.back().p);
+      QVERIFY(FreeSlur::curvePosition(result.points,.5).y()<-4);
+      auto below=FreeSlur::avoid(line,obstacles,false,10);QCOMPARE(below.collisions,0);QVERIFY(FreeSlur::curvePosition(below.points,.5).y()>4);
+      auto clear=FreeSlur::avoid(line,{},true,10);QCOMPARE(clear.candidates,0);QCOMPARE(clear.points.front().d,line.front().d);
+      line.front().locked=line.back().locked=true;
+      auto local=FreeSlur::avoid(line,obstacles,true,10);QCOMPARE(local.collisions,0);QVERIFY(local.points.size()>2);QVERIFY(local.points.size()<=6);
+      QCOMPARE(local.points.front().d,line.front().d);QCOMPARE(local.points.back().d,line.back().d);
+      line.insert(1,{.5,{50,0},{100,0},true});
+      auto blocked=FreeSlur::avoid(line,obstacles,true,10);QVERIFY(blocked.collisions>0);
+      auto fixed=std::find_if(blocked.points.begin(),blocked.points.end(),[](const CurvePoint& p){return p.t==.5;});QVERIFY(fixed!=blocked.points.end());QCOMPARE(fixed->p,QPointF(50,0));QCOMPARE(fixed->d,QPointF(100,0));
+      line[1].locked=false;auto unlocked=FreeSlur::avoid(line,obstacles,true,10);QCOMPARE(unlocked.collisions,0);
+      auto repeated=FreeSlur::avoid(line,obstacles,true,10);QCOMPARE(repeated.points.size(),unlocked.points.size());for(int i=0;i<repeated.points.size();++i){QCOMPARE(repeated.points[i].p,unlocked.points[i].p);QCOMPARE(repeated.points[i].d,unlocked.points[i].d);}
+      for(const auto& p:unlocked.points)QVERIFY(std::abs(p.p.y())<=60.001);
+      QVector<QRectF> excessive;for(int i=0;i<2049;++i)excessive.append(obstacles[0]);auto limited=FreeSlur::avoid(line,excessive,true,10);QVERIFY(limited.limited);QCOMPARE(limited.candidates,0);
+      QVector<QRectF> dense;for(int i=0;i<2048;++i)dense.append({i*100.0/2048,-4,.1,8});
+      QElapsedTimer large;large.start();auto denseResult=FreeSlur::avoid(line,dense,true,10);QVERIFY(denseResult.candidates<=30);qInfo("automatic slur, 2048 shapes: %.3f ms",large.nsecsElapsed()/1e6);
+      QElapsedTimer timer;timer.start();for(int i=0;i<200;++i)FreeSlur::avoid(line,obstacles,true,10);qInfo("automatic slur, 200 constrained candidates: %.3f ms",timer.nsecsElapsed()/1e6);
+      }
+void TestPerformanceEditor::freeSlurAutomaticPersistence()
+      {
+      std::unique_ptr<MasterScore> score(readScore("mscore/performanceeditor/freeslur.mscx"));QVERIFY(score);score->doLayout();auto slur=addFreeSlur(score.get());auto midi=freeSlurMidi(score.get());
+      QVector<FreeSlurNode> nodes;QVERIFY(FreeSlur::decode("[[0.5,0,2,0,0]]",&nodes));QVERIFY(nodes[0].locked);QCOMPARE(FreeSlur::encode(nodes),QString("[[0.5,0,2,0,0]]"));
+      nodes[0].locked=false;const auto data=FreeSlur::encode(nodes);QVERIFY(data.contains("false"));QVERIFY(!FreeSlur::decode("[[0.5,0,2,0,0,0]]",&nodes));QVERIFY(FreeSlur::decode(data,&nodes));QVERIFY(!nodes[0].locked);
+      score->startCmd();slur->undoChangeProperty(Pid::FREE_SLUR_MODE,true);slur->undoChangeProperty(Pid::FREE_SLUR_NODES,data);slur->undoChangeProperty(Pid::FREE_SLUR_AUTO,true);score->endCmd();
+      auto segment=slur->frontSegment();auto middle=score->firstMeasure()->findSegment(SegmentType::ChordRest,Fraction::fromTicks(480));QVERIFY(middle);
+      const auto handles=segment->gripsPositions();const auto local=handles[6]-segment->pagePos();
+      middle->staffShape(0).add(QRectF(local-QPointF(4,4),QSizeF(8,8)).translated(-(middle->pos()+middle->measure()->pos()-segment->pos())));
+      segment->computeBezier();QVERIFY(segment->gripsPositions()[6]!=handles[6]);
+      const auto undo=score->undoStack()->getCurIdx();for(int i=0;i<5;++i)score->doLayout();QCOMPARE(score->undoStack()->getCurIdx(),undo);QCOMPARE(slur->getProperty(Pid::FREE_SLUR_NODES).toString(),data);QCOMPARE(freeSlurMidi(score.get()),midi);
+      std::unique_ptr<Slur> clone(slur->clone());QVERIFY(clone->freeAuto());QCOMPARE(clone->freeNodes()[0].locked,false);
+      QTemporaryDir directory;for(const char* ext:{"mscx","mscz"}) {
+            const auto path=directory.path()+"/auto."+ext;if(QString(ext)=="mscz"){QFileInfo file(path);QVERIFY(score->saveCompressedFile(file,false,false));}else QVERIFY(saveScore(score.get(),path));
+            std::unique_ptr<MasterScore> restored(readCreatedScore(path));QVERIFY(restored);Slur* r=nullptr;for(const auto& s:restored->spannerMap().map())if(s.second->isSlur())r=toSlur(s.second);QVERIFY(r);QVERIFY(r->freeAuto());QVERIFY(!r->freeNodes()[0].locked);QCOMPARE(r->getProperty(Pid::FREE_SLUR_NODES).toString(),data);
+            }
+      auto layoutBreak=new LayoutBreak(score.get());layoutBreak->setLayoutBreakType(LayoutBreak::Type::LINE);layoutBreak->setParent(score->firstMeasure());score->startCmd();score->undoAddElement(layoutBreak);score->endCmd();QVERIFY(slur->spannerSegments().size()>1);QCOMPARE(slur->getProperty(Pid::FREE_SLUR_NODES).toString(),data);
+      score->startCmd();slur->reset();score->endCmd();QVERIFY(!slur->freeAuto());score->undoRedo(true,&ed);QVERIFY(slur->freeAuto());QCOMPARE(slur->getProperty(Pid::FREE_SLUR_NODES).toString(),data);
+      }
+void TestPerformanceEditor::freeSlurBeamAvoidance()
+      {
+      QFile fixture(QString(TESTROOT)+"/mtest/mscore/performanceeditor/freeslur.mscx");QVERIFY(fixture.open(QIODevice::ReadOnly));auto xml=fixture.readAll().replace("quarter","eighth");
+      QTemporaryDir directory;QFile file(directory.path()+"/beams.mscx");QVERIFY(file.open(QIODevice::WriteOnly));file.write(xml);file.close();std::unique_ptr<MasterScore> score(readCreatedScore(file.fileName()));QVERIFY(score);score->doLayout();
+      auto first=toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(0));auto last=toChord(score->firstMeasure()->findSegment(SegmentType::ChordRest,Fraction::fromTicks(720))->element(0));QVERIFY(first->beam());
+      auto slur=new Slur(score.get());slur->setTrack(0);slur->setTrack2(0);slur->setTick(first->tick());slur->setTicks(last->tick()-first->tick());slur->setStartElement(first);slur->setEndElement(last);
+      score->startCmd();score->undoAddElement(slur);slur->undoChangeProperty(Pid::SLUR_DIRECTION,QVariant::fromValue(Direction::UP));slur->undoChangeProperty(Pid::FREE_SLUR_MODE,true);slur->undoChangeProperty(Pid::FREE_SLUR_NODES,FreeSlur::encode({{.3,{}, {},false}}));score->endCmd();
+      auto segment=slur->frontSegment();const auto center=first->beam()->pagePos()+first->beam()->bbox().center();const auto node=segment->gripsPositions()[6];auto nodes=slur->freeNodes();nodes[0].offset=(center-node)/score->spatium();QVERIFY(slur->setProperty(Pid::FREE_SLUR_NODES,FreeSlur::encode(nodes)));segment->computeBezier();
+      QVERIFY(QLineF(segment->gripsPositions()[6],center).length()<.001);
+      // Remove ordinary note/stem rectangles so only the independently collected
+      // native beam outline can move this point away from the beam.
+      for(auto s=score->firstMeasure()->first();s && s->measure()==score->firstMeasure();s=s->next1())s->staffShape(0).clear();
+      const auto saved=slur->getProperty(Pid::FREE_SLUR_NODES);QVERIFY(slur->setProperty(Pid::FREE_SLUR_AUTO,true));segment->computeBezier();QVERIFY(QLineF(segment->gripsPositions()[6],center).length()>score->spatium()*.2);QCOMPARE(segment->freeCollisions(),0);QCOMPARE(slur->getProperty(Pid::FREE_SLUR_NODES),saved);
+      }
+void TestPerformanceEditor::freeSlurAutomaticControls()
+      {
+
+      if(!Ms::mscore) {QCoreApplication::setOrganizationName("PerformanceRegression");QCoreApplication::setApplicationName("FreeSlurAutoInspector");QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,_directory.path());dataPath=_directory.path();MScore::noGui=true;noSeq=true;converterMode=true;initMuseScoreResources();QStringList args;MuseScore::init(args);}
+      auto main=Ms::mscore;main->resize(1250,900);main->show();auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/performanceeditor/freeslur.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));auto slur=addFreeSlur(score);
+      score->startCmd();slur->undoChangeProperty(Pid::FREE_SLUR_MODE,true);slur->undoChangeProperty(Pid::FREE_SLUR_NODES,QString("[[0.5,0,2,0,0]]"));score->select(slur->frontSegment(),SelectType::SINGLE,0);score->endCmd();getAction("inspector")->setChecked(true);main->cmd(getAction("inspector"));QTest::qWait(40);
+      auto dock=main->findChild<Inspector*>();QVERIFY(dock);auto stack=dock->findChild<QStackedWidget*>();QVERIFY(stack);
+      auto panelNow=[&] {return qobject_cast<InspectorSlurTie*>(stack->currentWidget());};
+      auto clickBox=[&](const char* id) {auto box=panelNow()->findChild<QCheckBox*>(id);QVERIFY(box);QTest::mouseClick(box,Qt::LeftButton,Qt::NoModifier,QPoint(8,box->height()/2));};
+      QVERIFY(panelNow());QVERIFY(panelNow()->findChild<QCheckBox*>("freeSlurLock")->isChecked());
+      clickBox("freeSlurAuto");QTRY_VERIFY(slur->freeAuto());
+      clickBox("freeSlurLock");QTRY_VERIFY(!slur->freeNodes()[0].locked);
+      auto shown=slur->frontSegment()->gripsPositions()[6];
+      clickBox("freeSlurLock");QTRY_VERIFY(slur->freeNodes()[0].locked);QVERIFY(QLineF(shown,slur->frontSegment()->gripsPositions()[6]).length()<.001);
+      clickBox("freeSlurLock");QTRY_VERIFY(!slur->freeNodes()[0].locked);
+      // Starting a drag on an automatically moved point keeps its visible position.
+      auto segment=slur->frontSegment();auto before=segment->gripsPositions()[6];score->startCmd();EditData drag;drag.curGrip=Grip(6);drag.delta=QPointF(0,.1*score->spatium());segment->startEditDrag(drag);segment->editDrag(drag);auto after=segment->gripsPositions()[6];QVERIFY(QLineF(before+drag.delta,after).length()<.001);segment->endEditDrag(drag);score->endCmd();QVERIFY(slur->freeNodes()[0].locked);
+      auto position=panelNow()->findChild<QDoubleSpinBox*>("freeSlurAddPosition");auto add=panelNow()->findChild<QToolButton*>("freeSlurAdd");QVERIFY(position&&add);position->setValue(25);
+      FreeSlurNode expected;QVERIFY(segment->displayedFreeNode(.25,&expected));QTest::mouseClick(add,Qt::LeftButton);QTRY_COMPARE(slur->freeNodes().size(),2);QCOMPARE(slur->freeNodes()[0].offset,expected.offset);QCOMPARE(slur->freeNodes()[0].tangent,expected.tangent);
+      const auto old=slur->getProperty(Pid::FREE_SLUR_NODES);const int undo=score->undoStack()->getCurIdx();auto restore=panelNow()->findChild<QToolButton*>("freeSlurRestoreAuto");QVERIFY(restore);QTest::mouseClick(restore,Qt::LeftButton);QTRY_COMPARE(slur->freeNodes().size(),0);QVERIFY(slur->freeAuto());QCOMPARE(score->undoStack()->getCurIdx(),undo+1);getAction("undo")->trigger();QTRY_COMPARE(slur->getProperty(Pid::FREE_SLUR_NODES),old);
+      // Native undo restores the selection recorded before the command. Select
+      // the restored line again before querying its inspector controls.
+      score->startCmd();score->select(slur->frontSegment(),SelectType::SINGLE,0);score->endCmd();main->cmd(getAction("inspector"));
+      QTRY_VERIFY(panelNow());QTRY_VERIFY(panelNow()->findChild<QComboBox*>("freeSlurNode"));QTRY_COMPARE(panelNow()->findChild<QComboBox*>("freeSlurNode")->count(),2);
+      auto view=main->currentScoreView();view->setOffset(0,0);view->adjustCanvasPosition(slur->startCR(),false);QTest::qWait(40);QVERIFY(panelNow());panelNow()->grab().save("free-slur-auto-inspector.png");view->grab().save("free-slur-auto-score.png");QVERIFY(main->savePdf(score,"free-slur-auto.pdf"));QFile svg("free-slur-auto.svg");QVERIFY(svg.open(QIODevice::WriteOnly));QVERIFY(main->saveSvg(score,&svg));svg.close();QVERIFY(QFileInfo("free-slur-auto.pdf").size()>100);QCOMPARE(slur->getProperty(Pid::FREE_SLUR_NODES),old);
+      }
