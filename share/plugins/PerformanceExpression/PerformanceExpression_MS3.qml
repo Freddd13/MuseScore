@@ -12,11 +12,20 @@ MuseScore {
  id:root
  menuPath:"Plugins.Performance Expression"
  description:"演奏表达：把 MIDI 演奏的力度和速度用于选中的乐谱。"
- version:"1.2.0";requiresScore:true;pluginType:"dock";dockArea:"right"
+ version:"1.3.0";requiresScore:true;pluginType:"dock";dockArea:"right"
  implicitWidth:440;implicitHeight:720
  property var observer:null
  property var editorContext:null
  property var audioProject:null
+ property var captureSession:null
+ property var captureState:captureSession?captureSession.state:({recording:false,stopping:false,saving:false,seconds:0,count:0,pitch:-1,velocity:0,device:""})
+ property bool readForCapture:false
+ property bool recordingImport:false
+ property int captureEndMode:0
+ property int captureDuration:30
+ property bool captureMonitor:true
+ function recordingPitch(p){return ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"][p%12]+(Math.floor(p/12)-1)}
+ function saveCaptureOptions(){if(observer)observer.saveConfiguration("expression-recording",{endMode:captureEndMode,duration:captureDuration,monitor:captureMonitor})}
  property bool auditionAudio:false
  function publishComparison(){
   if(!observer||typeof observer.setEditorComparison!=="function"||stale)return;
@@ -83,19 +92,26 @@ MuseScore {
  property bool compact:height<170 || (typeof panelPlacement==="string"&&panelPlacement==="top")
  Desk.UiTheme {id:theme}
  function fail(e){status=Messages.readable(e)}
- function cancel(){pendingAudition=null;auditionRetry.stop();paging.stop();if(observer){observer.cancelReadOnlyJob();if(typeof observer.cancelPerformanceMidi==="function")observer.cancelPerformanceMidi()}busy=false}
+ function cancel(){var wasBusy=busy||captureState.recording||captureState.stopping||captureState.saving;readForCapture=false;if(captureSession)captureSession.cancel();pendingAudition=null;auditionRetry.stop();paging.stop();if(observer){observer.cancelReadOnlyJob();if(typeof observer.cancelPerformanceMidi==="function")observer.cancelPerformanceMidi()}busy=false;if(wasBusy)status="已取消，可以继续导入或录制。"}
  function runAlignment(){
   if(!midi||!notes.length){status="需要谱面起音与 MIDI";return}
   if(stale || observer.analysisRevision()!==revision){status="谱面已变化，请重新读取";return}
   candidate=null;busy=true;status="正在寻找并对应演奏…";
   token=observer.startReadOnlyJob(workerSource+"\nalign(input)",{notes:notes,performance:midi.notes,repeats:info.repeats,occurrence:occurrence,cacheKey:revision+":"+midi.sha256+":"+mode+":"+role+":"+selectedTrack+":"+fromSeconds+":"+untilSeconds+":"+occurrence,previousKey:result.cacheKey,segments:result.segments,from:fromSeconds,until:untilSeconds,role:role,track:selectedTrack,mode:mode===1?"tap":"score",passageChoice:passageChoice,anchors:manualAnchors,links:links});
  }
- function analyze(){
-  if(!midi){status="请先导入 MIDI";return}
+ function analyze(){if(!midi){status="请先导入 MIDI 或录制一段演奏";return}readScore(false)}
+ function startRecording(){if(previewing&&!returnOriginal())return;readScore(true)}
+ function beginRecording(){
+  readForCapture=false;busy=false;
+  if(!captureSession){status="更新软件后可以直接录制 MIDI；现在也可以导入 MIDI 文件。";return}
+  var r=captureSession.start({endMode:["manual","duration","passage"][captureEndMode],duration:captureDuration,monitor:captureMonitor,notes:notes,start:scope.start,firstTrack:scope.firstTrack,tap:mode===1,role:role,track:selectedTrack});
+  if(r.error){fail(r.error);return}busy=true;saveCaptureOptions();status="录制中，弹完后点击停止录制。";
+ }
+ function readScore(forCapture){
   if(observer.playing){status="请停播后分析";return}
-  cancel();observer.score=curScore;info=observer.workflowInfo();
+  cancel();readForCapture=forCapture;observer.score=curScore;info=observer.workflowInfo();
   if(info.error){fail(info.error);return}
-  scope=observer.analysisScope(whole);if(!scope.end){status="请选择目标谱段";return}
+  scope=observer.analysisScope(whole);if(selectedTrack<scope.firstTrack||selectedTrack>=scope.endTrack)selectedTrack=scope.firstTrack;if(!scope.end){status="请选择目标谱段";return}
   notes=[];collecting=[];revision=observer.analysisRevision();nextTick=scope.start;stale=false;busy=true;status="正在读取所选谱段…";paging.start();
  }
  function slice(){
@@ -104,7 +120,7 @@ MuseScore {
   if(page.error){cancel();fail(page.error);return}
   worstBatch=Math.max(worstBatch,page.milliseconds||0);if(page.milliseconds>2)batchSize=Math.max(1,Math.floor(batchSize/2));else if(page.milliseconds<.8)batchSize=Math.min(32,batchSize+1);
   Array.prototype.push.apply(collecting,page.notes||[]);nextTick=page.nextTick;
-  if(page.done){notes=collecting;collecting=[];paging.stop();runAlignment()}
+  if(page.done){notes=collecting;collecting=[];paging.stop();if(readForCapture)beginRecording();else runAlignment()}
  }
  function build(){
   if(!result.matches.length||stale){status="先导入演奏并对应谱段";return}
@@ -191,6 +207,8 @@ MuseScore {
   if(typeof newReferenceProject==="function")audioProject=newReferenceProject();
   if(typeof newScoreObserver!=="function"){status="需要支持 P1 的 Kumo 版本";return}
   observer=newScoreObserver();observer.score=curScore;
+  if(typeof newMidiCaptureSession==="function")captureSession=newMidiCaptureSession();
+  var recording=observer.loadConfiguration("expression-recording");if(recording){captureEndMode=Math.max(0,Math.min(2,recording.endMode||0));captureDuration=Math.max(1,Math.min(3600,recording.duration||30));captureMonitor=recording.monitor!==false;}
   workerSource=observer.readTextFile(String(Qt.resolvedUrl("Alignment.js")));
   if(typeof observer.performanceRange!=="function")status="需要支持 P1 演奏快照的版本";
  }
@@ -201,6 +219,14 @@ MuseScore {
  }
  onVisibleChanged:if(!visible){cancel();if(observer&&typeof observer.cancelPerformanceMidi==="function")observer.cancelPerformanceMidi()}
  Component.onDestruction:{if(previewing&&observer)observer.returnWorkflowSource();cancel()}
+ Connections {
+  target:root.captureSession;ignoreUnknownSignals:true
+  onFailed:{root.busy=false;root.fail(message)}
+  onFinished:{
+   root.recordingImport=true;root.loadedSourceHash="";root.manualAnchors=[];root.links=[];root.passageChoice=0;root.fromSeconds=0;root.untilSeconds=999999;root.busy=true;root.dirtyProject=true;
+   root.midiToken=root.observer.readPerformanceMidi(path);root.status=reason+"，正在对应选段…";
+  }
+ }
  Timer {id:auditionRetry;interval:50;onTriggered:root.advanceAudition()}
  Timer {id:candidateTimer;interval:120;onTriggered:if(root.result.matches.length&&!root.busy&&!root.stale&&!root.previewing)root.build()}
  Timer {id:paging;interval:1;repeat:true;onTriggered:root.slice()}
@@ -209,8 +235,8 @@ MuseScore {
   onPerformanceMidiReady:{
    if(token!==root.midiToken)return;
    if(result.error){root.busy=false;root.fail(result.error);return}
-   if(root.loadedSourceHash&&root.loadedSourceHash!==result.sha256){root.fail("项目原始 MIDI 已变化，请重新导入并核查人工对应");root.midi=null;return}
-   root.busy=false;root.loadedSourceHash="";root.midi=result;root.status="已导入 "+result.notes.length+" 个音，正在寻找所选谱段";root.analyze();
+   if(root.loadedSourceHash&&root.loadedSourceHash!==result.sha256){root.busy=false;root.fail("项目原始 MIDI 已变化，请重新导入并核查人工对应");root.midi=null;return}
+   root.busy=false;root.loadedSourceHash="";root.midi=result;root.status="已导入 "+result.notes.length+" 个音，正在寻找所选谱段";if(root.recordingImport){root.recordingImport=false;if(root.revision===root.observer.analysisRevision())root.runAlignment();else root.analyze()}else root.analyze();
   }
   onReadOnlyJobFinished:{
    if(token!==root.token)return;
@@ -229,13 +255,23 @@ MuseScore {
    Item {Layout.fillWidth:true}
    Desk.DeskButton {text:"停止";visible:root.compact&&root.previewing;onClicked:root.stopAudition()}
    Desk.DeskButton {text:"返回";visible:root.compact&&root.previewing;onClicked:root.returnOriginal()}
-   Desk.DeskButton {text:"导入 MIDI";enabled:!root.busy;onClicked:midiDialog.open()}
+   Desk.DeskButton {text:"导入 MIDI";enabled:!root.busy&&!root.captureState.recording&&!root.captureState.stopping&&!root.captureState.saving;onClicked:midiDialog.open()}
    Desk.DeskButton {text:"项目";onClicked:projectMenu.open()}
    Desk.DeskButton {text:"悬浮";onClicked:{if(typeof root.setPanelFloating==="function")root.setPanelFloating(!root.panelFloating)}}
   }
+  RowLayout {
+   Layout.fillWidth:true
+   Desk.DeskButton {objectName:"expressionRecord";text:root.captureState.recording?"停止录制":"录制";enabled:root.captureSession!==null&&!root.captureState.stopping&&!root.captureState.saving&&(!root.busy||root.captureState.recording);onClicked:{if(root.captureState.recording)root.captureSession.stop();else root.startRecording()}}
+   Desk.DeskComboBox {objectName:"expressionRecordEnd";Layout.fillWidth:true;model:["手动停止","到时停止","弹完选段停止"];currentIndex:root.captureEndMode;enabled:!root.captureState.recording&&!root.captureState.stopping;onActivated:{root.captureEndMode=currentIndex;root.saveCaptureOptions()}}
+   Desk.DeskSpinBox {visible:root.captureEndMode===1;from:1;to:3600;value:root.captureDuration;onValueModified:{root.captureDuration=value;root.saveCaptureOptions()}}
+   Label {visible:root.captureEndMode===1;text:"秒";color:theme.muted}
+  }
+  Label {visible:!!(root.captureState.recording||root.captureState.stopping||root.captureState.saving);Layout.fillWidth:true;Layout.preferredHeight:24;elide:Text.ElideRight;color:theme.accent;text:root.captureState.stopping?"正在收完最后的音…":root.captureState.saving?"正在保存录制…":(root.captureState.seconds||0).toFixed(1)+" 秒 · "+(root.captureState.count||0)+" 个音 · "+(root.captureState.pitch>=0?root.recordingPitch(root.captureState.pitch)+" · 力度 "+root.captureState.velocity:"等待键盘输入")}
   Label {Layout.fillWidth:true;Layout.preferredHeight:28;elide:Text.ElideRight;ToolTip.visible:statusHover.containsMouse;ToolTip.text:root.status;color:root.stale?theme.accent:theme.muted;text:root.status;MouseArea {id:statusHover;anchors.fill:parent;hoverEnabled:true;acceptedButtons:Qt.NoButton}}
   GridLayout {
    visible:root.advancedSettings&&!root.compact;columns:2;Layout.fillWidth:true
+   CheckBox {text:"录制时听到键盘声音";checked:root.captureMonitor;onToggled:{root.captureMonitor=checked;root.saveCaptureOptions()}}
+   Label {Layout.fillWidth:true;elide:Text.ElideRight;text:root.captureState.device||"使用软件当前 MIDI 输入";color:theme.muted}
    Desk.DeskComboBox {Layout.fillWidth:true;model:["按谱演奏（允许错漏）","任意音高敲击音序"];currentIndex:root.mode;onActivated:{root.mode=currentIndex;root.candidate=null}}
    Desk.DeskComboBox {Layout.fillWidth:true;model:["所选声部组","最高音旋律","指定谱表和声部"];currentIndex:root.role;onActivated:{root.role=currentIndex;root.candidate=null}}
    Desk.DeskSpinBox {visible:root.role===2;from:root.scope.firstTrack||0;to:Math.max(from,(root.scope.endTrack||1)-1);value:root.selectedTrack;onValueModified:root.selectedTrack=value}
@@ -253,13 +289,13 @@ MuseScore {
   }
   RowLayout {
    Layout.fillWidth:true
-   Desk.DeskButton {text:"重新对应";enabled:root.midi&&!root.busy;onClicked:root.analyze()}
+   Desk.DeskButton {text:"重新对应";enabled:root.midi&&!root.busy&&!root.captureState.recording&&!root.captureState.stopping&&!root.captureState.saving;onClicked:root.analyze()}
    Desk.DeskButton {visible:root.advancedSettings;text:"重算对应";enabled:root.notes.length&&!root.busy&&!root.stale;onClicked:root.runAlignment()}
    Desk.DeskButton {text:root.advancedSettings?"收起设置":"更多设置";onClicked:root.advancedSettings=!root.advancedSettings}
    Desk.DeskButton {text:"编辑器对比";enabled:root.result.matches.length>0;onClicked:{if(typeof root.observer.showEditorComparison==="function")root.observer.showEditorComparison()}}
    Desk.DeskButton {text:"取消";enabled:root.busy;onClicked:root.cancel()}
   }
-  Desk.DeskComboBox {objectName:"expressionPassageChoice";Layout.fillWidth:true;visible:root.result.passage&&root.result.passage.candidates&&root.result.passage.candidates.length>1;model:root.result.passage&&root.result.passage.candidates?root.result.passage.candidates.map(function(v,i){return "演奏位置 "+(i+1)+" · "+v.from.toFixed(2)+"–"+v.until.toFixed(2)+" 秒"}):[];currentIndex:root.passageChoice;onActivated:{root.passageChoice=currentIndex;root.runAlignment()}}
+  Desk.DeskComboBox {objectName:"expressionPassageChoice";Layout.fillWidth:true;visible:!!(root.result.passage&&root.result.passage.candidates&&root.result.passage.candidates.length>1);model:root.result.passage&&root.result.passage.candidates?root.result.passage.candidates.map(function(v,i){return "演奏位置 "+(i+1)+" · "+v.from.toFixed(2)+"–"+v.until.toFixed(2)+" 秒"}):[];currentIndex:root.passageChoice;onActivated:{root.passageChoice=currentIndex;root.runAlignment()}}
   Canvas {
    id:timeline;visible:root.advancedSettings&&!root.compact;Layout.fillWidth:true;Layout.preferredHeight:100
    onWidthChanged:requestPaint()

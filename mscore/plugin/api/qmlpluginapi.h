@@ -255,6 +255,7 @@ class PluginAPI : public Ms::QmlPlugin {
       Q_INVOKABLE QObject* newReferenceMedia();
       Q_INVOKABLE QObject* newReferenceProject();
       Q_INVOKABLE QObject* newWorkflowContext();
+      Q_INVOKABLE QObject* newMidiCaptureSession();
       Q_INVOKABLE void releaseReferenceMedia(QObject*);
       Q_INVOKABLE bool writeScore(Ms::PluginAPI::Score*, const QString& name, const QString& ext);
       Q_INVOKABLE Ms::PluginAPI::Score* readScore(const QString& name, bool noninteractive = false);

@@ -333,7 +333,7 @@ MuseScore {
   RowLayout {visible:!root.compact;Layout.fillWidth:true;Desk.DeskButton {objectName:"referencePlayAssociation";text:"播放选中片段";enabled:root.selectedAssociation>=0;onClicked:root.playAssociation()}Desk.DeskButton {text:"编辑关联";enabled:root.selectedAssociation>=0;onClicked:associationDialog.open()}Item{Layout.fillWidth:true}}
   Label {visible:!root.compact;Layout.fillWidth:true;Layout.preferredHeight:28;wrapMode:Text.Wrap;maximumLineCount:2;elide:Text.ElideRight;text:(root.audioProject&&root.audioProject.playing?root.audioProject.status:root.status)+(root.usable?" · "+Messages.mediaState(root.media.status):"");color:theme.muted;font.pixelSize:11}
  }
- Dialog {id:trackNameDialog;title:"音轨名称";modal:true;standardButtons:Dialog.Ok|Dialog.Cancel;onAccepted:root.trackOption("name",trackName.text);Desk.DeskTextField {id:trackName;width:240;text:root.selectedTrack>=0&&root.selectedTrack<root.tracks.length?root.tracks[root.selectedTrack].name:""}}
+ Dialog {id:trackNameDialog;title:"音轨名称";modal:true;width:280;standardButtons:Dialog.Ok|Dialog.Cancel;onAccepted:root.trackOption("name",trackName.text);Desk.DeskTextField {id:trackName;width:240;text:root.selectedTrack>=0&&root.selectedTrack<root.tracks.length?root.tracks[root.selectedTrack].name:""}}
  Menu {id:projectMenu;
  MenuItem {text:"当前音轨改名";enabled:root.selectedTrack>=0;onTriggered:trackNameDialog.open()}
  MenuItem {text:"移除此音轨，保留原文件";enabled:root.selectedTrack>=0;onTriggered:root.removeTrack()}

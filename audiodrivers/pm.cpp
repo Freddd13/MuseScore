@@ -32,6 +32,9 @@
 #include "mscore/preferences.h"
 #include "mscore/musescore.h"
 #include "mscore/seq.h"
+#ifdef SCRIPT_INTERFACE
+#include "mscore/workflow/midicapture.h"
+#endif
 
 namespace Ms {
 
@@ -182,12 +185,20 @@ void PortMidiDriver::read()
       if (!inputStream)
             return;
       PmEvent buffer[1];
-      while (Pm_Poll(inputStream)) {
+      int ready;
+      while ((ready = Pm_Poll(inputStream)) == TRUE) {
             int n = Pm_Read(inputStream, buffer, 1);
             if (n > 0) {
                   int status  = Pm_MessageStatus(buffer[0].message);
                   int type    = status & 0xF0;
                   int channel = status & 0x0F;
+                  #ifdef SCRIPT_INTERFACE
+                  // PortMidi timestamps use Pt_Time, including its 32-bit wrap.
+                  const qint32 age=qint32(quint32(Pt_Time())-quint32(buffer[0].timestamp));
+                  const qint64 timestamp=midiInputTime()-qint64(qMax(0,age))*1000000;
+                  NPlayEvent captured(type,channel,Pm_MessageData1(buffer[0].message),Pm_MessageData2(buffer[0].message));
+                  if(captureMidiInput(captured,timestamp))continue;
+                  #endif
                   if (type == ME_NOTEON) {
                         int pitch = Pm_MessageData1(buffer[0].message);
                         int velo = Pm_MessageData2(buffer[0].message);
@@ -204,7 +215,13 @@ void PortMidiDriver::read()
                         mscore->midiCtrlReceived(param, value);
                         }
                   }
+            #ifdef SCRIPT_INTERFACE
+            else if(n<0)stopMidiCaptureInput(QObject::tr("MIDI 输入连接中断，已保留收到的演奏"));
+            #endif
             }
+      #ifdef SCRIPT_INTERFACE
+      if(ready<0)stopMidiCaptureInput(QObject::tr("MIDI 输入连接中断，已保留收到的演奏"));
+      #endif
       }
 
 //---------------------------------------------------------

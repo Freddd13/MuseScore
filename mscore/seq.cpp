@@ -28,6 +28,9 @@
 #include "scoreview.h"
 #include "seq.h"
 #include "workflow/referencebus.h"
+#ifdef SCRIPT_INTERFACE
+#include "workflow/midicapture.h"
+#endif
 #include "synthcontrol.h"
 
 #include "audio/midi/msynthesizer.h"
@@ -2509,7 +2512,11 @@ void Seq::guiToSeq(const SeqMsg& msg)
 
 void Seq::eventToGui(NPlayEvent e)
       {
-      fromSeq.enqueue(SeqMsg(SeqMsgId::MIDI_INPUT_EVENT, e));
+      SeqMsg message(SeqMsgId::MIDI_INPUT_EVENT, e);
+      #ifdef SCRIPT_INTERFACE
+      message.inputTimestamp = midiInputTime();
+      #endif
+      fromSeq.enqueue(message);
       }
 
 //---------------------------------------------------------
@@ -2611,6 +2618,10 @@ void Seq::heartBeatTimeout()
       while (!fromSeq.empty()) {
             SeqMsg msg = fromSeq.dequeue();
             if (msg.id == SeqMsgId::MIDI_INPUT_EVENT) {
+                  #ifdef SCRIPT_INTERFACE
+                  if (captureMidiInput(msg.event, msg.inputTimestamp))
+                        continue;
+                  #endif
                   int type = msg.event.type();
                   if (type == ME_NOTEON)
                         mscore->midiNoteReceived(msg.event.channel(), msg.event.pitch(), msg.event.velo());

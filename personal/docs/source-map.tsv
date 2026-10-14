@@ -61,10 +61,10 @@ MIDI左右手拆分	importexport/midiimport/importmidi_lrhand.h	void splitIntoLe
 生成播放事件	libmscore/rendermidi.cpp	void Score::createPlayEvents(Chord* chord)	2433	Auto/User事件策略	mtest/libmscore/midi
 播放MIDI渲染	libmscore/rendermidi.cpp	void MidiRenderer::renderScore(	2582	分块渲染	mtest/libmscore/midi
 踏板播放	libmscore/rendermidi.cpp	void MidiRenderer::renderSpanners(	1166	踏板控制器及跨时元素	mtest/libmscore/spanners
-播放事件收集	mscore/seq.cpp	void Seq::collectEvents(int utick)	1526	缓存与异步结果	-
-音频回调	mscore/seq.cpp	void Seq::process(unsigned framesPerPeriod, float* buffer)	1117	实时事件调度与合成	-
-播放界面心跳	mscore/seq.cpp	void Seq::heartBeatTimeout()	2600	输入消息与显示同步	-
-独立节拍器	mscore/seq.cpp	void Seq::independentMetronome(unsigned n, float* p)	924	练习节拍音频生成	-
+播放事件收集	mscore/seq.cpp	void Seq::collectEvents(int utick)	1529	缓存与异步结果	-
+音频回调	mscore/seq.cpp	void Seq::process(unsigned framesPerPeriod, float* buffer)	1120	实时事件调度与合成	-
+播放界面心跳	mscore/seq.cpp	void Seq::heartBeatTimeout()	2607	输入消息与显示同步	-
+独立节拍器	mscore/seq.cpp	void Seq::independentMetronome(unsigned n, float* p)	927	练习节拍音频生成	-
 主合成器	audio/midi/msynthesizer.cpp	void MasterSynthesizer::process(unsigned n, float* p)	280	合成与效果器	-
 音频Driver	audiodrivers/driver.h	class Driver {	33	设备接口	-
 插件属性写入	mscore/plugin/api/scoreelement.cpp	Ownership::SCORE	127	undo与插件对象所有权	mtest/scripting
@@ -252,3 +252,5 @@ MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	232	�
 演奏直接试听	mscore/workflow/workflowexpression.cpp	QString ScoreObserver::temporaryWorkflowProject(	127	自动准备试听材料位置	mtest/mscore/p1native
 分手折线控制点	libmscore/symbol.cpp	void Symbol::editDrag(	168	端点调整长度，拐点移动整条折线	mtest/mscore/performanceeditor/handsymbol_tests.inc
 分手默认形状	mscore/handbracketsettings.cpp	static void refreshHandPaletteDefaults(	17	保存后更新所有默认符号面板	mtest/mscore/performanceeditor/handsymbol_tests.inc
+实时MIDI录制	mscore/workflow/midicapture.cpp	MidiCaptureSession::begin(	63	独立录制、时间、松手与自动结束	mtest/mscore/p1native
+Windows录制输入	audiodrivers/pm.cpp	void PortMidiDriver::read(	183	保留PortMidi时间的录制入口	mtest/mscore/p1native

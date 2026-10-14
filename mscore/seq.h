@@ -78,6 +78,7 @@ struct SeqMsg {
             };
       int intVal2 { 0 };
       NPlayEvent event;
+      qint64 inputTimestamp { 0 };
 
       SeqMsg() {}
       SeqMsg(SeqMsgId _id, int val) : id(_id), intVal(val) {}

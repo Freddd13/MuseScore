@@ -35,6 +35,9 @@
 #include "mscore/musescore.h"
 #include "mscore/globals.h"
 #include "mscore/seq.h"
+#ifdef SCRIPT_INTERFACE
+#include "mscore/workflow/midicapture.h"
+#endif
 
 namespace Ms {
 
@@ -394,6 +397,15 @@ void AlsaMidiDriver::read()
                   snd_seq_free_event(ev);
                   return;
                   }
+
+            #ifdef SCRIPT_INTERFACE
+            NPlayEvent captured;
+            if(ev->type==SND_SEQ_EVENT_NOTEON||ev->type==SND_SEQ_EVENT_NOTEOFF)
+                  captured=NPlayEvent(ev->type==SND_SEQ_EVENT_NOTEON?ME_NOTEON:ME_NOTEOFF,ev->data.note.channel,ev->data.note.note,ev->data.note.velocity);
+            else if(ev->type==SND_SEQ_EVENT_CONTROLLER)
+                  captured=NPlayEvent(ME_CONTROLLER,ev->data.control.channel,ev->data.control.param,ev->data.control.value);
+            if(captured.type()!=ME_INVALID&&captureMidiInput(captured,midiInputTime())){snd_seq_free_event(ev);continue;}
+            #endif
 
             if (ev->type == SND_SEQ_EVENT_NOTEON) {
                   int pitch = ev->data.note.note;

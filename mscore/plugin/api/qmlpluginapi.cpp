@@ -23,6 +23,7 @@
 #include "scoreobserver.h"
 #include "mscore/workflow/referencefactory.h"
 #include "mscore/workflow/workflowcontext.h"
+#include "mscore/workflow/midicapture.h"
 #include "selection.h"
 #include "shortcut.h"
 #include "tie.h"
@@ -270,6 +271,7 @@ QObject* PluginAPI::newReferenceMedia() { auto media=Ms::createReferenceMedia(th
 void PluginAPI::releaseReferenceMedia(QObject* media) { if(media&&media->parent()==this&&media->property("kumoReferenceOwned").toBool())media->deleteLater(); }
 QObject* PluginAPI::newReferenceProject() { return Ms::referenceProject(); }
 QObject* PluginAPI::newWorkflowContext() { return Ms::workflowContext(); }
+QObject* PluginAPI::newMidiCaptureSession() { return new Ms::MidiCaptureSession(this); }
 
 QObject* PluginAPI::newScoreObserver()
       {

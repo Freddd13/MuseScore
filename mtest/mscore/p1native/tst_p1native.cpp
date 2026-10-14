@@ -45,6 +45,9 @@
 #include "mscore/musescore.h"
 #include "mscore/workflow/referencebus.h"
 #include "mscore/workflow/workflowcontext.h"
+#include "mscore/workflow/midicapture.h"
+#include "mscore/workflow/midiinput.h"
+#include "audio/midi/event.h"
 #include "mscore/performanceeditor/performanceeditor.h"
 #include <QToolButton>
 #include <algorithm>
@@ -92,6 +95,54 @@ private slots:
 #include "tempo_palette_tests.inc"
 #include "tap_mark_tests.inc"
 #endif
+ void midiCaptureRecordingAndTiming(){
+  MidiCaptureSession capture;QSignalSpy finished(&capture,&MidiCaptureSession::finished),failed(&capture,&MidiCaptureSession::failed);
+  QVERIFY(!captureMidiInput(NPlayEvent(ME_NOTEON,0,60,80),midiInputTime()));
+  QVERIFY(!capture.begin({{"monitor",false}},false).contains("error"));
+  MidiCaptureSession other;QVERIFY(other.begin({},false).contains("error"));
+  qint64 origin=midiInputTime();QTest::qWait(150);
+  // Delivery is intentionally late. The recording uses arrival at the input FIFO.
+  QVERIFY(captureMidiInput(NPlayEvent(ME_CONTROLLER,1,64,127),origin+10000000));
+  QVERIFY(captureMidiInput(NPlayEvent(ME_NOTEON,1,60,93),origin+20000000));
+  QVERIFY(captureMidiInput(NPlayEvent(ME_NOTEOFF,1,60,0),origin+90000000));
+  QVERIFY(captureMidiInput(NPlayEvent(ME_CONTROLLER,1,64,0),origin+120000000));
+  captureMidiInput(NPlayEvent(ME_NOTEON,2,67,71),midiInputTime()); // stop closes this held key
+  capture.stop();QTRY_COMPARE(finished.count(),1);QCOMPARE(failed.count(),0);
+  std::atomic_bool cancel(false);auto result=readPerformanceMidi(finished[0][0].toString(),cancel);
+  QVERIFY2(!result.contains("error"),qPrintable(result.value("error").toString()));
+  auto notes=result["notes"].toList();QCOMPARE(notes.size(),2);auto note=notes[0].toMap();
+  QCOMPARE(note["pitch"].toInt(),60);QCOMPARE(note["velocity"].toInt(),93);QCOMPARE(note["channel"].toInt(),1);
+  QVERIFY(qAbs(note["endSeconds"].toDouble()-note["seconds"].toDouble()-.07)<.001);
+  QVERIFY(!notes[1].toMap()["unreleased"].toBool());
+  int pedalEvents=0;for(auto value:result["events"].toList()){auto e=value.toMap();if((e["type"].toInt()&240)==ME_CONTROLLER&&e["a"].toInt()==64)++pedalEvents;}
+  QCOMPARE(pedalEvents,2);QVERIFY(!capture.state()["recording"].toBool());
+  QVERIFY(!captureMidiInput(NPlayEvent(ME_NOTEON,0,60,80),midiInputTime()));
+ }
+ void midiCaptureEndModesAndCancellation(){
+  MidiCaptureSession capture;QSignalSpy finished(&capture,&MidiCaptureSession::finished),failed(&capture,&MidiCaptureSession::failed);
+  QVERIFY(!capture.begin({{"endMode","duration"},{"duration",1}},false).contains("error"));
+  captureMidiInput(NPlayEvent(ME_NOTEON,0,64,80),midiInputTime());captureMidiInput(NPlayEvent(ME_NOTEOFF,0,64,0),midiInputTime());
+  QTRY_COMPARE(finished.count(),1);QVERIFY(finished[0][1].toString().contains(QString::fromUtf8("设定时长")));
+  QVariantList target{QVariantMap{{"tick",0},{"pitch",60}},QVariantMap{{"tick",0},{"pitch",48}},QVariantMap{{"tick",480},{"pitch",64}},QVariantMap{{"tick",480},{"pitch",52}}};
+  QVERIFY(!capture.begin({{"endMode","passage"},{"notes",target},{"role",1}},false).contains("error"));
+  captureMidiInput(NPlayEvent(ME_NOTEON,0,60,80),midiInputTime());captureMidiInput(NPlayEvent(ME_NOTEOFF,0,60,0),midiInputTime());
+  QTest::qWait(250);QVERIFY(capture.state()["recording"].toBool()); // a pause inside the passage
+  captureMidiInput(NPlayEvent(ME_NOTEON,0,64,80),midiInputTime());captureMidiInput(NPlayEvent(ME_NOTEOFF,0,64,0),midiInputTime());
+  QTRY_COMPARE(finished.count(),2);QVERIFY(finished[1][1].toString().contains(QString::fromUtf8("选段末尾")));
+  QVERIFY(!capture.begin({},false).contains("error"));qint64 queued=midiInputTime();capture.cancel();
+  QVERIFY(captureMidiInput(NPlayEvent(ME_NOTEON,0,72,90),queued));
+  QVERIFY(!captureMidiInput(NPlayEvent(ME_NOTEON,0,72,90),midiInputTime()));QCOMPARE(finished.count(),2);
+  QVERIFY(!capture.begin({},false).contains("error"));capture.stop();QTRY_COMPARE(failed.count(),1);
+  QVERIFY(!capture.begin({{"duration",0}},false).isEmpty());
+ }
+ void midiCaptureScoreChange(){
+  auto score=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);mscore->setCurrentScoreView(mscore->appendScore(score));
+  MidiCaptureSession capture;QSignalSpy failed(&capture,&MidiCaptureSession::failed);
+  QVERIFY(!capture.begin({},false).contains("error"));captureMidiInput(NPlayEvent(ME_NOTEON,0,60,80),midiInputTime());
+  auto other=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(other);mscore->setCurrentScoreView(mscore->appendScore(other));
+  QTRY_COMPARE(failed.count(),1);QVERIFY(!capture.state()["recording"].toBool());
+  QVERIFY(!captureMidiInput(NPlayEvent(ME_NOTEOFF,0,60,0),midiInputTime()));
+ }
  void compatibleSnapshot(){
   std::unique_ptr<MasterScore> s(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx"));QVERIFY(s);PluginAPI::Score wrapped(s.get());PluginAPI::ScoreObserver o;o.setScore(&wrapped);
   auto info=o.workflowInfo();QVERIFY(!info.contains("error"));auto scope=o.analysisScope(true);auto rev=o.analysisRevision();
@@ -255,6 +306,35 @@ private slots:
   reference->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath("manual-reference.png"));
  }
 
+ void recordedExpressionMouseActions(){
+  auto score=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);mscore->setCurrentScoreView(mscore->appendScore(score));
+  const QString path=QString(TESTROOT)+"/share/plugins/PerformanceExpression/PerformanceExpression_MS3.qml";
+  PluginDescription description;description.path=path;QVERIFY(collectPluginMetaInformation(&description));mscore->registerPlugin(&description);mscore->pluginTriggered(path);QTest::qWait(100);
+  QmlPlugin* root=nullptr;for(auto window:QGuiApplication::allWindows()){auto view=qobject_cast<QQuickView*>(window);auto item=view?qobject_cast<QmlPlugin*>(view->rootObject()):nullptr;if(item&&item->property("menuPath").toString().endsWith("Performance Expression")&&item->isVisible())root=item;}
+  QVERIFY(root);root->setPanelFloating(true);root->window()->resize(520,800);root->focusPanel();
+  auto click=[root](const char* name){auto item=root->findChild<QQuickItem*>(name);if(!item||!item->isEnabled()||!item->isVisible())return false;auto p=item->mapToScene(QPointF(item->width()/2,item->height()/2));QTest::mouseClick(root->window(),Qt::LeftButton,Qt::NoModifier,p.toPoint());return true;};
+  QVERIFY(click("expressionRecord"));QTRY_VERIFY(!root->property("busy").toBool());
+  QVERIFY2(root->property("status").toString().contains("输入"),qPrintable(root->property("status").toString()));
+  auto notes=root->property("notes").value<QJSValue>().toVariant().toList();QVERIFY(notes.size()>1);
+  auto session=qobject_cast<MidiCaptureSession*>(root->property("captureSession").value<QObject*>());QVERIFY(session);
+  // Supply the same input interface using a timed test keyboard, with no physical device.
+  QVERIFY(!session->begin({{"notes",notes},{"monitor",false}},false).contains("error"));
+  root->setProperty("busy",true);root->setProperty("status",QString::fromUtf8("录制中，弹完后点击停止录制。"));
+  struct Input{double time;int type,pitch;};QVector<Input> events;double first=1e9;QSet<QString> seen;
+  for(auto value:notes){auto note=value.toMap();if(note["tieBack"].toBool()||note["grace"].toBool())continue;auto id=note.value("logicalId",note["id"]).toString();if(seen.contains(id))continue;seen.insert(id);first=std::min(first,note["scoreSeconds"].toDouble());}
+  seen.clear();for(auto value:notes){auto note=value.toMap();if(note["tieBack"].toBool()||note["grace"].toBool())continue;auto id=note.value("logicalId",note["id"]).toString();if(seen.contains(id))continue;seen.insert(id);double time=(note["scoreSeconds"].toDouble()-first)*.3;events.append({time,ME_NOTEON,note["pitch"].toInt()});events.append({time+.04,ME_NOTEOFF,note["pitch"].toInt()});}
+  std::stable_sort(events.begin(),events.end(),[](const Input&a,const Input&b){return a.time<b.time;});qint64 origin=midiInputTime();
+  for(const auto& event:events){int wait=int((origin+qint64(event.time*1e9)-midiInputTime())/1000000);if(wait>0)QTest::qWait(wait);captureMidiInput(NPlayEvent(event.type,0,event.pitch,event.type==ME_NOTEON?105:0),midiInputTime());}
+  root->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath("recording-expression.png"));
+  QVERIFY(click("expressionRecord"));QTRY_VERIFY_WITH_TIMEOUT(!root->property("busy").toBool()&&!session->state()["stopping"].toBool()&&!session->state()["saving"].toBool(),10000);
+  QTRY_VERIFY_WITH_TIMEOUT(root->property("candidate").value<QJSValue>().isObject(),10000);
+  auto result=root->property("result").value<QJSValue>().toVariant().toMap();QVERIFY2(!result["matches"].toList().isEmpty(),qPrintable(root->property("status").toString()));
+  root->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath("recorded-expression-preview.png"));
+  int undo=score->undoStack()->getCurIdx();QVERIFY(click("expressionApplyVelocity"));QTRY_VERIFY(root->property("status").toString().contains("已使用演奏力度"));QCOMPARE(score->undoStack()->getCurIdx(),undo+1);
+  EditData edit;score->undoRedo(true,&edit);QCOMPARE(score->undoStack()->getCurIdx(),undo);
+  root->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath("recorded-expression-applied.png"));
+  root->setVisible(false);root->deleteLater();QTest::qWait(50);
+ }
  void harmonyOpenAndScoreSwitch(){
   auto first=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(first);
   mscore->setCurrentScoreView(mscore->appendScore(first));mscore->resize(1250,900);mscore->show();first->deselectAll();
