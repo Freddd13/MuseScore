@@ -1,5 +1,6 @@
 #include "libmscore/handbracket.h"
 #include "mscore/handbracketsettings.h"
+#include "mscore/palette/paletteworkspace.h"
 #include <QStackedWidget>
 #include <QtTest/QtTest>
 #include <QTemporaryDir>
@@ -81,6 +82,20 @@
 #include "audio/midi/msynthesizer.h"
 #include "audio/midi/synthesizer.h"
 #include <functional>
+#include <QQuickWindow>
+#include <QQmlEngine>
+#include <QQmlComponent>
+#include "mscore/plugin/qmlplugin.h"
+#include "mscore/plugin/api/scoreobserver.h"
+class RepairPanelPlugin : public Ms::QmlPlugin {
+      Q_OBJECT
+   public:
+      int spacePresses=0;
+      void runPlugin() override {}
+      void endCmd(const QMap<QString,QVariant>&) override {}
+   public slots:
+      void toggleReferencePlayback() { ++spacePresses; }
+};
 
 using namespace Ms;
 // Exercise the real sequencer without touching the machine's audio/MIDI devices.
@@ -823,6 +838,29 @@ class TestPerformanceEditor : public QObject, public MTest {
             QVERIFY(looped); getAction("loop")->setChecked(false);
             sequence->stopWait(); sequence->waitForStoppedRendering(); QApplication::processEvents();
             }
+      void independentPluginSummaryAndSpace() {
+            if(!Ms::mscore) {QCoreApplication::setOrganizationName("PerformanceRegression");QCoreApplication::setApplicationName("RepairPanel");QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,_directory.path());dataPath=_directory.path();MScore::noGui=true;noSeq=true;converterMode=true;initMuseScoreResources();QStringList args;MuseScore::init(args);}
+            auto main=Ms::mscore;QVERIFY(main);
+            auto dock=new QDockWidget("Reference test",main);
+            dock->setObjectName("repairReferenceTest");
+            auto quick=new QQuickWindow();quick->setGeometry(0,0,300,150);
+            dock->setWidget(QWidget::createWindowContainer(quick));main->addDockWidget(Qt::RightDockWidgetArea,dock);
+            auto root=new RepairPanelPlugin();root->setParentItem(quick->contentItem());root->setSize(QSizeF(300,150));
+            root->setProperty("panelSpaceHandler","toggleReferencePlayback");root->setProperty("preferredPanelGroup","rightTools");
+            root->attachPanelDock(dock);dock->show();dock->raise();main->show();QTest::qWait(30);
+            auto observer=new Ms::PluginAPI::ScoreObserver(root);
+            root->showSummaryPanel(true);QTRY_VERIFY(root->summaryPanelVisible());QVERIFY(root->summaryPanelHost());root->setSummaryPanelFloating(true);QVERIFY(root->summaryPanelFloating());root->setSummaryPanelFloating(false);QVERIFY(!root->summaryPanelFloating());
+            auto summary=main->findChild<QDockWidget*>("kumoPanel/"+dock->objectName()+"/summary");QVERIFY(summary);QCOMPARE(main->dockWidgetArea(summary),Qt::TopDockWidgetArea);
+            observer->setAuxiliarySurfaceVisible(true);quick->hide();QApplication::processEvents();QVERIFY(observer->surfaceVisible());
+            observer->setAuxiliarySurfaceVisible(false);QVERIFY(!observer->surfaceVisible());quick->show();
+            dock->raise();main->activateWindow();quick->requestActivate();QTest::qWait(80);root->forceActiveFocus();QTRY_VERIFY(quick->activeFocusItem());QTest::keyClick(quick,Qt::Key_Space);QCOMPARE(root->spacePresses,1);
+            QKeyEvent repeat(QEvent::KeyPress,Qt::Key_Space,Qt::NoModifier," ",true);QApplication::sendEvent(quick,&repeat);QCOMPARE(root->spacePresses,1);
+            QQmlEngine engine;QQmlComponent component(&engine);component.setData("import QtQuick 2.9; TextInput { width:120; height:30 }",QUrl());
+            auto text=qobject_cast<QQuickItem*>(component.create());QVERIFY(text);text->setParentItem(root);text->forceActiveFocus();
+            QTest::keyClick(quick,Qt::Key_Space);QCOMPARE(root->spacePresses,1);QCOMPARE(text->property("text").toString(),QString(" "));
+            root->showSummaryPanel(false);QVERIFY(!root->summaryPanelVisible());
+            delete text;delete observer;delete root;QApplication::processEvents();delete dock;
+      }
       void inputActionsSurviveMenuRebuild() {
             auto main=Ms::mscore;QVERIFY(main);
             for(const char* name:{"auto-tie-beams","coherent-tie-stems"}) {

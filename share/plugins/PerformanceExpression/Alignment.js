@@ -24,7 +24,7 @@ function groups(notes,score,tap) {
 function pitchCost(a,b) {
     var hits=0;
     for(var i=0;i<a.pitches.length;++i)if(b.pitches.indexOf(a.pitches[i])>=0)++hits;
-    return 1-hits/Math.max(a.pitches.length,b.pitches.length);
+    return .75*(1-hits/Math.max(1,a.pitches.length))+.25*(1-hits/Math.max(1,b.pitches.length));
 }
 function typicalIOI(a) {
     var intervals=[];for(var i=1;i<a.length;++i)if(a[i].time>a[i-1].time)intervals.push(a[i].time-a[i-1].time);
@@ -66,6 +66,48 @@ function path(s,p,tap) {
     }
     return pairs.reverse();
 }
+// Locate a score passage anywhere in a longer performance. Prefix/suffix are
+// free; insertions and missing notes inside the passage still have a cost.
+function locatePassage(s,p,tap) {
+    var n=s.length,m=p.length;
+    if(n*m>8000000 && n>32) {
+        var prefix=locatePassage(s.slice(0,Math.min(32,n)),p,tap);
+        var start=Math.max(0,prefix.start-3),end=Math.min(m,start+n*2+32);
+        var window=p.slice(start,end);
+        if(n*window.length>8000000)return {start:start,end:Math.min(m,start+Math.ceil((s[n-1].time-s[0].time)/typicalIOI(s))+1),alternatives:[],cost:prefix.cost};
+        var local=locatePassage(s,window,tap);
+        local.start+=start;local.end+=start;return local;
+    }
+    var trace=new Uint8Array((n+1)*(m+1)),previous=new Float64Array(m+1),current=new Float64Array(m+1);
+    var si=typicalIOI(s),pi=typicalIOI(p),gap=.95;
+    for(var i=1;i<=n;++i) {
+        current[0]=i*gap;
+        for(var j=1;j<=m;++j) {
+            var time=0;
+            if(i>1&&j>1)time=Math.min(1.5,Math.abs(Math.log(Math.max(.03,(s[i-1].time-s[i-2].time)/si)/Math.max(.03,(p[j-1].time-p[j-2].time)/pi))))*.35;
+            var diagonal=previous[j-1]+(tap?0:pitchCost(s[i-1],p[j-1])*1.8)+time;
+            var deletion=previous[j]+gap,insertion=current[j-1]+gap,kind=1,value=diagonal;
+            if(deletion<value){value=deletion;kind=2}if(insertion<value){value=insertion;kind=3}
+            current[j]=value;trace[i*(m+1)+j]=kind;
+        }
+        var swap=previous;previous=current;current=swap;
+    }
+    var endings=[];for(j=1;j<=m;++j)endings.push({end:j,cost:previous[j]});
+    endings.sort(function(a,b){return a.cost-b.cost||a.end-b.end});
+    function recover(end) {
+        var row=n,col=end,pairs=[];
+        while(row>0&&col>0){var kind=trace[row*(m+1)+col];if(kind===1){pairs.push({s:row-1,p:col-1});--row;--col}else if(kind===2)--row;else --col;}
+        pairs.reverse();return {start:pairs.length?pairs[0].p:col,end:end,pairs:pairs};
+    }
+    var best=recover(endings[0].end);best.cost=endings[0].cost/n;best.alternatives=[];
+    for(i=1;i<endings.length&&best.alternatives.length<3;++i){var candidate=endings[i];
+        if(candidate.cost>endings[0].cost+Math.max(.4,n*.08))break;
+        var other=recover(candidate.end);
+        if(Math.abs(other.start-best.start)<Math.max(2,n*.5)||best.alternatives.some(function(v){return Math.abs(v.start-other.start)<Math.max(2,n*.5)}))continue;
+        other.cost=candidate.cost/n;best.alternatives.push(other);
+    }
+    return best;
+}
 function align(input) {
     var score=input.notes||[];
     if(input.repeats&&input.repeats.length){
@@ -84,6 +126,19 @@ function align(input) {
     var performance=(input.performance||[]).filter(function(n){return n.seconds>=(input.from||0)&&n.seconds<=(input.until===undefined?Infinity:input.until)}),tap=input.mode==="tap";
     var s=groups(score,true,tap),p=groups(performance,false,tap),anchors=input.anchors||[],links=input.links||[];
     if(!s.length||!p.length)return {matches:[],missing:score,extra:performance,pending:0};
+    var passage=null;
+    if(!anchors.length && p.length>s.length*1.2 && input.findPassage!==false) {
+        passage=locatePassage(s,p,tap);
+        var wholeGroups=p;
+        passage.candidates=[{from:p[passage.start].time,until:p[Math.max(passage.start,passage.end-1)].time+.035,cost:passage.cost}].concat(passage.alternatives.map(function(v){return {from:wholeGroups[v.start].time,until:wholeGroups[Math.max(v.start,v.end-1)].time+.035,cost:v.cost};}));
+        var choice=input.passageChoice||0;
+        var chosen=choice>0&&passage.alternatives[choice-1]?passage.alternatives[choice-1]:passage;
+        var begin=p[chosen.start].time,end=p[Math.max(chosen.start,chosen.end-1)].time+.035;
+        performance=performance.filter(function(v){return v.seconds>=begin&&v.seconds<=end});
+        p=groups(performance,false,tap);
+        passage.from=begin;passage.until=end;
+        passage.alternatives=passage.candidates.slice(1);
+    }
     var cuts=[{s:-1,p:-1}],fixed=[];
     anchors.forEach(function(a){
         var x=s.findIndex(function(g){return g.notes.some(function(n){return n.id===a.scoreId})});
@@ -103,12 +158,7 @@ function align(input) {
     var scale=typicalIOI(p)/typicalIOI(s);
     coarse.forEach(function(pair,index){
         var sg=s[pair.s],pg=p[pair.p],cost=tap?0:pitchCost(sg,pg);
-        var repeated=tap;
-        if(index>0&&index+1<coarse.length){
-            var left=s[coarse[index-1].s],right=s[coarse[index+1].s];
-            repeated=tap?Math.abs((sg.time-left.time)-(right.time-sg.time))<.001:
-                pitchCost(left,sg)===0&&pitchCost(right,sg)===0;
-        }
+            var repeated=false;
         var candidates=[];
         // Adjacent rolling events remain separate and can match this onset.
         for(var k=Math.max(0,pair.p-2);k<Math.min(p.length,pair.p+3);++k){
@@ -138,17 +188,17 @@ function align(input) {
     });
     usedScore={};usedMidi={};matches.forEach(function(v){usedScore[v.scoreId]=true;usedMidi[v.midiId]=true});
     matches.sort(function(a,b){return (a.original.alignmentTick||a.tick)-(b.original.alignmentTick||b.tick)||a.track-b.track||a.index-b.index});
-    return {matches:matches,displayMatches:matches.slice().sort(function(a,b){return a.tick-b.tick||a.track-b.track||a.index-b.index}),missing:score.filter(function(n){return !n.tieBack&&!usedScore[n.id]}),extra:performance.filter(function(n){return !usedMidi[n.id]}),segments:segments,cacheKey:input.cacheKey||"",pending:matches.filter(function(v){return !v.confirmed&&v.confidence<.8}).length,scale:scale};
+    return {matches:matches,displayMatches:matches.slice().sort(function(a,b){return a.tick-b.tick||a.track-b.track||a.index-b.index}),missing:score.filter(function(n){return !n.tieBack&&!usedScore[n.id]}),extra:performance.filter(function(n){return !usedMidi[n.id]}),segments:segments,cacheKey:input.cacheKey||"",pending:matches.filter(function(v){return !v.confirmed&&v.confidence<.8}).length,scale:scale,passage:passage};
 }
 function candidates(input) {
     var result=clone(input.result),config=input.config||{},strength=(config.strength===undefined?50:config.strength)/100,velocity=[],tempos=[],kept=[],confirmed=result.matches.filter(function(m){return m.confirmed||m.confidence>=.8}),unlock=config.unlocked||[];
     confirmed.forEach(function(m){
         var n=m.original,vs=config.velocityStrength===undefined?strength:config.velocityStrength/100;
         if(!config.velocity)return;
-        if(n.protected&&unlock.indexOf(n.id)<0){kept.push({id:n.id,reason:n.protection||"已有手工演奏值"});return}
+        if(n.protected&&config.keepManual!==false&&unlock.indexOf(n.id)<0){kept.push({id:n.id,reason:n.protection||"保留手动调整"});return}
         var measured=Math.max(1,Math.min(127,Math.round((m.velocity-(config.deviceCenter||64))*(config.deviceGain||1)+64)));
         var target=Math.max(1,Math.min(127,Math.round(n.velocity*(1-vs)+measured*vs)));
-        velocity.push({id:n.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,writtenPitch:n.writtenPitch,writtenTpc:n.writtenTpc,graceIndex:n.graceIndex,oldType:n.velocityType,oldRaw:n.velocityRaw,oldBase:n.velocityBase,target:target,source:"measured",unlock:unlock.indexOf(n.id)>=0});
+        velocity.push({id:n.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,writtenPitch:n.writtenPitch,writtenTpc:n.writtenTpc,graceIndex:n.graceIndex,oldType:n.velocityType,oldRaw:n.velocityRaw,oldBase:n.velocityBase,target:target,source:"measured",unlock:config.keepManual===false||unlock.indexOf(n.id)>=0});
     });
     if(config.accompaniment&&velocity.length){
         (input.notes||[]).forEach(function(n){

@@ -54,6 +54,11 @@ class QmlPlugin : public QQuickItem {
       Q_PROPERTY(bool panelFloating READ panelFloating NOTIFY panelDockChanged)
       Q_PROPERTY(QQuickItem* detailPanelHost READ detailPanelHost NOTIFY panelDetailChanged)
       Q_PROPERTY(bool detailPanelVisible READ detailPanelVisible NOTIFY panelDetailChanged)
+      Q_PROPERTY(QQuickItem* summaryPanelHost READ summaryPanelHost NOTIFY panelSummaryChanged)
+      Q_PROPERTY(bool summaryPanelVisible READ summaryPanelVisible NOTIFY panelSummaryChanged)
+      Q_PROPERTY(bool summaryPanelFloating READ summaryPanelFloating NOTIFY panelSummaryChanged)
+      QPointer<QDockWidget> _summaryDock;
+      QPointer<QQuickWindow> _summaryWindow;
       QPointer<QDockWidget> _panelDock;
       QPointer<QDockWidget> _detailDock;
       QPointer<QQuickWindow> _detailWindow;
@@ -86,10 +91,17 @@ class QmlPlugin : public QQuickItem {
       bool detailPanelVisible() const;
       Q_INVOKABLE void showDetailPanel(bool visible);
       Q_INVOKABLE void focusDetailPanel();
+      QQuickItem* summaryPanelHost() const;
+      bool summaryPanelVisible() const;
+      bool summaryPanelFloating() const;
+      Q_INVOKABLE void showSummaryPanel(bool visible);
+      Q_INVOKABLE void setSummaryPanelFloating(bool floating);
    signals:
       void panelDockChanged();
       void panelDetailChanged();
       void panelDetailClosed();
+      void panelSummaryChanged();
+      void panelSummaryClosed();
    public:
 
       void setMenuPath(const QString& s)   { _menuPath = s;    }

@@ -14,6 +14,7 @@
 #include "mscore/scoreview.h"
 #include "mscore/seq.h"
 #include "libmscore/chord.h"
+#include "libmscore/symbol.h"
 #include "libmscore/measure.h"
 #include "libmscore/segment.h"
 #include "libmscore/staff.h"
@@ -1068,6 +1069,16 @@ bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       const bool closestWheel=onScore&&event->type()==QEvent::Wheel&&(static_cast<QWheelEvent*>(event)->modifiers()&(Qt::AltModifier|Qt::ShiftModifier))==(Qt::AltModifier|Qt::ShiftModifier);
       QScopedValueRollback<bool> wheelScope(_closestWheelActive,closestWheel);
       if (onScore && !overlayAllowed()) return false;
+      if(onScore && !_dragging && !_bandResizing && !_scoreRangePanning
+            && (event->type()==QEvent::MouseButtonPress || event->type()==QEvent::MouseButtonRelease || event->type()==QEvent::MouseButtonDblClick)) {
+            auto mouse=static_cast<QMouseEvent*>(event);
+            if(mouse->button()==Qt::LeftButton) {
+                  const QPointF logical=_view->toLogical(mouse->pos());
+                  auto target=_view->elementNear(logical);
+                  if(target && target->isSymbol() && toSymbol(target)->handBracket()
+                        && target->contains(logical-(target->canvasPos()-target->pagePos())))return false;
+                  }
+            }
       if (onScore && overlayEvent(event)) return true;
       if (event->type() == QEvent::ShortcutOverride && _dragging && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) { event->accept(); return true; }
       if (event->type() == QEvent::Hide) cancelGesture();

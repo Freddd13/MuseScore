@@ -27,7 +27,7 @@ function describe(result, notes, tick, tonic, minor, degreeMode, preferFlats) {
         for(var i=0;i<notes.length;++i)if(Harmony.mod12(notes[i].pitch)===out.root){rootNote=notes[i];break;}
         out.chord=(out.rootSpelling|| (rootNote?Harmony.spelledName(rootNote.tpc,rootNote.pitch,flats):Harmony.pcName(out.root,flats)))+Harmony.defs[out.definition].suffix;
         if(b && out.bass!==out.root)out.chord+="/"+Harmony.spelledName(b.tpc,b.pitch,flats);
-        out.degree=Harmony.roman(tonic,minor,out.root,out.definition,degreeMode);
+        out.degree=Harmony.roman(tonic,minor,out.root,out.definition,degreeMode,out.bass);
         out.inversion=b?Harmony.inversion(Harmony.labelFor(out.bass,out.root,out.definition)):"低音未确定";
     }
     out.chromatic=Harmony.isChromatic(tonic,minor,out.root,out.definition);

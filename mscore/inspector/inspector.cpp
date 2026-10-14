@@ -1444,23 +1444,40 @@ InspectorHandSymbol::InspectorHandSymbol(QWidget* parent)
       auto title=new QLabel(tr("左右手记号"),host);grid->addWidget(title,0,0,1,3);
       _mode=new QCheckBox(tr("可伸缩折线"),host);_mode->setObjectName("handBracketMode");grid->addWidget(_mode,1,0,1,3);
       _details=new QWidget(host);grid->addWidget(_details,2,0,1,3);auto details=new QGridLayout(_details);
-      auto h=scrubProperty(_details,tr("水平长度"),Pid::HAND_BRACKET_H,-40,40,.1,tr(" sp"));
-      auto v=scrubProperty(_details,tr("竖直长度"),Pid::HAND_BRACKET_V,-40,40,.1,tr(" sp"));
+      auto h=scrubProperty(_details,tr("水平长度"),Pid::HAND_BRACKET_H,.05,40,.1,tr(" sp"));
+      auto v=scrubProperty(_details,tr("竖直长度"),Pid::HAND_BRACKET_V,.05,40,.1,tr(" sp"));
       auto width=scrubProperty(_details,tr("线宽"),Pid::HAND_BRACKET_WIDTH,.02,2,.01,tr(" sp"));
       auto text=new QCheckBox(tr("显示 LH / RH"),_details);text->setObjectName("handBracketText");details->addWidget(text,details->rowCount(),0,1,3);
       auto horizontal=new QPushButton(tr("水平反向"),_details),vertical=new QPushButton(tr("竖直反向"),_details);
       horizontal->setObjectName("handBracketFlipH");vertical->setObjectName("handBracketFlipV");int row=details->rowCount();details->addWidget(horizontal,row,0);details->addWidget(vertical,row,1,1,2);
+      auto lengthChanged=[this](Pid id,double value) {
+            for(auto e:*inspector->el()) if(e->isSymbol() && toSymbol(e)->handEligible()) {
+                  const int sign=e->getProperty(id).toDouble()<0?-1:1;
+                  mscore->performanceEditor()->queueProperty(e,id,sign*value);
+                  }
+            };
+      for(auto item:{h,v}) {
+            auto spin=qobject_cast<QDoubleSpinBox*>(item.w);
+            connect(spin,QOverload<double>::of(&QDoubleSpinBox::valueChanged),this,[lengthChanged,item](double value){lengthChanged(item.t,value);});
+            connect(qobject_cast<QToolButton*>(item.r),&QToolButton::clicked,this,[this,item,spin] {
+                  const QSignalBlocker block(spin);
+                  const double value=std::abs(inspector->element()->propertyDefault(item.t).toDouble());spin->setValue(value);
+                  for(auto e:*inspector->el())if(e->isSymbol())mscore->performanceEditor()->queueProperty(e,item.t,(e->getProperty(item.t).toDouble()<0?-1:1)*value);
+                  });
+            }
       auto flip=[this,h,v](Pid id) {
             auto spin=qobject_cast<QDoubleSpinBox*>(id==Pid::HAND_BRACKET_H ? h.w : v.w);
             const bool single=inspector->el()->size()==1;
-            const double value=-spin->value();
+            const int sign=spin->property("handDirection").toInt();
+            const double value=-(sign?sign:1)*spin->value();
+            spin->setProperty("handDirection",value<0?-1:1);
             for (auto e:*inspector->el()) if(e->isSymbol() && toSymbol(e)->handEligible())
                   mscore->performanceEditor()->queueProperty(e,id,single ? value : -e->getProperty(id).toDouble());
-            if (single) {const QSignalBlocker block(spin);spin->setValue(value);}
+            if (single) {const QSignalBlocker block(spin);spin->setValue(std::abs(value));}
             };
       connect(horizontal,&QPushButton::clicked,this,[flip]{flip(Pid::HAND_BRACKET_H);});
       connect(vertical,&QPushButton::clicked,this,[flip]{flip(Pid::HAND_BRACKET_V);});
-      auto preset=new QPushButton(tr("应用短折线预设"),host);preset->setObjectName("handBracketPreset");grid->addWidget(preset,3,0,1,3);
+      auto preset=new QPushButton(tr("还原基础折线"),host);preset->setObjectName("handBracketPreset");grid->addWidget(preset,3,0,1,3);
       connect(preset,&QPushButton::clicked,this,[this] {
             for (auto e:*inspector->el()) if(e->isSymbol() && toSymbol(e)->handEligible()) {
                   auto editor=mscore->performanceEditor();
@@ -1468,9 +1485,20 @@ InspectorHandSymbol::InspectorHandSymbol(QWidget* parent)
                   editor->queueProperty(e,Pid::HAND_BRACKET_MODE,true);
                   }
             });
-      auto hint=new QLabel(tr("正数向右／向下，负数向左／向上。双击记号后分别拖动横、竖端点；拖动整个记号改变偏移。数字名称可拖动，Shift精调、Esc取消。关闭折线模式恢复原字形。"),host);hint->setWordWrap(true);grid->addWidget(hint,4,0,1,3);
+      auto hint=new QLabel(tr("双击记号后拖动两个端点调整长度，拖动拐点移动整条折线。水平／竖直反向改变朝向。拖动数字名称可调整长度，按住 Shift 细调，Esc 取消。"),host);hint->setWordWrap(true);grid->addWidget(hint,4,0,1,3);
       addHandBracketDefaultControls(host,grid,inspector);
-      mapSignals({h,v,width,{Pid::HAND_BRACKET_MODE,0,_mode,nullptr},{Pid::HAND_BRACKET_TEXT,0,text,nullptr}},{});
+            connect(_mode,&QCheckBox::clicked,this,[this](bool checked) {
+            for(auto e:*inspector->el())if(e->isSymbol() && toSymbol(e)->handEligible()) {
+                  auto symbol=toSymbol(e);auto editor=mscore->performanceEditor();
+                  if(checked && !symbol->handBracket() && !symbol->bbox().isEmpty()) {
+                        const double unit=symbol->spatium()*symbol->mag();
+                        editor->queueProperty(e,Pid::HAND_BRACKET_H,(symbol->handEnd()?-1:1)*symbol->bbox().width()/unit);
+                        editor->queueProperty(e,Pid::HAND_BRACKET_V,-symbol->bbox().height()/unit);
+                        }
+                  editor->queueProperty(e,Pid::HAND_BRACKET_MODE,checked);
+                  }
+            });
+      mapSignals({width,{Pid::HAND_BRACKET_TEXT,0,text,nullptr}},{});
       }
 
 void InspectorHandSymbol::postInit()
@@ -1478,6 +1506,12 @@ void InspectorHandSymbol::postInit()
       bool all=true,enabled=true;
       for (auto e:*inspector->el()) {all &= e->isSymbol() && toSymbol(e)->handEligible(); enabled &= e->isSymbol() && toSymbol(e)->handBracket();}
       _mode->setEnabled(all);_details->setEnabled(all && enabled);
+      {const QSignalBlocker block(_mode);_mode->setChecked(enabled);}
+      for(auto entry:{std::make_pair("handBracketH",Pid::HAND_BRACKET_H),std::make_pair("handBracketV",Pid::HAND_BRACKET_V)})
+            if(auto spin=findChild<QDoubleSpinBox*>(entry.first)) {
+                  const QSignalBlocker block(spin);const double value=inspector->element()->getProperty(entry.second).toDouble();
+                  spin->setValue(std::abs(value));spin->setProperty("handDirection",value<0?-1:1);
+                  }
       }
 
 InspectorSlurTie::InspectorSlurTie(QWidget* parent)

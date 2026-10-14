@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <functional>
 namespace Ms { namespace FreeSlur {
 namespace {
 CurvePoint at(const QVector<CurvePoint>& points,double t)
@@ -48,13 +49,25 @@ Evaluation evaluate(const QVector<CurvePoint>& points,const ObstacleIndex& obsta
       QVector<double> samples;for(int i=1;i<=128;++i)samples.append(i/128.0);
       for(const auto& point:points)if(point.t>0)samples.append(point.t);
       std::sort(samples.begin(),samples.end());
-      for(double t:samples) {
+      // Split where a straight sample chord would cut across the curved path.
+      // The bound keeps this local calculation predictable on dense systems.
+      double left=0;
+      QVector<double> refined;
+      std::function<void(double,double,int)> refine=[&](double a,double b,int depth) {
+            const double mid=(a+b)/2;
+            const QPointF first=at(points,a).p,last=at(points,b).p;
+            const double error=QLineF(at(points,mid).p,(first+last)/2).length();
+            if(error>sp*.01 && depth<4 && refined.size()<512) {refine(a,mid,depth+1);refine(mid,b,depth+1);}
+            else refined.append(b);
+            };
+      for(double right:samples){if(right-left>1e-9)refine(left,right,0);left=right;}
+      for(double t:refined) {
             if(t-previousT<1e-9)continue;
             const auto point=at(points,t);const QPointF midpoint=(previous+point.p)/2;
             ++sample;
             for(int b=obstacles.bucket(qMin(previous.x(),point.p.x()));b<=obstacles.bucket(qMax(previous.x(),point.p.x()));++b)for(int i:obstacles.buckets[b]) {
                   if(visited[i]==sample)continue;visited[i]=sample;
-                  const auto& r=obstacles.rectangles[i];
+                  const auto r=obstacles.rectangles[i].adjusted(-.01*sp,-.01*sp,.01*sp,.01*sp);
                   if(!crosses(previous,point.p,r))continue;
                   collided.insert(i);
                   const double depth=qMax(.01,(up ? midpoint.y()-r.top() : r.bottom()-midpoint.y())/sp);
@@ -107,8 +120,8 @@ AvoidanceResult avoid(const QVector<CurvePoint>& original,const QVector<QRectF>&
             if(!bounded(candidate,original,sp))continue;
             const auto score=evaluate(candidate,obstacleIndex,up,sp);++result.candidates;
             if(better(score,best)){best=score;result.points=candidate;}
-            if(!best.collisions){result.collisions=0;return result;}
             }
+      if(!best.collisions){result.collisions=0;return result;}
       // A few local knots handle an obstacle that a single bow cannot avoid.
       // They exist only for this layout; saved manual data is never changed.
       for(int pass=0;pass<4 && best.collisions;++pass) {
@@ -124,8 +137,8 @@ AvoidanceResult avoid(const QVector<CurvePoint>& original,const QVector<QRectF>&
                   if(!bounded(candidate,original,sp))continue;
                   const auto score=evaluate(candidate,obstacleIndex,up,sp);++result.candidates;
                   if(better(score,best)){best=score;result.points=candidate;improved=true;}
-                  if(!best.collisions)break;
                   }
+            if(!best.collisions)break;
             if(!improved)break;
             }
       result.collisions=best.collisions;return result;

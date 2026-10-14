@@ -328,6 +328,7 @@ else (MINGW)
       if (Qt5Widgets_VERSION VERSION_GREATER_EQUAL "5.14.1")
          list(APPEND dlls_to_copy "${QT_INSTALL_BINS}/Qt5QmlModels.dll")
          list(APPEND dlls_to_copy "${QT_INSTALL_BINS}/Qt5QmlWorkerScript.dll")
+         install(FILES "${QT_INSTALL_BINS}/Qt5QmlModels.dll" "${QT_INSTALL_BINS}/Qt5QmlWorkerScript.dll" DESTINATION bin)
       endif(Qt5Widgets_VERSION VERSION_GREATER_EQUAL "5.14.1")
 
       set(CMAKE_FIND_LIBRARY_PREFIX "")

@@ -75,14 +75,14 @@ void ScoreObserver::watchSurface()
             _surfaceVisible = window->isVisible();
             connect(window, &QWindow::visibleChanged, this, [this](bool visible) {
                   _surfaceVisible = visible;
-                  if (!visible) clearAllPreviews();
+                  if (!surfaceVisible()) clearAllPreviews();
                   emit surfaceVisibleChanged();
                   });
             };
       connect(item, &QQuickItem::windowChanged, this, attach);
       attach(item->window());
       connect(item, &QQuickItem::visibleChanged, this, [this, item]() {
-            if (!item->isVisible()) clearAllPreviews();
+            if (!item->isVisible() && !_auxiliarySurfaceVisible) clearAllPreviews();
             });
       }
 
@@ -125,7 +125,16 @@ int ScoreObserver::tick() const
       { return _score ? (_tick >= 0 ? _tick : _score->masterScore()->playPos().ticks()) : -1; }
 
 void ScoreObserver::notifyPosition()
-      { if (_enabled && _surfaceVisible) emit positionChanged(); }
+      { if (_enabled && surfaceVisible()) emit positionChanged(); }
+
+void ScoreObserver::setAuxiliarySurfaceVisible(bool visible)
+      {
+      if (_auxiliarySurfaceVisible==visible) return;
+      _auxiliarySurfaceVisible=visible;
+      if (!surfaceVisible()) clearAllPreviews();
+      emit surfaceVisibleChanged();
+      if (surfaceVisible()) notifyPosition();
+      }
 
 void ScoreObserver::setEnabled(bool enabled)
       {
@@ -408,7 +417,7 @@ static qreal previewTickX(const Ms::Measure* measure, int tick, const Ms::Segmen
 
 void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors)
       {
-      if (!_score || !_enabled || !_surfaceVisible) { clearPreview(owner); return; }
+      if (!_score || !_enabled || !surfaceVisible()) { clearPreview(owner); return; }
       NotePreviewColors colors;
       NotePreviewMarkers markers;
       QVector<QPointF> positions;

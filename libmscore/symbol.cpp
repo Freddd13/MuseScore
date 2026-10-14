@@ -151,27 +151,37 @@ std::vector<QPointF> Symbol::gripsPositions(const EditData&) const
       {
       if (!handBracket()) return {};
       const qreal unit = spatium() * mag();
-      return {pagePos()+QPointF(_handH*unit,handLeft() ? _handV*unit : 0),pagePos()+QPointF(0,_handV*unit)};
+      return {pagePos()+QPointF(_handH*unit,handLeft() ? _handV*unit : 0),
+            pagePos()+QPointF(0,handLeft() ? 0 : _handV*unit),
+            pagePos()+QPointF(0,handLeft() ? _handV*unit : 0)};
       }
 
 void Symbol::startEditDrag(EditData& ed)
       {
       Element::startEditDrag(ed);
-      if (handBracket() && int(ed.curGrip)>=0 && int(ed.curGrip)<2) {
+      if (handBracket() && int(ed.curGrip)>=0 && int(ed.curGrip)<3) {
             auto data=ed.getData(this); data->pushProperty(Pid::HAND_BRACKET_H); data->pushProperty(Pid::HAND_BRACKET_V);
-            _handDragOriginal=QPointF(_handH,_handV); _handDragging=true;
+            _handDragOriginal=QPointF(_handH,_handV); _handDragOffset=offset(); _handDragging=true;
             }
       }
 
 void Symbol::editDrag(EditData& ed)
       {
-      if (!handBracket() || int(ed.curGrip)<0 || int(ed.curGrip)>=2) {BSymbol::editDrag(ed);return;}
+      if (!handBracket() || int(ed.curGrip)<0 || int(ed.curGrip)>=3) {BSymbol::editDrag(ed);return;}
       if (!_handDragging) return; // cancelled preview stays cancelled until release
       const qreal unit=spatium()*mag();
-      const Pid id=int(ed.curGrip)==0 ? Pid::HAND_BRACKET_H : Pid::HAND_BRACKET_V;
-      const qreal delta=int(ed.curGrip)==0 ? ed.delta.x() : ed.delta.y();
       score()->addRefresh(canvasBoundingRect());
-      setProperty(id,qBound(-40.0,getProperty(id).toDouble()+delta/unit,40.0));
+      if (int(ed.curGrip)==2) setOffset(offset()+ed.delta);
+      else if (int(ed.curGrip)==0) {
+            const double sign=_handH<0?-1:1;
+            setProperty(Pid::HAND_BRACKET_H,sign*qBound(.05,sign*(_handH+ed.delta.x()/unit),40.0));
+            }
+      else {
+            const double sign=_handV<0?-1:1;
+            const double next=sign*qBound(.05,sign*(_handV+(handLeft()?-1:1)*ed.delta.y()/unit),40.0);
+            if(handLeft())setOffset(offset()+QPointF(0,(_handV-next)*unit));
+            setProperty(Pid::HAND_BRACKET_V,next);
+            }
       layout(); score()->addRefresh(canvasBoundingRect());
       }
 
@@ -182,16 +192,19 @@ void Symbol::endEditDrag(EditData& ed)
 
 bool Symbol::edit(EditData& ed)
       {
-      if (handBracket() && int(ed.curGrip)>=0 && int(ed.curGrip)<2) {
+      if (handBracket() && int(ed.curGrip)>=0 && int(ed.curGrip)<3) {
             if (ed.key==Qt::Key_Escape && _handDragging) {
                   score()->addRefresh(canvasBoundingRect());
                   setProperty(Pid::HAND_BRACKET_H,_handDragOriginal.x());
                   setProperty(Pid::HAND_BRACKET_V,_handDragOriginal.y());
+                  setOffset(_handDragOffset);
                   _handDragging=false; layout(); score()->addRefresh(canvasBoundingRect()); return true;
                   }
             if (ed.key==Qt::Key_Home) {
-                  const Pid id=int(ed.curGrip)==0 ? Pid::HAND_BRACKET_H : Pid::HAND_BRACKET_V;
-                  undoChangeProperty(id,propertyDefault(id));return true;
+                  if(int(ed.curGrip)==2)undoChangeProperty(Pid::OFFSET,QPointF());
+                  else {const Pid id=int(ed.curGrip)==0 ? Pid::HAND_BRACKET_H : Pid::HAND_BRACKET_V;
+                        undoChangeProperty(id,propertyDefault(id));}
+                  return true;
                   }
             }
       return BSymbol::edit(ed);
@@ -363,7 +376,16 @@ bool Symbol::setProperty(Pid id, const QVariant& value)
       if(id==Pid::AUTOPLACE && value.toBool())_handGeometryEdited=false;
       const qreal number=value.toDouble();
       switch (id) {
-            case Pid::HAND_BRACKET_MODE: _handMode=value.toBool();break;
+            case Pid::HAND_BRACKET_MODE:
+                  if(value.toBool() && !_handMode && !_handBaseValid && !bbox().isEmpty() && handEligible()) {
+                        const double unit=spatium()*mag();
+                        if(unit>0) {
+                              const QRectF glyph=bbox().translated(pos()-offset());
+                              _handBase=QPointF(handEnd()?glyph.right():glyph.left(),handLeft()?glyph.bottom():glyph.bottom())/unit;
+                              _handBaseValid=true;_handGeometryEdited=true;
+                              }
+                        }
+                  _handMode=value.toBool();break;
             case Pid::HAND_BRACKET_TEXT: _handText=value.toBool();break;
             case Pid::HAND_BRACKET_H:
             case Pid::HAND_BRACKET_V:

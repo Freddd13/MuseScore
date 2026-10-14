@@ -15,7 +15,7 @@ MuseScore {
     UiTheme {id:theme}
     menuPath: "Plugins.Harmony Assistant"
     description: "钢琴和声助手：持续音识别、级数、音程功能与可选谱面配色。"
-    version: "1.7.0"
+    version: "1.8.0"
     requiresScore: true
     pluginType: "dock"
     dockArea: "right"
@@ -30,6 +30,7 @@ MuseScore {
     property bool advancedNative: observer && typeof observer.contextSnapshot === "function"
     property bool fixedChordNative: observer && typeof observer.setActiveScorePreview === "function"
     property bool dualDetailActive:ribbon && configuration.dualPanel && typeof root.detailPanelVisible==="boolean" && root.detailPanelVisible
+    property bool dualSummaryActive:!ribbon && configuration.dualPanel && typeof root.summaryPanelVisible==="boolean" && root.summaryPanelVisible
     property bool chromaticChord: Harmony.isChromatic(Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,chordRoot,chordDefinition)
     property color chordInk:configuration.chromaticAccent && chromaticChord ? configuration.chromaticColor : ink
     property var contextNotes: []
@@ -72,13 +73,14 @@ MuseScore {
     property bool analysisDirty: true
     property string pendingFileAction: ""
     property string pendingExport: ""
-    property int preferredRibbonHeight: 44
+    property int preferredRibbonHeight: 32
     property bool ribbonContentHeight: true
     property string detailPanelTitle:"和声助手 · 详细面板"
     property color detailPanelBackground:theme.background
     property bool started: false
     property var observer: null
-    property bool surfaceActive: visible && (!observer || observer.surfaceVisible)
+    property bool surfaceActive: (visible || dualSummaryActive || dualDetailActive || (showChords.checked && !!ownerScore)) && (!observer || observer.surfaceVisible)
+    property string analysisStatus: !ownerScore ? "打开乐谱后开始识别" : analysisTimer.running ? "正在读取 · "+pendingRecords.length+" 个位置" : regionJobToken || regionBuilder ? "正在分析前后和弦" : analysisDirty ? observer && observer.playing ? "播放中 · 当前和弦" : "等待更新" : "已更新 · "+analysisRegions.length+" 处和弦"
     property bool nativeAvailable: observer !== null
     property var nativeSnapshot: ({})
     property bool internalChange: false
@@ -115,7 +117,7 @@ MuseScore {
     property string voicingText: "—"
     property string inversionText: "—"
     property string scopeText: "当前乐器 · 包含全部声部"
-    property string positionText: "等待选区"
+    property string positionText: "—"
     property string noticeText: ""
     property string placementNotice: ""
     property color ink: theme.text
@@ -219,10 +221,18 @@ MuseScore {
     function syncDetailPanel() {
         if(!started || loadingConfiguration)return
         if(typeof root.showDetailPanel==="function")root.showDetailPanel(ribbon && configuration.dualPanel)
+        if(typeof root.showSummaryPanel==="function")root.showSummaryPanel(!ribbon && configuration.dualPanel)
+        syncAnalysisSurface()
         if(!ribbon)detailPopup.visible=false
     }
+    function syncAnalysisSurface() {
+        if(observer && typeof observer.auxiliarySurfaceVisible==="boolean") {
+            observer.auxiliarySurfaceVisible=dualDetailActive || dualSummaryActive || (showChords.checked && !!curScore)
+            observer.enabled=visible || observer.auxiliarySurfaceVisible
+        }
+    }
     function toggleDetailPanel() {
-        var c=JSON.parse(JSON.stringify(configuration));c.dualPanel=!dualDetailActive
+        var c=JSON.parse(JSON.stringify(configuration));c.dualPanel=!(dualDetailActive || dualSummaryActive)
         configuration=Preferences.clean(c);configurationTimer.restart();syncDetailPanel()
     }
     function openDetails() {
@@ -306,7 +316,7 @@ MuseScore {
         requestRefresh(false)
         if(advancedNative) {
             if(rebuild===false && !analysisDirty)applyScorePreview()
-            else {observer.setScorePreview([]); scheduleAnalysis()}
+            else {if(!showChords.checked && !showFunctions.checked)observer.setScorePreview([]); scheduleAnalysis()}
         }
     }
     function cancelRegionJob() {
@@ -320,7 +330,7 @@ MuseScore {
     }
     function needsAnalysis() {return advancedNative && ((scoreColoring.checked && allColor.checked) || showChords.checked || showFunctions.checked || configuration.summaryMode===1 || configuration.detailMode===1 || pendingExport.length>0)}
     function scheduleAnalysis() {
-        if(!started || !surfaceActive || !curScore || !needsAnalysis() || analysisTimer.running || regionBuilder || regionJobToken || observer.playing || !analysisDirty)return
+        if(!started || !surfaceActive || !curScore || !needsAnalysis() || analysisTimer.running || regionBuilder || regionJobToken || (observer.playing && analysisRecords.length) || !analysisDirty)return
         setScope()
         regionRevision=typeof observer.analysisRevision==="function"?observer.analysisRevision():""
         pendingRecords=[]
@@ -344,7 +354,8 @@ MuseScore {
             var name=nameOf(result.root)
             for(var i=0;i<notes.length;++i)if(Harmony.mod12(notes[i].pitch)===result.root){name=Harmony.spelledName(notes[i].tpc,notes[i].pitch,prefersFlats());break}
             chord=name+Harmony.defs[result.definition].suffix
-            degree=Harmony.roman(tonic,keyMode.currentIndex===1,result.root,result.definition,configuration.degreeMode)
+            degree=Harmony.roman(tonic,keyMode.currentIndex===1,result.root,result.definition,configuration.degreeMode,notes.length?Math.min.apply(null,pitches):undefined)
+            if(notes.length && Harmony.mod12(Math.min.apply(null,pitches))!==result.root)chord+="/"+nameOf(Math.min.apply(null,pitches))
         }
         if(imported){if(typeof imported.chord==="string")chord=imported.chord;if(typeof imported.degree==="string")degree=imported.degree}
         return {tick:frame.tick,bar:frame.bar,beat:frame.beat,root:result.root,definition:result.definition,
@@ -352,9 +363,9 @@ MuseScore {
     }
     function buildAnalysisChunk() {
         if(!curScore || !surfaceActive || !needsAnalysis())return
-        if(observer.playing){cancelRegionJob();analysisTimer.stop();analysisDirty=true;return}
+        if(observer.playing && analysisRecords.length){cancelRegionJob();analysisTimer.stop();analysisDirty=true;return}
         if(regionBuilder){buildRegionChunk();return}
-        var batch=observer.analysisFrames(analysisNextTick,32,firstTrack,endTrack,pedalContext.checked,windowTicks())
+        var batch=observer.analysisFrames(analysisNextTick,observer.playing?8:32,firstTrack,endTrack,pedalContext.checked,windowTicks())
         analysisFingerprint=batch.fingerprint || ""
         var frames=batch.frames || []
         for(var i=0;i<frames.length;++i)pendingRecords.push(frameResult(frames[i]))
@@ -565,7 +576,8 @@ MuseScore {
         lastPlayTick = -1
         playbackAvailable = !!observer || (!!curScore && typeof curScore.harmonyPlaybackTick === "number" &&
                 typeof curScore.harmonyPlaybackActive === "boolean")
-        clearDisplay(curScore ? "请选择音符、和弦或休止符" : "没有打开乐谱")
+        clearDisplay(curScore ? "正在读取当前小节" : "没有打开乐谱")
+        syncAnalysisSurface()
     }
     function clearDisplay(message) {
         currentTick = -1
@@ -580,7 +592,7 @@ MuseScore {
         inversionText = "—"
         alternativesText = ""
         toneRows = []
-        positionText = "等待选区"
+        positionText = "—"
         matchText = message
     }
     function requestRefresh(dirty) {
@@ -592,7 +604,6 @@ MuseScore {
             buildSegment = null
             analysisDirty = true
             regionBuilder = null
-            if (advancedNative) observer.clearAllPreviews()
             unplacedMarkers=[];unplacedIndex=({});placementNotice=""
             if (importedRecords.length || importedRegions.length) {importedRecords=[];importedRegions=[]; noticeText="乐谱已变更，已退出导入结果；请重新分析。"}
         }
@@ -603,11 +614,7 @@ MuseScore {
         if (!curScore || !surfaceActive) return
         if (lastPlaying && followPlayback.checked) return
         var location = selectedLocation()
-        if (!location) {
-            restoreColors()
-            clearDisplay("请选择音符、和弦或休止符")
-            return
-        }
+        if (!location) location={tick:observer && observer.playing ? Math.max(0,observer.tick) : Math.max(0,currentTick),track:selectionTrack>=0?selectionTrack:0}
         selectionTrack = location.track
         var oldFirst = firstTrack, oldEnd = endTrack
         setScope()
@@ -712,9 +719,9 @@ MuseScore {
         var changed = JSON.stringify(notes) !== JSON.stringify(currentNotes)
         currentTick = tick
         if(fixedChordNative)observer.setActiveScorePreview(highlightedTick())
-        positionText = lastPlaying && followPlayback.checked ? "正在播放 · 包含持续音" : "当前选区 · 包含持续音"
+        positionText = lastPlaying && followPlayback.checked ? "正在播放 · 包含持续音" : "当前位置 · 包含持续音"
         if (observer && nativeSnapshot.bar !== undefined)
-            positionText = (lastPlaying && followPlayback.checked ? "播放" : "选区") +
+            positionText = (lastPlaying && followPlayback.checked ? "播放" : "当前位置") +
                     " · 第 " + nativeSnapshot.bar + " 小节 · 第 " + nativeSnapshot.beat + " 拍"
         var previousKey = keyTonic.currentIndex
         initializeKey(tick)
@@ -772,7 +779,7 @@ MuseScore {
         chordText = chordRoot < 0 ? (currentPitches.length === 1 ? noteName(currentNotes[0]) : "—") :
                 rootName() + Harmony.defs[chordDefinition].suffix
         degreeText = Harmony.roman(Harmony.rootPcs[keyTonic.currentIndex], keyMode.currentIndex === 1,
-                                   chordRoot, chordDefinition,configuration.degreeMode)
+                                   chordRoot, chordDefinition,configuration.degreeMode,currentNotes.length?currentNotes[0].pitch:-1)
         var voicing = []
         for (var i = 0; i < currentNotes.length; ++i) voicing.push(noteName(currentNotes[i]))
         voicingText = voicing.length ? voicing.join(" · ") : "—"
@@ -948,7 +955,7 @@ MuseScore {
         var playing = observer.playing
         if (playing !== lastPlaying) {
             lastPlaying = playing
-            if(playing){cancelRegionJob();analysisTimer.stop();regionBuilder=null}
+            if(playing && analysisRecords.length){cancelRegionJob();analysisTimer.stop();regionBuilder=null}
             if (!playing) {lastPlayTick = -1; requestRefresh(false); return}
         }
         if (playing && followPlayback.checked) {
@@ -992,9 +999,9 @@ MuseScore {
     }
     onVisibleChanged: {
         if (!started) return
-        if (observer) observer.enabled = visible
-        if (!visible) {buildTimer.stop(); restoreColors();markerWindow.hide()}
-        else requestRefresh(true)
+        syncAnalysisSurface()
+        if (!surfaceActive) {buildTimer.stop(); restoreColors();markerWindow.hide()}
+        else requestRefresh(false)
     }
     onSurfaceActiveChanged: {
         if (!started) return
@@ -1003,6 +1010,8 @@ MuseScore {
         if (surfaceActive) {followNativePosition(); requestRefresh(false)}
     }
     onRibbonChanged:syncDetailPanel()
+    onDualSummaryActiveChanged:syncAnalysisSurface()
+    onDualDetailActiveChanged:syncAnalysisSurface()
     Component.onDestruction: {cancelRegionJob();if (started) {savePreferences();saveCorrections(); undoPause = false; restoreColors(true); if(advancedNative)observer.clearAllPreviews()}}
     Timer {id:configurationTimer; interval:350; onTriggered:savePreferences()}
     Timer {id:analysisTimer; interval:12; onTriggered:buildAnalysisChunk()}
@@ -1032,7 +1041,7 @@ MuseScore {
         function open(){visible=true; requestActivate()}
     }
     Window {
-        id:ribbonMenuWindow;objectName:"harmonyRibbonMenuWindow";width:230;height:positionOnly?(configuration.ribbonAlign===3?188:148):112
+        id:ribbonMenuWindow;objectName:"harmonyRibbonMenuWindow";width:230;height:positionOnly?(configuration.ribbonAlign===3?188:148):(root.dualSummaryActive?146:112)
         visible:false;flags:Qt.Popup|Qt.FramelessWindowHint;color:theme.background
         property bool positionOnly:true
         function openAt(item,position){positionOnly=position;var point=item.mapToGlobal(0,item.height);x=point.x;y=point.y;show();raise();requestActivate()}
@@ -1050,8 +1059,9 @@ MuseScore {
             Column {
                 width:parent.width;visible:!ribbonMenuWindow.positionOnly;spacing:4
                 DeskButton {objectName:"harmonyRibbonMarkerList";width:parent.width;text:root.unplacedMarkers.length?"记号列表（有待检查项）":"记号列表";enabled:root.advancedNative;onClicked:{ribbonMenuWindow.hide();markerWindow.show();markerWindow.raise();markerWindow.requestActivate()}}
+                DeskButton {width:parent.width;text:"隐藏顶部摘要";visible:root.dualSummaryActive;onClicked:{ribbonMenuWindow.hide();root.toggleDetailPanel()}}
                 DeskButton {width:parent.width;text:"详细窗口";onClicked:{ribbonMenuWindow.hide();root.openDetailWindow()}}
-                DeskButton {width:parent.width;text:"悬浮这个面板";enabled:typeof root.setPanelFloating==="function";onClicked:{ribbonMenuWindow.hide();root.setPanelFloating(true)}}
+                DeskButton {width:parent.width;text:(root.dualSummaryActive && typeof root.summaryPanelFloating==="boolean" ? root.summaryPanelFloating : root.panelFloating)?"停靠这个面板":"悬浮这个面板";enabled:typeof root.setPanelFloating==="function";onClicked:{ribbonMenuWindow.hide();(root.dualSummaryActive && typeof root.setSummaryPanelFloating==="function")?root.setSummaryPanelFloating(!root.summaryPanelFloating):root.setPanelFloating(!root.panelFloating)}}
             }
         }
     }
@@ -1068,12 +1078,12 @@ MuseScore {
         onReadOnlyJobFinished: {
             if(token!==root.regionJobToken)return
             root.regionJobToken=0
-            if(!root.surfaceActive || !curScore || observer.playing || firstTrack!==root.regionFirstTrack || endTrack!==root.regionEndTrack || observer.analysisRevision()!==root.regionRevision) {root.analysisDirty=true;root.scheduleAnalysis();return}
+            if(!root.surfaceActive || !curScore || firstTrack!==root.regionFirstTrack || endTrack!==root.regionEndTrack || observer.analysisRevision()!==root.regionRevision) {root.analysisDirty=true;root.scheduleAnalysis();return}
             if(result.error){root.analysisDirty=true;root.matchText="分析未完成";root.noticeText="和弦计算未完成："+result.error;return}
             root.finishRegions(result.regions||[])
         }
     }
-    Connections {target:root; ignoreUnknownSignals:true; onPanelDetailClosed:root.detailPanelClosed()}
+    Connections {target:root; ignoreUnknownSignals:true; onPanelDetailClosed:root.detailPanelClosed();onPanelSummaryClosed:root.detailPanelClosed()}
 
     Rectangle {
         id:backdrop
@@ -1349,12 +1359,15 @@ MuseScore {
                         DeskButton {text:"导入 JSON"; enabled:advancedNative; onClicked:chooseFile("import-analysis")}
                         DeskButton {text:"重新检测"; enabled:advancedNative; onClicked:{importedRecords=[];importedRegions=[]; optionsChanged()}}
                     }
-                    UiLabel {width:parent.width; text:analysisTimer.running?"正在分批分析…":analysisRecords.length+" 个时间切片"+(importedRecords.length?" · 使用导入分析":""); color:muted; font.pixelSize:11; wrapMode:Text.Wrap}
+                    UiLabel {width:parent.width; text:root.analysisStatus+(importedRecords.length?" · 使用导入分析":""); color:muted; font.pixelSize:11; wrapMode:Text.Wrap}
                 }
             }
         }
         Item {
-            visible:root.ribbon; anchors.fill:parent; clip:true
+            id:summarySurface
+            parent:root.dualSummaryActive ? root.summaryPanelHost : backdrop
+            visible:root.ribbon || root.dualSummaryActive; anchors.fill:parent; clip:true
+            Rectangle {anchors.fill:parent;color:theme.background}
             Item {
                 id:ribbonGroup; objectName:"harmonyRibbonGroup"
                 width:Math.min(850,Math.max(100,parent.width-ribbonControls.width-36))
@@ -1364,9 +1377,9 @@ MuseScore {
                         configuration.ribbonAlign===3 ? 12+(maximum-12)*configuration.ribbonPosition/100 : Math.max(12,Math.min(maximum,(parent.width-ribbonControls.width-width)/2))}
                 RowLayout {
                     anchors.fill:parent;spacing:10
-                    StableLabel {objectName:"harmonyRibbonChord";text:root.summaryChordText;color:root.summaryInk;font.pixelSize:22;font.bold:true;Layout.preferredWidth:Math.min(240,Math.max(70,ribbonGroup.width*.4));Layout.alignment:Qt.AlignVCenter}
+                    StableLabel {objectName:"harmonyRibbonChord";text:root.summaryChordText;color:root.summaryInk;font.pixelSize:20;font.bold:true;Layout.preferredWidth:Math.min(240,Math.max(70,ribbonGroup.width*.4));Layout.alignment:Qt.AlignVCenter}
                     StableLabel {text:root.summaryDegreeText;color:root.summaryInk;font.pixelSize:13;Layout.preferredWidth:Math.min(80,ribbonGroup.width*.22);Layout.alignment:Qt.AlignVCenter}
-                    StableLabel {text:(configuration.summaryMode===0?"实时":"所属和弦")+" · "+positionText;color:muted;font.pixelSize:11;visible:ribbonGroup.width>360;Layout.fillWidth:true;Layout.alignment:Qt.AlignVCenter}
+                    StableLabel {text:(configuration.summaryMode===0?"实时":"所属和弦")+" · "+positionText+" · "+root.analysisStatus;color:muted;font.pixelSize:11;visible:ribbonGroup.width>360;Layout.fillWidth:true;Layout.alignment:Qt.AlignVCenter}
                     Row {
                         id:ribbonTones;visible:ribbonGroup.width>=760;spacing:3;Layout.alignment:Qt.AlignVCenter
                         Repeater {model:root.summaryToneRows;delegate:Rectangle {
@@ -1380,7 +1393,7 @@ MuseScore {
             Row {
                 id:ribbonControls;spacing:4;width:230;anchors.right:parent.right;anchors.rightMargin:12;anchors.verticalCenter:parent.verticalCenter
                 DeskButton {id:ribbonAlignmentButton;objectName:"harmonyRibbonAlignment";width:98;text:["靠左","居中","靠右","自定位置"][configuration.ribbonAlign]+" ▾";onClicked:ribbonMenuWindow.openAt(ribbonAlignmentButton,true)}
-                DeskButton {width:58;text:"详情";checked:root.dualDetailActive;visible:typeof root.showDetailPanel==="function";onClicked:root.toggleDetailPanel();ToolTip.visible:hovered;ToolTip.text:"显示／隐藏右侧详情"}
+                DeskButton {width:58;text:"详情";checked:root.dualDetailActive;visible:typeof root.showDetailPanel==="function";onClicked:{if(root.dualSummaryActive)root.focusPanel();else root.toggleDetailPanel()}ToolTip.visible:hovered;ToolTip.text:root.dualSummaryActive?"打开右侧详情":"显示／隐藏右侧详情"}
                 DeskButton {id:ribbonMoreButton;objectName:"harmonyRibbonMore";width:58;text:"更多";onClicked:ribbonMenuWindow.openAt(ribbonMoreButton,false)}
 
             }

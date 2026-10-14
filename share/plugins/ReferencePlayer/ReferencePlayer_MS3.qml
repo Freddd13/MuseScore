@@ -12,7 +12,7 @@ MuseScore {
  id:root
  menuPath:"Plugins.Reference Player"
  description:"原曲参考：本地播放、波形循环、保调慢放及手动谱段关联。"
- version:"1.1.0"
+ version:"1.2.0"
  requiresScore:false
  pluginType:"dock"
  dockArea:"bottom"
@@ -40,7 +40,7 @@ MuseScore {
  }
  property real shownPosition:audioProject&&audioProject.playing?(!audioProject.joint||playbackMode===0?a+audioProject.position*(media?media.speed:1):Project.mapped(associations[selectedAssociation]||{start:0,end:1,from:0,until:1},audioProject.scoreTick)):media?media.position:0
  function storeTrack(){
-  if(switchingTrack||selectedTrack<0||selectedTrack>=tracks.length||!media)return;
+  if(switchingTrack||selectedTrack<0||selectedTrack>=tracks.length||!media||media.duration<=0)return;
   var list=Project.copy(tracks),t=list[selectedTrack];t.path=media.path;t.identity=sourceIdentity;t.a=a;t.b=b;t.loop=looping;t.fade=fade;t.bookmarks=Project.copy(bookmarks);t.associations=Project.copy(associations);t.volume=media.volume;t.speed=media.speed;tracks=list;
   if(audioProject&&audioProject.available&&!audioProject.playing){if(observer&&typeof observer.setReferenceTracks==="function")observer.setReferenceTracks(tracks);else audioProject.setTracks(tracks);audioProject.selectedTrack=selectedTrack;audioProject.playbackSettings={mode:playbackMode,selectedTrack:selectedTrack,selectedAssociation:selectedAssociation,speed:media.speed,volume:jointVolume,fade:fade};}
  }
@@ -52,20 +52,32 @@ MuseScore {
   viewportPeaks=[];media.volume=t.volume===undefined?.8:t.volume;media.speed=t.speed||1;switchingTrack=false;applyLoop();wave.requestPaint();status="已选音轨："+t.name;
  }
  function trackOption(name,value){if(selectedTrack<0)return;storeTrack();var list=Project.copy(tracks);list[selectedTrack][name]=value;tracks=list;if(audioProject&&!audioProject.playing)audioProject.setTracks(tracks);}
+ function watchTrackFile(session,id) {
+  session.fileReady.connect(function(info){
+   var list=Project.copy(root.tracks),index=list.findIndex(function(t){return t.id===id});
+   if(index<0)return;
+   var track=list[index],previous=track.identity;
+   track.identity=info;track.path=session.path;
+   if(!(track.b>track.a))track.b=session.duration;
+   if(previous && (previous.size!==info.size || previous.modified!==info.modified))track.associations=(track.associations||[]).map(function(v){v.stale=true;return v});
+   root.tracks=list;
+   if(root.audioProject && !root.audioProject.playing)root.audioProject.setTracks(list);
+  });
+ }
  function openAudio(url){
   if(audioProject&&audioProject.playing){status="请先停止联合播放。";return;}
   if(relocating){media.open(String(url));return;}
   storeTrack();if(usable)media.pause();
   if(addingAudio||selectedTrack<0){
    if(tracks.length>=16){status="最多添加 16 条音轨。";return;}
-   var session=root.newReferenceMedia(),list=Project.copy(tracks),objects=sessions.slice();objects.push(session);list.push({id:"audio-"+Date.now()+"-"+list.length,name:Project.path(url).split(/[\\/]/).pop(),path:String(url),associations:[],mute:false,solo:false,participate:true,volume:.8,speed:1});sessions=objects;tracks=list;selectedTrack=list.length-1;media=session;
+   var session=root.newReferenceMedia(),list=Project.copy(tracks),objects=sessions.slice();objects.push(session);list.push({id:"audio-"+Date.now()+"-"+list.length,name:Project.path(url).split(/[\\/]/).pop(),path:String(url),associations:[],mute:false,solo:false,participate:true,volume:.8,speed:1});sessions=objects;tracks=list;selectedTrack=list.length-1;media=session;watchTrackFile(session,list[selectedTrack].id);
   }
   addingAudio=false;restored=null;media.open(String(url));
  }
  function restoreTracks(data,url){
   var retired=sessions.slice();
   if(audioProject&&audioProject.playing)observer.stopReferencePlayback();
-  var list=Project.copy(data.tracks),objects=[];for(var i=0;i<list.length;++i){list[i].path=Project.resolve(url,list[i].path);var session=root.newReferenceMedia();objects.push(session);session.open(Project.fileUrl(list[i].path));}
+  var list=Project.copy(data.tracks),objects=[];for(var i=0;i<list.length;++i){list[i].path=Project.resolve(url,list[i].path);var session=root.newReferenceMedia();objects.push(session);if(!list[i].id)list[i].id="restored-"+i;watchTrackFile(session,list[i].id);session.open(Project.fileUrl(list[i].path));}
   tracks=list;sessions=objects;selectedTrack=-1;selectTrack(Math.max(0,Math.min(list.length-1,data.selectedTrack||0)));restored=list[selectedTrack];workspace=String(url);playbackMode=data.playbackMode||0;status="正在恢复音轨与关联。";
   if(typeof root.releaseReferenceMedia==="function")retired.forEach(function(m){root.releaseReferenceMedia(m)});
  }
@@ -218,6 +230,21 @@ MuseScore {
  onVisibleChanged:{if(!visible&&usable&&pauseWhenHidden)media.pause()}
  Connections {target:media;ignoreUnknownSignals:true;onFileReady:root.updateFile(info);onWaveformChanged:wave.requestPaint();onWaveformReady:{root.peaksFrom=from;root.peaksUntil=until;root.viewportPeaks=peaks;wave.requestPaint()}}
  Rectangle {anchors.fill:parent;color:theme.background}
+ DropArea {anchors.fill:parent;onDropped:{
+  if(!drop.urls.length)return;
+  var added=0;for(var i=0;i<drop.urls.length;++i){var url=String(drop.urls[i]);if(/\.(wav|mp3|flac)$/i.test(url)){root.addingAudio=true;root.openAudio(url);added++;}}
+  if(added){drop.acceptProposedAction();root.status="已添加 "+added+" 条音轨";}
+ }}
+ property string panelSpaceHandler:"toggleReferencePlayback"
+ function toggleReferencePlayback() {
+  if(!usable || !media.path){status="先打开一段音频，再按空格播放";return;}
+  if(audioProject && audioProject.playing)stopJoint();
+  else if(media.playing)media.pause();
+  else if(lastSessionMode==="joint")startJoint();
+  else if(lastSessionMode==="audio")playAudioTracks();
+  else {lastSessionMode="single";media.play();}
+ }
+
  ColumnLayout {
   anchors.fill:parent;anchors.margins:8;spacing:6
   RowLayout {

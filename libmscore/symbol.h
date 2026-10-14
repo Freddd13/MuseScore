@@ -35,6 +35,7 @@ class Symbol : public BSymbol {
       bool _handMode = false, _handText = false, _handDragging = false;
       qreal _handH = 2, _handV = -1, _handWidth = .12;
       QPointF _handDragOriginal;
+      QPointF _handDragOffset;
       QPointF _handBase;
       bool _handBaseValid=false,_handLegacyAnchor=false;
       bool _handGeometryEdited=false;
@@ -77,7 +78,7 @@ class Symbol : public BSymbol {
       bool handEnd() const;
       void applyHandPreset(); // only explicit creation/conversion, never read/clone
       Shape shape() const override;
-      int gripsCount() const override { return handBracket() ? 2 : 0; }
+      int gripsCount() const override { return handBracket() ? 3 : 0; }
       Grip initialEditModeGrip() const override { return handBracket() ? Grip::START : Grip::NO_GRIP; }
       Grip defaultGrip() const override { return initialEditModeGrip(); }
       std::vector<QPointF> gripsPositions(const EditData& = EditData()) const override;

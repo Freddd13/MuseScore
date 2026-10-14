@@ -20,6 +20,8 @@
 #include "libmscore/textline.h"
 #include "libmscore/undo.h"
 #include <QSaveFile>
+#include <QStandardPaths>
+#include <QAction>
 #include <QBuffer>
 #include <QUrl>
 #include <QDir>
@@ -45,7 +47,9 @@ Ms::Note* noteAt(Ms::Score* score,const QVariantMap& value){
 }
 }
 QVariantMap ScoreObserver::applyExpression(const QVariantMap& candidate){
- if(!_score||!idle()||_score->readOnly())return {{"error","stop playback/rendering and select an editable score"}};
+ if(!_score)return {{"error",tr("打开要编辑的乐谱后使用力度。")}};
+ if(!idle())return {{"error",tr("正在播放或准备乐谱。停播后即可使用新的力度。")}};
+ if(_score->readOnly())return {{"error",tr("这份谱子以只读方式打开。另存为可编辑的乐谱后继续修改。")}};
  if(mscore&&mscore->currentScore()&&mscore->currentScore()!=_score&&!_workflowApplyingPreview)return {{"error","return to the source score before applying"}};
  if(candidate.value("revision").toString()!=analysisRevision())return {{"error","stale score session or content version"}};
  auto scope=candidate["scope"].toMap();int start=scope.value("start",-1).toInt(),end=scope.value("end",-1).toInt(),first=scope.value("firstTrack",-1).toInt(),last=scope.value("endTrack",-1).toInt();
@@ -119,6 +123,17 @@ QVariantMap ScoreObserver::openWorkflowScore(const QString& filename,bool baseli
  score->masterScore()->QObject::setProperty("kumoWorkflowOwned",true);score->masterScore()->setReadOnly(baseline);
  mscore->setCurrentScoreView(mscore->appendScore(score));
  return {{"ok",true},{"path",path}};
+}
+QString ScoreObserver::temporaryWorkflowProject() {
+ const QString folder=QStandardPaths::writableLocation(QStandardPaths::TempLocation)+"/musescore-expression/"+QUuid::createUuid().toString(QUuid::WithoutBraces);
+ if(!QDir().mkpath(folder))return QString();
+ return QUrl::fromLocalFile(folder+"/expression.json").toString();
+}
+QVariantMap ScoreObserver::showEditorComparison() {
+ if(!mscore||!_score)return {{"error",tr("打开乐谱后可以查看力度对比。")}};
+ if(auto action=mscore->findChild<QAction*>("performance-editor"))action->setChecked(true);
+ else mscore->showPerformanceEditor(true);
+ return {{"ok",true}};
 }
 QVariantMap ScoreObserver::previewExpression(const QString& workspace,const QVariantMap& candidate,const QVariantMap& scope){
  if(!_score||!idle())return {{"error","stop and wait for rendering"}};

@@ -153,13 +153,23 @@ function detectWeighted(notes, weights, previous, tonic, minorKey, tick, hint) {
     if(best.context)best.kind+=" · "+best.context;
     return best;
 }
-function roman(tonic, minorKey, chordRoot, definition, degreeMode) {
+function roman(tonic, minorKey, chordRoot, definition, degreeMode, bass) {
     if(chordRoot<0 || definition<0) return "—";
     // Conventional Roman numerals reference the parallel major: A minor uses ♭III, ♭VI, ♭VII.
     var map=["I","♭II","II","♭III","III","IV","♯IV","V","♭VI","VI","♭VII","VII"];
     if(minorKey && degreeMode===0)map=["I","♭II","II","III","♯III","IV","♯IV","V","VI","♯VI","VII","♯VII"];
     var d=defs[definition], base=map[mod12(chordRoot-tonic)];
-    return (d.minor?base.toLowerCase():base)+d.roman;
+    var numeral=(d.minor?base.toLowerCase():base), suffix=d.roman;
+    if(bass===undefined || bass<0 || mod12(bass)===chordRoot)return numeral+suffix;
+    var label=labelFor(bass,chordRoot,definition), seventh=d.labels.some(function(v){return /7$/.test(v);});
+    var third=/3$/.test(label), fifth=/5$/.test(label), seven=/7$/.test(label);
+    if(third || fifth || seven && seventh) {
+        var figure=seventh ? (third?"⁶₅":fifth?"⁴₃":"⁴₂") : third?"⁶":"⁶₄";
+        // Keep quality/extension text, while ordinary seventh figures replace 7.
+        if(seventh && /7$/.test(suffix))suffix=suffix.slice(0,-1);
+        return numeral+suffix+figure;
+    }
+    return numeral+suffix+"/"+label;
 }
 function isChromatic(tonic, minorKey, chordRoot, definition) {
     if(chordRoot<0 || definition<0 || !defs[definition])return false;

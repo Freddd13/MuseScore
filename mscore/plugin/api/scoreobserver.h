@@ -36,6 +36,7 @@ class ScoreObserver : public QObject {
       Q_PROPERTY(bool playing READ playing NOTIFY positionChanged)
       Q_PROPERTY(bool enabled READ enabled WRITE setEnabled NOTIFY enabledChanged)
       Q_PROPERTY(bool surfaceVisible READ surfaceVisible NOTIFY surfaceVisibleChanged)
+      Q_PROPERTY(bool auxiliarySurfaceVisible READ auxiliarySurfaceVisible WRITE setAuxiliarySurfaceVisible NOTIFY surfaceVisibleChanged)
       Q_PROPERTY(int indexBuildCount READ indexBuildCount NOTIFY indexChanged)
       Q_PROPERTY(double indexBuildMilliseconds READ indexBuildMilliseconds NOTIFY indexChanged)
 
@@ -77,6 +78,7 @@ class ScoreObserver : public QObject {
       double _indexBuildMilliseconds = 0.0;
       bool _enabled = true;
       bool _surfaceVisible = true;
+      bool _auxiliarySurfaceVisible = false;
       void ensureIndex(int firstTrack, int endTrack);
       QVariantMap describe(const Ms::Note* note, int pitch, bool eventPitch = false) const;
       QVariantList soundingNotes(int firstTrack, int endTrack) const;
@@ -90,7 +92,9 @@ class ScoreObserver : public QObject {
       int tick() const;
       bool playing() const;
       bool enabled() const { return _enabled; }
-      bool surfaceVisible() const { return _surfaceVisible; }
+      bool surfaceVisible() const { return _surfaceVisible || _auxiliarySurfaceVisible; }
+      bool auxiliarySurfaceVisible() const { return _auxiliarySurfaceVisible; }
+      void setAuxiliarySurfaceVisible(bool visible);
       void setEnabled(bool enabled);
       int indexBuildCount() const { return _indexBuildCount; }
       double indexBuildMilliseconds() const { return _indexBuildMilliseconds; }
@@ -106,6 +110,8 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QVariantMap setReferenceTracks(const QVariantList&);
       Q_INVOKABLE QVariantMap workflowFingerprint(int from,int limit,const QString& expected);
       Q_INVOKABLE QVariantMap returnWorkflowSource();
+      Q_INVOKABLE QString temporaryWorkflowProject();
+      Q_INVOKABLE QVariantMap showEditorComparison();
       Q_INVOKABLE QVariantMap previewExpression(const QString& workspace,const QVariantMap& candidate,const QVariantMap& scope);
       Q_INVOKABLE QVariantMap openWorkflowScore(const QString& filename,bool baseline = false,const QString& expectedHash = QString());
       Q_INVOKABLE QVariantMap copyWorkflowScore(const QString& destination,const QString& expected,bool overwrite = false);

@@ -24,7 +24,7 @@ Column {
         UiLabel {text:"侧边主和弦";color:theme.muted;font.pixelSize:11}
         DeskComboBox {model:["实时结果","所属和弦"];currentIndex:configuration.detailMode;Layout.fillWidth:true;onActivated:editor.option("detailMode",currentIndex)}
     }
-    DeskSwitch {text:"顶部摘要同时显示右侧详情"; checked:configuration.dualPanel; onToggled:if(checked!==configuration.dualPanel)editor.option("dualPanel",checked)}
+    DeskSwitch {text:"同时显示顶部摘要与右侧详情"; checked:configuration.dualPanel; onToggled:if(checked!==configuration.dualPanel)editor.option("dualPanel",checked)}
     RowLayout {
         width:parent.width
         UiLabel {text:"顶栏位置"; color:theme.muted; font.pixelSize:11}
@@ -54,6 +54,7 @@ Column {
         width:parent.width
         UiLabel {text:"记号大小 %"; Layout.fillWidth:true; color:theme.muted; font.pixelSize:11}
         DeskSpinBox {from:60; to:200; stepSize:10; value:configuration.chordScale; editable:true; implicitHeight:28; onValueModified:editor.option("chordScale",value)}
+        DeskButton {text:"100%";implicitHeight:28;onClicked:editor.option("chordScale",100);ToolTip.visible:hovered;ToolTip.text:"使用乐谱和弦记号的原大小"}
     }
     Repeater {
         model:[{key:"chordColor",name:"记号颜色"},{key:"highlightColor",name:"高亮文字"},{key:"highlightBackground",name:"高亮背景"},{key:"chromaticColor",name:"离调强调"}]

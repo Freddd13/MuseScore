@@ -5560,9 +5560,12 @@ QList<Element*> ScoreView::elementsNear(QPointF p)
             Element* owner=ll.front();
             for (int i=1;i<ll.size();++i) {
                   Element* child=ll[i];
-                  if (child->isSymbol() && toSymbol(child)->handBracket() && child->contains(p)
-                     && ((owner->isNote() && (child->parent()==owner || child->parent()==owner->parent()))
-                        || (owner->isChord() && child->parent()==owner))) {
+                  if (!child->isSymbol() || !toSymbol(child)->handBracket() || !child->contains(p)) continue;
+                  Element* attachment=child->parent();
+                  Element* chord=attachment && attachment->isNote() ? attachment->parent() : attachment;
+                  Element* ownerChord=owner;
+                  for(int depth=0;ownerChord && !ownerChord->isChord() && depth<3;++depth)ownerChord=ownerChord->parent();
+                  if ((owner->isNote() && child->parent()==owner) || (chord && chord->isChord() && ownerChord==chord)) {
                         ll.move(i,0);break;
                         }
                   }
