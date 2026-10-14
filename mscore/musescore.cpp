@@ -2777,7 +2777,8 @@ void MuseScore::updateMenus()
       updateMenu(menuFormat,      "menu-format",       "Format");
       updateMenu(menuStretch,     "menu-stretch",      "");
       updateMenu(menuTools,       "menu-tools",        "Tools");
-      if (auto action = findChild<QAction*>("auto-rhythmic-input")) {
+      if(menuTools)addInputNotationMenu(menuTools);
+      for (const char* actionName : {"auto-rhythmic-input", "auto-tie-beams", "coherent-tie-stems"}) if (auto action = findChild<QAction*>(actionName)) {
             if (menuTools && !menuTools->actions().contains(action)) {
                   auto actions = menuTools->actions();
                   const int anchor = actions.indexOf(getAction("reset-groupings"));

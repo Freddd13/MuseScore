@@ -13,7 +13,10 @@ namespace Ms {
 void addInputNotationMenu(QMenu* menu)
       {
       auto add = [&](const QString& label, const char* name, const char* preference, void(*setter)(bool)) {
-            auto action = menu->addAction(label); action->setObjectName(name); action->setCheckable(true);
+            QObject* owner=mscore ? static_cast<QObject*>(mscore) : menu->parent();
+            if(!owner)owner=menu;
+            if(auto existing=owner->findChild<QAction*>(name)){if(!menu->actions().contains(existing))menu->addAction(existing);return;}
+            auto action = new QAction(label,owner); menu->addAction(action); action->setObjectName(name); action->setCheckable(true);
             action->setChecked(preferences.getBool(preference)); Workspace::addActionAndString(action,name);
             action->setToolTip(QObject::tr("改变已打开乐谱的自动排版；手动符干和符杠保持原设置。"));
             QObject::connect(action,&QAction::triggered,action,[=](bool enabled) {

@@ -711,6 +711,7 @@ class TestPerformanceEditor : public QObject, public MTest {
                   QVERIFY(beats.count() > 0); QCOMPARE(beats.last().at(0).toInt(), 0); // Long note: heartbeat event tick has not moved.
                   auto note = noteAt(score, 0); const int tick = sequence->getCurTick(); QVERIFY(PerformanceSelection::apply(score, {note}, note)); QCOMPARE(sequence->getCurTick(), tick);
                   PerformanceEditor late; late.resize(700, 600); late.setView(main->currentScoreView()); late.show(); QTest::qWait(60);
+                  QTRY_VERIFY(late.findChild<QPushButton*>("performanceConvertAbsolute")->isEnabled());
                   auto lateAxis = late.findChild<QComboBox*>("performanceAxis"); QVERIFY(lateAxis); lateAxis->setCurrentIndex(1); late.setSelectedValue(25); QVERIFY(late.hasPending()); QCOMPARE(note->veloOffset(), 0);
                   late.fit(true); QTest::mouseClick(late.findChild<QToolButton*>("performancePitchReset"), Qt::LeftButton);
                   auto lateNotes = late.findChild<QWidget*>("performanceNoteCanvas"); auto latePitch = lateNotes->findChild<QScrollBar*>();
@@ -822,6 +823,17 @@ class TestPerformanceEditor : public QObject, public MTest {
             QVERIFY(looped); getAction("loop")->setChecked(false);
             sequence->stopWait(); sequence->waitForStoppedRendering(); QApplication::processEvents();
             }
+      void inputActionsSurviveMenuRebuild() {
+            auto main=Ms::mscore;QVERIFY(main);
+            for(const char* name:{"auto-tie-beams","coherent-tie-stems"}) {
+                  QPointer<QAction> action=main->findChild<QAction*>(name);QVERIFY(action);
+                  const bool checked=action->isChecked();
+                  for(auto widget:action->associatedWidgets())if(auto menu=qobject_cast<QMenu*>(widget))menu->removeAction(action);
+                  main->updateMenus();QVERIFY(action);QCOMPARE(action->isChecked(),checked);
+                  bool present=false;for(auto widget:action->associatedWidgets())present|=qobject_cast<QMenu*>(widget)!=nullptr;
+                  QVERIFY(present);
+            }
+      }
       void editorUsabilityRepairs();
 #ifdef Q_MOC_RUN
       void keyboardContoursAndCompactParameterLayout();

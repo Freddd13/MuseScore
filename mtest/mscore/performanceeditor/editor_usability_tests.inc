@@ -51,7 +51,8 @@ void TestPerformanceEditor::editorUsabilityRepairs()
       const QPoint edge(qRound(view->matrix().mapRect(chord[0]->canvasBoundingRect()).center().x()+20),view->height()-100);
       QTest::mousePress(view,Qt::LeftButton,Qt::NoModifier,edge);QMouseEvent resize(QEvent::MouseMove,QPointF(edge-QPoint(0,20)),Qt::NoButton,Qt::LeftButton,Qt::NoModifier);QApplication::sendEvent(view,&resize);QTest::mouseRelease(view,Qt::LeftButton,Qt::NoModifier,resize.pos());QCOMPARE(QSettings().value("performanceEditor/bandHeight").toInt(),68);QVERIFY(score->state()==state);
       editor.findChild<QAction*>("performanceBandHeight48")->trigger();editor.setScoreBandEnabled(false);editor.hide();
-      const QPoint head=view->matrix().mapRect(chord[0]->canvasBoundingRect()).center().toPoint();const auto matrix=view->matrix();const int raw=chord[0]->veloOffset();
+      const QPoint head=view->matrix().mapRect(chord[0]->canvasBoundingRect()).center().toPoint();const auto matrix=view->matrix();editor.setScoreBandEnabled(false);editor.hide();QApplication::processEvents();
+      const int raw=chord[0]->veloOffset();
       QWheelEvent wheel(QPointF(head+QPoint(20,0)),view->mapToGlobal(head+QPoint(20,0)),QPoint(),QPoint(0,120),Qt::NoButton,Qt::AltModifier|Qt::ShiftModifier,Qt::NoScrollPhase,false);QApplication::sendEvent(view,&wheel);
       QVERIFY(editor.hasPending());QTest::qWait(380);QCOMPARE(chord[0]->veloOffset(),raw+1);QCOMPARE(view->matrix(),matrix);
       // The keyboard and visible-note filters did not silently remove score selection.

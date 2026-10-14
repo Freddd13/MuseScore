@@ -4,6 +4,7 @@
 #include "libmscore/pedal.h"
 #include "libmscore/staff.h"
 #include <QPainter>
+#include <QCursor>
 #include <QComboBox>
 #include <QScrollBar>
 #include <cmath>
@@ -80,7 +81,8 @@ void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface su
                         painter.setPen(black ? QColor("#ededed") : QColor("#292929"));
                         QFont font = painter.font(); font.setPixelSize(qBound(7, int(_viewport.rowHeight * .82), 12)); painter.setFont(font);
                         const double y = _viewport.pitchY(pitch);
-                        painter.drawText(QRectF(black ? 2 : PerformanceViewport::gutter * .58 + 2, y,
+                        const auto keyBounds = (_keyboardMode==2&&!_viewport.pitchRows.isEmpty()) ? QRectF(0,y,PerformanceViewport::gutter,_viewport.rowHeight) : PerformanceKeyboard::shape(pitch,_viewport.topPitch,_viewport.rowHeight,PerformanceViewport::gutter).boundingRect();
+                        painter.drawText(QRectF(black ? 2 : PerformanceViewport::gutter * .58 + 2, keyBounds.center().y()-_viewport.rowHeight/2,
                               PerformanceViewport::gutter * (black ? .58 : .42) - 4, _viewport.rowHeight), Qt::AlignVCenter | Qt::AlignHCenter, pitchName(pitch));
                         }
                   painter.setOpacity(1);
@@ -298,8 +300,14 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
                   if (_playingNotes.contains(i)) { painter.setBrush(Qt::NoBrush); painter.setPen(QPen(c[PerformanceAppearance::Playhead], 2.5)); painter.drawRect(geometry.rect.adjusted(2, 2, -2, -2)); }
                   if (_pending.contains(note.note)) { painter.setBrush(Qt::NoBrush); painter.setPen(QPen(c[PerformanceAppearance::Preview], 1.5, Qt::DashLine)); painter.drawRect(geometry.rect.adjusted(-1, -1, 1, 1)); }
                   if (i == _hover) { painter.setBrush(Qt::NoBrush); painter.setPen(QPen(c[PerformanceAppearance::Text], 2)); painter.drawRect(geometry.rect.adjusted(-2, -2, 2, 2)); }
+                  const bool showValue=_showValues || (_peekHeld && (_peekAll || note.selected || i==_hover || geometry.rect.adjusted(-160,-80,160,80).contains(_noteCanvas->mapFromGlobal(QCursor::pos()))));
                   if (_viewport.rowHeight >= 16 && geometry.rect.width() >= 28) {
-                        painter.setPen(color.lightness() > 145 ? Qt::black : Qt::white); painter.drawText(geometry.rect.adjusted(3, 0, -2, 0), Qt::AlignVCenter, note.name + (_showValues ? QString(" · %1%2").arg(note.base < 0 ? edit.raw : midi).arg(note.base < 0 && edit.type == Note::ValueType::OFFSET_VAL ? "%" : "") : QString()));
+                        painter.setPen(color.lightness() > 145 ? Qt::black : Qt::white); painter.drawText(geometry.rect.adjusted(3, 0, -2, 0), Qt::AlignVCenter, note.name + (showValue ? QString(" · %1%2").arg(note.base < 0 ? edit.raw : midi).arg(note.base < 0 && edit.type == Note::ValueType::OFFSET_VAL ? "%" : "") : QString()));
+                        }
+                  if (showValue && note.enabled && (geometry.rect.width()<28 || _viewport.rowHeight<16)) {
+                        const QString value=QString::number(note.base<0?edit.raw:midi)+(note.base<0 && edit.type==Note::ValueType::OFFSET_VAL?"%":"");
+                        QRectF label(geometry.rect.right()+3,geometry.rect.center().y()-7,painter.fontMetrics().horizontalAdvance(value)+6,14);
+                        painter.fillRect(label,c[PerformanceAppearance::Background]);painter.setPen(c[PerformanceAppearance::Text]);painter.drawText(label,Qt::AlignCenter,value);
                         }
                   }
             if (_marquee) {

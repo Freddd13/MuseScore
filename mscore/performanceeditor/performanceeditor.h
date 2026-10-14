@@ -272,6 +272,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       ~PerformanceEditor() override;
       void setView(ScoreView*);
       void selectionChanged();
+      bool adjustNearestScoreVelocity(ScoreView*, QWheelEvent*);
       bool scoreBandEnabled() const;
       void setScoreBandEnabled(bool);
       void convertSelected(Note::ValueType);

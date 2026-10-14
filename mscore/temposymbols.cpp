@@ -11,6 +11,7 @@
 #include "libmscore/textline.h"
 #include "libmscore/tempotext.h"
 namespace Ms {
+static QString lineFontFace(Score* score) { TempoText text(score); return text.getProperty(Pid::FONT_FACE).toString(); }
 void appendPlayableTempoSymbols(PalettePanel* panel)
       {
       if (!panel || panel->type() != PalettePanel::Type::Tempo || !gscore) return;
@@ -20,16 +21,23 @@ void appendPlayableTempoSymbols(PalettePanel* panel)
             hasRit |= element->isTextLine() && static_cast<TextLine*>(element)->ritPlay();
             hasRestore |= element->isTempoText() && toTempoText(element)->restoreMode()==1;
             }
+      for (int i=0;i<panel->ncells();++i) {
+            auto cell=panel->cell(i);
+            if(cell->tag=="kumo-rit" || cell->tag=="kumo-a-tempo")cell->tag.clear();
+            }
       if (!hasRit) {
             auto line=new TextLine(gscore,true);line->setLen(7*gscore->spatium());
-            line->setBeginText("rit.");line->setContinueText("(rit.)");line->setBeginFontStyle(FontStyle::Italic);
+            TempoText prototype(gscore);
+            line->setBeginText("rit.");line->setContinueText("(rit.)");
+            line->setProperty(Pid::BEGIN_FONT_FACE,prototype.getProperty(Pid::FONT_FACE));line->setProperty(Pid::BEGIN_FONT_SIZE,prototype.getProperty(Pid::FONT_SIZE));line->setProperty(Pid::BEGIN_FONT_STYLE,prototype.getProperty(Pid::FONT_STYLE));
             line->setLineStyle(Qt::DashLine);line->setProperty(Pid::RIT_MODE,true);line->setProperty(Pid::RIT_PLAY,true);
-            panel->append(line,QObject::tr("渐慢 rit.（可播放）"),"kumo-rit",.8);
+            panel->append(line,QObject::tr("渐慢 rit.（可播放）"),QString(),.8);
             }
       if (!hasRestore) {
             auto text=new TempoText(gscore);text->setFollowText(false);text->setXmlText("a tempo");
             text->setProperty(Pid::TEMPO_RESTORE_MODE,1);
-            panel->append(text,QObject::tr("a tempo（恢复渐变前的速度）"),"kumo-a-tempo",1.1);
+            text->setProperty(Pid::FONT_FACE,lineFontFace(gscore));
+            panel->append(text,QObject::tr("a tempo（恢复渐变前的速度）"),QString(),1.1);
             }
       }
 bool isPlayableTempoSymbol(const Element* element)

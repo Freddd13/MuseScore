@@ -21,7 +21,7 @@ namespace Ms {
 void PerformanceEditor::syncOverlayTracking()
       {
       if (!_view) return;
-      const bool needed = overlayAllowed() && (_handles->isChecked() || _band->isChecked() || _wheelButton->isChecked() || _peekHeld);
+      const bool needed = overlayAllowed() && (_handles->isChecked() || _band->isChecked() || _wheelButton->isChecked() || _peekHeld || _showValues);
       if (needed) {
             if (!_trackingOwned) { _trackingBefore = _view->hasMouseTracking(); _trackingOwned = true; }
             _view->setMouseTracking(true);
@@ -93,7 +93,7 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
             if (pointer && _scoreFrame.contains(point)) { scheduleRefresh(); return true; }
             return false;
             }
-      if (!_handles->isChecked() && !_band->isChecked() && !_wheelButton->isChecked() && !_peekHeld) return false;
+      if (!_handles->isChecked() && !_band->isChecked() && !_wheelButton->isChecked() && !_peekHeld && !_showValues && !_closestWheelActive) return false;
       if (event->type() == QEvent::Leave && !_dragging) { _overBand = false; updateHover(-1); invalidateOverlay(); }
       if (event->type() == QEvent::MouseMove && !_dragging) {
             auto mouse = static_cast<QMouseEvent*>(event);
@@ -207,12 +207,12 @@ void PerformanceEditor::paintOverlay(QPainter& painter)
       QRegion damage;
       painter.save(); painter.resetTransform(); painter.setRenderHint(QPainter::Antialiasing);
       QVector<int> handles = _selectedIndices;
-      if(_peekHeld){rebuildVisibleScoreNotes();for(auto item:_visibleScoreNotes)if(noteEditable(_notes[item.first])&&(_peekAll||QLineF(item.second.center(),_overlayPointer).length()<160)&&!handles.contains(item.first))handles.append(item.first);}
+      if(_peekHeld || _showValues){rebuildVisibleScoreNotes();for(auto item:_visibleScoreNotes)if(noteEditable(_notes[item.first])&&(_showValues||_peekAll||QLineF(item.second.center(),_overlayPointer).length()<160)&&!handles.contains(item.first))handles.append(item.first);}
       if (_hover >= 0 && !handles.contains(_hover)) handles.append(_hover);
       QVector<QPair<int,QRectF>> handleBounds;
       for(int i:handles)if(i>=0&&i<_notes.size())handleBounds.append({i,_view->matrix().mapRect(_notes[i].bounds)});
-      if(_peekHeld)for(auto item:_visibleScoreNotes)if(noteEditable(_notes[item.first])&&(_peekAll||QLineF(item.second.center(),_overlayPointer).length()<160)&&!handleBounds.contains(item))handleBounds.append(item);
-      if (_handles->isChecked() || _band->isChecked() || _peekHeld) for (auto item : handleBounds) {
+      if(_peekHeld || _showValues)for(auto item:_visibleScoreNotes)if(noteEditable(_notes[item.first])&&(_showValues||_peekAll||QLineF(item.second.center(),_overlayPointer).length()<160)&&!handleBounds.contains(item))handleBounds.append(item);
+      if (_handles->isChecked() || _band->isChecked() || _peekHeld || _showValues) for (auto item : handleBounds) {
             const int i=item.first;const auto& note = _notes[i]; const QRectF bounds = item.second;
             if (!_view->rect().intersects(bounds.toRect())) continue;
             const QColor color = _pending.contains(note.note) ? _appearance.colors[PerformanceAppearance::Preview] : scoreNoteColor(i);
@@ -220,7 +220,7 @@ void PerformanceEditor::paintOverlay(QPainter& painter)
                   painter.setPen(QPen(color, 2, i == _hover ? Qt::DashLine : Qt::SolidLine)); painter.setBrush(Qt::NoBrush); painter.drawRoundedRect(bounds.adjusted(-3, -3, 3, 3), 2, 2);
                   damage |= bounds.adjusted(-5, -5, 5, 5).toAlignedRect();
                   }
-            if ((!_handles->isChecked()&&!_peekHeld) || _parameter->currentIndex() != 0 || !noteEditable(note)) continue;
+            if ((!_handles->isChecked()&&!_peekHeld&&!_showValues) || _parameter->currentIndex() != 0 || !noteEditable(note)) continue;
             const QPointF handle = bounds.topRight() + QPointF(12, -12);
             painter.setPen(QPen(color, 2)); painter.setBrush(note.audible ? QBrush(Qt::white) : Qt::NoBrush); painter.drawEllipse(handle, 5, 5);
             painter.drawText(handle + QPointF(8, -4), QString::number(noteValue(i)) + (rangeKind()==1 ? "%" : ""));

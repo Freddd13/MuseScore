@@ -14,6 +14,7 @@
 #include "fotomode.h"
 #include "musescore.h"
 #include "scoreview.h"
+#include "performanceeditor/performanceeditor.h"
 #include "seq.h"
 #include "texttools.h"
 #include "zoombox.h"
@@ -156,6 +157,10 @@ bool ScoreView::gestureEvent(QGestureEvent *event)
 void ScoreView::wheelEvent(QWheelEvent* event)
        {
 #define PIXELSSTEPSFACTOR 5
+      if ((event->modifiers() & (Qt::AltModifier|Qt::ShiftModifier)) == (Qt::AltModifier|Qt::ShiftModifier)
+            && !(event->modifiers() & Qt::ControlModifier) && mscore) {
+            if (mscore->performanceEditor()->adjustNearestScoreVelocity(this,event)) return;
+            }
 
       QPoint pixelsScrolled = event->pixelDelta();
       QPoint stepsScrolled  = event->angleDelta();

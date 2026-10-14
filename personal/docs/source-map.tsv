@@ -246,3 +246,4 @@ MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	232	�
 分段方案	libmscore/regionalvariants.cpp	QVariantMap select(	597	压缩写法、声部范围、原生撤销和连线保护	mtest/mscore/p1native/regional_tests.inc
 方案保存	libmscore/regionalvariants.cpp	bool save(	674	普通主方案入口和本分支当前组合恢复	mtest/mscore/p1native/regional_tests.inc
 方案面板	mscore/workflow/regionalpanel.cpp	void showRegionalVariantPanel(	536	菜单、停靠、复制切换、旧文件和普通版导出	mtest/mscore/p1native/regional_tests.inc
+演奏快捷调整	mscore/events.cpp	ScoreView::wheelEvent	156	最近音力度入口	mscore/performanceeditor

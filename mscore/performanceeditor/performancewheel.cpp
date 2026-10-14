@@ -8,8 +8,17 @@
 #include <QComboBox>
 #include <QCheckBox>
 #include <QToolTip>
+#include <QScopedValueRollback>
 #include <cmath>
 namespace Ms {
+bool PerformanceEditor::adjustNearestScoreVelocity(ScoreView* view,QWheelEvent* event)
+      {
+      if(view!=_view)setView(view);
+      QScopedValueRollback<bool> active(_closestWheelActive,true);
+      if(!overlayAllowed())return false;
+      if(_parameter->currentIndex()!=0)_parameter->setCurrentIndex(0);
+      return wheelVelocity(event,false,true);
+      }
 void PerformanceEditor::finishWheel(bool commit)
       {
       if (_wheelIndex >= 0) { repaintWheelTarget(_wheelIndex); if (_wheelSurface) _wheelSurface->update(wheelBadge(_wheelSurface).adjusted(-2, -2, 2, 2).toAlignedRect()); }

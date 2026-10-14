@@ -128,8 +128,8 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _handles = new QCheckBox(tr("音旁手柄"), this); second->addWidget(_handles, second->count() / 6, second->count() % 6);
       _band = new QCheckBox(tr("谱行参数带"), this); second->addWidget(_band, second->count() / 6, second->count() % 6);
       _band->setObjectName("performanceScoreBand");
-      button(tr("转换为相对"), [this] { convertSelected(Note::ValueType::OFFSET_VAL); })->setObjectName("performanceConvertRelative");
-      button(tr("转换为绝对"), [this] { convertSelected(Note::ValueType::USER_VAL); })->setObjectName("performanceConvertAbsolute");
+      button(tr("跟随力度记号"), [this] { convertSelected(Note::ValueType::OFFSET_VAL); })->setObjectName("performanceConvertRelative");
+      button(tr("固定这个音的力度"), [this] { convertSelected(Note::ValueType::USER_VAL); })->setObjectName("performanceConvertAbsolute");
       _number = new QDoubleSpinBox(this); _number->setObjectName("performanceValue"); _number->setRange(1, 127); _number->setDecimals(0); second->addWidget(_number, second->count() / 6, second->count() % 6);
       button(tr("写入选中"), [this] { setSelectedValue(_number->value()); })->setObjectName("performanceWriteValue");
       button(tr("全曲"), [this] { fit(); });
@@ -173,8 +173,8 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             auto action = heights->addAction(tr("%1 像素").arg(h)); action->setObjectName(QString("performanceBandHeight%1").arg(h));
             connect(action, &QAction::triggered, this, [this, h] { cancelGesture(); invalidateOverlay(); _bandHeight = h; QSettings().setValue("performanceEditor/bandHeight", h); if (_view) _view->update(); });
             }
-      auto values = displayMenu->addAction(tr("音符内显示力度")); values->setCheckable(true); values->setChecked(QSettings().value("performanceEditor/showValues", false).toBool()); _showValues = values->isChecked();
-      connect(values, &QAction::toggled, this, [this](bool on) { _showValues = on; QSettings().setValue("performanceEditor/showValues", on); updateSurfaces(); });
+      auto values = displayMenu->addAction(tr("一直显示力度（谱面与卷帘）")); values->setCheckable(true); values->setChecked(QSettings().value("performanceEditor/showValues", false).toBool()); _showValues = values->isChecked();
+      connect(values, &QAction::toggled, this, [this](bool on) { _showValues = on; QSettings().setValue("performanceEditor/showValues", on); invalidateOverlay(); syncOverlayTracking(); updateSurfaces(); });
       auto appearanceAction = displayMenu->addAction(tr("配色／力度柱宽…")); appearanceAction->setObjectName("performanceAppearance");
       connect(appearanceAction, &QAction::triggered, this, [this] { if (_appearance.edit(this)) { applyAppearance(); invalidateVisual(); if (_view) _view->update(); } });
       connect(displayMenu->addAction(tr("REAPER 默认力度色")), &QAction::triggered, this, [this] { _appearance = PerformanceAppearance(); _appearance.save(); applyAppearance(); invalidateVisual(); if (_view) _view->update(); });
@@ -360,13 +360,16 @@ void PerformanceEditor::refresh()
       if (!surfacesActive()) return;
       // A late-opened panel may copy stable notation while playing, but must not
       // regenerate/read mutable playback events or velocity maps until stopped.
-      const bool live = _score->isPlaying() || (seq && seq->isPlaying());
-      if (live && !_notes.isEmpty()) {
+      const bool live = _score->isPlaying() || (seq && seq->isPlaying() && seq->score() == _score->masterScore());
+      const bool stablePlayback = !seq || seq->backgroundRenderingIdle();
+      if (_snapshotDegraded && stablePlayback) _dirty = true;
+      if (live && !_notes.isEmpty() && !(_snapshotDegraded && stablePlayback)) {
             // Layout/selection are GUI data; never regenerate playback events here.
             if (_score->masterScore()->state() == _state) {
                   if (_geometryDirty) refreshLayout();
                   _dirty = false; if (_selectionRefreshNeeded) selectionChanged(); else updateSelection();
                   }
+            if (_snapshotDegraded) _refreshTimer.start(20);
             status(); return;
             }
       if (!live && seq && !seq->backgroundRenderingIdle()) { _refreshTimer.start(20); return; }
@@ -385,7 +388,7 @@ void PerformanceEditor::refresh()
       for (auto& boundaries : _pedalBoundaries) boundaries.clear();
       QElapsedTimer snapshotTimer; snapshotTimer.start();
       if (!live) { _score->createPlayEvents(); _score->updateVelo(); }
-      _snapshotDegraded = live;
+      _snapshotDegraded = !stablePlayback;
       const int track = selectionTrack(_score, _contextTrack);
       _contextTrack = track;
       const int globalMethod = mscore ? mscore->synthesizerState().method() : 1;
@@ -411,14 +414,14 @@ void PerformanceEditor::refresh()
                   auto cr = toChordRest(element);
                   _pedalBoundaries[0][t / VOICES].insert(tick); _pedalBoundaries[1][t / VOICES].insert((cr->tick() + cr->actualTicks()).ticks());
                   if (!element->isChord()) continue;
-                  auto addChord = [this, tick, globalMethod, live](Chord* chord) {
+                  auto addChord = [this, tick, globalMethod, live, stablePlayback](Chord* chord) {
                         for (Note* note : chord->notes()) {
                               const int index = _notes.size();
                               _noteIndex.insert(note, index);
                               const bool audible = note->play() && !note->hidden() && (live ? !note->tieBack() : (!note->tieBack() || note->playEvents().size() != 1))
                                     && (live ? !chord->isGrace() : (!chord->isGrace() || !graceNotesMerged(toChord(chord->parent()))));
                               _notes.append({note, tick, chord->endTick().ticks(), note->track(), note->ppitch(),
-                                    live ? -1 : NoteVelocity::referenceBase(note, globalMethod), note->veloOffset(), 0, 0, note->veloType(),
+                                    stablePlayback ? NoteVelocity::referenceBase(note, globalMethod) : -1, note->veloOffset(), 0, 0, note->veloType(),
                                     note->selected(), audible, note->canvasBoundingRect(), chord->measure()->system()});
                               auto& cached = _notes.back(); cached.baseMin = cached.baseMax = cached.base;
                               if (!note->tieBack() && note->tieFor()) cached.end = note->lastTiedNote()->chord()->endTick().ticks();
@@ -587,7 +590,7 @@ void PerformanceEditor::status(const QString& message)
       const QString mode = _parameter->currentIndex() == 1 ? tr("四分音符 BPM · 实际速度阶梯")
             : (_parameter->currentIndex() == 2 ? tr("原生延音踏板 · CC64 开/关")
                   : (rangeKind()==1 ? tr("在原力度上增减百分比") : tr("MIDI 力度 1–127")));
-      const QString baseline = _snapshotDegraded ? tr(" · 播放中首次打开：原力度需停播读取；仅编辑原相对%／绝对MIDI模式") : QString();
+      const QString baseline = _snapshotDegraded ? tr(" · 正在读取播放力度") : QString();
       const QString pending = hasPending() ? tr(" · %1 音、%2 参数预览中；原生属性尚未提交").arg(_pending.size()).arg(_propertyPending.size()) : QString();
       _status->setText(message.isEmpty() ? (_score ? mode + baseline + pending + tr(" · 可编辑选音 %1 · Ctrl 选音／缩放时间 · Ctrl+Shift 缩放纵向").arg(_selectedIndices.size()) : tr("打开乐谱后使用演奏编辑器。")) : message);
       }
@@ -756,7 +759,7 @@ bool PerformanceEditor::overlayAllowed() const
             && !_view->editMode() && !_view->noteEntryMode();
       }
 bool PerformanceEditor::surfacesActive() const
-      { return isVisible() || ((_band->isChecked()||_peekHeld||_closestWheelActive||(_wheelIndex>=0&&_wheelSurface==_view)) && _view && _view->isVisible()); }
+      { return isVisible() || ((_band->isChecked()||_peekHeld||_showValues||_closestWheelActive||(_wheelIndex>=0&&_wheelSurface==_view)) && _view && _view->isVisible()); }
 bool PerformanceEditor::scoreBandEnabled() const
       { return _band->isChecked(); }
 void PerformanceEditor::setScoreBandEnabled(bool enabled)

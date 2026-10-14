@@ -63,7 +63,7 @@ void TapTempo::tap() {
       }
 void TapTempo::update() {
       const double bpm = _estimate.bpm(_quarterBeats)*_multiplier;
-      if (_button) _button->setText(bpm > 0 ? QString("TAP · %1").arg(bpm,0,'f',0) : QString("TAP · —"));
+      if (_button) _button->setText(bpm > 0 ? QString::number(bpm,'f',0) : QString("—"));
       if (_value) _value->setText(bpm > 0 ? tr("四分音符：%1 BPM\n点击单位：%2 BPM").arg(bpm,0,'f',1).arg(bpm/_quarterBeats,0,'f',1) : tr("请至少点击四拍"));
       if (_status) _status->setText(tr("%1 · 已点击 %2 次").arg(!_estimate.ready()?tr("正在起步"):_estimate.stable()?tr("点击稳定"):tr("点击间隔不均匀")).arg(_estimate.count()));
       if (_apply) {
@@ -76,8 +76,8 @@ QWidget* TapTempo::createButton(QWidget* parent, QAction* action) {
       auto button = new TapButton(parent); _button = button;
       action->setAutoRepeat(false);
       button->setDefaultAction(action); button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-      button->setFixedWidth(qMax(112, button->fontMetrics().horizontalAdvance("TAP · 9999")+54));
-      button->setAccessibleName(tr("Tap tempo"));
+      button->setFixedWidth(qMax(76, button->fontMetrics().horizontalAdvance("9999")+46));
+      button->setAccessibleName(tr("敲击测速")); button->setToolTip(tr("敲击测速：每次点击一拍；箭头打开速度设置。"));
       button->setPopupMode(QToolButton::MenuButtonPopup);
       auto menu = new QMenu(button); button->setMenu(menu);
       auto body = new QWidget(menu); auto grid = new QGridLayout(body);

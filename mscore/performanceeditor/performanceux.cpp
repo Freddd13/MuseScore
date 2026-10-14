@@ -141,13 +141,13 @@ void PerformanceEditor::rebuildVisibleScoreNotes()
       }
 bool PerformanceEditor::peekKeyEvent(QObject* object,QEvent* event)
       {
-      if(event->type()==QEvent::ApplicationDeactivate){if(_peekHeld){_peekHeld=false;invalidateOverlay();syncOverlayTracking();}return false;}
+      if(event->type()==QEvent::ApplicationDeactivate){if(_peekHeld){_peekHeld=false;invalidateOverlay();updateSurfaces();syncOverlayTracking();}return false;}
       if(event->type()!=QEvent::KeyPress&&event->type()!=QEvent::KeyRelease&&event->type()!=QEvent::ShortcutOverride)return false;
       auto key=static_cast<QKeyEvent*>(event);if(!_peekKey)return false;
       const int mainKey=_peekKey&~int(Qt::KeyboardModifierMask);
-      if(_peekHeld&&key->key()==Qt::Key_Shift&&event->type()!=QEvent::ShortcutOverride){_peekAll=event->type()==QEvent::KeyPress;invalidateOverlay();if(_view)_view->update();event->accept();return true;}
+      if(_peekHeld&&key->key()==Qt::Key_Shift&&event->type()!=QEvent::ShortcutOverride){_peekAll=event->type()==QEvent::KeyPress;invalidateOverlay();updateSurfaces();if(_view)_view->update();event->accept();return true;}
       if(_peekHeld&&event->type()==QEvent::KeyRelease&&(key->key()==mainKey||key->key()==Qt::Key_Control||key->key()==Qt::Key_Alt)){
-            _peekHeld=false;invalidateOverlay();syncOverlayTracking();event->accept();return true;}
+            _peekHeld=false;invalidateOverlay();updateSurfaces();syncOverlayTracking();event->accept();return true;}
       auto widget=qobject_cast<QWidget*>(object);
       if(!widget||(!(widget==_view)&&!isAncestorOf(widget))||!_score||!_view||_view->noteEntryMode()||_view->editMode()||_view->fotoMode())return false;
       if(qobject_cast<QLineEdit*>(widget)||qobject_cast<QAbstractSpinBox*>(widget)||qobject_cast<QTextEdit*>(widget)||qobject_cast<QPlainTextEdit*>(widget))return false;
@@ -156,7 +156,7 @@ bool PerformanceEditor::peekKeyEvent(QObject* object,QEvent* event)
       if(event->type()==QEvent::KeyRelease)return false;
       event->accept();if(event->type()==QEvent::KeyPress&&!key->isAutoRepeat()){
             _peekHeld=true;_peekAll=bool(key->modifiers()&Qt::ShiftModifier);_overlayPointer=_view->mapFromGlobal(QCursor::pos());
-            if(_dirty)refresh();syncOverlayTracking();_view->update();}return true;
+            if(_dirty)refresh();syncOverlayTracking();updateSurfaces();_view->update();}return true;
       }
 void PerformanceEditor::paintOriginalVelocity(QPainter& painter,const QRectF& rect,bool onScore)
       {
@@ -164,10 +164,10 @@ void PerformanceEditor::paintOriginalVelocity(QPainter& painter,const QRectF& re
       QHash<int,QPointF> previous;QHash<int,bool> labelled;
       const int from=tickForX(rect.left(),onScore),until=tickForX(rect.right(),onScore);
       auto candidates=onScore?_systemIndices:_intervals.query(from,until);std::sort(candidates.begin(),candidates.end());
-      for(int i:candidates){const auto& n=_notes[i];if(!n.enabled||n.base<0)continue;
-            double x=xForNote(i,onScore);if(x<rect.left()||x>rect.right())continue;const QPointF p(x,yForValue(n.base,rect,onScore));int staff=n.track/VOICES;
-            painter.setPen(QPen(MScore::selectColor[staff%VOICES],1,Qt::DashLine));
-            if(previous.contains(staff)){auto old=previous.value(staff);painter.drawLine(old,QPointF(p.x(),old.y()));painter.drawLine(QPointF(p.x(),old.y()),p);}else painter.drawLine(QPointF(p.x()-4,p.y()),QPointF(p.x()+4,p.y()));
-            if(!labelled.value(staff)){painter.drawText(QPointF(p.x()+3,p.y()-4),tr("谱表 %1 原力度").arg(staff+1));labelled[staff]=true;}previous[staff]=p;}
+      for(int i:candidates){const auto& n=_notes[i];if(!n.inScope||(!n.enabled&&!_ghostVoices)||n.base<0)continue;
+            double x=xForNote(i,onScore);if(x<rect.left()||x>rect.right())continue;const QPointF p(x,yForValue(n.base,rect,onScore));int staff=n.track/VOICES, line=n.track;
+            QColor color=MScore::selectColor[n.track%VOICES];if(!n.enabled)color.setAlpha(45);painter.setPen(QPen(color,1,Qt::DashLine));
+            if(previous.contains(line)){auto old=previous.value(line);painter.drawLine(old,QPointF(p.x(),old.y()));painter.drawLine(QPointF(p.x(),old.y()),p);}else painter.drawLine(QPointF(p.x()-4,p.y()),QPointF(p.x()+4,p.y()));
+            if(!labelled.value(line)){painter.drawText(QPointF(p.x()+3,p.y()-4),tr("谱表 %1 · 声部 %2 · 原力度 %3").arg(staff+1).arg(n.track%VOICES+1).arg(n.base));labelled[line]=true;}previous[line]=p;}
       }
 }
