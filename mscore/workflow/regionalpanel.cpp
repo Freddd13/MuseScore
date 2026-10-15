@@ -17,6 +17,7 @@
 #include "paneldock.h"
 #include "referencebus.h"
 #include "referencefactory.h"
+#include "regionalcontrols.h"
 #include <QBuffer>
 #include <QCryptographicHash>
 #include <QDialog>
@@ -25,15 +26,19 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGridLayout>
+#include <QHBoxLayout>
 #include <QInputDialog>
 #include <QJsonDocument>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QPushButton>
 #include <QSaveFile>
+#include <QScrollArea>
 #include <QSet>
 #include <QSpinBox>
 #include <QTimer>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -43,6 +48,8 @@ namespace {
 class RegionalPanel : public QWidget {
       QTreeWidget *_tree;
       QLabel *_status;
+      QLabel *_scope;
+      QHBoxLayout *_choices;
       QTimer _refresh;
       QPointer<MasterScore> _master;
       QVariantMap _last;
@@ -110,6 +117,48 @@ class RegionalPanel : public QWidget {
                         return value.toMap();
             return {};
       }
+      void choices() {
+            while (auto item = _choices->takeAt(0)) {
+                  if (item->widget())
+                        item->widget()->deleteLater();
+                  delete item;
+            }
+            auto g = selectedGroup();
+            if (g.isEmpty()) {
+                  _scope->setText(tr("选中一段乐谱，点“保存为A”开始。"));
+                  return;
+            }
+            QString current;
+            for (auto entry : g.value("variants").toList())
+                  if (entry.toMap().value("id") == g.value("active"))
+                        current = entry.toMap().value("name").toString();
+            auto first = score()->tick2measure(Fraction::fromTicks(g.value("start").toInt())),
+                 last = score()->tick2measure(Fraction::fromTicks(g.value("end").toInt() - 1));
+            QStringList scope;
+            for (auto track : g.value("tracks").toList())
+                  scope << tr("谱表%1声部%2").arg(track.toInt() / 4 + 1).arg(track.toInt() % 4 + 1);
+            _scope->setText(tr("%1 · 第%2–%3小节\n%4 · 正在编辑：%5")
+                                .arg(g.value("name").toString())
+                                .arg(first ? first->no() + 1 : 0)
+                                .arg(last ? last->no() + 1 : 0)
+                                .arg(scope.join("、"), current));
+            for (auto entry : g.value("variants").toList()) {
+                  auto v = entry.toMap();
+                  auto button = new QPushButton(this);
+                  button->setObjectName("regionalQuick/" + v.value("id").toString());
+                  button->setText(
+                      button->fontMetrics().elidedText(v.value("name").toString(), Qt::ElideRight, 110));
+                  button->setToolTip(v.value("name").toString());
+                  button->setCheckable(true);
+                  button->setChecked(v.value("id") == g.value("active"));
+                  _choices->addWidget(button);
+                  connect(button, &QPushButton::clicked, this, [this, g, v] {
+                        selectTree(g.value("id").toString(), v.value("id").toString());
+                        switchTo();
+                  });
+            }
+            _choices->addStretch();
+      }
       void refresh() {
             auto master = score();
             auto data = RegionalVariants::state(master);
@@ -144,10 +193,15 @@ class RegionalPanel : public QWidget {
                         if (v.value("id") == g.value("active"))
                               flags << tr("当前");
                         if (v.value("id") == g.value("main"))
-                              flags << tr("普通版主方案");
+                              flags << tr("主方案");
                         auto child =
                             new QTreeWidgetItem(item, {v.value("name").toString(), flags.join(" · ")});
                         child->setData(0, Qt::UserRole, v.value("id"));
+                        if (v.value("id") == g.value("active")) {
+                              auto font = child->font(0);
+                              font.setBold(true);
+                              child->setFont(0, font);
+                        }
                         if (g.value("id").toString() == selectedGroupId &&
                             v.value("id").toString() == selectedVariantId)
                               restore = child;
@@ -157,6 +211,7 @@ class RegionalPanel : public QWidget {
                   _tree->setCurrentItem(restore);
             else if (_tree->topLevelItemCount())
                   _tree->setCurrentItem(_tree->topLevelItem(0));
+            choices();
       }
       void create() {
             if (!idle())
@@ -257,8 +312,11 @@ class RegionalPanel : public QWidget {
                   return;
             }
             bool ok = false;
-            QString name = QInputDialog::getText(this, tr("复制当前写法"), tr("新写法名称"),
-                                                 QLineEdit::Normal, tr("B · 试写"), &ok);
+            QString name = QInputDialog::getText(
+                this, tr("复制当前写法"), tr("新写法名称"), QLineEdit::Normal,
+                QString(QChar('A' + qMin(25, selectedGroup().value("variants").toList().size()))) +
+                    tr(" · 新写法"),
+                &ok);
             if (!ok)
                   return;
             auto result = RegionalVariants::duplicate(score(), group(), name, true);
@@ -484,33 +542,73 @@ class RegionalPanel : public QWidget {
       }
 
     public:
+      void focusGroup(const QString &id) {
+            refresh();
+            _status->setText(tr("已打开这段的写法。点名称切换，按Ctrl+S保存。"));
+            for (auto value : RegionalVariants::state(score()).value("groups").toList())
+                  if (value.toMap().value("id").toString() == id) {
+                        selectTree(id, value.toMap().value("active").toString());
+                        break;
+                  }
+      }
       explicit RegionalPanel(QWidget *parent) : QWidget(parent) {
             setObjectName("regionalVariantPanel");
             auto layout = new QVBoxLayout(this);
             auto help = new QLabel(
-                tr("每组只保存选定小节和声部。当前组合直接在谱面编辑；Ctrl+S把全部写法存入一个MSCZ。"), this);
+                tr("保存当前写法为A，再增加B。修改后，点写法名称切换比较。Ctrl+S保存全部写法。"), this);
             help->setWordWrap(true);
             layout->addWidget(help);
-            auto actions = new QGridLayout;
-            layout->addLayout(actions);
-            int i = 0;
-            auto button = [&](const QString &name, const char *id, auto call) {
-                  auto b = new QPushButton(name, this);
+            auto primary = new QHBoxLayout;
+            layout->addLayout(primary);
+            auto button = [&](QHBoxLayout *row, const QString &text, const char *id, auto call) {
+                  auto b = new QPushButton(text, this);
                   b->setObjectName(id);
-                  actions->addWidget(b, i / 3, i % 3);
-                  ++i;
+                  row->addWidget(b);
                   connect(b, &QPushButton::clicked, this, call);
+                  return b;
             };
-            button(tr("建立组"), "regionalCreateButton", [this] { create(); });
-            button(tr("复制写法"), "regionalCopy", [this] { copy(); });
-            button(tr("切换写法"), "regionalSwitch", [this] { switchTo(); });
-            button(tr("设为主方案"), "regionalMain", [this] { mainChoice(); });
-            button(tr("改名"), "regionalRename", [this] { rename(); });
-            button(tr("同处试听"), "regionalAudition", [this] { audition(); });
-            button(tr("显示主方案组合"), "regionalShowMain", [this] { showMain(); });
-            button(tr("普通版副本"), "regionalOrdinary", [this] { ordinary(); });
-            button(tr("导入旧写法"), "regionalImport", [this] { importLegacy(); });
-            button(tr("扩大范围"), "regionalExpand", [this] { expand(); });
+            button(primary, tr("保存为A"), "regionalCreateButton", [this] { create(); });
+            button(primary, tr("增加写法"), "regionalCopy", [this] { copy(); });
+            auto more = new QToolButton(this);
+            more->setText(tr("更多"));
+            more->setObjectName("regionalMore");
+            more->setPopupMode(QToolButton::InstantPopup);
+            auto menu = new QMenu(more);
+            more->setMenu(menu);
+            primary->addWidget(more);
+            auto action = [&](const QString &text, const char *id, auto call) {
+                  auto a = menu->addAction(text);
+                  a->setObjectName(id);
+                  connect(a, &QAction::triggered, this, call);
+            };
+            action(tr("改名…"), "regionalRename", [this] { rename(); });
+            action(tr("扩大范围…"), "regionalExpand", [this] { expand(); });
+            menu->addSeparator();
+            action(tr("设为主方案"), "regionalMain", [this] { mainChoice(); });
+            action(tr("显示主方案组合"), "regionalShowMain", [this] { showMain(); });
+            action(tr("导出普通版副本…"), "regionalOrdinary", [this] { ordinary(); });
+            action(tr("导入旧写法…"), "regionalImport", [this] { importLegacy(); });
+            menu->addSeparator();
+            auto controls = menu->addAction(tr("谱上显示切换按钮"));
+            controls->setObjectName("regionalScoreButtons");
+            controls->setCheckable(true);
+            controls->setChecked(regionalControlsVisible());
+            connect(controls, &QAction::toggled, this,
+                    [](bool checked) { setRegionalControlsVisible(checked); });
+            _scope = new QLabel(this);
+            _scope->setObjectName("regionalCurrent");
+            _scope->setWordWrap(true);
+            layout->addWidget(_scope);
+            auto strip = new QScrollArea(this);
+            strip->setWidgetResizable(true);
+            strip->setFixedHeight(58);
+            strip->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+            auto host = new QWidget(strip);
+            _choices = new QHBoxLayout(host);
+            _choices->setContentsMargins(0, 0, 0, 0);
+            _choices->setSizeConstraint(QLayout::SetMinimumSize);
+            strip->setWidget(host);
+            layout->addWidget(strip);
             _tree = new QTreeWidget(this);
             _tree->setObjectName("regionalTree");
             _tree->setColumnCount(2);
@@ -519,9 +617,15 @@ class RegionalPanel : public QWidget {
             layout->addWidget(_tree, 1);
             connect(_tree, &QTreeWidget::itemDoubleClicked, this,
                     [this](QTreeWidgetItem *, int) { switchTo(); });
-            _status = new QLabel(tr("先选择谱段，再建立方案组。"), this);
+            connect(_tree, &QTreeWidget::currentItemChanged, this, [this] { choices(); });
+            auto transport = new QHBoxLayout;
+            layout->addLayout(transport);
+            button(transport, tr("切换所选写法"), "regionalSwitch", [this] { switchTo(); });
+            button(transport, tr("从同处听"), "regionalAudition", [this] { audition(); });
+            _status = new QLabel(tr("选中要尝试的几小节，点“保存为A”。"), this);
             _status->setObjectName("regionalStatus");
             _status->setWordWrap(true);
+            _status->setMinimumHeight(48);
             layout->addWidget(_status);
             _observer = new PluginAPI::ScoreObserver(this);
             _refresh.setInterval(500);
@@ -533,7 +637,7 @@ QPointer<QDockWidget> dock;
 void addRegionalVariantAction(QMenu *menu) {
       menu->addAction(getAction("regional-variants"));
 }
-void showRegionalVariantPanel() {
+void showRegionalVariantPanel(const QString &group) {
       if (!dock) {
             dock = new QDockWidget(QObject::tr("分段试写方案"), mscore);
             dock->setObjectName("regionalVariantsDock");
@@ -544,5 +648,7 @@ void showRegionalVariantPanel() {
       }
       dock->show();
       dock->raise();
+      if (!group.isEmpty())
+            static_cast<RegionalPanel *>(dock->widget())->focusGroup(group);
 }
 } // namespace Ms

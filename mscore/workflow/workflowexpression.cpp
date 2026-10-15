@@ -1,33 +1,35 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // GUI-side workflow operations. Preflight accepts values; audio callbacks remain untouched.
-#include "mscore/plugin/api/scoreobserver.h"
-#include "mscore/plugin/api/score.h"
-#include "mscore/musescore.h"
-#include "mscore/scoreview.h"
-#include "mscore/scoretab.h"
-#include "libmscore/excerpt.h"
-#include "mscore/seq.h"
-#include "workflowcontext.h"
-#include "referencefactory.h"
-#include "mscore/performanceeditor/parameteredit.h"
 #include "libmscore/chord.h"
-#include "libmscore/note.h"
+#include "libmscore/excerpt.h"
 #include "libmscore/measure.h"
+#include "libmscore/note.h"
 #include "libmscore/segment.h"
-#include "libmscore/tempotext.h"
 #include "libmscore/tempo.h"
 #include "libmscore/tempoexpression.h"
+#include "libmscore/tempotext.h"
 #include "libmscore/textline.h"
 #include "libmscore/undo.h"
-#include <QSaveFile>
-#include <QStandardPaths>
+#include "mscore/musescore.h"
+#include "mscore/performanceeditor/parameteredit.h"
+#include "mscore/plugin/api/score.h"
+#include "mscore/plugin/api/scoreobserver.h"
+#include "mscore/scoretab.h"
+#include "mscore/scoreview.h"
+#include "mscore/seq.h"
+#include "referencefactory.h"
+#include "workflowcontext.h"
 #include <QAction>
 #include <QBuffer>
-#include <QUrl>
-#include <QDir>
-#include <QFileInfo>
 #include <QCryptographicHash>
+#include <QDir>
+#include <QDockWidget>
 #include <QElapsedTimer>
+#include <QFileInfo>
+#include <QSaveFile>
+#include <QStandardPaths>
+#include <QToolButton>
+#include <QUrl>
 #include <QUuid>
 #include <cmath>
 namespace Ms { namespace PluginAPI {
@@ -132,7 +134,16 @@ QString ScoreObserver::temporaryWorkflowProject() {
 QVariantMap ScoreObserver::showEditorComparison() {
  if(!mscore||!_score)return {{"error",tr("打开乐谱后可以查看力度对比。")}};
  if(auto action=mscore->findChild<QAction*>("performance-editor"))action->setChecked(true);
- else mscore->showPerformanceEditor(true);
+ mscore->showPerformanceEditor(true);
+ if (auto toggle = mscore->findChild<QToolButton *>("performanceWorkflowToggle"))
+       toggle->setChecked(true);
+ if (auto dock = mscore->findChild<QDockWidget *>("performanceEditorDock")) {
+       dock->show();
+       dock->raise();
+       const auto area=mscore->dockWidgetArea(dock);
+       if(area==Qt::BottomDockWidgetArea || area==Qt::TopDockWidgetArea)
+             mscore->resizeDocks({dock},{dock->widget()->minimumSizeHint().height()+24},Qt::Vertical);
+ }
  return {{"ok",true}};
 }
 QVariantMap ScoreObserver::previewExpression(const QString& workspace,const QVariantMap& candidate,const QVariantMap& scope){

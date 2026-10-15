@@ -9,6 +9,7 @@
 #include "measure.h"
 #include "note.h"
 #include "part.h"
+#include "regionalconnections.h"
 #include "score.h"
 #include "segment.h"
 #include "select.h"
@@ -250,7 +251,11 @@ bool validateFragment(const QVariantMap &group, const QByteArray &data, QString 
       }
       return true;
 }
-bool replace(Score *score, const QVariantMap &group, const QByteArray &data, QString *problem) {
+bool replace(Score *score, const QVariantMap &group, const QByteArray &data, QString *problem,
+             const QVariantMap &writing = {}) {
+      if (writing.contains("connections") &&
+          !RegionalConnections::validate(writing.value("connections").toList(), group, problem))
+            return false;
       if (!validateFragment(group, data, problem))
             return false;
       const int start = group.value("start").toInt(), end = group.value("end").toInt();
@@ -276,6 +281,7 @@ bool replace(Score *score, const QVariantMap &group, const QByteArray &data, QSt
             *problem = QObject::tr("方案总拍数和位置不同，不能直接替换。");
             return false;
       }
+      RegionalConnections::remove(score, start, end, tracks);
       QList<Spanner *> remove;
       for (auto pair : score->spannerMap().map())
             if (ownedSpanner(pair.second, start, end, tracks))
@@ -313,6 +319,9 @@ bool replace(Score *score, const QVariantMap &group, const QByteArray &data, QSt
             *problem = QObject::tr("方案片段中的记谱数据不完整，原内容已恢复：%1").arg(reader.errorString());
             return false;
       }
+      if (writing.contains("connections") &&
+          !RegionalConnections::restore(score, writing.value("connections").toList(), problem))
+            return false;
       return true;
 }
 QVariantMap capturedState(Score *score, QString *problem) {
@@ -339,11 +348,17 @@ QVariantMap capturedState(Score *score, QString *problem) {
             rememberImages(data, bytes);
             auto v = variants[selected].toMap();
             v["data"] = QString::fromLatin1(packed(bytes));
+            v["connections"] =
+                RegionalConnections::capture(score, g.value("start").toInt(), g.value("end").toInt(),
+                                             trackSet(g.value("tracks").toList()), problem);
+            if (!problem->isEmpty())
+                  return {};
             variants[selected] = v;
             g["variants"] = variants;
             groups[i] = g;
       }
       data["groups"] = groups;
+      data["schema"] = 2;
       return data;
 }
 } // namespace
@@ -409,6 +424,17 @@ QVariantMap check(Score *score, int start, int end, const QVariantList &values) 
                   if (!e->isChord())
                         continue;
                   auto chord = toChord(e);
+                  auto chords = chord->graceNotes();
+                  chords.append(chord);
+                  for (auto ownedChord : chords)
+                        for (auto note : ownedChord->notes())
+                              for (const auto &lines : {note->spannerFor(), note->spannerBack()})
+                                    for (auto line : lines)
+                                          if (line->isGlissando() && !ownedSpanner(line, start, end, tracks))
+                                                return error(
+                                                    QObject::tr("滑音连接到另一段或声部，请把两端一起加入方案。"),
+                                                    qMin(start, line->tick().ticks()),
+                                                    qMax(end, line->tick2().ticks() + 1));
                   if (chord->staffMove() != 0 && !tracks.contains(track + chord->staffMove() * VOICES))
                         return error(QObject::tr("跨谱表音符需要同时选择目标谱表的相应声部。"));
                   if (chord->tremolo() && chord->tremolo()->twoNotes()) {
@@ -418,30 +444,18 @@ QVariantMap check(Score *score, int start, int end, const QVariantList &values) 
                                             !tracks.contains(other->track())))
                                     return error(QObject::tr("双音震音连接到范围之外，请一起选择。"));
                   }
-                  for (auto note : chord->notes())
-                        for (auto tie : {note->tieBack(), note->tieFor()})
-                              if (tie && tie->startNote() && tie->endNote()) {
-                                    auto a = tie->startNote(), b = tie->endNote();
-                                    if (a->tick().ticks() < start || b->tick().ticks() >= end ||
-                                        !tracks.contains(a->track()) || !tracks.contains(b->track()))
-                                          return error(
-                                              QObject::tr(
-                                                  "延音线连接到范围之外，请扩大方案后再切换，避免截断它。"),
-                                              qMin(start, a->tick().ticks()),
-                                              qMax(end,
-                                                   b->tick().ticks() + b->chord()->actualTicks().ticks()));
-                              }
             }
-      for (auto pair : score->spannerMap().map()) {
-            auto line = pair.second;
-            if (!(line->isSlur() || line->isGlissando()) || line->tick2().ticks() < start ||
-                line->tick().ticks() >= end)
-                  continue;
-            if ((tracks.contains(line->track()) || tracks.contains(line->track2())) &&
-                !ownedSpanner(line, start, end, tracks))
-                  return error(QObject::tr("圆滑线或滑音连接到另一段／声部，请扩大范围或一起选择。"),
-                               qMin(start, line->tick().ticks()), qMax(end, line->tick2().ticks() + 1));
-      }
+      for(auto pair:score->spannerMap().map()) {
+            auto line=pair.second;
+            if(line->isGlissando() && line->tick2().ticks()>=start && line->tick().ticks()<end &&
+                  (tracks.contains(line->track()) || tracks.contains(line->track2())) &&
+                  !ownedSpanner(line,start,end,tracks))
+                  return error(QObject::tr("滑音连接到另一段或声部，请把两端一起加入方案。"),qMin(start,line->tick().ticks()),qMax(end,line->tick2().ticks()+1));
+            }
+      QString connectionError;
+      RegionalConnections::capture(score, start, end, tracks, &connectionError);
+      if (!connectionError.isEmpty())
+            return error(connectionError, start, end);
       return {{"ok", true}, {"start", start}, {"end", end}, {"tracks", trackValues(tracks)}};
 }
 QByteArray capture(Score *score, int start, int end, const QVariantList &values, QString *problem) {
@@ -518,6 +532,7 @@ QByteArray capture(Score *score, int start, int end, const QVariantList &values,
                         staff.removeChild(node);
                   node = next;
             }
+      RegionalConnections::strip(document);
       return document.toByteArray();
 }
 QVariantMap create(Score *score, int start, int end, const QVariantList &values, const QString &name) {
@@ -544,8 +559,10 @@ QVariantMap create(Score *score, int start, int end, const QVariantList &values,
             return error(problem);
       rememberImages(data, bytes);
       QString group = id(), variant = id();
-      QVariantMap v{
-          {"id", variant}, {"name", QObject::tr("原写法")}, {"data", QString::fromLatin1(packed(bytes))}};
+      QVariantMap v{{"id", variant},
+                    {"name", QObject::tr("A · 当前写法")},
+                    {"data", QString::fromLatin1(packed(bytes))},
+                    {"connections", RegionalConnections::capture(score, start, end, tracks, &problem)}};
       groups.append(QVariantMap{{"id", group},
                                 {"name", name.trimmed().isEmpty() ? QObject::tr("分段方案") : name.left(80)},
                                 {"start", start},
@@ -555,7 +572,7 @@ QVariantMap create(Score *score, int start, int end, const QVariantList &values,
                                 {"active", variant},
                                 {"main", variant},
                                 {"variants", QVariantList{v}}});
-      data["schema"] = 1;
+      data["schema"] = 2;
       data["groups"] = groups;
       score->startCmd();
       score->undo(new ChangeState(score->masterScore(), data));
@@ -620,7 +637,7 @@ QVariantMap select(Score *score, const QString &group, const QString &variant) {
       data["groups"] = groups;
       score->startCmd();
       score->undo(new ChangeState(score->masterScore(), data));
-      bool ok = replace(score, g, bytes, &problem);
+      bool ok = replace(score, g, bytes, &problem, variants[target].toMap());
       score->endCmd(!ok);
       return ok ? QVariantMap{{"ok", true}} : error(problem);
 }
@@ -718,7 +735,7 @@ bool save(Score *input, QIODevice *destination, const QString &filename, bool th
                         return false;
                   }
                   copy->startCmd();
-                  bool ok = replace(copy.get(), g, bytes, &problem);
+                  bool ok = replace(copy.get(), g, bytes, &problem, variants[main].toMap());
                   copy->endCmd(!ok);
                   if (!ok) {
                         MScore::lastError = problem;
@@ -813,7 +830,7 @@ QVariantMap expand(Score *score, const QString &group, int start, int end) {
                   if (!problem.isEmpty())
                         return error(problem);
                   copy->startCmd();
-                  bool ok = replace(copy.get(), old, bytes, &problem);
+                  bool ok = replace(copy.get(), old, bytes, &problem, v);
                   copy->endCmd(!ok);
                   if (!ok)
                         return error(problem);
@@ -823,6 +840,10 @@ QVariantMap expand(Score *score, const QString &group, int start, int end) {
                   return error(problem);
             rememberImages(data, bytes);
             v["data"] = QString::fromLatin1(packed(bytes));
+            v["connections"] = RegionalConnections::capture(copy.get(), start, end,
+                                                            trackSet(old.value("tracks").toList()), &problem);
+            if (!problem.isEmpty())
+                  return error(problem);
             versions[i] = v;
       }
       expanded["variants"] = versions;
@@ -855,8 +876,12 @@ QVariantMap importVersion(Score *score, Score *source, const QString &group, con
             return error(QObject::tr("这一组写法已达32个。"));
       rememberImages(data, bytes);
       QString key = id();
-      versions.append(
-          QVariantMap{{"id", key}, {"name", name.left(80)}, {"data", QString::fromLatin1(packed(bytes))}});
+      versions.append(QVariantMap{
+          {"id", key},
+          {"name", name.left(80)},
+          {"data", QString::fromLatin1(packed(bytes))},
+          {"connections", RegionalConnections::capture(source, start, end,
+                                                       trackSet(g.value("tracks").toList()), &problem)}});
       g["variants"] = versions;
       groups[index] = g;
       data["groups"] = groups;
@@ -899,7 +924,7 @@ bool restore(MasterScore *score, const QByteArray &bytes, QString *problem) {
             return false;
       }
       auto data = document.toVariant().toMap();
-      if (data.value("schema").toInt() != 1) {
+      if (data.value("schema").toInt() != 1 && data.value("schema").toInt() != 2) {
             *problem = QObject::tr("这份方案来自不同版本，请使用对应版本的软件。");
             return false;
       }
@@ -957,6 +982,9 @@ bool restore(MasterScore *score, const QByteArray &bytes, QString *problem) {
                         return false;
                   if (!validateFragment(g, xml, problem))
                         return false;
+                  if (v.contains("connections") &&
+                      !RegionalConnections::validate(v.value("connections").toList(), g, problem))
+                        return false;
             }
             if (!ids.contains(g.value("active").toString()) || !ids.contains(g.value("main").toString())) {
                   *problem = QObject::tr("当前或主方案选择不存在。");
@@ -986,7 +1014,7 @@ bool restore(MasterScore *score, const QByteArray &bytes, QString *problem) {
             auto variants = g.value("variants").toList();
             int current = variantIndex(variants, g.value("active").toString());
             auto fragment = unpacked(variants[current].toMap().value("data"), problem);
-            if (!problem->isEmpty() || !replace(score, g, fragment, problem)) {
+            if (!problem->isEmpty() || !replace(score, g, fragment, problem, variants[current].toMap())) {
                   ok = false;
                   break;
             }

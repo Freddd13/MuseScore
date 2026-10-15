@@ -267,7 +267,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
    signals:
       void scoreBandChanged(bool);
    public:
-      QSize minimumSizeHint() const override { return QSize(260,240); }
+      QSize minimumSizeHint() const override;
       explicit PerformanceEditor(QWidget* parent = nullptr);
       ~PerformanceEditor() override;
       void setView(ScoreView*);

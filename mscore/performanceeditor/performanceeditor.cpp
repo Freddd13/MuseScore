@@ -59,6 +59,12 @@ int selectionTrack(Score* score, int fallback)
       return qBound(0, fallback, qMax(0, score->nstaves() * VOICES - 1));
       }
 }
+QSize PerformanceEditor::minimumSizeHint() const {
+      return _workflowPanel && !_workflowPanel->isHidden() && layout()
+                 ? QSize(260, qMax(240, layout()->minimumSize().height()))
+                 : QSize(260, 240);
+      }
+
 PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       {
       _score = nullptr;
@@ -221,7 +227,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _scroll = new QScrollBar(Qt::Horizontal, this); layout->addWidget(_scroll);
       addWorkflowLanes(this,&_workflowPanel,_splitter);_splitter->addWidget(_workflowPanel);_workflowPanel->hide();
       auto workflowButton=new QToolButton(this);workflowButton->setObjectName("performanceWorkflowToggle");workflowButton->setText(tr("音轨／演奏对应"));workflowButton->setCheckable(true);second->addWidget(workflowButton,second->count()/6,second->count()%6);
-      connect(workflowButton,&QToolButton::toggled,this,[this](bool show){_workflowPanel->setVisible(show);if(show)_splitter->setSizes({150,130,180});});
+      connect(workflowButton,&QToolButton::toggled,this,[this](bool show){_workflowPanel->setVisible(show);if(show)_splitter->setSizes({150,130,180});updateGeometry();});
       _status = new QLabel(this); _status->setWordWrap(true); layout->addWidget(_status);
       _refreshTimer.setSingleShot(true);
       connect(&_refreshTimer, &QTimer::timeout, this, &PerformanceEditor::refresh);

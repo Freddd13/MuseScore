@@ -33,6 +33,23 @@
   PerformanceEditor editor;editor.setView(mscore->currentScoreView());editor.resize(1120,680);editor.show();auto toggle=editor.findChild<QToolButton*>("performanceWorkflowToggle");QVERIFY(toggle);QTest::mouseClick(toggle,Qt::LeftButton);auto lane=editor.findChild<QWidget*>("performanceWorkflowLanes");QTRY_VERIFY(lane&&lane->isVisible());editor.fit();QTest::qWait(50);
   auto first=matches.front().toMap();QSignalSpy requested(workflowContext(),&WorkflowContext::requested);int px=PerformanceViewport::gutter+int(first["tick"].toDouble()/480*72);QTest::mouseClick(lane,Qt::LeftButton,Qt::NoModifier,QPoint(px,13));QVERIFY(!requested.isEmpty());QVERIFY(!s->selection().noteList().empty());
   auto notes=s->selection().noteList();auto original=first["original"].toMap();QCOMPARE(notes.front()->track(),original["track"].toInt());QCOMPARE(notes.front()->chord()->tick().ticks(),original["tick"].toInt());
+  lane->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS", settings.path()))
+                        .filePath("editor-velocity-047.png"));
+  comparison["selectedScoreId"]=first.value("scoreId");QVERIFY(o.setEditorComparison(comparison)["ok"].toBool());
+  auto voices = editor.findChild<QMenu *>("performanceVoiceMenu");
+  QVERIFY(voices);
+  requested.clear();
+  for (int v = 0; v < 4; ++v)
+        voices->actions()[v]->setChecked(false);
+  QTest::qWait(30);
+  requested.clear();
+  QTest::mouseClick(lane, Qt::LeftButton, Qt::NoModifier, QPoint(px, 13));
+  QVERIFY(requested.isEmpty());
+  for (int v = 0; v < 4; ++v)
+        voices->actions()[v]->setChecked(true);
+  QTest::qWait(30);
+  QTest::mouseClick(lane, Qt::LeftButton, Qt::NoModifier, QPoint(px, 13));
+  QVERIFY(!requested.isEmpty());
   auto kind=editor.findChild<QComboBox*>("workflowComparisonKind");QVERIFY(kind);kind->setCurrentIndex(1);QTest::qWait(20);QTest::mouseClick(lane,Qt::LeftButton,Qt::NoModifier,QPoint(px,13));QVERIFY(requested.size()>=2);
   lane->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath("editor-correspondence-041.png"));
   auto changed=original;auto n=notes.front();s->startCmd();n->undoChangeProperty(Pid::VELO_OFFSET,10);s->endCmd();QVERIFY(!workflowContext()->current(s));QVERIFY(o.setEditorComparison(comparison).contains("error"));QVERIFY(o.setEditorComparison({})["ok"].toBool());

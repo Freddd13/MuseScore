@@ -24,6 +24,9 @@
 #include "scoreaccessibility.h"
 #include "scoretab.h"
 #include "scoreview.h"
+#ifdef SCRIPT_INTERFACE
+#include "workflow/regionalcontrols.h"
+#endif
 #include "taptempo/tapmark.h"
 #include "performanceeditor/performanceeditor.h"
 #include "seq.h"
@@ -1134,6 +1137,9 @@ void ScoreView::paintEvent(QPaintEvent* ev)
       drawAnchorLines(vp);
       PerformanceEditor::paintForView(this, vp);
       paintTopChordPreview(vp);
+#ifdef SCRIPT_INTERFACE
+      updateRegionalControls(this);
+#endif
       }
 
 //---------------------------------------------------------

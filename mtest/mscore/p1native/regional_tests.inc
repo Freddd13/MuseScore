@@ -272,7 +272,48 @@ void TestP1Native::regionalPanelMouseOperations() {
       QTest::mouseClick(button, Qt::LeftButton);
       QCOMPARE(RegionalVariants::state(s)["groups"].toList()[0].toMap()["active"].toString(),
                copied["variant"].toString());
-      QTest::mouseClick(dock->findChild<QPushButton *>("regionalMain"), Qt::LeftButton);
+      auto chooseMore = [&](const char *id) {
+            bool chosen = false;
+            int attempts = 0;
+            auto more = dock->findChild<QToolButton *>("regionalMore");
+            if (!more)
+                  return false;
+            auto menu = more->menu();
+            QAction *action = nullptr;
+            if (menu)
+                  for (auto candidate : menu->actions())
+                        if (candidate->objectName() == id)
+                              action = candidate;
+            if (!action)
+                  return false;
+            dock->activateWindow();
+            QTest::qWait(60);
+            QTimer picker;
+            picker.setInterval(30);
+            connect(&picker, &QTimer::timeout, dock, [&] {
+                  if (menu->isVisible()) {
+                        picker.stop();
+                        chosen = true;
+                        const auto point = menu->actionGeometry(action).center();
+                        QTest::mouseClick(menu, Qt::LeftButton, Qt::NoModifier, point);
+                        if (menu->isVisible())
+                              menu->hide();
+                  } else if (++attempts > 40) {
+                        picker.stop();
+                        menu->hide();
+                  }
+            });
+            picker.start();
+            QTest::mousePress(more, Qt::LeftButton);
+            for (int n = 0; n < 80 && !chosen; ++n)
+                  QTest::qWait(25);
+            picker.stop();
+            QTest::mouseRelease(more, Qt::LeftButton);
+            if (menu->isVisible())
+                  menu->hide();
+            return chosen;
+      };
+      QVERIFY(chooseMore("regionalMain"));
       QCOMPARE(RegionalVariants::state(s)["groups"].toList()[0].toMap()["main"].toString(),
                copied["variant"].toString());
       QTest::qWait(100);
@@ -303,11 +344,11 @@ void TestP1Native::regionalPanelMouseOperations() {
                         return;
                   }
       });
-      QTest::mouseClick(dock->findChild<QPushButton *>("regionalRename"), Qt::LeftButton);
+      QVERIFY(chooseMore("regionalRename"));
       QVERIFY(renamedByMouse);
       auto versions = RegionalVariants::state(s)["groups"].toList()[0].toMap()["variants"].toList();
       QCOMPARE(versions.back().toMap()["name"].toString(), QString("C · 新名称"));
-      QTest::mouseClick(dock->findChild<QPushButton *>("regionalShowMain"), Qt::LeftButton);
+      QVERIFY(chooseMore("regionalShowMain"));
       QCOMPARE(RegionalVariants::state(s)["groups"].toList()[0].toMap()["active"].toString(),
                copied["variant"].toString());
       QTest::mouseClick(dock->findChild<QPushButton *>("regionalAudition"), Qt::LeftButton);
@@ -360,8 +401,7 @@ void TestP1Native::regionalNotationFixturesAndCrossBoundary() {
             QCOMPARE(contents(), before);
             auto cut = RegionalVariants::check(s, 0, s->firstMeasure()->endTick().ticks(), tracks);
             if (QString(name).startsWith("readwriteundoreset")) {
-                  QVERIFY(cut.contains("error"));
-                  QVERIFY(cut["expandEnd"].toInt() > s->firstMeasure()->endTick().ticks());
+                  QVERIFY2(cut["ok"].toBool(), qPrintable(cut["error"].toString()));
             }
       }
 }
@@ -466,4 +506,211 @@ void TestP1Native::regionalResourcesLinkedPartsAndManualEvents() {
                   found = true;
             }
       QVERIFY(found);
+}
+
+void TestP1Native::regionalBoundaryConnectionsUndoAndFile() {
+      auto s = mscore->readScore(QString(TESTROOT) + "/mtest/mscore/p1native/regionalconnection.mscx");
+      QVERIFY(s);
+      mscore->setCurrentScoreView(mscore->appendScore(s));
+      auto note = [&](Score *score, int tick) {
+            auto cr = score->findCR(Fraction::fromTicks(tick), 0);
+            return cr && cr->isChord() ? toChord(cr)->upNote() : nullptr;
+      };
+      auto a = note(s, 0), b = note(s, 1920), c = note(s, 3840);
+      QVERIFY(a && b && c);
+      auto tie = new Tie(s);
+      tie->setStartNote(a);
+      tie->setEndNote(b);
+      tie->setTrack(0);
+      tie->setTick(a->tick());
+      tie->setTick2(b->tick());
+      tie->setParent(a);
+      auto slur = new Slur(s);
+      slur->setStartElement(b->chord());
+      slur->setEndElement(c->chord());
+      slur->setTrack(0);
+      slur->setTrack2(0);
+      slur->setTick(b->tick());
+      slur->setTick2(c->tick());
+      s->startCmd();
+      s->undoAddElement(tie);
+      s->undoAddElement(slur);
+      s->endCmd();
+      auto check = [&](Score *score) {
+            auto n = note(score, 1920), before = note(score, 0), after = note(score, 3840);
+            if (!n || !before || !after || !n->tieBack() || n->tieBack()->startNote() != before ||
+                before->tieFor() != n->tieBack())
+                  return false;
+            int lines = 0;
+            for (auto pair : score->spannerMap().map())
+                  if (pair.second->isSlur()) {
+                        auto line = pair.second;
+                        if (line->startCR() == n->chord() && line->endCR() == after->chord())
+                              ++lines;
+                  }
+            return lines == 1;
+      };
+      QVERIFY(check(s));
+      s->startCmd();
+      s->insertMeasure(ElementType::VBOX, s->first());
+      s->endCmd();
+      s->startCmd();
+      auto linked = new Score(s);
+      auto excerpt = new Excerpt(s);
+      excerpt->setPartScore(linked);
+      excerpt->setParts({s->parts().front()});
+      excerpt->setTitle("Linked piano");
+      qInfo("boundary: create linked part");
+      Excerpt::createExcerpt(excerpt);
+      qInfo("boundary: part created");
+      s->excerpts().append(excerpt);
+      s->endCmd();
+      QVERIFY(check(linked));
+      qInfo("boundary: initial links checked");
+      auto created = RegionalVariants::create(s, 1920, 3840, {0}, QString::fromUtf8("中间一小节"));
+      QVERIFY2(created["ok"].toBool(), qPrintable(created["error"].toString()));
+      const auto group = created["group"].toString(), original = created["variant"].toString();
+      qInfo("boundary: group created");
+      auto copied = RegionalVariants::duplicate(s, group, "B", true);
+      QVERIFY2(copied["ok"].toBool(), qPrintable(copied["error"].toString()));
+      const auto alternative = copied["variant"].toString();
+      s->startCmd();
+      note(s, 1920)->undoChangeProperty(Pid::VELO_OFFSET, 25);
+      s->endCmd();
+      for (int pass = 0; pass < 3; ++pass) {
+            qInfo("boundary: pass %d", pass);
+            auto result = RegionalVariants::select(s, group, original);
+            QVERIFY2(result["ok"].toBool(), qPrintable(result["error"].toString()));
+            QVERIFY(check(s));
+            QVERIFY(check(linked));
+            QCOMPARE(note(s, 1920)->veloOffset(), 0);
+            result = RegionalVariants::select(s, group, alternative);
+            QVERIFY2(result["ok"].toBool(), qPrintable(result["error"].toString()));
+            QVERIFY(check(s));
+            QVERIFY(check(linked));
+            QCOMPARE(note(s, 1920)->veloOffset(), 25);
+      }
+      EditData edit;
+      s->undoRedo(true, &edit);
+      QVERIFY(check(s));
+      QVERIFY(check(linked));
+      QCOMPARE(note(s, 1920)->veloOffset(), 0);
+      s->undoRedo(false, &edit);
+      QVERIFY(check(s));
+      QVERIFY(check(linked));
+      QCOMPARE(note(s, 1920)->veloOffset(), 25);
+      QByteArray archive;
+      QBuffer output(&archive);
+      output.open(QIODevice::WriteOnly);
+      QVERIFY2(RegionalVariants::save(s, &output, "connected.mscx", false), qPrintable(MScore::lastError));
+      output.close();
+      QBuffer input(&archive);
+      input.open(QIODevice::ReadOnly);
+      std::unique_ptr<MasterScore> restored(new MasterScore(s->style()));
+      QVERIFY2(restored->loadCompressedMsc(&input, true) == Score::FileError::FILE_NO_ERROR,
+               qPrintable(MScore::lastError));
+      QVERIFY(check(restored.get()));
+      QCOMPARE(restored->excerpts().size(), 1);
+      QVERIFY(check(restored->excerpts().front()->partScore()));
+      QCOMPARE(note(restored.get(), 1920)->veloOffset(), 25);
+      auto result = RegionalVariants::select(restored.get(), group, original);
+      QVERIFY2(result["ok"].toBool(), qPrintable(result["error"].toString()));
+      QVERIFY(check(restored.get()));
+      // An edit to the outside endpoint is reported and the entire attempted
+      // switch is undone, including its note values and current writing.
+      auto before = note(restored.get(), 0);
+      restored->startCmd();
+      before->undoChangeProperty(Pid::PITCH, 62);
+      restored->endCmd();
+      const int undo = restored->undoStack()->getCurIdx();
+      result = RegionalVariants::select(restored.get(), group, alternative);
+      QVERIFY(result.contains("error"));
+      QCOMPARE(restored->undoStack()->getCurIdx(), undo);
+      QCOMPARE(note(restored.get(), 0)->pitch(), 62);
+      QCOMPARE(note(restored.get(), 1920)->veloOffset(), 0);
+      QCOMPARE(RegionalVariants::state(restored.get())["groups"].toList()[0].toMap()["active"].toString(),
+               original);
+}
+
+void TestP1Native::regionalScoreSwitchMouseAndRestore() {
+      auto s = mscore->readScore(QString(TESTROOT) + "/mtest/mscore/p1native/regionalconnection.mscx");
+      QVERIFY(s);
+      mscore->setCurrentScoreView(mscore->appendScore(s));
+      mscore->resize(1280, 900);
+      mscore->show();
+      auto a = RegionalVariants::create(s, 1920, 3840, {0}, QString::fromUtf8("左手写法"));
+      QVERIFY(a["ok"].toBool());
+      const auto group = a["group"].toString(), first = a["variant"].toString();
+      auto b = RegionalVariants::duplicate(s, group, "B", true);
+      QVERIFY(b["ok"].toBool());
+      auto note = [&]() { return toChord(s->findCR(Fraction::fromTicks(1920), 0))->upNote(); };
+      s->startCmd();
+      note()->undoChangeProperty(Pid::VELO_OFFSET, 25);
+      s->endCmd();
+      QVERIFY(RegionalVariants::select(s, group, first)["ok"].toBool());
+      auto view = mscore->currentScoreView();
+      view->adjustCanvasPosition(note(), false);
+      setRegionalControlsVisible(true);
+      view->update();
+      auto find = [&]() -> QToolButton * {
+            for (auto button : view->findChildren<QToolButton *>())
+                  if (button->objectName() == "regionalScoreSwitch/" + group && button->isVisible())
+                        return button;
+            return nullptr;
+      };
+      QTRY_VERIFY(find());
+      auto button = find();
+      QVERIFY(view->rect().contains(button->geometry().center()));
+      bool chose = false;
+      QTimer::singleShot(30, [&] {
+            auto menu = button->menu();
+            for (auto action : menu->actions())
+                  if (action->data().toString() == b["variant"].toString()) {
+                        chose = true;
+                        QTest::mouseClick(menu, Qt::LeftButton, Qt::NoModifier,
+                                          menu->actionGeometry(action).center());
+                        return;
+                  }
+            menu->hide();
+      });
+      QTest::mouseClick(button, Qt::LeftButton);
+      QVERIFY(chose);
+      QTRY_COMPARE(note()->veloOffset(), 25);
+      EditData edit;
+      s->undoRedo(true, &edit);
+      QCOMPARE(note()->veloOffset(), 0);
+      s->undoRedo(false, &edit);
+      QCOMPARE(note()->veloOffset(), 25);
+      view->update();
+      const auto index = s->undoStack()->getCurIdx();
+      setRegionalControlsVisible(false);
+      QTRY_VERIFY(!find());
+      QCOMPARE(s->undoStack()->getCurIdx(), index);
+      setRegionalControlsVisible(true);
+      QTRY_VERIFY(find());
+      showRegionalVariantPanel(group);
+      auto dock = mscore->findChild<QDockWidget *>("kumoPanel/regionalVariantsDock");
+      QVERIFY(dock);
+      dock->setFloating(true);
+      dock->resize(420, 650);
+      dock->show();
+      QTest::qWait(100);
+      QVERIFY(dock->findChild<QLabel *>("regionalCurrent")->text().contains("B"));
+      const auto output = qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");
+      if (!output.isEmpty()) {
+            QVERIFY(dock->grab().save(output + "/regional-047.png"));
+            QVERIFY(view->grab(view->toPhysical(s->firstMeasure()->system()->canvasBoundingRect())
+                                   .adjusted(-20, -60, 20, 20)
+                                   .intersected(view->rect()))
+                        .save(output + "/regional-score-047.png"));
+      }
+      dock->hide();
+}
+
+void TestP1Native::regionalGlissandoRequiresBothEnds() {
+      auto s=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/p1native/regionalconnection.mscx");QVERIFY(s);mscore->setCurrentScoreView(mscore->appendScore(s));
+      auto note=[&](int tick){return toChord(s->findCR(Fraction::fromTicks(tick),0))->upNote();};auto line=new Glissando(s);line->setNoteSpan(note(1920),note(3840));line->setParent(note(1920));
+      s->startCmd();s->undoAddElement(line);s->endCmd();QVERIFY(note(1920)->spannerFor().contains(line));const auto state=s->state();const auto undo=s->undoStack()->getCurIdx();
+      auto shortRange=RegionalVariants::create(s,1920,3840,{0},"short");QVERIFY(shortRange.contains("error"));QVERIFY(shortRange["expandEnd"].toInt()>3840);QVERIFY(s->state()==state);QCOMPARE(s->undoStack()->getCurIdx(),undo);
+      auto full=RegionalVariants::create(s,0,5760,{0},"whole glissando");QVERIFY2(full["ok"].toBool(),qPrintable(full["error"].toString()));auto b=RegionalVariants::duplicate(s,full["group"].toString(),"B");QVERIFY(b["ok"].toBool());auto result=RegionalVariants::select(s,full["group"].toString(),b["variant"].toString());QVERIFY2(result["ok"].toBool(),qPrintable(result["error"].toString()));int count=0;for(auto value:note(1920)->spannerFor())if(value->isGlissando()){++count;QCOMPARE(value->startElement(),static_cast<Element*>(note(1920)));QCOMPARE(value->endElement(),static_cast<Element*>(note(3840)));}QCOMPARE(count,1);
 }

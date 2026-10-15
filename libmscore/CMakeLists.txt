@@ -58,7 +58,7 @@ add_library (libmscore STATIC
       textframe.cpp textline.cpp textlinebase.cpp timesig.cpp
       tremolobar.cpp tremolo.cpp trill.cpp tuplet.cpp
       utils.cpp volta.cpp xmlreader.cpp xmlwriter.cpp mscore.cpp
-      undo.cpp cmd.cpp scorefile.cpp regionalvariants.cpp regionalvariants.h revisions.cpp
+      undo.cpp cmd.cpp scorefile.cpp regionalvariants.cpp regionalvariants.h regionalconnections.cpp regionalconnections.h revisions.cpp
       check.cpp input.cpp icon.cpp ossia.cpp
       tempo.cpp sig.cpp pos.cpp duration.cpp
       figuredbass.cpp rehearsalmark.cpp transpose.cpp
@@ -118,5 +118,5 @@ if (APPLE)
 endif (APPLE)
 
 if(MSVC)
-  set_source_files_properties(regionalvariants.cpp scorefile.cpp PROPERTIES COMPILE_FLAGS "/execution-charset:utf-8")
+  set_source_files_properties(regionalvariants.cpp regionalconnections.cpp scorefile.cpp PROPERTIES COMPILE_FLAGS "/execution-charset:utf-8")
 endif()

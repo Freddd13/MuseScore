@@ -1,81 +1,87 @@
-#include <QtTest>
-#include <QTemporaryDir>
-#include <QSettings>
-#include <QSaveFile>
-#include <QQuickView>
-#include <QJSValue>
-#include <QDomDocument>
-#include <QSpinBox>
-#include <QCheckBox>
-#include <QPushButton>
-#include <QDialog>
-#include <QInputDialog>
-#include <QComboBox>
-#include <QLabel>
-#include "mscore/scoreview.h"
-#include "mscore/scoretab.h"
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonArray>
-#include <cmath>
-#include "mscore/shortcut.h"
-#include "mscore/temposymbols.h"
+#include "audio/exports/exportmidi.h"
+#include "audio/exports/midigatefile.h"
+#include "audio/midi/event.h"
+#include "libmscore/audio.h"
+#include "libmscore/chord.h"
+#include "libmscore/excerpt.h"
+#include "libmscore/fermata.h"
+#include "libmscore/image.h"
+#include "libmscore/instrument.h"
+#include "libmscore/measure.h"
+#include "libmscore/note.h"
+#include "libmscore/part.h"
+#include "libmscore/pedal.h"
+#include "libmscore/regionalvariants.h"
+#include "libmscore/select.h"
+#include "libmscore/slur.h"
+#include "libmscore/spannermap.h"
+#include "libmscore/synthesizerstate.h"
+#include "libmscore/system.h"
+#include "libmscore/tempo.h"
+#include "libmscore/tempoexpression.h"
+#include "libmscore/tempotext.h"
+#include "libmscore/textline.h"
+#include "libmscore/tie.h"
+#include "libmscore/glissando.h"
+#include "libmscore/undo.h"
+#include "libmscore/xml.h"
+#include "mscore/midicrop/midicroppanel.h"
+#include "mscore/musescore.h"
 #include "mscore/palette.h"
 #include "mscore/palette/palettetree.h"
+#include "mscore/performanceeditor/parameteredit.h"
+#include "mscore/performanceeditor/performanceeditor.h"
+#include "mscore/plugin/api/score.h"
+#include "mscore/plugin/api/scoreobserver.h"
+#include "mscore/plugin/pluginManager.h"
+#include "mscore/plugin/qmlplugin.h"
+#include "mscore/scoretab.h"
+#include "mscore/scoreview.h"
+#include "mscore/shortcut.h"
 #include "mscore/taptempo/tapmark.h"
 #include "mscore/taptempo/taptempo.h"
-#include "libmscore/tempoexpression.h"
-#include "libmscore/textline.h"
-#include <QTreeWidget>
-#include <QTableView>
-#include "mscore/midicrop/midicroppanel.h"
-#include <QDockWidget>
+#include "mscore/temposymbols.h"
+#include "mscore/workflow/midicapture.h"
+#include "mscore/workflow/midiinput.h"
+#include "mscore/workflow/paneldock.h"
+#include "mscore/workflow/referencebus.h"
+#include "mscore/workflow/regionalcontrols.h"
+#include "mscore/workflow/regionalpanel.h"
+#include "mscore/workflow/workflowcontext.h"
+#include "mtest/testutils.h"
+#include "thirdparty/qzip/qzipreader_p.h"
+#include "thirdparty/qzip/qzipwriter_p.h"
+#include <QCheckBox>
+#include <QComboBox>
+#include <QCryptographicHash>
 #include <QDataStream>
-#include <QMimeData>
+#include <QDialog>
+#include <QDockWidget>
+#include <QDomDocument>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
-#include <QtMath>
-#include "mscore/workflow/paneldock.h"
-#include "mscore/workflow/regionalpanel.h"
-#include "mscore/plugin/qmlplugin.h"
-#include "mscore/plugin/pluginManager.h"
-#include <QCryptographicHash>
-#include "mtest/testutils.h"
-#include "mscore/musescore.h"
-#include "mscore/workflow/referencebus.h"
-#include "mscore/workflow/workflowcontext.h"
-#include "mscore/workflow/midicapture.h"
-#include "mscore/workflow/midiinput.h"
-#include "audio/midi/event.h"
-#include "mscore/performanceeditor/performanceeditor.h"
+#include <QInputDialog>
+#include <QJSValue>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QLabel>
+#include <QMenu>
+#include <QMimeData>
+#include <QPushButton>
+#include <QQuickView>
+#include <QSaveFile>
+#include <QSettings>
+#include <QSpinBox>
+#include <QTableView>
+#include <QTemporaryDir>
 #include <QToolButton>
+#include <QTreeWidget>
+#include <QtMath>
+#include <QtTest>
 #include <algorithm>
-#include "mscore/plugin/api/score.h"
-#include "mscore/plugin/api/scoreobserver.h"
-#include "libmscore/measure.h"
-#include "libmscore/chord.h"
-#include "libmscore/note.h"
-#include "libmscore/undo.h"
-#include "libmscore/tempotext.h"
-#include "libmscore/tempo.h"
-#include "libmscore/xml.h"
-#include "libmscore/audio.h"
-#include "libmscore/excerpt.h"
-#include "libmscore/image.h"
-#include "libmscore/part.h"
-#include "libmscore/select.h"
-#include "libmscore/regionalvariants.h"
-#include "libmscore/spannermap.h"
-#include "thirdparty/qzip/qzipreader_p.h"
-#include "thirdparty/qzip/qzipwriter_p.h"
-#include "libmscore/instrument.h"
-#include "libmscore/pedal.h"
-#include "libmscore/fermata.h"
-#include "audio/exports/exportmidi.h"
-#include "audio/exports/midigatefile.h"
-#include "libmscore/synthesizerstate.h"
-#include "mscore/performanceeditor/parameteredit.h"
+#include <cmath>
 static void initP1Resources(){Q_INIT_RESOURCE(musescorefonts_Petaluma);}
 using namespace Ms;
 class TestP1Native:public QObject{
@@ -288,7 +294,21 @@ private slots:
   expression->setProperty("advancedSettings",false);QTRY_VERIFY(expression->property("candidate").value<QJSValue>().isObject());
   QVERIFY(click(expression,"expressionOriginalAudition"));QVERIFY(expression->property("workspace").toString().isEmpty());QVERIFY(!expression->property("previewWorkspace").toString().isEmpty());QVERIFY(mscore->currentScore()!=score);QVERIFY(expression->property("status").toString().contains("声音设备"));int auditionTabs=mscore->scores().size();QVERIFY(click(expression,"expressionCandidateAudition"));QTRY_COMPARE(mscore->scores().size(),auditionTabs+1);QVERIFY(mscore->currentScore()!=score);QVERIFY(click(expression,"expressionStop"));QTRY_VERIFY2(expression->property("status").toString().contains("试听已停止"),qPrintable(expression->property("status").toString()));expression->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath("return-debug.png"));QVERIFY(click(expression,"expressionReturn"));QTRY_VERIFY2(expression->property("status").toString().contains("已返回原谱"),qPrintable(expression->property("status").toString()));QCOMPARE(mscore->currentScore(),score);QTest::qWait(100);
   auto oldVelocity=score->undoStack()->getCurIdx();auto original=score->selection().noteList().front();int oldRaw=original->veloOffset();
-  QVERIFY(click(expression,"expressionApplyVelocity"));QTRY_VERIFY(expression->property("status").toString().contains("已使用演奏力度"));QCOMPARE(score->undoStack()->getCurIdx(),oldVelocity+1);QVERIFY(original->veloOffset()!=oldRaw);
+  QVERIFY(click(expression, "expressionOpenEditor"));
+  auto editorDock = mscore->findChild<QDockWidget *>("performanceEditorDock");
+  QVERIFY(editorDock);
+  QTRY_VERIFY(editorDock->isVisible());
+  auto compareLane = editorDock->findChild<QWidget *>("performanceWorkflowLanes");
+  QTRY_VERIFY(compareLane && compareLane->isVisible());
+  auto use = editorDock->findChild<QToolButton *>("workflowapply");
+  QVERIFY(use && use->isVisible());
+  QTest::qWait(80);
+  auto lane=editorDock->findChild<QWidget*>("performanceWorkflowLanes");QVERIFY(lane);QVERIFY(lane->height()>=100);QVERIFY(lane->visibleRegion().contains(QPoint(lane->width()/2,lane->height()-2)));
+  QVERIFY(editorDock->rect().contains(use->mapTo(editorDock,use->rect().center())));
+  const auto output=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");if(!output.isEmpty())editorDock->grab().save(output+"/editor-expression-047.png");QTest::mouseClick(use, Qt::LeftButton);
+  QTRY_VERIFY(expression->property("status").toString().contains("已使用演奏力度"));
+  QCOMPARE(score->undoStack()->getCurIdx(), oldVelocity + 1);
+  QVERIFY(original->veloOffset() != oldRaw);
   EditData undo;score->undoRedo(true,&undo);QCOMPARE(original->veloOffset(),oldRaw);
   expression->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath("manual-expression.png"));
   auto reference=open("ReferencePlayer","Reference Player");QVERIFY(reference);reference->setPanelFloating(true);reference->window()->resize(900,600);reference->focusPanel();auto media=reference->property("media").value<QObject*>();QVERIFY(media);
@@ -365,6 +385,9 @@ private slots:
  void editorCorrespondenceSelection();
  void multiTrackSaveRestore();
  void excerptExpressionPreview();
+ void regionalBoundaryConnectionsUndoAndFile();
+ void regionalGlissandoRequiresBothEnds();
+ void regionalScoreSwitchMouseAndRestore();
  void regionalSwitchUndoAndSharedSettings();
  void regionalSaveMainAndRestoreCurrent();
  void regionalIndependentVoicesExpandImportAndExport();

@@ -12,10 +12,11 @@ MuseScore {
  id:root
  menuPath:"Plugins.Performance Expression"
  description:"演奏表达：把 MIDI 演奏的力度和速度用于选中的乐谱。"
- version:"1.3.0";requiresScore:true;pluginType:"dock";dockArea:"right"
+ version:"1.4.0";requiresScore:true;pluginType:"dock";dockArea:"right"
  implicitWidth:440;implicitHeight:720
  property var observer:null
  property var editorContext:null
+ property string editorOwner:"expression-"+Date.now()+"-"+Math.random()
  property var audioProject:null
  property var captureSession:null
  property var captureState:captureSession?captureSession.state:({recording:false,stopping:false,saving:false,seconds:0,count:0,pitch:-1,velocity:0,device:""})
@@ -29,10 +30,14 @@ MuseScore {
  property bool auditionAudio:false
  function publishComparison(){
   if(!observer||typeof observer.setEditorComparison!=="function"||stale)return;
-  observer.setEditorComparison({revision:revision,result:result,candidate:candidate||{},selectedScoreId:selected>=0&&selected<result.matches.length?result.matches[selected].scoreId:"",scope:scope});
+  observer.setEditorComparison({owner:editorOwner,revision:revision,result:result,candidate:candidate||{},selectedScoreId:selected>=0&&selected<result.matches.length?result.matches[selected].scoreId:"",scope:scope});
  }
  function editorRequest(action,scoreId,midiId){
-  if(stale||busy)return;var index=result.matches.findIndex(function(m){return m.scoreId===scoreId});if(index>=0)selected=index;
+  if(!editorContext || editorContext.expression.owner!==editorOwner)return;
+  if(stale||busy){status=busy?"正在对应演奏，请等结果出现后继续。":"乐谱已改变，请重新对应这一段。";return;}
+  if(action==="applyVelocity" || action==="applyTempo"){if(!candidate){status="先完成演奏对应，再使用预览里的力度或速度。";return;}applyPart(action==="applyVelocity"?"velocity":"tempo");return;}
+  if(action==="auditionOriginal" || action==="auditionCandidate"){audition(action==="auditionCandidate");return;}
+  var index=result.matches.findIndex(function(m){return m.scoreId===scoreId});if(index>=0)selected=index;
   if(action==="select"){publishComparison();return;}
   if(action==="confirm"){confirm();return;}
   if(action==="anchor"){anchor();return;}
@@ -292,7 +297,7 @@ MuseScore {
    Desk.DeskButton {text:"重新对应";enabled:root.midi&&!root.busy&&!root.captureState.recording&&!root.captureState.stopping&&!root.captureState.saving;onClicked:root.analyze()}
    Desk.DeskButton {visible:root.advancedSettings;text:"重算对应";enabled:root.notes.length&&!root.busy&&!root.stale;onClicked:root.runAlignment()}
    Desk.DeskButton {text:root.advancedSettings?"收起设置":"更多设置";onClicked:root.advancedSettings=!root.advancedSettings}
-   Desk.DeskButton {text:"编辑器对比";enabled:root.result.matches.length>0;onClicked:{if(typeof root.observer.showEditorComparison==="function")root.observer.showEditorComparison()}}
+   Desk.DeskButton {objectName:"expressionOpenEditor";text:"编辑器对比";enabled:root.result.matches.length>0;onClicked:{root.publishComparison();if(typeof root.observer.showEditorComparison==="function"){var opened=root.observer.showEditorComparison();if(opened.error)root.fail(opened.error);else root.status="编辑器已显示原力度和演奏力度，可在下方试听和使用。"}}}
    Desk.DeskButton {text:"取消";enabled:root.busy;onClicked:root.cancel()}
   }
   Desk.DeskComboBox {objectName:"expressionPassageChoice";Layout.fillWidth:true;visible:!!(root.result.passage&&root.result.passage.candidates&&root.result.passage.candidates.length>1);model:root.result.passage&&root.result.passage.candidates?root.result.passage.candidates.map(function(v,i){return "演奏位置 "+(i+1)+" · "+v.from.toFixed(2)+"–"+v.until.toFixed(2)+" 秒"}):[];currentIndex:root.passageChoice;onActivated:{root.passageChoice=currentIndex;root.runAlignment()}}
