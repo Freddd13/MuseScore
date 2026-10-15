@@ -47,7 +47,7 @@ function pedalAt(frame, part) {
 }
 function createBuilder(frames, config, fallbackPart) {
     return {frames:frames,config:clone(config),fallbackPart:fallbackPart,byPart:{},keys:[],
-        evidence:{},pedalResults:{},ornaments:{},regions:[],phase:0,frameIndex:0,partIndex:0,rowIndex:0,previous:null,current:null};
+        evidence:{},pedalResults:{},ornaments:{},regions:[],phase:0,frameIndex:0,partIndex:0,rowIndex:0,partPass:"score",traceIndex:-1,traceChoice:0,previous:null,current:null};
 }
 function ornament(state,row,key,note) {
     var onset=note.attackTick===undefined?note.tick:note.attackTick;
@@ -123,27 +123,55 @@ function evaluate(state, row, key) {
             if(active && note.pitch>(heldBass?heldBass.pitch:note.pitch)+12 && ornament(state,row,key,note))weight*=.18;
             weights[pc]=Math.max(weights[pc]||0,weight);
         }
-        var following=null,rows=state.byPart[key];
-        // The next attack contributes only where it is close enough to belong to this phrase.
-        for(var nextIndex=state.rowIndex;nextIndex<Math.min(rows.length,state.rowIndex+4);++nextIndex) {
-            var nextRow=rows[nextIndex];if(nextRow.start-row.start>960)break;
-            var nextAttack=nextRow.notes.filter(function(n){return (n.attackTick===undefined?n.tick:n.attackTick)===nextRow.start;});
-            if(nextAttack.length>=3) {following=Harmony.detect(nextAttack.map(function(n){return n.pitch;}));break;}
-        }
-        result=Harmony.detectWeighted(row.notes,weights,strongAttack?null:state.previous,tonic,config.keyMode===1,row.start,{bass:strongAttack?freshBass:null,next:following});
+        row.strongAttack=!!strongAttack;row.attackCount=attacks.length;
+        result=Harmony.detectWeighted(row.notes,weights,null,tonic,config.keyMode===1,row.start,{bass:strongAttack?freshBass:null,collect:true});
         if(strongAttack && freshBass)result.harmonicBass=Harmony.mod12(freshBass.pitch);
     }
     if(result.chord===undefined)result=describe(result,row.notes,row.start,tonic,config.keyMode===1,config.degreeMode,flats);
-    if(!row.notes.length && config.auto!==false && !row.frame.imported){state.current=null;state.previous=null;return;}
+    if(!row.notes.length && config.auto!==false && !row.frame.imported){row.pathOptions=[null];state.previous=null;return;}
     if(row.frame.imported) {
         result=describe(row.frame,row.notes,row.start,tonic,config.keyMode===1,config.degreeMode,flats);
         if(row.frame.chord)result.chord=row.frame.chord;
         if(row.frame.degree)result.degree=row.frame.degree;
     }
-    if(result.root<0 && !(row.frame.imported && row.frame.chord)){state.current=null;return;}
-    var current=state.current;
-    var same=current && current.end===row.start && signature(current)===signature(result);
-    if(window && config.pedalMode===0 && current && current.pedalStart===window.start)same=true;
+    if(result.root<0 && !(row.frame.imported && row.frame.chord)){row.pathOptions=[null];return;}
+    var choices=result.candidates||[];delete result.candidates;row.pathOptions=[result];
+    if(!row.frame.imported && config.auto!==false && !(window && config.pedalMode===0))for(var c=0;c<choices.length;++c) {
+        var candidate=choices[c];if(candidate.root===result.root && candidate.definition===result.definition)continue;
+        if(result.harmonicBass!==undefined)candidate.harmonicBass=result.harmonicBass;
+        candidate.kind="结合前后和弦";
+        row.pathOptions.push(describe(candidate,row.notes,row.start,tonic,config.keyMode===1,config.degreeMode,flats));
+    }
+    state.previous=result;
+}
+function transition(previous,current,row) {
+    if(!previous || !current || previous.root<0 || current.root<0 || !Harmony.defs[previous.definition] || !Harmony.defs[current.definition] || row.frame.imported)return 0;
+    if(previous.root===current.root && previous.definition===current.definition)return 0;
+    var cost=row.strongAttack?.2:row.attackCount?.4:.65;
+    if(previous.root===current.root)cost*=.55;
+    var definition=Harmony.defs[previous.definition];
+    if(Harmony.mod12(previous.root-current.root)===7 && definition.intervals.indexOf(4)>=0 && definition.intervals.indexOf(10)>=0)cost-=.06;
+    return cost;
+}
+function scorePath(row,previous) {
+    var choices=row.pathOptions||[null],weight=Math.max(.25,Math.min(2,(row.end-row.start)/480));
+    row.pathCosts=[];row.pathBack=[];
+    var minimum=Infinity;
+    for(var i=0;i<choices.length;++i)minimum=Math.min(minimum,choices[i]&&typeof choices[i].rawCost==="number"?choices[i].rawCost:0);
+    for(i=0;i<choices.length;++i) {
+        var local=((choices[i]&&typeof choices[i].rawCost==="number"?choices[i].rawCost:0)-minimum)*weight,best=Infinity,back=0;
+        if(!previous)best=0;
+        else for(var j=0;j<previous.pathCosts.length;++j) {
+            var cost=previous.pathCosts[j]+transition(previous.pathOptions[j],choices[i],row);
+            if(cost<best-1e-9){best=cost;back=j;}
+        }
+        row.pathCosts.push(best+local);row.pathBack.push(back);
+    }
+}
+function emitRegion(state,row,key) {
+    var result=row.chosen;if(!result){state.current=null;return;}
+    var current=state.current,window=row.pedal,same=current && current.end===row.start && signature(current)===signature(result);
+    if(window && state.config.pedalMode===0 && current && current.pedalStart===window.start)same=true;
     if(same)current.end=row.end;
     else {
         current=clone(result);current.start=row.start;current.end=row.end;current.part=Number(key);
@@ -151,7 +179,6 @@ function evaluate(state, row, key) {
         current.notes=clone(row.notes);current.bar=row.frame.bar;current.beat=row.frame.beat;
         current.pedalStart=window?window.start:-1;state.regions.push(current);state.current=current;
     }
-    state.previous=result;
 }
 function step(state, limit) {
     for(var count=0;count<limit;++count) {
@@ -168,8 +195,26 @@ function step(state, limit) {
             state.regions.sort(function(a,b){return a.start-b.start||a.part-b.part;});state.phase=2;return true;
         }
         key=state.keys[state.partIndex];var rows=state.byPart[key];
-        if(state.rowIndex>=rows.length){state.partIndex++;state.rowIndex=0;state.previous=null;state.current=null;--count;continue;}
-        evaluate(state,rows[state.rowIndex++],key);
+        if(state.partPass==="score") {
+            if(state.rowIndex<rows.length) {
+                var index=state.rowIndex++;evaluate(state,rows[index],key);scorePath(rows[index],index?rows[index-1]:null);
+            } else {
+                state.partPass="trace";state.traceIndex=rows.length-1;
+                var costs=rows[state.traceIndex].pathCosts,best=0;
+                for(var c=1;c<costs.length;++c)if(costs[c]<costs[best]-1e-9)best=c;
+                state.traceChoice=best;
+            }
+        } else if(state.partPass==="trace") {
+            if(state.traceIndex>=0) {
+                var row=rows[state.traceIndex--];row.chosen=row.pathOptions[state.traceChoice];
+                if(row.chosen && row.pathOptions.length>1) {
+                    row.chosen.alternatives=row.pathOptions.filter(function(option){return option && (option.root!==row.chosen.root || option.definition!==row.chosen.definition);}).map(function(option){return {root:option.root,definition:option.definition,cost:option.rawCost};});
+                    row.chosen.kind="结合前后和弦 · 有其他解释";
+                }
+                state.traceChoice=row.pathBack[state.traceChoice];
+            } else {state.partPass="emit";state.rowIndex=0;state.current=null;}
+        } else if(state.rowIndex<rows.length)emitRegion(state,rows[state.rowIndex++],key);
+        else {state.partIndex++;state.rowIndex=0;state.partPass="score";state.previous=null;state.current=null;}
     }
     return state.phase===2;
 }

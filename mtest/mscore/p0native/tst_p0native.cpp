@@ -89,7 +89,7 @@ class TestP0Native : public QObject {
       void tapUsesSharedActionAndFixedGeometry() {
             auto action=getAction("tap-tempo");QVERIFY(action);QVERIFY(!action->autoRepeat());
             QToolButton* button=nullptr;for(auto candidate:mscore->findChildren<QToolButton*>())if(candidate->defaultAction()==action && candidate->menu())button=candidate;
-            QVERIFY(button);const int width=button->width();action->trigger();QTest::qWait(65);action->trigger();QCOMPARE(button->width(),width);QVERIFY(button->text().startsWith("TAP"));
+            QVERIFY(button);const int width=button->width();action->trigger();QTest::qWait(65);action->trigger();QCOMPARE(button->width(),width);QVERIFY(!button->text().contains("TAP",Qt::CaseInsensitive));QVERIFY(!button->icon().isNull());
             QSignalSpy taps(action,&QAction::triggered);QTest::keyPress(button,Qt::Key_Space);QCOMPARE(taps.size(),1);
             QKeyEvent repeat(QEvent::KeyPress,Qt::Key_Space,Qt::NoModifier,QString(),true);QApplication::sendEvent(button,&repeat);QCOMPARE(taps.size(),1);
             QTest::keyRelease(button,Qt::Key_Space);QCOMPARE(taps.size(),1);
@@ -163,7 +163,7 @@ class TestP0Native : public QObject {
             connect(&timer,&QTimer::timeout,&panel,[&] {
                   auto dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());if(!dialog)return;if(++tries>150){dialog->reject();return;}auto table=dialog->findChild<QTableView*>();auto roll=dialog->findChild<QAbstractScrollArea*>("midiCropRoll");if(!table || !roll || table->model()->rowCount()==0)return;
                   int rootRow=-1;for(int i=0;i<table->model()->rowCount();++i)if(table->model()->data(table->model()->index(i,0)).toString()=="C2")rootRow=i;if(rootRow<0)return;
-                  const double row=qMin(10.,double(roll->viewport()->height()-55)/49.);QPoint hit(20,qRound(48*row+22+row/2));QTest::mouseClick(roll->viewport(),Qt::LeftButton,Qt::NoModifier,hit);QCOMPARE(table->currentIndex().row(),rootRow);clicked=true;QVERIFY(table->model()->data(table->model()->index(rootRow,5)).toString().contains(QString::fromUtf8("提前松开")));dialog->grab().save("midi-hand-release.png");timer.stop();dialog->accept();
+                  const double row=qMin(10.,double(roll->viewport()->height()-55)/49.);QPoint hit(20,qRound(48*row+22+row/2));QTest::mouseClick(roll->viewport(),Qt::LeftButton,Qt::NoModifier,hit);QCOMPARE(table->currentIndex().row(),rootRow);clicked=true;timer.stop();dialog->grab().save("midi-hand-release.png");dialog->accept();QVERIFY(table->model()->data(table->model()->index(rootRow,5)).toString().contains(QString::fromUtf8("提前松手")));
                   });
             timer.start();QTest::mouseClick(compare,Qt::LeftButton);timer.stop();QVERIFY(clicked);
 
@@ -203,9 +203,27 @@ class TestP0Native : public QObject {
             MidiGateOptions options;options.jitter=0;MidiGateProcessor processor;auto rows=processor.process(data,options);QCOMPARE(rows[0].reason,QString("hand-release"));QVERIFY(rows[0].newOff<480);QVERIFY(rows[0].newOff>=116);QCOMPARE(rows[0].beforeSpan,31);QCOMPARE(rows[0].afterSpan,7);
             options.protectedTracks={4};auto protectedRows=processor.process(data,options);QCOMPARE(protectedRows[0].newOff,1800);QVERIFY(!protectedRows[1].handWarning.isEmpty());options.protectedTracks.clear();
             data.notes[0].off=2000;auto boundary=processor.process(data,options);QCOMPARE(boundary[0].newOff,2000);QVERIFY(boundary[0].reason!="hand-release");data.notes[0].off=1800;
-            data.notes={note("fresh-low",60,0,960,1),note("fresh-high",84,0,960,1)};auto impossible=processor.process(data,options);QVERIFY(impossible[0].handWarning.contains(QString::fromUtf8("新起音")));QVERIFY(impossible[1].handWarning.contains(QString::fromUtf8("不能解决")));
+            data.notes={note("fresh-low",60,0,960,1),note("fresh-high",84,0,960,1)};auto impossible=processor.process(data,options);QVERIFY(impossible[0].handWarning.contains(QString::fromUtf8("这组新音")));QVERIFY(impossible[1].handWarning.contains(QString::fromUtf8("调整跨度")));
             data.notes={note("chord-c",60,0,960,1),note("chord-e",64,0,960,1),note("chord-g",67,0,960,1)};options.jitter=.02;auto varied=processor.process(data,options),again=processor.process(data,options);int low=10000,high=0;for(int i=0;i<varied.size();++i){QCOMPARE(varied[i].newOff,again[i].newOff);low=qMin(low,varied[i].newOff);high=qMax(high,varied[i].newOff);QCOMPARE(varied[i].on,data.notes[i].on);QCOMPARE(varied[i].pitch,data.notes[i].pitch);}QVERIFY(high-low<=5);
             options.seed+=97;auto different=processor.process(data,options);bool changed=false;for(int i=0;i<varied.size();++i)changed|=different[i].newOff!=varied[i].newOff;QVERIFY(changed);
+            }
+      void continuousHandChoiceAndChordRelease() {
+            PianoHands::Limits limits[2];PianoHands::Position positions[2];
+            QVector<PianoHands::Key> current={{0,60,-1,0,true,false}};
+            PianoHands::Future next;next.seconds=.25;next.keys={{0,60,-1,0,false,false},{1,36,0,0,true,false}};
+            auto local=PianoHands::plan(current,limits,positions,0),context=PianoHands::planWithContext(current,limits,positions,0,{next});
+            QCOMPARE(local.hands[0],0);QCOMPARE(context.hands[0],1);QVERIFY(context.possible);
+            current[0].hand=0;QCOMPARE(PianoHands::planWithContext(current,limits,positions,0,{next}).hands[0],0);
+            auto note=[](QString id,int pitch,int on,int off,int hand,int voice){MidiGateNote n;n.id=id;n.pitch=pitch;n.on=on;n.off=off;n.hand=hand;n.handHint=hand<0?0:hand;n.partId=0;n.staff=0;n.voice=voice;n.known=n.piano=true;n.offOrdinal=pitch;n.sourceTick=on;return n;};
+            MidiGateData data;data.notes={note("held",60,0,960,-1,0),note("low",36,240,480,0,4)};
+            MidiGateOptions options;options.jitter=0;MidiGateProcessor processor;auto assigned=processor.process(data,options);
+            QCOMPARE(assigned[0].hand,1);QCOMPARE(assigned[1].hand,0);QVERIFY(assigned[1].handWarning.isEmpty());
+            data.pedals={{0,0,0,2500,true}};
+            data.notes={note("c",60,0,960,1,0),note("e",64,0,1440,1,1),note("g",67,0,1920,1,2)};
+            auto grouped=processor.process(data,options);QCOMPARE(grouped[0].newOff,grouped[1].newOff);QCOMPARE(grouped[1].newOff,grouped[2].newOff);
+            data.notes.append(note("next",65,480,960,1,3));auto followed=processor.process(data,options);
+            for(int i=0;i<3;++i){QVERIFY(followed[i].newOff<480);QCOMPARE(followed[i].newOff,followed[0].newOff);}
+            options.jitter=.02;auto varied=processor.process(data,options);int low=10000,high=0;for(int i=0;i<3;++i){low=qMin(low,varied[i].newOff);high=qMax(high,varied[i].newOff);}QVERIFY(high-low<=3);
             }
       void pianoHandsWorkerAndRules() {
             PluginAPI::ReadOnlyAnalysisJob job;QSignalSpy done(&job,&PluginAPI::ReadOnlyAnalysisJob::finished);
@@ -239,6 +257,11 @@ QCOMPARE(input.value("value").toInt(),7);
             file.tracks()[0].insert(0,MidiEvent(ME_PITCHBEND,0,1,64));
             auto bent=midiGateSnapshot(file,{source});QVERIFY(!bent.pedals[0].supported);
             QCOMPARE(p.process(bent,options)[0].newOff,bent.notes[0].off);
+            MidiFile binary;binary.setDivision(480);binary.setFormat(1);MidiTrack switched;switched.setOutPort(0);switched.setOutChannel(0);
+            switched.insert(0,MidiEvent(ME_CONTROLLER,0,64,100));switched.insert(0,MidiEvent(ME_NOTEON,0,60,85));switched.insert(960,MidiEvent(ME_NOTEOFF,0,60,0));switched.insert(1200,MidiEvent(ME_CONTROLLER,0,64,0));binary.tracks().append(switched);
+            auto onOff=midiGateSnapshot(binary,{source});QVERIFY(onOff.pedals[0].supported);QVERIFY(p.process(onOff,options)[0].newOff<960);
+            binary.tracks()[0].insert(400,MidiEvent(ME_CONTROLLER,0,64,80));auto continuous=midiGateSnapshot(binary,{source});QVERIFY(!continuous.pedals[0].supported);QCOMPARE(p.process(continuous,options)[0].newOff,960);
+
             }
       void nativeRenderDefaultEqualityAndPedalCrop() {
             std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx"));QVERIFY(score);
@@ -254,30 +277,32 @@ QCOMPARE(input.value("value").toInt(),7);
             qInfo("P0 native MIDI: %d safe shortened notes; normal bytes %d",changed,raw.data().size());
             }
       void actualMidiComparisonWindow() {
-            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx"));QVERIFY(score);
-            auto pedal=new Pedal(score.get());pedal->setTick(Fraction::fromTicks(0));pedal->setTicks(Fraction::fromTicks(1800));pedal->setTrack(4);pedal->setTrack2(4);score->addSpanner(pedal);
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx"));QVERIFY(score);
+            auto pedal=new Pedal(score.get());pedal->setTick(Fraction::fromTicks(0));pedal->setTicks(Fraction::fromTicks(1920));pedal->setTrack(4);pedal->setTrack2(4);score->addSpanner(pedal);
             MidiCropPanel panel(nullptr,[&]{return QList<Score*>{score.get()};});panel.show();
             QPushButton* button=nullptr;for(auto candidate:panel.findChildren<QPushButton*>())if(candidate->objectName()=="midiCropCompare")button=candidate;QVERIFY(button);
-            bool ready=false;int tries=0;QTimer close;close.setInterval(50);
+            bool ready=false,releaseShown=false;int tries=0;QTimer close;close.setInterval(50);
             connect(&close,&QTimer::timeout,&panel,[&] {
                   ++tries;for(auto widget:QApplication::topLevelWidgets())if(auto dialog=qobject_cast<QDialog*>(widget))if(dialog->objectName()=="midiCropComparison") {
-                        auto table=dialog->findChild<QTableView*>();if(table && table->model()->rowCount()>0) {ready=true;table->selectRow(0);const auto output=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");if(!output.isEmpty())dialog->grab().save(output+"/midi-compare.png");dialog->accept();}
+                        auto table=dialog->findChild<QTableView*>();if(table && table->model()->rowCount()>0) {ready=true;int selected=-1;for(int row=0;row<table->model()->rowCount();++row)if(table->model()->index(row,5).data().toString().contains(QString::fromUtf8("为弹下一组音提前松手")))selected=row;releaseShown=selected>=0;table->selectRow(qMax(0,selected));const auto output=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");if(!output.isEmpty())dialog->grab().save(output+"/midi-compare.png");dialog->accept();}
                         else if(tries>80)dialog->reject();
                         }
                   });
-            close.start();button->click();close.stop();QVERIFY(ready);panel.hide();
+            close.start();button->click();close.stop();QVERIFY(ready);QVERIFY(releaseShown);panel.hide();
             }
       void currentSoundfontCropPCMComparison() {
             const QString font=qEnvironmentVariable("P0_TEST_SOUNDFONT");QVERIFY2(QFileInfo::exists(font),"Set P0_TEST_SOUNDFONT to the current piano bank");
-            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx"));QVERIFY(score);
-            auto pedal=new Pedal(score.get());pedal->setTick(Fraction::fromTicks(0));pedal->setTicks(Fraction::fromTicks(1800));pedal->setTrack(4);pedal->setTrack2(4);score->addSpanner(pedal);
+            for(const auto& fixture:QStringList{"scoreobserver/piano.mscx","p0native/longroot.mscx"}) {
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/"+fixture));QVERIFY(score);
+            auto pedal=new Pedal(score.get());pedal->setTick(Fraction::fromTicks(0));pedal->setTicks(Fraction::fromTicks(1920));pedal->setTrack(4);pedal->setTrack2(4);score->addSpanner(pedal);
             ExportMidi exporter(score.get());QBuffer buffer;buffer.open(QIODevice::WriteOnly);MidiExportOptions options;options.crop=true;options.gate.jitter=0;
             QVERIFY(exporter.write(&buffer,true,true,mscore->synthesizerState(),options));
             const auto before=render(exporter.gateBaseline,exporter.gateData,font),after=render(exporter.mf,exporter.gateData,font);QVERIFY(!before.isEmpty());QCOMPARE(before.size(),after.size());
             float peak=0,difference=0;for(int i=0;i<before.size();++i) {peak=qMax(peak,qAbs(before[i]));difference=qMax(difference,qAbs(before[i]-after[i]));}
-            QVERIFY(peak>.000001f);qInfo("P0 current SF3 PCM: peak %.9f, maximum before/after difference %.9f",double(peak),double(difference));
+            QVERIFY(peak>.000001f);qInfo("P0 current SF3 %s PCM: peak %.9f, maximum before/after difference %.9f",qPrintable(fixture),double(peak),double(difference));
             QVERIFY2(difference/qMax(.000001f,peak)<.0001f,"Unexpected audible-scale crop difference; tighten protection rules");
-            const QString output=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");if(!output.isEmpty()) {wave(output+"/original.wav",before,.8f/peak);wave(output+"/cropped.wav",after,.8f/peak);}
+            const QString output=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");if(!output.isEmpty()) {const auto name=QFileInfo(fixture).completeBaseName();wave(output+"/"+name+"-original.wav",before,.8f/peak);wave(output+"/"+name+"-cropped.wav",after,.8f/peak);}
+            }
             }
       void actualHarmonyWorkerCacheAndHideCancellation() {
             auto score=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);mscore->setCurrentScoreView(mscore->appendScore(score));auto note=toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(4))->downNote();score->select(note);mscore->show();
@@ -285,9 +310,10 @@ QCOMPARE(input.value("value").toInt(),7);
             QmlPlugin* panel=nullptr;for(auto window:QGuiApplication::allWindows())if(auto view=qobject_cast<QQuickView*>(window))if(auto root=qobject_cast<QmlPlugin*>(view->rootObject()))if(root->menuPath()=="Plugins.Harmony Assistant")panel=root;QVERIFY(panel);QVERIFY(!panel->property("regionWorkerSource").toString().isEmpty());
             QTRY_VERIFY_WITH_TIMEOUT(!panel->property("analysisDirty").toBool(),10000);auto regions=panel->property("automaticRegions").value<QJSValue>().toVariant().toList();if(regions.isEmpty())regions=panel->property("automaticRegions").toList();QVERIFY(!regions.isEmpty());QCOMPARE(regions.first().toMap().value("root").toInt(),0);
             const auto source=panel->property("regionWorkerSource");panel->setProperty("regionWorkerSource",QString("while(true){}"));panel->setProperty("analysisDirty",true);QVERIFY(QMetaObject::invokeMethod(panel,"scheduleAnalysis"));QTRY_VERIFY_WITH_TIMEOUT(panel->property("regionJobToken").toInt()>0,10000);
-            panel->setProperty("visible",false);QTRY_COMPARE(panel->property("regionJobToken").toInt(),0);QTest::qWait(50);panel->setProperty("regionWorkerSource",source);panel->setProperty("visible",true);QTRY_VERIFY_WITH_TIMEOUT(!panel->property("analysisDirty").toBool(),10000);
+            panel->setProperty("visible",false);QVERIFY(panel->summaryPanelVisible());QVERIFY(panel->property("regionJobToken").toInt()>0);panel->showSummaryPanel(false);panel->showDetailPanel(false);QTRY_COMPARE(panel->property("regionJobToken").toInt(),0);QTest::qWait(50);panel->setProperty("regionWorkerSource",source);panel->setProperty("visible",true);QTRY_VERIFY_WITH_TIMEOUT(!panel->property("analysisDirty").toBool(),10000);
             }
       void actualArrangementPluginWorkerAndDock() {
+            mscore->resize(1280,900);
             auto score=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);mscore->setCurrentScoreView(mscore->appendScore(score));mscore->show();
             const QString path=QString(TESTROOT)+"/share/plugins/ArrangementAssistant/ArrangementAssistant_MS3.qml";
             PluginDescription description;description.path=path;QVERIFY(collectPluginMetaInformation(&description));mscore->registerPlugin(&description);mscore->pluginTriggered(path);QTest::qWait(100);
@@ -296,6 +322,20 @@ QCOMPARE(input.value("value").toInt(),7);
             QVERIFY(QMetaObject::invokeMethod(panel,"start",Q_ARG(QVariant,QVariant(false))));QTRY_VERIFY_WITH_TIMEOUT(panel->property("analyzed").toBool(),10000);
             QVERIFY(!panel->property("running").toBool());QCOMPARE(panel->property("status").toString(),QString::fromUtf8("已更新"));
             qInfo("P0 native arrangement peak GUI batch %.3f ms",panel->property("worstBatch").toDouble());
+            auto observer=qobject_cast<PluginAPI::ScoreObserver*>(panel->property("observer").value<QObject*>());QVERIFY(observer);
+            auto notes=observer->snapshot(0,0,score->ntracks(),false)["notes"].toList();QVERIFY(!notes.isEmpty());auto anchor=notes.first().toMap();
+            PluginAPI::Score wrapped(score);PluginAPI::ScoreObserver harmony;harmony.setScore(&wrapped);auto chord=anchor;chord["chord"]="C";chord["chordTick"]=0;chord["onTop"]=true;harmony.setScorePreview({chord});
+            auto view=mscore->currentScoreView();QCOMPARE(view->notePreviewMarkerBoxes().size(),1);const auto harmonyBox=view->notePreviewMarkerBoxes().first();
+            auto config=panel->property("config").value<QJSValue>().toVariant().toMap();config["scoreHints"]=true;panel->setProperty("config",config);
+            panel->setProperty("issues",QVariantList{QVariantMap{{"id","hint"},{"type","playability"},{"code","release-left"},{"tick",0},{"bar",1},{"beat",1},{"severity",QString::fromUtf8("提示")},{"title",QString::fromUtf8("左手先松开C2，再弹下一组音")},{"basis",QString::fromUtf8("踏板继续保持低音。")},{"notes",QVariantList{anchor}}}});
+            auto list=panel->findChild<QQuickItem*>("arrangementIssues");QVERIFY(list);list->setProperty("currentIndex",0);QVERIFY(QMetaObject::invokeMethod(panel,"publishMarkers"));
+            auto boxes=view->notePreviewMarkerBoxes();QCOMPARE(boxes.size(),2);QVERIFY(!boxes[0].intersects(boxes[1]));
+            QRectF hint;for(const auto& box:boxes)if(box!=harmonyBox)hint=box;QVERIFY(!hint.isEmpty());
+            view->adjustCanvasPosition(toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(anchor["track"].toInt()))->upNote(),false);QTest::qWait(40);
+            QVERIFY(view->width()>300 && view->height()>200);const auto point=view->toPhysical(hint.center()).toPoint();QVERIFY(view->rect().contains(point));
+            QTest::mouseClick(view,Qt::LeftButton,Qt::NoModifier,point);QTRY_VERIFY(panel->property("status").toString().startsWith(QString::fromUtf8("已定位")));
+            const auto output=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");if(!output.isEmpty()){const auto image=view->grab(view->toPhysical(score->firstMeasure()->canvasBoundingRect().united(hint)).adjusted(-45,-25,45,25).intersected(view->rect()));QVERIFY(!image.isNull());QVERIFY(image.save(output+"/arrangement-hint.png"));mscore->grab().save(output+"/arrangement-main.png");QTRY_VERIFY(panel->window()->width()>300);QVERIFY(panel->window()->grabWindow().save(output+"/arrangement-panel.png"));}
+            config["scoreHints"]=false;panel->setProperty("config",config);QVERIFY(QMetaObject::invokeMethod(panel,"publishMarkers"));QCOMPARE(view->notePreviewMarkerBoxes().size(),1);
             panel->setPanelFloating(true);QVERIFY(panel->panelFloating());panel->setPanelFloating(false);
             }
       void cleanupTestCase() {mscore->hide();}

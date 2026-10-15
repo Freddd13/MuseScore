@@ -435,6 +435,7 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
       std::unique_ptr<Ms::MasterScore> scratch;
       QHash<QString,NotePreviewEntry> rendered;
       int hidden=0;QVariantList unplaced;QString fontFallback;
+      QVector<QRectF> otherMarkers;bool haveOtherMarkers=false;
       for (const auto& descriptor : descriptors) {
             const auto value=descriptor.toMap();
             auto note=resolve(value,descriptors.size()>64 ? &segments : nullptr);
@@ -502,7 +503,7 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
             if (entry.chord.isEmpty() && entry.degree.isEmpty()) continue;
             entry.annotationTrack=note->staff()->part()->startTrack();entry.activationTarget=this;
             entry.sourceAnchor=note;entry.chordMask=value.value("chordMask",true).toBool();
-            entry.onTop=value.value("onTop",false).toBool();entry.avoidScoreContent=value.value("avoidScoreContent",true).toBool();
+            entry.onTop=value.value("onTop",false).toBool();entry.avoidScoreContent=value.value("avoidScoreContent",true).toBool();entry.avoidOtherPreviews=value.value("avoidOtherPreviews",false).toBool();
             entry.label.clear();entry.labelBox={};entry.color={};entry.active=false;entry.bounds={};
             // This anchor belongs to the change's system, even if its sustained source note is on a prior line.
             const QPointF position(x,system->staffYpage(entry.annotationTrack/VOICES));
@@ -572,6 +573,13 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
                         if (owner==this) obstacles+=_baseChordBoxes.value(page);
                         const QRectF corridor(preferred.left()-gap,pageBounds.top(),preferred.width()+2*gap,
                               qMax(qreal(0),preferred.bottom()-pageBounds.top()+gap));
+                        if(entry.avoidOtherPreviews) {
+                              if(!haveOtherMarkers) {
+                                    for(auto viewer:_score->getViewer())if(auto view=dynamic_cast<Ms::ScoreView*>(viewer)){otherMarkers=view->notePreviewMarkerBoxes(owner);break;}
+                                    haveOtherMarkers=true;
+                                    }
+                              for(const auto& box:otherMarkers) {const auto local=box.translated(-page->pos());if(local.intersects(corridor))obstacles.append(local);}
+                              }
                         if(entry.avoidScoreContent)for (const auto element:page->items(corridor)) {
                               if (!element->visible() || element->isPage() || element->isSystem() || element->isMeasure()) continue;
                               const auto box=element->pageBoundingRect();

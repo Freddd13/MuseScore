@@ -14,7 +14,7 @@ MuseScore {
     id:root
     menuPath:"Plugins.Arrangement Check"
     description:"编配检查：和声疑点、基础对位与上下文可弹性；只读分析。"
-    version:"1.1.0"
+    version:"1.2.0"
     requiresScore:true
     pluginType:"dock"
     dockArea:"right"
@@ -54,6 +54,16 @@ MuseScore {
     property bool activeSurface:visible && (!observer || observer.surfaceVisible)
     property real worstBatch:0
     Desk.UiTheme {id:theme}
+    onCurrentChanged:publishMarkers()
+    onStaleChanged:publishMarkers()
+    function publishMarkers() {
+        if(!observer || typeof observer.setScorePreview!=="function")return
+        if(!config.scoreHints || !activeSurface || stale || !current || !current.notes.length){observer.setScorePreview([]);return}
+        var note=current.notes.filter(function(n){return (n.attackTick===undefined?n.tick:n.attackTick)===root.current.tick;})[0]||current.notes[0]
+        var marker=Rules.clone(note);marker.degree=current.type==="playability"?(current.code.indexOf("release-")===0?"松手":"手位"):current.type==="counterpoint"?"对位":"和声"
+        marker.color="";marker.label="";marker.active=false;marker.chord="";marker.chordTick=current.tick;marker.chordUntil=current.tick+1;marker.degreeFont="Arial";marker.chordScale=1;marker.onTop=true;marker.avoidScoreContent=true;marker.avoidOtherPreviews=true;marker.chordMask=true
+        observer.setScorePreview([marker]);if(typeof observer.setActiveScorePreview==="function")observer.setActiveScorePreview(current.tick)
+    }
     function persist() {if(observer)observer.saveConfiguration("ArrangementAssistant",config)}
     function syncDetail() {
         if(typeof root.showDetailPanel==="function")root.showDetailPanel(ribbon && config.dualPanel)
@@ -129,15 +139,22 @@ MuseScore {
             for(var i=0;i<output.length;++i)totals[output[i].type]++
             issues=output;counts=totals;roles=result.roles;analyzed=true;stale=false;running=false;task=null;snapshot=null
             status="已更新"+(localRefresh?" · 局部刷新":"")+(imported.length?" · 使用导入解释，请核对来源":"")+(scope.noncontiguous?" · 非连续选择按起止范围检查":"")
-            list.currentIndex=issues.length?0:-1;work.stop();workerToken=0
+            list.currentIndex=issues.length?0:-1;work.stop();workerToken=0;publishMarkers()
     }
     function locate() {
         if(!current || !curScore)return
         if(observer && observer.playing) {pendingLocate=true;status="定位将在停播后执行";return}
         pendingLocate=false
-        var n=current.notes[0];if(!n)return
+        var n=current.notes.filter(function(note){return (note.attackTick===undefined?note.tick:note.attackTick)===root.current.tick;})[0]||current.notes[0];if(!n)return
+        if(observer && typeof observer.navigateWorkflow==="function") {
+            var target=Rules.clone(n);target.start=current.tick;target.firstTrack=n.track
+            var result=observer.navigateWorkflow(target,false)
+            if(result.error){status="定位提示："+result.error;return}
+        } else {
         var cursor=curScore.newCursor();cursor.track=n.track;cursor.rewindToTick(n.tick)
         if(cursor.element && cursor.element.notes && n.index<cursor.element.notes.length)curScore.selection.select(cursor.element.notes[n.index])
+        }
+        publishMarkers();status="已定位第"+current.bar+"小节 · "+current.title
         if(typeof root.focusPanel==="function")root.focusPanel()
     }
     function ignore() {
@@ -189,6 +206,7 @@ MuseScore {
     }
     onActiveSurfaceChanged: {
         if(!started)return
+        publishMarkers()
         if(!activeSurface) {cancel();refresh.stop()}
         else if(requested && stale && config.autoRefresh && observer && !observer.playing)refresh.restart()
     }
@@ -200,6 +218,7 @@ MuseScore {
         target:observer;ignoreUnknownSignals:true
         onPositionChanged:{if(observer.playing) {if(root.running) {root.cancel();root.stale=root.requested;root.status="播放中 · 显示缓存"}refresh.stop()}if(root.activeSurface && !observer.playing) {if(root.pendingLocate)root.locate();if(root.stale && root.config.autoRefresh && !refresh.running && !root.running)refresh.start()}}
         onScoreChanged:root.newScore()
+        onPreviewActivated:root.locate()
         onReadOnlyJobFinished:{
             if(token!==root.workerToken)return
             if(!root.activeSurface || observer.playing || observer.analysisRevision()!==root.revision) {root.cancel();root.markDirty();return}
@@ -230,13 +249,13 @@ MuseScore {
                 Layout.fillWidth:true
                 Desk.DeskComboBox {id:rangeBox;model:["选区／当前小节","当前钢琴全谱"];Layout.fillWidth:true;onActivated:root.whole=currentIndex===1}
                 Desk.DeskButton {text:"悬浮";visible:typeof root.setPanelFloating==="function" && !root.ribbon;onClicked:root.setPanelFloating(!root.panelFloating)}
-                Desk.DeskButton {text:"设置";onClicked:settings.open()}
+                Desk.DeskButton {text:"设置";visible:root.ribbon;onClicked:settings.open()}
             }
             Label {text:"和声 "+root.counts.harmony+" · 对位 "+root.counts.counterpoint+" · 可弹性 "+root.counts.playability;color:theme.text;Layout.fillWidth:true}
             Desk.DeskComboBox {id:styleBox;model:["调性钢琴／流行","严格对位","爵士"];currentIndex:root.config.style;Layout.fillWidth:true;onActivated:{var c=Rules.clone(root.config);c.style=currentIndex;root.config=c;root.persist();root.markDirty()}}
             Label {text:root.status;Layout.fillWidth:true;Layout.preferredHeight:28;Layout.minimumHeight:28;Layout.maximumHeight:28;maximumLineCount:2;elide:Text.ElideRight;wrapMode:Text.WordWrap;color:theme.muted;font.pixelSize:11}
             ListView {
-                id:list;Layout.fillWidth:true;Layout.fillHeight:true;Layout.minimumHeight:100;Layout.preferredHeight:270;clip:true;model:root.issues;spacing:1
+                id:list;objectName:"arrangementIssues";Layout.fillWidth:true;Layout.fillHeight:true;Layout.minimumHeight:100;Layout.preferredHeight:270;clip:true;model:root.issues;spacing:1
                 ScrollBar.vertical:ScrollBar {}
                 delegate:Rectangle {
                     width:list.width;height:58;color:ListView.isCurrentItem?theme.selected:theme.field
@@ -251,7 +270,7 @@ MuseScore {
             Label {text:"当前问题的依据";font.bold:true;color:theme.text}
             Flickable {
                 Layout.fillWidth:true;Layout.minimumHeight:90;Layout.preferredHeight:175;Layout.maximumHeight:220;clip:true;contentHeight:explanation.height
-                Text {id:explanation;width:parent.width;text:root.current?root.current.basis+"\n\n涉及音："+root.current.notes.map(function(n){return Harmony.spelledName(n.tpc,n.pitch,false)+" · 谱表"+(Math.floor(n.track/4)+1)+"声部"+(n.track%4+1)}).join("，"):"选择一条问题查看依据。未列出问题不代表完整证明可弹。";wrapMode:Text.WordWrap;color:theme.text;font.pixelSize:12}
+                Text {id:explanation;width:parent.width;text:root.current?root.current.basis+"\n\n涉及音："+root.current.notes.map(function(n){return Harmony.spelledName(n.tpc,n.pitch,false)+" · 谱表"+(Math.floor(n.track/4)+1)+"声部"+(n.track%4+1)}).join("，"):"选择一条问题，查看相关音和建议。";wrapMode:Text.WordWrap;color:theme.text;font.pixelSize:12}
                 ScrollBar.vertical:ScrollBar {}
             }
             RowLayout {
@@ -278,6 +297,7 @@ MuseScore {
                 Repeater {model:[{key:"harmony",text:"和声疑点"},{key:"counterpoint",text:"基础对位"},{key:"playability",text:"上下文可弹性"},{key:"autoRefresh",text:"停播后自动刷新"},{key:"dualPanel",text:"顶部摘要 + 右侧详情"}]
                     Desk.DeskSwitch {text:modelData.text;checked:root.config[modelData.key];onClicked:{var c=Rules.clone(root.config);c[modelData.key]=checked;root.config=c;root.persist();root.syncDetail();root.markDirty()}}
                 }
+                Desk.DeskSwitch {text:"在谱面提示当前问题";checked:root.config.scoreHints;onClicked:{var c=Rules.clone(root.config);c.scoreHints=checked;root.config=c;root.persist();root.publishMarkers()}}
                 RowLayout {
                     Label {text:"最短按键参考（ms）";color:theme.text}
                     Desk.DeskSpinBox {objectName:"arrangementMinimumHold";from:0;to:5000;value:root.config.minimumHoldMs===undefined?120:root.config.minimumHoldMs;onValueModified:{var c=Rules.clone(root.config);c.minimumHoldMs=value;root.config=c;root.persist();root.markDirty()}}
@@ -287,7 +307,7 @@ MuseScore {
                 Desk.DeskComboBox {model:["调性未确认"].concat(Harmony.rootNames);currentIndex:root.config.tonic<0?0:Harmony.rootPcs.indexOf(root.config.tonic)+1;onActivated:{var c=Rules.clone(root.config);c.tonic=currentIndex?Harmony.rootPcs[currentIndex-1]:-1;root.config=c;root.persist();root.markDirty()}}
                 Desk.DeskSwitch {text:"已确认小调";enabled:root.config.tonic>=0;checked:root.config.minor;onClicked:{var c=Rules.clone(root.config);c.minor=checked;root.config=c;root.persist();root.markDirty()}}
                 Label {text:"对位规则（预设可覆盖）";color:theme.text}
-                Repeater {model:[{key:"parallel",text:"平行五八"},{key:"hidden",text:"外声部隐伏"},{key:"crossing",text:"声部交叉"},{key:"overlap",text:"声部重叠"},{key:"leaps",text:"大跳"},{key:"resolution",text:"已确认调性下的解决疑点"}]
+                Repeater {model:[{key:"parallel",text:"平行五八"},{key:"oppositePerfect",text:"反向五八（严格对位）"},{key:"hidden",text:"外声部隐伏"},{key:"crossing",text:"声部交叉"},{key:"overlap",text:"声部重叠"},{key:"leaps",text:"大跳"},{key:"resolution",text:"已确认调性下的解决疑点"}]
                     Desk.DeskSwitch {text:modelData.text;checked:Rules.ruleEnabled(root.config,modelData.key);onClicked:{var c=Rules.clone(root.config);c.ruleOverrides[modelData.key]=checked;root.config=c;root.persist();root.markDirty()}}
                 }
                 Repeater {model:["left","right"]

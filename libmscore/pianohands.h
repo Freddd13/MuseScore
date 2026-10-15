@@ -1,6 +1,8 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2.
 #pragma once
 #include <QVector>
+#include <QHash>
+#include <QSet>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -84,8 +86,8 @@ inline bool releaseForHand(const QVector<Group>& keys,const QVector<int>& hands,
             }
       if(!std::isfinite(best))return false;*removed=bestRemoved;return true;
       }
-inline Plan plan(const QVector<Key>& input,const Limits (&limits)[2],const Position (&previous)[2],double seconds) {
-      Plan best;best.hands.fill(-1,input.size());if(input.isEmpty()){best.cost=0;return best;}
+inline QVector<Plan> candidates(const QVector<Key>& input,const Limits (&limits)[2],const Position (&previous)[2],double seconds,int width) {
+      Plan best;QVector<Plan> choices;best.hands.fill(-1,input.size());if(input.isEmpty()){best.cost=0;return {best};}
       QVector<int> order;for(int i=0;i<input.size();++i)order.append(i);
       std::stable_sort(order.begin(),order.end(),[&](int a,int b){return input[a].pitch<input[b].pitch;});
       QVector<Group> groups;bool uncertain=false;
@@ -104,7 +106,7 @@ inline Plan plan(const QVector<Key>& input,const Limits (&limits)[2],const Posit
                   }
             }
       // At most 25 split candidates even for dense material; no exponential search.
-      if(groups.size()>24){best.limited=true;best.possible=false;best.uncertain=true;return best;}
+      if(groups.size()>24){best.limited=true;best.possible=false;best.uncertain=true;return {best};}
       for(int split=0;split<=groups.size();++split) {
             QVector<int> hands;QVector<bool> removed(groups.size(),false);double cost=0;
             for(int i=0;i<groups.size();++i) {
@@ -131,7 +133,52 @@ inline Plan plan(const QVector<Key>& input,const Limits (&limits)[2],const Posit
                   candidate.hands[member]=hands[i];if(removed[i])candidate.released.append(member);
                   }
             candidate.cost=cost;
-            if(cost<best.cost-1e-9)best=candidate;
+            bool duplicate=false;for(const auto& old:choices)if(old.hands==candidate.hands && old.released==candidate.released){duplicate=true;break;}
+            if(!duplicate)choices.append(candidate);
+            }
+      std::stable_sort(choices.begin(),choices.end(),[](const Plan& a,const Plan& b){return a.cost<b.cost;});
+      if(choices.size()>width)choices.resize(width);
+      return choices;
+      }
+inline Plan plan(const QVector<Key>& input,const Limits (&limits)[2],const Position (&previous)[2],double seconds) {
+      return candidates(input,limits,previous,seconds,1).first();
+      }
+struct Future { QVector<Key> keys; double seconds=0; };
+// Compare at most four present hand assignments across the next two attacks.
+// Key ids persist across frames; a released key stays released until its next attack.
+inline Plan planWithContext(const QVector<Key>& input,const Limits (&limits)[2],const Position (&previous)[2],double seconds,const QVector<Future>& future) {
+      if(future.isEmpty())return plan(input,limits,previous,seconds);
+      const auto choices=candidates(input,limits,previous,seconds,4);
+      bool possible=false;for(const auto& choice:choices)possible|=choice.possible;
+      Plan best=choices.first();double bestCost=std::numeric_limits<double>::infinity();
+      for(const auto& choice:choices) {
+            if(possible && !choice.possible)continue;
+            QHash<int,int> assigned;QSet<int> released;Position positions[2]={previous[0],previous[1]};
+            auto remember=[&](const QVector<Key>& keys,const Plan& value,double at) {
+                  for(int i=0;i<keys.size();++i) {
+                        assigned[keys[i].id]=value.hands[i];
+                        if(value.released.contains(i))released.insert(keys[i].id);
+                        else if(keys[i].attack)released.remove(keys[i].id);
+                        }
+                  for(int side=0;side<2;++side) {
+                        bool attacked=false;for(int i=0;i<keys.size();++i)attacked|=keys[i].attack && value.hands[i]==side;
+                        if(attacked&&value.after[side].count)positions[side]={true,value.after[side].low,value.after[side].high,at};
+                        }
+                  };
+            remember(input,choice,seconds);double cost=choice.cost,weight=.5;
+            for(int f=0;f<std::min(2,future.size());++f) {
+                  QVector<Key> keys;
+                  for(auto key:future[f].keys) {
+                        if(!key.attack && released.contains(key.id))continue;
+                        if(!key.attack && key.hand<0)key.hand=assigned.value(key.id,-1);
+                        keys.append(key);
+                        }
+                  const auto next=plan(keys,limits,positions,future[f].seconds);
+                  cost+=weight*next.cost;weight*=.5;
+                  if(next.limited || next.uncertain)break;
+                  remember(keys,next,future[f].seconds);
+                  }
+            if(cost<bestCost-1e-9){bestCost=cost;best=choice;}
             }
       return best;
       }

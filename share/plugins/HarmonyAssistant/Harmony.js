@@ -149,7 +149,8 @@ function detectWeighted(notes, weights, previous, tonic, minorKey, tick, hint) {
     var best=ranked[0],runner=ranked[1];
     if(!best || best.cost>6)return {root:-1,definition:-1,kind:"未确定和弦",alternatives:[]};
     best.alternatives=runner && runner.cost-best.cost<.65?[runner]:[];
-    best.kind=best.alternatives.length?"上下文匹配 · 存在歧义":"上下文匹配";
+    if(hint && hint.collect)best.candidates=ranked.slice(0,4).filter(function(c){return c.rawCost-ranked[0].rawCost<.8;}).map(function(c){return {root:c.root,definition:c.definition,cost:c.rawCost,rawCost:c.rawCost};});
+    best.kind=best.alternatives.length?"自动识别 · 有其他解释":"自动识别";
     if(best.context)best.kind+=" · "+best.context;
     return best;
 }

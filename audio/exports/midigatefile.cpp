@@ -52,6 +52,9 @@ MidiGateData midiGateSnapshot(const MidiFile& file,const QVector<MidiGateSource>
             }
       for(auto i=controls.begin();i!=controls.end();++i) {
             auto& stream=i.value();std::stable_sort(stream.begin(),stream.end(),[](const auto& a,const auto& b){return a.tick<b.tick;});
+            QSet<int> lowValues,highValues;
+            for(const auto& c:stream)if(c.controller==64)(c.value>=64?highValues:lowValues).insert(c.value);
+            const bool binary=lowValues.size()<=1 && highValues.size()<=1;
             const auto key=i.key().split(':');int down=-1;bool safe=true,unsupported=false;
             for(const auto& c:stream) {
                   if(c.controller!=64) {
@@ -61,14 +64,11 @@ MidiGateData midiGateSnapshot(const MidiFile& file,const QVector<MidiGateSource>
                         continue;
                         }
                   if(c.value>=64) {
-                        if(down<0) {down=c.tick;safe=!unsupported;}
-                        if(c.value!=127)safe=false;
+                        if(down<0) {down=c.tick;safe=!unsupported && binary;}
                         }
                   else if(down>=0) {
-                        safe=safe && c.value==0;
                         data.pedals.append({key[0].toInt(),key[1].toInt(),down,c.tick,safe});down=-1;
                         }
-                  else if(c.value!=0)unsupported=true;
                   }
             // No fabricated pedal-up at EOF.
             if(down>=0)data.pedals.append({key[0].toInt(),key[1].toInt(),down,lastTick,false});

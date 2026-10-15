@@ -6,7 +6,7 @@
 function defaults() {
     return {schema:1,style:0,autoRefresh:true,dualPanel:true,alignment:1,
         harmony:true,counterpoint:true,playability:true,
-        left:{comfort:14,maximum:15,white:16},right:{comfort:14,maximum:15,white:16},
+        scoreHints:false,left:{comfort:14,maximum:15,white:16},right:{comfort:14,maximum:15,white:16},
         roles:{},ruleOverrides:{},handOverrides:[],ignored:[],chords:[],tonic:-1,minor:false,minimumHoldMs:120};
 }
 function clone(v) {return JSON.parse(JSON.stringify(v));}
@@ -65,12 +65,28 @@ function choose(group,line) {
     if(line==="single" && group.length!==1)return null;
     return group.reduce(function(a,b){return line==="bottom"?(a.pitch<b.pitch?a:b):(a.pitch>b.pitch?a:b);});
 }
+function brokenChordTexture(groups) {
+    var ticks=Object.keys(groups).map(Number).sort(function(a,b){return a-b;});if(ticks.length<6)return false;
+    var checked=0,broken=0;
+    for(var i=0;i+5<ticks.length && checked<128;++i) {
+        var pcs={},low=128,high=-1,leaps=0,minGap=Infinity,maxGap=0,valid=true;
+        for(var j=0;j<6;++j) {
+            var group=groups[ticks[i+j]];if(group.length!==1){valid=false;break;}
+            var pitch=group[0].pitch;pcs[Harmony.mod12(pitch)]=true;low=Math.min(low,pitch);high=Math.max(high,pitch);
+            if(j) {var previous=groups[ticks[i+j-1]][0],distance=Math.abs(pitch-previous.pitch),gap=ticks[i+j]-ticks[i+j-1];leaps+=distance>=3 && distance<=12;minGap=Math.min(minGap,gap);maxGap=Math.max(maxGap,gap);}
+        }
+        if(!valid)continue;++checked;
+        if(Object.keys(pcs).length<=4 && leaps>=4 && high-low>=7 && maxGap<=minGap*2)++broken;
+    }
+    return checked>0 && broken/checked>=.5;
+}
 function roleFor(s,track) {
     var user=s.config.roles[String(track)],groups=s.byTrack[track],poly=false;
     for(var key in groups)if(groups[key].length>1){poly=true;break;}
     var bottom=Math.floor(track/4)>Math.floor((s.trackParts[track]===undefined?s.data.scope.firstTrack:s.trackParts[track])/4);
+    var broken=!poly && brokenChordTexture(groups);
     var automatic={track:Number(track),role:bottom?"bass":"melody",hand:bottom?"left":"right",
-        line:poly?(bottom?"bottom":"top"):"single",source:"自动推断",independent:!poly,uncertain:poly};
+        line:poly?(bottom?"bottom":"top"):"single",source:broken?"自动建议（分解和弦）":"自动推断",independent:!poly&&!broken,uncertain:poly||broken};
     if(user) {
         for(var field in user)automatic[field]=user[field];
         var confirmed=user.role!==undefined || user.line!==undefined || typeof user.independent==="boolean";
@@ -159,6 +175,7 @@ function harmonic(s,frame) {
 }
 function ruleEnabled(config,name) {
     if(config.ruleOverrides && typeof config.ruleOverrides[name]==="boolean")return config.ruleOverrides[name];
+    if(name==="oppositePerfect")return config.style===1;
     return !(config.style===2 && ["parallel","hidden","resolution"].indexOf(name)>=0);
 }
 function counterpoint(s,frame) {
@@ -182,8 +199,9 @@ function counterpoint(s,frame) {
         var before=perfect(prev.a,prev.b),after=perfect(a.note,b.note);
         var evidence="前一组："+Harmony.spelledName(prev.a.tpc,prev.a.pitch,false)+(Math.floor(prev.a.pitch/12)-1)+" / "+Harmony.spelledName(prev.b.tpc,prev.b.pitch,false)+(Math.floor(prev.b.pitch/12)-1)+"；当前："+Harmony.spelledName(a.note.tpc,a.note.pitch,false)+(Math.floor(a.note.pitch/12)-1)+" / "+Harmony.spelledName(b.note.tpc,b.note.pitch,false)+(Math.floor(b.note.pitch/12)-1)+"。";
         if(ruleEnabled(s.config,"parallel") && da*db>0 && before && before===after)issue(s,"counterpoint","parallel-"+after,tick,[a.note,b.note,prev.a,prev.b],"独立声部平行"+(after===5?"五度":"八度"),evidence+"前后均为拼写明确的纯音程；两个声部同向移动。"+(a.role.source==="自动推断"?"声部来自自动推断，可在角色设置中改为加倍。":""),s.config.style===1?"需核查":"注意");
+        if(ruleEnabled(s.config,"oppositePerfect") && da*db<0 && before && before===after)issue(s,"counterpoint","opposite-perfect-"+after,tick,[a.note,b.note,prev.a,prev.b],"独立声部反向进入纯"+(after===5?"五度":"八度"),evidence+"严格对位可进一步检查这两条线的独立性。", "提示");
         if(ruleEnabled(s.config,"crossing") && (prev.a.pitch-prev.b.pitch)*(a.note.pitch-b.note.pitch)<0)issue(s,"counterpoint","crossing",tick,[a.note,b.note,prev.a,prev.b],"声部发生交叉",evidence+"前后上下位置互换；交叉可能是预期效果。","注意");
-        else if(ruleEnabled(s.config,"overlap") && (a.note.pitch<prev.b.pitch && prev.a.pitch>prev.b.pitch || b.note.pitch>prev.a.pitch && prev.b.pitch<prev.a.pitch))
+        else if(ruleEnabled(s.config,"overlap") && (prev.a.pitch>prev.b.pitch ? a.note.pitch<prev.b.pitch || b.note.pitch>prev.a.pitch : b.note.pitch<prev.a.pitch || a.note.pitch>prev.b.pitch))
             issue(s,"counterpoint","overlap",tick,[a.note,b.note,prev.a,prev.b],"相邻位置出现声部重叠",evidence+"一个声部进入另一声部先前占用的音区。","提示");
         var outer=(a.role.role==="melody" && b.role.role==="bass") || (b.role.role==="melody" && a.role.role==="bass");
         var upper=a.note.pitch>b.note.pitch?da:db;
@@ -192,6 +210,7 @@ function counterpoint(s,frame) {
     if(!lines.length) {s.pairState={};s.previousLines={};}
     for(i=0;i<lines.length;++i) {
         var line=lines[i],previous=s.previousLines[line.role.track];
+        if(!line.role.independent || line.role.uncertain)continue;
         if(ruleEnabled(s.config,"leaps") && previous && previous.attackTick!==line.note.attackTick && Math.abs(previous.pitch-line.note.pitch)>12)
             issue(s,"counterpoint","leap",tick,[previous,line.note],"声部出现大跳","跳跃 "+Math.abs(previous.pitch-line.note.pitch)+" 半音；可核对后续方向及旋律意图。","提示");
         if(previous && previous.attackTick!==line.note.attackTick && s.config.tonic>=0 && ruleEnabled(s.config,"resolution") && Harmony.mod12(previous.pitch-s.config.tonic)===11 && line.note.pitch-previous.pitch!==1)
@@ -215,7 +234,19 @@ function physicalPlayability(s,frame) {
     }
     for(var part in parts) {
     notes=parts[part];
-    var report=PianoHands.analyse(notes,s.data.pedals||[],{tick:tick,seconds:seconds,left:s.config.left,right:s.config.right,minimumHoldMs:s.config.minimumHoldMs===undefined?120:s.config.minimumHoldMs,part:Number(part)});
+    var lookahead=[];
+    for(var f=s.index;f<s.frames.length && f<s.index+32 && lookahead.length<2;++f) {
+        var upcoming=s.frames[f],futureNotes=[],futureSeconds=upcoming.tick/960,attacked=false;
+        for(var j=0;j<upcoming.notes.length;++j) {
+            var source=upcoming.notes[j],sourcePart=source.partId===undefined?s.data.scope.firstTrack:source.partId;
+            if(Number(sourcePart)!==Number(part) || source.logicalEnd<=upcoming.tick || source.grace || source.piano===false)continue;
+            var hand=handFor(s,source,upcoming.tick);if(hand.hand!=="left" && hand.hand!=="right")continue;
+            var next=clone(source);next.analysisHand=hand.hand;next.handKnown=hand.source.indexOf("自动推断")<0;next.id=next.id||next.track+":"+next.attackTick+":"+next.index;
+            futureNotes.push(next);if(next.attackTick===upcoming.tick){attacked=true;futureSeconds=next.onSeconds;}
+        }
+        if(attacked)lookahead.push({tick:upcoming.tick,seconds:futureSeconds,notes:futureNotes});
+    }
+    var report=PianoHands.analyse(notes,s.data.pedals||[],{tick:tick,seconds:seconds,left:s.config.left,right:s.config.right,minimumHoldMs:s.config.minimumHoldMs===undefined?120:s.config.minimumHoldMs,part:Number(part),lookahead:lookahead});
     if(report.limited || report.uncertain) {
         issue(s,"playability","hand-uncertain",tick,notes,"这处按键关系需要确认",report.limited?"同时延续的按键太多，本次不自动安排松手。可先确认分手和踏板范围。":"同一个按键有相互冲突的分手或指法说明，请先确认。","提示");continue;
     }
@@ -224,24 +255,25 @@ function physicalPlayability(s,frame) {
         if(!before.count)continue;
         var involved=side.notes.map(function(index){return notes[index];}),released=side.released.map(function(index){return notes[index];});
         var basis="按谱面一直保持时："+before.count+"个不同按键，跨度"+(before.high-before.low)+"半音。";
-        basis+="检查的最短按键参考为"+(s.config.minimumHoldMs===undefined?120:s.config.minimumHoldMs)+" ms；这是可调设置，不是演奏保证。";
+        basis+="检查的最短按键参考为"+(s.config.minimumHoldMs===undefined?120:s.config.minimumHoldMs)+" ms，可在设置中调整。";
         basis+=report.inferred?"其中部分分手来自自动建议，可校正。":"分手由用户或符号指定。";
         if(released.length) {
             basis+="同一踏板内可提前松开 "+released.map(function(n){return Harmony.spelledName(n.tpc,n.pitch,false)+(Math.floor(n.pitch/12)-1);}).join("、")+"；之后需保持"+after.count+"键，跨度"+(after.high-after.low)+"半音。";
-            issue(s,"playability","release-"+side.hand,tick,involved,label+"需要提前松开旧音",basis,"注意");
+            var names=released.map(function(n){return Harmony.spelledName(n.tpc,n.pitch,false)+(Math.floor(n.pitch/12)-1);});
+            issue(s,"playability","release-"+side.hand,tick,involved,label+"先松开"+names.slice(0,3).join("、")+(names.length>3?"等音":"")+"，再弹下一组音",basis,"注意");
         }
         if(!after.fits) {
-            basis+="松开允许释放的旧音后仍超过"+after.maximum+"半音或5个按键；新起音自身的负担不能靠裁剪旧音解决。";
+            basis+="松开允许释放的旧音后仍超过"+after.maximum+"半音或5个按键；这组新音需要进一步调整跨度、指法或分手。";
             if(after.fingerConflicts)basis+="现有指法要求同一个手指同时保持不同按键，请确认指法或松手时机。";
             if(side.rolled)basis+="已标记琶音，需要另外核查展开顺序。";
             issue(s,"playability",(after.count>5?"keys-":"span-")+side.hand,tick,involved,label+"仍有按键或跨度困难",basis,report.inferred || side.rolled?"注意":"需核查");
         } else if(after.high-after.low>s.config[side.hand].comfort) {
             issue(s,"playability","comfort-"+side.hand,tick,involved,label+"超出舒适跨度",basis+"提前松手后的跨度仍超过个人舒适值；两端白键才采用白键十度上限。","提示");
         }
-        if(after.crowdedBlackKeys && after.high-after.low>=12)issue(s,"playability","shape-"+side.hand,tick,involved,label+"的黑白键排列需要核对",basis+"跨度较大，同时有相邻黑白键。两端白键满足上限，也不代表内部手型一定舒适；可检查指法、换手或排列。","提示");
+        if(after.crowdedBlackKeys && after.high-after.low>=12)issue(s,"playability","shape-"+side.hand,tick,involved,label+"的黑白键排列需要核对",basis+"跨度较大，同时有相邻黑白键。可检查内部黑白键的指法，或尝试换手、调整排列。","提示");
         if(side.attacks.length && side.travel>0) {
-            var movement="最低必要手位移动"+side.travel+"半音；起音之间有"+Math.round(side.available*1000)+" ms。";
-            if(side.travel>=7 && side.available<.3)issue(s,"playability","transition-"+side.hand,tick,involved,label+"转场时间较短",movement+"即使提前松手也仍需快速移动；可考虑换手或改变排列。","注意");
+            var movement="手位至少需要移动"+side.travel+"半音；两组音之间有"+Math.round(side.available*1000)+" ms。";
+            if(side.travel>=7 && side.available<.3)issue(s,"playability","transition-"+side.hand,tick,involved,label+"弹下一组音的时间较短",movement+"即使提前松手也仍需快速移动；可考虑换手或改变排列。","注意");
             else if(side.travel>=12)issue(s,"playability","travel-"+side.hand,tick,involved,label+"需要较大手位移动",movement+"请结合你的实际速度检查。","提示");
         }
     }
@@ -271,11 +303,11 @@ function playability(s,frame) {
             var seconds=attacks[0].onSeconds;
             if(previous) {
                 var distance=Math.max(0,high-maximum-previous.low,previous.high-maximum-low),available=Math.max(0,seconds-previous.seconds),strict=Math.max(0,seconds-previous.end);
-                var transition="最低必要手位移动 "+distance+" 半音；起音间隔 "+Math.round(available*1000)+" ms；严格释放后的空隙 "+Math.round(strict*1000)+" ms；当前保持 "+held.length+" 音。";
+                var transition="手位至少需要移动 "+distance+" 半音；起音间隔 "+Math.round(available*1000)+" ms；严格释放后的空隙 "+Math.round(strict*1000)+" ms；当前保持 "+held.length+" 音。";
                 if((distance>=7 && available<.3) || (distance>0 && held.length>0 && span>maximum))
-                    issue(s,"playability","transition-"+side,tick,notes,label+"转场需要提前释放或换手",transition+(underPedal?"踏板保持可减少手指保持限制。":"无踏板时提前释放可能改变连贯听感。")+" 可考虑滚奏／换手；自动分手可校正。","注意");
+                    issue(s,"playability","transition-"+side,tick,notes,label+"弹下一组音需要提前松手或换手",transition+(underPedal?"踏板保持可减少手指保持限制。":"无踏板时提前释放可能改变连贯听感。")+" 可考虑滚奏／换手；自动分手可校正。","注意");
                 else if(distance>=12)issue(s,"playability","travel-"+side,tick,notes,label+"大幅手位移动",transition+"请结合实际速度与连续负荷核查。","提示");
-                if(distance>=5 && available<.5 && previous.busy)issue(s,"playability","load-"+side,tick,notes,label+"连续转场负荷",transition+"连续两次移动时间较短，可考虑重新分手。","注意");
+                if(distance>=5 && available<.5 && previous.busy)issue(s,"playability","load-"+side,tick,notes,label+"连续移动手位比较紧张",transition+"连续两次移动时间较短，可考虑重新分手。","注意");
                 s.previousHands[side]={low:low,high:high,seconds:seconds,end:Math.max.apply(null,notes.map(function(n){return n.endSeconds;})),busy:distance>=5 && available<.5};
             } else s.previousHands[side]={low:low,high:high,seconds:seconds,end:Math.max.apply(null,notes.map(function(n){return n.endSeconds;})),busy:false};
         }

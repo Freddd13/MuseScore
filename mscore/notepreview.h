@@ -40,7 +40,7 @@ struct NotePreviewEntry {
       QColor highlightColor = QColor("#0043ce");
       QColor highlightBackground = QColor("#d0e2ff");
       bool chordMask = true;
-      bool onTop = false, avoidScoreContent = true;
+      bool onTop = false, avoidScoreContent = true, avoidOtherPreviews = false;
       const Element* sourceAnchor = nullptr; // opaque identity for destruction cleanup only
       int chordTick = -1;
       int chordUntil = 0;
@@ -56,7 +56,7 @@ struct NotePreviewEntry {
                   && primaryBox == other.primaryBox && secondaryBox == other.secondaryBox
                   && chordColor == other.chordColor && highlightColor == other.highlightColor
                   && highlightBackground == other.highlightBackground && chordMask == other.chordMask
-                  && onTop == other.onTop && avoidScoreContent == other.avoidScoreContent
+                  && onTop == other.onTop && avoidScoreContent == other.avoidScoreContent && avoidOtherPreviews == other.avoidOtherPreviews
                   && sourceAnchor == other.sourceAnchor
                   && chordTick == other.chordTick && chordUntil == other.chordUntil
                   && annotationTrack == other.annotationTrack && activationTarget == other.activationTarget;
@@ -185,6 +185,12 @@ class NotePreviewLayers {
                         });
             if (index>=0) _layers[index]=layer; else _layers.append(layer);
             return dirty;
+            }
+      QVector<QRectF> markerBoxes(const void* exceptOwner) const {
+            QVector<QRectF> result;
+            for(const auto& layer:_layers)if(layer.owner!=exceptOwner)for(const auto& marker:layer.markers)
+                  if(!marker.chordBox.isEmpty())result.append(marker.chordBox.translated(marker.anchor));
+            return result;
             }
       const NotePreviewEntry* entry(const Element* note) const
             {

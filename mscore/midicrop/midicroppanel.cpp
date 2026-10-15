@@ -20,8 +20,8 @@ namespace Ms {
 namespace {
 QString reasonText(const QString& code) {
       static const QMap<QString,QString> names {
-            {"pedal-release",MidiCropPanel::tr("同一踏板内的自然松手变化")},
-            {"hand-release",MidiCropPanel::tr("为下一次演奏提前松开旧音")},
+            {"pedal-release",MidiCropPanel::tr("同组音自然松手，踏板继续保持声音")},
+            {"hand-release",MidiCropPanel::tr("为弹下一组音提前松手")},
             {"hand-conflict",MidiCropPanel::tr("分手说明有冲突或未确认，保留原长度")},
             {"fingering-uncertain",MidiCropPanel::tr("指法有多个解释，保留原长度")},
             {"unselected",MidiCropPanel::tr("未选择这个乐器")},
@@ -78,8 +78,10 @@ class GateRoll : public QAbstractScrollArea {
                   if(x+w<0 || x>viewport()->width())continue;
                   const double y=(high-n.pitch)*row+22;
                   const bool changed=n.newOff<n.off;
-                  const QColor color=i==selected?palette().highlight().color():palette().text().color();
-                  p.setPen(color);p.setBrush(Qt::NoBrush);p.drawRect(QRectF(x,y,qMax(1.,w),qMax(2.,row-1)));
+                  const auto* chosen=selected>=0 && selected<notes.size()?&notes[selected]:nullptr;
+                  const bool nextGroup=chosen && chosen->releaseFor==n.on && chosen->hand==n.hand && (chosen->partId>=0?chosen->partId==n.partId:chosen->port==n.port&&chosen->channel==n.channel);
+                  const QColor color=i==selected||nextGroup?palette().highlight().color():palette().text().color();
+                  p.setPen(QPen(color,i==selected||nextGroup?2.:1.,nextGroup?Qt::DashLine:Qt::SolidLine));p.setBrush(Qt::NoBrush);p.drawRect(QRectF(x,y,qMax(1.,w),qMax(2.,row-1)));
                   QColor fill=changed?palette().highlight().color():palette().mid().color();fill.setAlpha(changed?185:65);
                   p.setPen(Qt::NoPen);p.setBrush(fill);p.drawRect(QRectF(x,y+(stacked?height+8:0),qMax(1.,clock.durationMs(n.on,n.newOff)*scale),qMax(2.,row-1)));
                   }
@@ -242,6 +244,8 @@ void MidiCropPanel::compare() {
       auto zoom=new QSlider(Qt::Horizontal,&dialog);zoom->setRange(1,40);zoom->setValue(10);bar->addWidget(zoom);layout->addLayout(bar);
       auto caption=new QLabel(tr("细轮廓是原长度，实心条是新长度；下方是踏板。时间尺包含展开的反复和暂停。"),&dialog);caption->setWordWrap(true);layout->addWidget(caption);
       auto roll=new GateRoll(&dialog);roll->setObjectName("midiCropRoll");layout->addWidget(roll,2);
+      auto detail=new QLabel(tr("点一个音查看松手原因。细轮廓为原长度，强调色实心条为缩短后的长度，灰色为保留的音。"),&dialog);
+      detail->setObjectName("midiCropDetail");detail->setWordWrap(true);detail->setMinimumHeight(48);layout->addWidget(detail);
       auto table=new QTableView(&dialog);auto model=new GateModel(table);table->setModel(model);table->setSelectionBehavior(QAbstractItemView::SelectRows);table->setSelectionMode(QAbstractItemView::SingleSelection);table->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);table->setColumnWidth(0,65);table->setColumnWidth(1,120);table->setColumnWidth(2,100);table->setColumnWidth(3,100);table->setColumnWidth(4,120);table->setColumnWidth(5,140);table->setColumnWidth(6,145);table->horizontalHeader()->setStretchLastSection(true);layout->addWidget(table,2);
       auto buttons=new QHBoxLayout;auto exclude=new QPushButton(tr("排除／恢复这个音"),&dialog);auto recompute=new QPushButton(tr("重新计算"),&dialog);auto reset=new QPushButton(tr("恢复默认设置"),&dialog);auto close=new QPushButton(tr("返回导出"),&dialog);
       buttons->addWidget(exclude);buttons->addWidget(recompute);buttons->addWidget(reset);buttons->addStretch();buttons->addWidget(close);layout->addLayout(buttons);
@@ -255,7 +259,8 @@ void MidiCropPanel::compare() {
             caption->setText(tr("正在计算，关闭窗口可取消。"));exclude->setEnabled(false);recompute->setEnabled(false);scoreBox->setEnabled(false);targets->setEnabled(false);
             watcher.setFuture(QtConcurrent::run([snapshot,gate,canceled] {MidiGateProcessor p;return p.process(snapshot,gate,[canceled]{return canceled->load();});}));
             };
-      connect(&watcher,&QFutureWatcher<QVector<MidiGateNote>>::finished,&dialog,[&] {rows=watcher.result();loading=false;exclude->setEnabled(true);recompute->setEnabled(true);scoreBox->setEnabled(true);targets->setEnabled(true);caption->setText(tr("细轮廓是原长度，实心条是导出长度；踏板在下方单独一行。"));present();if(queued) {queued=false;calculate();}});
+      connect(&watcher,&QFutureWatcher<QVector<MidiGateNote>>::finished,&dialog,[&] {rows=watcher.result();loading=false;exclude->setEnabled(true);recompute->setEnabled(true);scoreBox->setEnabled(true);targets->setEnabled(true);int needed=0,natural=0;for(const auto& note:rows){needed+=note.reason=="hand-release";natural+=note.reason=="pedal-release";}
+            caption->setText(tr("为下一组音安排松手：%1个音；自然松手：%2个音。\n细轮廓：原按键长度；彩色实心：缩短后；灰色实心：保持原样；虚线：下一组音。下方一行显示踏板。").arg(needed).arg(natural));present();if(queued) {queued=false;calculate();}});
       auto load=[&] {
             ExportMidi exporter(scores[scoreBox->currentIndex()]);exporter.collectGateData=true;QBuffer bytes;bytes.open(QIODevice::WriteOnly);
             if(!exporter.write(&bytes,preferences.getBool(PREF_IO_MIDI_EXPANDREPEATS),preferences.getBool(PREF_IO_MIDI_EXPORTRPNS),mscore->synthesizerState()))return;
@@ -273,7 +278,14 @@ void MidiCropPanel::compare() {
       connect(part,QOverload<int>::of(&QComboBox::currentIndexChanged),&dialog,[&](int){present();});connect(filter,QOverload<int>::of(&QComboBox::currentIndexChanged),&dialog,[&](int){present();});
       connect(display,QOverload<int>::of(&QComboBox::currentIndexChanged),&dialog,[&](int i){roll->stacked=i==1;roll->refresh();});connect(zoom,&QSlider::valueChanged,&dialog,[&](int i){roll->scale=i*.015;roll->refresh();});
       roll->selectRow=[table](int row){table->selectRow(row);};
-      connect(table->selectionModel(),&QItemSelectionModel::currentRowChanged,&dialog,[&](const QModelIndex& index,const QModelIndex&){roll->selected=index.row();if(index.isValid())roll->horizontalScrollBar()->setValue(qMax(0,int(roll->clock.durationMs(0,roll->notes[index.row()].on)*roll->scale)-20));roll->refresh();});
+      connect(table->selectionModel(),&QItemSelectionModel::currentRowChanged,&dialog,[&](const QModelIndex& index,const QModelIndex&){roll->selected=index.row();if(index.isValid()) {
+            const auto& note=roll->notes[index.row()];QString explanation=pitchText(note.pitch)+" · "+reasonText(note.reason);
+            explanation+=tr("。原按键时长 %1 ms，导出 %2 ms。").arg(qRound(roll->clock.durationMs(note.on,note.off))).arg(qRound(roll->clock.durationMs(note.on,note.newOff)));
+            if(note.releaseFor>=0) {QStringList pitches;for(int pitch:note.nextPitches)pitches.append(pitchText(pitch));explanation+=tr(" 下一组：%1，位于 %2 秒；图中以虚线轮廓标出。").arg(pitches.join("、")).arg(roll->clock.durationMs(0,note.releaseFor)/1000.,0,'f',3);}
+            if(note.beforeKeys>=0)explanation+=tr(" 这只手由 %1 个按键减为 %2 个，跨度由 %3 减为 %4 半音。").arg(note.beforeKeys).arg(note.afterKeys).arg(note.beforeSpan).arg(note.afterSpan);
+            if(!note.handWarning.isEmpty())explanation+=" "+note.handWarning;
+            detail->setText(explanation);roll->horizontalScrollBar()->setValue(qMax(0,int(roll->clock.durationMs(0,note.on)*roll->scale)-20));
+            }roll->refresh();});
       connect(exclude,&QPushButton::clicked,&dialog,[&] {const auto index=table->currentIndex();if(!index.isValid())return;const auto& n=rows[model->visible[index.row()]];auto& set=_exclusions[scores[scoreBox->currentIndex()]];if(set.contains(n.id))set.remove(n.id);else set.insert(n.id);calculate();});
       connect(recompute,&QPushButton::clicked,&dialog,calculate);
       connect(config,&QPushButton::clicked,&dialog,[&]{settings();calculate();});

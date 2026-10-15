@@ -478,14 +478,18 @@ void MuseScore::pluginTriggered(QString pp)
                   addDockWidget(area, dock);
                   const bool restored=arrangeWorkflowDock(this,dock,QFileInfo(pp).completeBaseName(),p->property("preferredPanelGroup").toString(),area);
                   p->attachPanelDock(dock);
-                  const Qt::Orientation orientation =
-                     (area == Qt::RightDockWidgetArea || area == Qt::LeftDockWidgetArea)
-                     ? Qt::Vertical
-                     : Qt::Horizontal;
-                  const int size = (orientation == Qt::Vertical) ? view->initialSize().height() : view->initialSize().width();
+                  const bool workflowPanel=!p->property("preferredPanelGroup").toString().isEmpty();
+                  const bool side=area==Qt::RightDockWidgetArea || area==Qt::LeftDockWidgetArea;
+                  const Qt::Orientation orientation=workflowPanel ? (side?Qt::Horizontal:Qt::Vertical)
+                        : (side?Qt::Vertical:Qt::Horizontal);
+                  const QSize initial=view->initialSize();
+                  const int requestedSize=orientation==Qt::Horizontal ? initial.width() : initial.height();
+                  const int implicitSize=qRound(orientation==Qt::Horizontal?p->implicitWidth():p->implicitHeight());
+                  const int size=workflowPanel && requestedSize<80 ? qMax(80,implicitSize) : requestedSize;
                   if(!restored)resizeDocks({ dock }, { size }, orientation);
                   connect(engine, SIGNAL(quit()), dock, SLOT(close()));
                   dock->show();
+                  if(!p->property("preferredPanelGroup").toString().isEmpty())dock->raise();
                   }
             else {
                   connect(engine, SIGNAL(quit()), view, SLOT(close()));

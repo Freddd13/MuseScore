@@ -15,7 +15,7 @@ MuseScore {
     UiTheme {id:theme}
     menuPath: "Plugins.Harmony Assistant"
     description: "钢琴和声助手：持续音识别、级数、音程功能与可选谱面配色。"
-    version: "1.8.0"
+    version: "1.9.0"
     requiresScore: true
     pluginType: "dock"
     dockArea: "right"

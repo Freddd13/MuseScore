@@ -19,25 +19,45 @@ QVariantMap PianoHandAnalysis::analyse(const QVariantList& notes,const QVariantL
       QVector<PianoHands::Key> keys;QVector<QVariantMap> rows;QVector<int> original;
       double seconds=options.value("seconds",tick/960.).toDouble();bool inferred=false;
       const double minimum=qBound(0.,options.value("minimumHoldMs",120.).toDouble(),5000.)/1000.;
-      for(int i=0;i<notes.size();++i) {
-            auto n=notes[i].toMap();const auto id=n.value("id").toString();
-            if(n.value("logicalEnd",n.value("end")).toInt()<=tick || n.value("grace").toBool() || state.released.contains(id))continue;
-            PianoHands::Key key;key.id=i;key.pitch=n.value("pitch").toInt();key.hint=side(n.value("analysisHand").toString());
-            key.attack=n.value("attackTick",n.value("tick")).toInt()==tick;
-            const bool known=n.value("handKnown").toBool();inferred|=!known;
-            key.hand=known?key.hint:!key.attack?state.assigned.value(id,-1):-1;
+      QHash<QString,int> identities;
+      auto identity=[&](const QVariantMap& n) {
+            auto id=n.value("id").toString();
+            if(id.isEmpty())id=QString("%1:%2:%3:%4").arg(n.value("track").toInt()).arg(n.value("attackTick",n.value("tick")).toInt()).arg(n.value("index").toInt()).arg(n.value("pitch").toInt());
+            if(!identities.contains(id))identities[id]=identities.size();return identities.value(id);
+            };
+      auto keyFor=[&](const QVariantMap& n,int at,double atSeconds) {
+            PianoHands::Key key;key.id=identity(n);key.pitch=n.value("pitch").toInt();key.hint=side(n.value("analysisHand").toString());
+            key.attack=n.value("attackTick",n.value("tick")).toInt()==at;
+            key.hand=n.value("handKnown").toBool()?key.hint:!key.attack?state.assigned.value(n.value("id").toString(),-1):-1;
             for(const auto& value:n.value("fingerings").toList()) {
                   const auto text=value.toString().trimmed();const int finger=text.toInt();
                   if(text.size()==1 && finger>=1 && finger<=5){if(!key.finger)key.finger=finger;else if(key.finger!=finger)key.finger=-1;}
                   }
-            if(!key.attack && seconds-n.value("onSeconds").toDouble()>=minimum)for(const auto& value:pedals) {
+            if(!key.attack && atSeconds-n.value("onSeconds").toDouble()>=minimum)for(const auto& value:pedals) {
                   const auto p=value.toMap();const int track=n.value("track").toInt();
-                  if(p.value("tick").toInt()<tick && tick<p.value("end").toInt() && track>=p.value("firstTrack").toInt() && track<p.value("endTrack").toInt()
+                  if(p.value("tick").toInt()<at && at<p.value("end").toInt() && track>=p.value("firstTrack").toInt() && track<p.value("endTrack").toInt()
                         && n.value("logicalEnd",n.value("end")).toInt()<=p.value("end").toInt() && p.value("supported",true).toBool())key.releasable=true;
                   }
-            keys.append(key);rows.append(n);original.append(i);
+            return key;
+            };
+      for(int i=0;i<notes.size();++i) {
+            auto n=notes[i].toMap();const auto id=n.value("id").toString();
+            if(n.value("logicalEnd",n.value("end")).toInt()<=tick || n.value("grace").toBool() || state.released.contains(id))continue;
+            inferred|=!n.value("handKnown").toBool();keys.append(keyFor(n,tick,seconds));rows.append(n);original.append(i);
             }
-      const auto result=PianoHands::plan(keys,limits,state.previous,seconds);QVariantList sides,assignments;
+      QVector<PianoHands::Future> future;
+      for(const auto& value:options.value("lookahead").toList()) {
+            if(future.size()>=2)break;
+            const auto frame=value.toMap();const int at=frame.value("tick").toInt();const double atSeconds=frame.value("seconds",at/960.).toDouble();
+            if(at<=tick || atSeconds<seconds)continue;
+            PianoHands::Future next;next.seconds=atSeconds;
+            for(const auto& note:frame.value("notes").toList()) {
+                  auto n=note.toMap();if(n.value("logicalEnd",n.value("end")).toInt()<=at || n.value("grace").toBool() || state.released.contains(n.value("id").toString()))continue;
+                  next.keys.append(keyFor(n,at,atSeconds));
+                  }
+            future.append(next);
+            }
+      const auto result=PianoHands::planWithContext(keys,limits,state.previous,seconds,future);QVariantList sides,assignments;
       for(int h=0;h<2;++h) {
             QVariantList involved,released,attacks;bool rolled=false;
             for(int i=0;i<keys.size();++i)if(result.hands[i]==h) {

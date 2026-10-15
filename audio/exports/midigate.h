@@ -37,6 +37,8 @@ struct MidiGateNote {
       bool piano = false, known = false, manual = false, ambiguous = false;
       QString reason,handWarning;
       int beforeKeys=-1,afterKeys=-1,beforeSpan=-1,afterSpan=-1;
+      int releaseFor=-1;
+      QVector<int> nextPitches;
       };
 struct MidiGatePedal { int port=0, channel=0, down=0, up=0; bool supported=true; };
 struct MidiGateTempo { int tick=0; double micros=500000.; };
@@ -107,7 +109,7 @@ class MidiGateProcessor {
             QMap<QString,QVector<int>> samePitch, attacks;
             for(int i=0;i<result.size();++i) {
                   if(canceled && canceled())return {};
-                  auto& n=result[i];n.newOff=n.off;n.handInferred=n.hand<0;n.reason.clear();n.handWarning.clear();n.beforeKeys=n.afterKeys=n.beforeSpan=n.afterSpan=-1;
+                  auto& n=result[i];n.newOff=n.off;n.handInferred=n.hand<0;n.reason.clear();n.handWarning.clear();n.releaseFor=-1;n.nextPitches.clear();n.beforeKeys=n.afterKeys=n.beforeSpan=n.afterSpan=-1;
                   samePitch[key(n.port,n.channel)+":"+QString::number(n.pitch)].append(i);
                   if(n.voice>=0)attacks[key(n.port,n.channel)+":"+QString::number(n.voice)].append(n.on);
                   }
@@ -150,17 +152,34 @@ class MidiGateProcessor {
                               const bool legal=!attack && preserved(n,option).isEmpty() && candidate>n.on && seconds(candidate)-seconds(n.on)>=minimum && releaseWindow(n,candidate);
                               keys.append({i,n.pitch,n.hand,n.handHint,attack,legal,n.finger});releaseAt.append(candidate);
                               }
-                        auto plan=PianoHands::plan(keys,option.hands,previous,now);
+                        QVector<PianoHands::Future> future;
+                        auto nextFrame=frame;
+                        for(int f=0;f<2 && ++nextFrame!=frames.cend();++f) {
+                              const int nextTick=nextFrame.key();const double nextTime=seconds(nextTick);
+                              PianoHands::Future next;next.seconds=nextTime;
+                              QVector<int> upcoming=active;
+                              for(auto added=frame; ++added!=frames.cend() && added.key()<=nextTick;)upcoming+=added.value();
+                              for(int i:upcoming) {
+                                    const auto& n=result[i];if(n.newOff<=nextTick)continue;
+                                    const bool attack=n.on==nextTick;const int at=tickAt(nextTime-qBound(0.,option.releaseLeadMs,500.)/1000.);
+                                    const bool legal=!attack && preserved(n,option).isEmpty() && at>n.on && durationMs(n.on,at)>=qBound(1.,option.minimumMs,5000.) && releaseWindow(n,at);
+                                    next.keys.append({i,n.pitch,n.hand,n.handHint,attack,legal,n.finger});
+                                    }
+                              future.append(next);
+                              }
+                        auto plan=PianoHands::planWithContext(keys,option.hands,previous,now,future);
                         if(plan.limited || plan.uncertain || uncertain)continue;
                         for(int k=0;k<active.size();++k) {
                               auto& n=result[active[k]];const int side=plan.hands[k];if(side<0)continue;n.hand=side;
                               if(n.on==tick && !plan.after[side].fits) {
                                     QVector<PianoHands::Key> attacksOnly;for(int j=0;j<keys.size();++j)if(keys[j].attack && plan.hands[j]==side) {auto key=keys[j];key.hand=side;key.releasable=false;attacksOnly.append(key);}
                                     const auto fresh=PianoHands::plan(attacksOnly,option.hands,previous,now);
-                                    n.handWarning=fresh.possible ? QString::fromUtf8("旧音的保护或最短长度限制仍影响这次演奏") : QString::fromUtf8("新起音自身仍有跨度或按键困难，缩短旧音不能解决");
+                                    n.handWarning=fresh.possible ? QString::fromUtf8("需要保持的旧音占用了这只手，可检查保护设置和最短按键时长") : QString::fromUtf8("这组新音仍需要调整跨度、指法或分手");
                                     }
                               if(plan.after[side].fits && plan.released.contains(k)) {
-                                    n.newOff=releaseAt[k];n.reason="hand-release";n.beforeKeys=plan.before[side].count;n.afterKeys=plan.after[side].count;n.beforeSpan=plan.before[side].high-plan.before[side].low;n.afterSpan=plan.after[side].high-plan.after[side].low;
+                                    n.newOff=releaseAt[k];n.reason="hand-release";n.releaseFor=tick;
+                                    for(int j=0;j<keys.size();++j)if(keys[j].attack && plan.hands[j]==side && !n.nextPitches.contains(keys[j].pitch))n.nextPitches.append(keys[j].pitch);
+                                    std::sort(n.nextPitches.begin(),n.nextPitches.end());n.beforeKeys=plan.before[side].count;n.afterKeys=plan.after[side].count;n.beforeSpan=plan.before[side].high-plan.before[side].low;n.afterSpan=plan.after[side].high-plan.after[side].low;
                                     }
                               }
                         for(int side=0;side<2;++side) {
@@ -169,6 +188,15 @@ class MidiGateProcessor {
                               }
                         }
                   }
+            QMap<QString,QVector<double>> groupLengths;
+            QMap<QString,QVector<int>> handAttacks;
+            auto handKey=[&](const MidiGateNote& n){return partKey(n)+":"+QString::number(n.hand>=0?n.hand:n.handHint);};
+            for(const auto& n:result) {
+                  if(n.piano)handAttacks[handKey(n)].append(n.on);
+                  if(preserved(n,option).isEmpty() && n.reason!="hand-release" && durationMs(n.on,n.off)>qBound(1.,option.minimumMs,5000.))groupLengths[handKey(n)+":"+QString::number(n.on)].append(seconds(n.off)-seconds(n.on));
+                  }
+            for(auto& group:handAttacks){std::sort(group.begin(),group.end());group.erase(std::unique(group.begin(),group.end()),group.end());}
+            for(auto& group:groupLengths)std::sort(group.begin(),group.end());
             for(auto& n:result) {
                   if(canceled && canceled())return {};
                   auto preserve=[&](const char* reason){n.reason=QString::fromLatin1(reason);};
@@ -177,7 +205,11 @@ class MidiGateProcessor {
                   const double start=seconds(n.on), length=seconds(n.off)-start;
                   const double minimum=qBound(1.,option.minimumMs,5000.)/1000.;
                   if(length<=minimum) {preserve("short-note");continue;}
-                  double desired=length*qBound(.1,option.lengthRatio,1.);
+                  const auto& lengths=groupLengths[handKey(n)+":"+QString::number(n.on)];
+                  const double commonLength=lengths.isEmpty()?length:lengths.first();
+                  double desired=std::min(length,commonLength)*qBound(.1,option.lengthRatio,1.);
+                  const auto& handGroup=handAttacks[handKey(n)];auto handNext=std::upper_bound(handGroup.cbegin(),handGroup.cend(),n.on);
+                  if(handNext!=handGroup.cend())desired=qMin(desired,(seconds(*handNext)-start)*qBound(.1,option.nextAttackRatio,1.));
                   const auto& group=attacks[key(n.port,n.channel)+":"+QString::number(n.voice)];
                   auto next=std::upper_bound(group.cbegin(),group.cend(),n.on);
                   if(next!=group.cend())desired=qMin(desired,(seconds(*next)-start)*qBound(.1,option.nextAttackRatio,1.));
