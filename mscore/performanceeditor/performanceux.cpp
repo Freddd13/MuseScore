@@ -46,6 +46,10 @@ void PerformanceEditor::setupUsabilityControls()
       _keyboardMode=qBound(0,settings.value("performanceEditor/keyboardMode",1).toInt(),2);
       _peekKey=QKeySequence(settings.value("performanceEditor/peekKey","Ctrl+Alt+V").toString())[0];
       new PerformancePeekKeys(this);
+      connect(&_wheelFeedbackTimer,&QTimer::timeout,this,[this]{
+            ++_wheelFeedbackTicks;if(_wheelFeedbackTicks>=30){_wheelFeedbackTimer.stop();}
+            if(_wheelFeedbackSurface){auto damage=wheelBadge(_wheelFeedbackSurface).adjusted(-3,-3,3,3);if(_wheelFeedbackSurface==_view)damage=damage.united(_view->matrix().mapRect(_wheelFeedbackHead).adjusted(-6,-6,6,6));_wheelFeedbackSurface->update(damage.toAlignedRect());}
+            });
       auto add=[this](QWidget* w){_topRow->addWidget(w,0,_topRow->count());};
       auto filters=new QToolButton(this); filters->setText(tr("谱表／声部")); filters->setObjectName("performanceTrackFilter");
       filters->setToolTip(tr("一张表选择可编辑的谱表和声部；编辑器、谱行带、音旁手柄同步使用。"));
@@ -54,10 +58,17 @@ void PerformanceEditor::setupUsabilityControls()
       keyMode->addItems({tr("完整键盘"),tr("淡化无关音高"),tr("只显示相关音高")}); keyMode->setCurrentIndex(_keyboardMode);
       keyMode->setToolTip(tr("相关音高来自当前筛选允许显示的音符；收起音高时网格和选音一起调整。"));
       connect(keyMode,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int mode){finishWheel();cancelGesture();_keyboardMode=mode;QSettings().setValue("performanceEditor/keyboardMode",mode);rebuildPitchRows();centerPitch(false,true);invalidateVisual();}); add(keyMode);
-      auto actual=new QCheckBox(tr("实际力度＋原力度线"),this);actual->setObjectName("performanceActualVelocity");
-      actual->setToolTip(tr("显示每个音最终的 MIDI 力度，并用虚线连接各谱表起音处的原力度；不改变音符原本的保存方式。百分比视图的 0% 表示不增减。"));
+      auto actual=new QCheckBox(tr("显示记号力度线"),this);actual->setObjectName("performanceActualVelocity");
+      actual->setToolTip(tr("MIDI力度视图中，虚线显示各谱表由力度记号给出的力度。显示方式由上方的MIDI力度／相对%选择；音符继续按原来的相对或固定方式保存。"));
       connect(actual,&QCheckBox::toggled,this,[this](bool on){finishWheel();cancelGesture();_relativeActual=on;_visibleScoreRect=QRect();_number->setSuffix(rangeKind()==1?" %":QString());_number->setRange(rangeKind()==1?NoteVelocity::minOffset:1,rangeKind()==1?NoteVelocity::maxOffset:127);invalidateVisual();invalidateOverlay();updateSelection();});add(actual);
-      connect(_parameter,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this,actual](int i){actual->setVisible(i==0);});
+      actual->setChecked(settings.value("performanceEditor/markVelocityLines",true).toBool());
+      connect(actual,&QCheckBox::toggled,this,[](bool on){QSettings().setValue("performanceEditor/markVelocityLines",on);});
+      auto arrangement=new QComboBox(this);arrangement->setObjectName("performanceVelocityArrangement");arrangement->addItems({tr("力度同图"),tr("按谱表分区")});arrangement->setCurrentIndex(qBound(0,settings.value("performanceEditor/velocityArrangement",0).toInt(),1));_velocityArrangement=arrangement->currentIndex();
+      connect(arrangement,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int i){finishWheel();cancelGesture();_velocityArrangement=i;QSettings().setValue("performanceEditor/velocityArrangement",i);invalidateVisual();});add(arrangement);
+      auto together=new QComboBox(this);together->setObjectName("performanceGroupVelocity");together->addItems({tr("一起增减百分比"),tr("相同MIDI差值")});_groupRelative=settings.value("performanceEditor/groupRelative",true).toBool();together->setCurrentIndex(_groupRelative?0:1);
+      together->setToolTip(tr("百分比方式分别按各音的记号力度换算；例如80和48同时增加10%，得到88和53。"));
+      connect(together,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int i){finishWheel();cancelGesture();_groupRelative=i==0;QSettings().setValue("performanceEditor/groupRelative",_groupRelative);});add(together);
+      connect(_parameter,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[actual,arrangement,together](int i){actual->setVisible(i==0);arrangement->setVisible(i==0);together->setVisible(i==0);});
       auto sensitivity=new QComboBox(this);sensitivity->setObjectName("performanceDragSensitivity");
       const QList<double> factors{.25,.5,1,2,4};for(double factor:factors)sensitivity->addItem(tr("拖动 %1 倍").arg(factor),factor);
       sensitivity->setCurrentIndex(qMax(0,sensitivity->findData(_dragSensitivity)));
@@ -79,9 +90,11 @@ void PerformanceEditor::setupUsabilityControls()
       auto operations=new QToolButton(this);operations->setText(tr("操作设置…"));operations->setObjectName("performanceOperationSettings");
       connect(operations,&QToolButton::clicked,this,[this]{QDialog dialog(this);dialog.setWindowTitle(tr("临时查看音旁力度"));auto layout=new QVBoxLayout(&dialog);
             auto text=new QLabel(tr("按住快捷键：显示鼠标附近的力度；再按住 Shift：显示当前视口全部力度。松开恢复。文字输入、输入音符或编辑标记时不接管按键。"));text->setWordWrap(true);layout->addWidget(text);
-            auto key=new QKeySequenceEdit(QKeySequence(_peekKey));layout->addWidget(key);auto box=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);layout->addWidget(box);
+            auto key=new QKeySequenceEdit(QKeySequence(_peekKey));layout->addWidget(key);
+            layout->addWidget(new QLabel(tr("谱面最近音滚轮快捷键")));
+            auto wheelKey=new QComboBox;wheelKey->addItem("Alt+Shift",int(Qt::AltModifier|Qt::ShiftModifier));wheelKey->addItem("Ctrl+Alt",int(Qt::ControlModifier|Qt::AltModifier));wheelKey->addItem("Ctrl+Shift",int(Qt::ControlModifier|Qt::ShiftModifier));wheelKey->addItem(tr("关闭"),0);wheelKey->setCurrentIndex(qMax(0,wheelKey->findData(QSettings().value("performanceEditor/nearestWheelModifiers",int(Qt::AltModifier|Qt::ShiftModifier)))));layout->addWidget(wheelKey);auto box=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);layout->addWidget(box);
             connect(box,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(box,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
-            if(dialog.exec()==QDialog::Accepted){_peekKey=key->keySequence().isEmpty()?0:key->keySequence()[0];QSettings().setValue("performanceEditor/peekKey",QKeySequence(_peekKey).toString());}});add(operations);
+            if(dialog.exec()==QDialog::Accepted){QSettings().setValue("performanceEditor/nearestWheelModifiers",wheelKey->currentData());_peekKey=key->keySequence().isEmpty()?0:key->keySequence()[0];QSettings().setValue("performanceEditor/peekKey",QKeySequence(_peekKey).toString());}});add(operations);
       _wheelButton->setToolTip(tr("开启后指向音符滚轮调力度。Alt+Shift+滚轮临时选择视口内最近的音并细调 1；本次滚动中固定目标。普通 Shift 粗调 8，Ctrl 仍缩放。停转 300 ms 后写入，Esc 取消。"));
       _axis->setToolTip(tr("MIDI 力度：显示最终力度；相对 %：在力度记号和渐强渐弱给出的力度上增减百分比。切换显示不会转换音符的保存方式。"));
       }
@@ -136,8 +149,11 @@ void PerformanceEditor::rebuildVisibleScoreNotes()
       bool invertible=false;const auto logicalViewport=matrix.inverted(&invertible).mapRect(QRectF(_view->rect()));if(!invertible)return;
       // Layout already cached every head's bounds. Pointer operations must not
       // walk native parent objects across the whole score again.
-      for(int i=0;i<_notes.size();++i){const auto& note=_notes[i];if(!noteEditable(note)||!logicalViewport.intersects(note.bounds))continue;
-            QRectF bounds=matrix.mapRect(note.bounds);if(_view->rect().intersects(bounds.toAlignedRect()))_visibleScoreNotes.append({i,bounds});}
+      for(const auto& row:_scoreNoteRows) {
+            if(!logicalViewport.intersects(row.bounds))continue;
+            for(int i:row.indices) {const auto& note=_notes[i];if(!noteEditable(note)||!logicalViewport.intersects(note.bounds))continue;
+                  QRectF bounds=matrix.mapRect(note.bounds);if(_view->rect().intersects(bounds.toAlignedRect()))_visibleScoreNotes.append({i,bounds});}
+            }
       }
 bool PerformanceEditor::peekKeyEvent(QObject* object,QEvent* event)
       {
@@ -165,9 +181,46 @@ void PerformanceEditor::paintOriginalVelocity(QPainter& painter,const QRectF& re
       const int from=tickForX(rect.left(),onScore),until=tickForX(rect.right(),onScore);
       auto candidates=onScore?_systemIndices:_intervals.query(from,until);std::sort(candidates.begin(),candidates.end());
       for(int i:candidates){const auto& n=_notes[i];if(!n.inScope||(!n.enabled&&!_ghostVoices)||n.base<0)continue;
-            double x=xForNote(i,onScore);if(x<rect.left()||x>rect.right())continue;const QPointF p(x,yForValue(n.base,rect,onScore));int staff=n.track/VOICES, line=n.track;
-            QColor color=MScore::selectColor[n.track%VOICES];if(!n.enabled)color.setAlpha(45);painter.setPen(QPen(color,1,Qt::DashLine));
+            double x=xForNote(i,onScore);if(x<rect.left()||x>rect.right())continue;const auto noteLane=velocityLane(i,rect,onScore);if(noteLane.isEmpty())continue;const QPointF p(x,yForValue(n.base,noteLane,onScore));int staff=n.track/VOICES, line=n.track;
+            QColor color=_appearance.staves[(n.track/VOICES)%8];if(!n.enabled)color.setAlpha(45);painter.setPen(QPen(color,1,Qt::DashLine));
             if(previous.contains(line)){auto old=previous.value(line);painter.drawLine(old,QPointF(p.x(),old.y()));painter.drawLine(QPointF(p.x(),old.y()),p);}else painter.drawLine(QPointF(p.x()-4,p.y()),QPointF(p.x()+4,p.y()));
-            if(!labelled.value(line)){painter.drawText(QPointF(p.x()+3,p.y()-4),tr("谱表 %1 · 声部 %2 · 原力度 %3").arg(staff+1).arg(n.track%VOICES+1).arg(n.base));labelled[line]=true;}previous[line]=p;}
+            if(!labelled.value(line)){painter.drawText(QPointF(p.x()+3,p.y()-4),tr("谱表 %1 · 声部 %2 · 记号力度 %3").arg(staff+1).arg(n.track%VOICES+1).arg(n.base));labelled[line]=true;}previous[line]=p;}
+      for(auto it=previous.cbegin();it!=previous.cend();++it){painter.setPen(QPen(_appearance.staves[(it.key()/VOICES)%8],1,Qt::DashLine));painter.drawLine(it.value(),QPointF(rect.right(),it.value().y()));}
       }
+void PerformanceEditor::rebuildScoreNoteRows()
+      {
+      _scoreNoteRows.clear();_visibleScoreRect=QRect();QHash<System*,int> rows;
+      for(int i=0;i<_notes.size();++i){const auto& n=_notes[i];if(n.bounds.isEmpty())continue;
+            int row=rows.value(n.system,-1);if(row<0){row=_scoreNoteRows.size();rows.insert(n.system,row);_scoreNoteRows.append({{}, {}});}
+            auto& r=_scoreNoteRows[row];r.bounds=r.bounds.united(n.bounds);r.indices.append(i);}
+      }
+QRectF PerformanceEditor::velocityLane(int index,const QRectF& rect,bool onScore) const
+      {
+      if(onScore || _velocityArrangement==0 || _parameter->currentIndex()!=0)return rect;
+      if(index<0 || index>=_notes.size())return {};
+      const int staff=_notes[index].track/VOICES;const int row=_velocityStaves.indexOf(staff);if(row<0)return {};
+      int expanded=0;for(int s:_velocityStaves)if(!_collapsedVelocityStaves.contains(s))++expanded;
+      const double header=17.,body=qMax(12.,(rect.height()-header*_velocityStaves.size())/qMax(1,expanded));double top=rect.top();
+      for(int s:_velocityStaves){const bool closed=_collapsedVelocityStaves.contains(s);if(s==staff)return closed?QRectF():QRectF(rect.left(),top+header,rect.width(),body);top+=header+(closed?0:body);}
+      return {};
+      }
+double PerformanceEditor::velocityY(int index,const QRectF& rect,bool onScore) const
+      {const auto lane=velocityLane(index,rect,onScore);return lane.isEmpty()?-1e6:yForValue(noteValue(index),lane,onScore);}
+bool PerformanceEditor::velocityHeaderClick(QPointF point)
+      {
+      if(_parameter->currentIndex()!=0 || !_velocityArrangement)return false;
+      const auto rect=laneRect();int expanded=0;for(int s:_velocityStaves)if(!_collapsedVelocityStaves.contains(s))++expanded;
+      const double body=qMax(12.,(rect.height()-17*_velocityStaves.size())/qMax(1,expanded));double top=rect.top();
+      for(int s:_velocityStaves){if(point.y()>=top&&point.y()<top+17){finishWheel();cancelGesture();if(_collapsedVelocityStaves.contains(s))_collapsedVelocityStaves.remove(s);else _collapsedVelocityStaves.insert(s);invalidateVisual();return true;}top+=17+(_collapsedVelocityStaves.contains(s)?0:body);}
+      return false;
+      }
+void PerformanceEditor::paintVelocityHeaders(QPainter& painter,const QRectF& rect)
+      {
+      if(_parameter->currentIndex()!=0 || !_velocityArrangement)return;
+      int expanded=0;for(int s:_velocityStaves)if(!_collapsedVelocityStaves.contains(s))++expanded;
+      const double body=qMax(12.,(rect.height()-17*_velocityStaves.size())/qMax(1,expanded));double top=rect.top();
+      for(int s:_velocityStaves){const bool closed=_collapsedVelocityStaves.contains(s);painter.fillRect(QRectF(rect.left(),top,rect.width(),17),_appearance.colors[PerformanceAppearance::NaturalRow]);painter.setPen(_appearance.colors[PerformanceAppearance::Text]);
+            painter.drawText(QRectF(rect.left()+4,top,rect.width()-8,17),Qt::AlignVCenter,(closed?QString::fromUtf8("▸ "):QString::fromUtf8("▾ "))+tr("谱表 %1 · 记号力度／谱中力度").arg(s+1));top+=17+(closed?0:body);}
+      }
+
 }

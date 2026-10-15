@@ -10,9 +10,12 @@
 #include <QToolTip>
 #include <QScopedValueRollback>
 #include <cmath>
+#include <QSettings>
+#include <QPainterPath>
 namespace Ms {
 bool PerformanceEditor::adjustNearestScoreVelocity(ScoreView* view,QWheelEvent* event)
       {
+      if(!nearestWheelShortcut(event))return false;
       if(view!=_view)setView(view);
       QScopedValueRollback<bool> active(_closestWheelActive,true);
       if(!overlayAllowed())return false;
@@ -22,6 +25,7 @@ bool PerformanceEditor::adjustNearestScoreVelocity(ScoreView* view,QWheelEvent* 
 void PerformanceEditor::finishWheel(bool commit)
       {
       if (_wheelIndex >= 0) { repaintWheelTarget(_wheelIndex); if (_wheelSurface) _wheelSurface->update(wheelBadge(_wheelSurface).adjusted(-2, -2, 2, 2).toAlignedRect()); }
+      if(_wheelIndex>=0){rememberWheelFeedback();_wheelFeedbackTicks=0;_wheelFeedbackTimer.start(30);}
       _wheelTimer.stop(); _wheelSurface = nullptr; _wheelIndex = -1; _wheelRemainder = 0; _wheelBefore.clear();
       if (!_dragging && !_marquee && !_seeking && !_rangePanning) qApp->removeEventFilter(this);
       if (commit) applyPending();
@@ -35,17 +39,17 @@ void PerformanceEditor::cancelWheel()
 bool PerformanceEditor::wheelVelocity(QWheelEvent* wheel, bool notes, bool onScore)
       {
       const auto modifiers = wheel->modifiers();
-      const bool closest=onScore&&(modifiers&Qt::AltModifier)&&(modifiers&Qt::ShiftModifier);
+      const bool closest=onScore&&nearestWheelShortcut(wheel);
       const bool temporary = closest||(!onScore && (modifiers & Qt::AltModifier));
-      if ((modifiers & Qt::ControlModifier) || (onScore && (modifiers & Qt::AltModifier)&&!closest) || (!_wheelButton->isChecked() && !temporary)
+      if (((modifiers & Qt::ControlModifier)&&!closest) || (onScore && (modifiers & Qt::AltModifier)&&!closest) || (!_wheelButton->isChecked() && !temporary)
             || !_score || _score->readOnly() || _dragging || _parameter->currentIndex() != 0) return false;
       // A new wheel event can arrive before the queued post-commit refresh.
       // Resolve that snapshot first instead of interpreting the event as scrolling.
-      if (_dirty) refresh();
+      if (_dirty || _geometryDirty) refresh();
       if (_dirty) return false;
       const QPointF point = wheel->position();
       const bool overStrip = onScore && _band->isChecked() && _scoreFrame.contains(point);
-      if (overStrip && !_scoreLane.contains(point)) return false;
+      if (!closest && overStrip && !_scoreLane.contains(point)) return false;
       QWidget* surface = onScore ? static_cast<QWidget*>(_view) : (notes ? static_cast<QWidget*>(_noteCanvas) : _canvas);
       int target = -1;
       // Keep a stationary wheel burst attached to its first endpoint even when
@@ -71,7 +75,8 @@ bool PerformanceEditor::wheelVelocity(QWheelEvent* wheel, bool notes, bool onSco
             }
       if(closest&&target<0){status(tr("当前视口没有可编辑的音，请显示目标谱行或调整筛选。"));wheel->accept();return true;}
       if (target < 0 || !noteEditable(_notes[target])) return false;
-      const int delta = wheel->angleDelta().y(); const int pixels = wheel->pixelDelta().y();
+      const int delta = wheel->angleDelta().y() ? wheel->angleDelta().y() : (closest ? wheel->angleDelta().x() : 0);
+      const int pixels = wheel->pixelDelta().y() ? wheel->pixelDelta().y() : (closest ? wheel->pixelDelta().x() : 0);
       if (!delta && !pixels) return false; // Do not swallow horizontal-only trackpads.
       if (_wheelIndex != target || _wheelSurface != surface) {
             // Different targets form separate undo bursts. A native commit refresh
@@ -92,28 +97,50 @@ bool PerformanceEditor::wheelVelocity(QWheelEvent* wheel, bool notes, bool onSco
             setNoteValue(target, _wheelValue, false); updateHover(target);
             repaintWheelTarget(target); surface->update(wheelBadge(surface).adjusted(-2, -2, 2, 2).toAlignedRect());
             }
-      _wheelTimer.start(); wheel->accept(); return true;
+      rememberWheelFeedback();_wheelFeedbackTimer.stop();_wheelTimer.start(); wheel->accept(); return true;
       }
 QRectF PerformanceEditor::wheelBadge(QWidget* surface) const
       {
-      return QRectF(qBound(0.0, _wheelPoint.x() + 10, double(qMax(0, surface->width() - 236))),
-            qBound(0.0, _wheelPoint.y() - 25, double(qMax(0, surface->height() - 24))), 232, 22);
+      const auto point=_wheelIndex>=0?_wheelPoint:_wheelFeedbackPoint;
+      return QRectF(qBound(0.0, point.x()+16,double(qMax(0,surface->width()-276))),
+            qBound(0.0,point.y()-63,double(qMax(0,surface->height()-55))),272,52);
       }
 void PerformanceEditor::paintWheelBadge(QPainter& painter, QWidget* surface) const
       {
-      if (_wheelIndex < 0 || _wheelIndex >= _notes.size() || _wheelSurface != surface) return;
-      const auto badge = wheelBadge(surface);
-      painter.save(); painter.fillRect(badge, _appearance.colors[PerformanceAppearance::Background]);
-      painter.setPen(_appearance.colors[PerformanceAppearance::Preview]); painter.drawRect(badge);
-      const auto& note=_notes[_wheelIndex];painter.drawText(badge, Qt::AlignCenter, tr("%1 · 谱表 %2／声部 %3 · %4%5").arg(note.name).arg(note.track/VOICES+1).arg(note.track%VOICES+1).arg(noteValue(_wheelIndex),0,'f',0).arg(rangeKind()==1 ? " %" : " MIDI")); painter.restore();
+      if(_wheelFeedbackSurface!=surface || (_wheelIndex<0&&!_wheelFeedbackTimer.isActive()))return;
+      painter.save();const double opacity=_wheelIndex>=0?1.:qBound(0.,(30.-_wheelFeedbackTicks)/8.,1.);painter.setOpacity(opacity);
+      if(surface==_view && !_wheelFeedbackHead.isEmpty()){
+            auto head=_view->matrix().mapRect(_wheelFeedbackHead).adjusted(-3,-3,3,3);painter.setBrush(Qt::NoBrush);painter.setPen(QPen(_wheelFeedbackColor,2.5));painter.drawRoundedRect(head,3,3);}
+      const auto badge=wheelBadge(surface);painter.setBrush(_appearance.colors[PerformanceAppearance::Background]);painter.setPen(QPen(_wheelFeedbackColor,1.5));painter.drawRoundedRect(badge,4,4);
+      painter.fillRect(QRectF(badge.left(),badge.top()+5,4,badge.height()-10),_wheelFeedbackColor);
+      painter.setPen(_appearance.colors[PerformanceAppearance::Text]);QFont font=painter.font();font.setBold(false);painter.setFont(font);painter.drawText(badge.adjusted(12,3,-5,-28),Qt::AlignVCenter,_wheelFeedbackName);
+      font.setBold(true);font.setPointSizeF(font.pointSizeF()>0?font.pointSizeF()+1:10);painter.setFont(font);painter.drawText(badge.adjusted(12,23,-5,-3),Qt::AlignVCenter,_wheelFeedbackValue);painter.restore();
       }
 void PerformanceEditor::repaintWheelTarget(int index)
       {
       if (index < 0 || index >= _notes.size()) return;
-      buildGeometry();
-      for (const auto& geometry : _noteGeometry) if (geometry.index == index) _noteCanvas->update(geometry.rect.adjusted(-3, -24, 3, 3).toAlignedRect());
+      if(_view)_view->update(_view->matrix().mapRect(_notes[index].bounds).adjusted(-6,-6,6,6).toAlignedRect());
+      if(_noteCanvas->isVisible())buildGeometry();
+      if(_noteCanvas->isVisible())for (const auto& geometry : _noteGeometry) if (geometry.index == index) _noteCanvas->update(geometry.rect.adjusted(-3, -24, 3, 3).toAlignedRect());
       const int x = qRound(xForTick(_notes[index].tick, false)); _canvas->update(QRect(x - 9, 0, 19, _canvas->height()));
       if (_view && (_handles->isChecked() || _band->isChecked())) invalidateOverlay();
+      }
+
+bool PerformanceEditor::nearestWheelShortcut(const QWheelEvent* event)
+      {
+      const int required=QSettings().value("performanceEditor/nearestWheelModifiers",int(Qt::AltModifier|Qt::ShiftModifier)).toInt();
+      return required && (int(event->modifiers())&~int(Qt::KeypadModifier))==required;
+      }
+void PerformanceEditor::rememberWheelFeedback()
+      {
+      if(_wheelIndex<0 || _wheelIndex>=_notes.size())return;
+      const auto& n=_notes[_wheelIndex];const auto e=_pending.value(n.note,{n.type,n.raw});
+      _wheelFeedbackSurface=_wheelSurface;_wheelFeedbackPoint=_wheelPoint;
+      _wheelFeedbackHead=_wheelSurface==_view?n.bounds:QRectF();
+      _wheelFeedbackColor=MScore::selectColor[n.track%VOICES];
+      _wheelFeedbackName=tr("谱表%1 · 声部%2 · %3").arg(n.track/VOICES+1).arg(n.track%VOICES+1).arg(n.name);
+      const int value=n.base<0?e.raw:NoteVelocity::effective(n.base,e.type,e.raw);
+      _wheelFeedbackValue=tr("力度 %1    %2%3    记号力度 %4").arg(value).arg(n.base>0?NoteVelocity::offsetFor(n.base,value):0).arg("%").arg(n.base<0?tr("读取中"):QString::number(n.base));
       }
 
 }

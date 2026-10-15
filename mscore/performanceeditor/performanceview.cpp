@@ -100,11 +100,12 @@ PerformanceCanvas::PerformanceCanvas(PerformanceEditor* editor, PerformanceSurfa
       setMouseTracking(true); setFocusPolicy(Qt::StrongFocus);
       setObjectName(surface == PerformanceSurface::Notes ? "performanceNoteCanvas" : (surface == PerformanceSurface::Ruler ? "performanceRuler" : "performanceParameterCanvas"));
       if (surface == PerformanceSurface::Ruler) setFixedHeight(28);
-      else setMinimumHeight(surface == PerformanceSurface::Notes ? 100 : 90);
+      else setMinimumHeight(surface==PerformanceSurface::Notes?32:72);
       }
 void PerformanceCanvas::resizeEvent(QResizeEvent*) { _editor->surfaceResized(_surface); }
 void PerformanceCanvas::paintEvent(QPaintEvent* event)
       {
+      if(width()<=0 || height()<=0)return;
       QElapsedTimer paintTimer; paintTimer.start();
       const qreal ratio = devicePixelRatioF();
       if (_background.size() != size() * ratio || _background.devicePixelRatioF() != ratio || _revision != _editor->_visualRevision) {

@@ -873,6 +873,7 @@ class TestPerformanceEditor : public QObject, public MTest {
             }
       }
       void editorUsabilityRepairs();
+      void editorVelocitySectionsAndInputWheel();
 #ifdef Q_MOC_RUN
       void keyboardContoursAndCompactParameterLayout();
       void reaperStemsAndStripSelection();
@@ -1029,6 +1030,13 @@ class TestPerformanceEditor : public QObject, public MTest {
                         timer.start();QApplication::sendEvent(view,&nearest);nearestSamples.append(timer.nsecsElapsed()/1e6);if(!frame)QVERIFY(editor->hasPending());}
                   QTest::keyClick(view,Qt::Key_Escape);QVERIFY(!editor->hasPending());std::sort(nearestSamples.begin(),nearestSamples.end());
                   qInfo("Performance closest score note %d notes: GUI wheel handler P95 %.3f ms, max %.3f ms",all.size(),nearestSamples[37],nearestSamples.back());
+                  QTest::qWait(950);
+                  const auto zoomState=score->state();
+                  for(bool showBand:{false,true}){editor->setScoreBandEnabled(showBand);QApplication::processEvents();QVector<double> samples;
+                        for(int frame=0;frame<20;++frame){QWheelEvent zoom(QPointF(180,150),view->mapToGlobal(QPoint(180,150)),QPoint(),QPoint(0,frame%2?120:-120),Qt::NoButton,Qt::ControlModifier,Qt::NoScrollPhase,false);timer.start();QApplication::sendEvent(view,&zoom);QApplication::processEvents();samples.append(timer.nsecsElapsed()/1e6);}
+                        std::sort(samples.begin(),samples.end());qInfo("Score Ctrl zoom %d notes: band %d P95 %.3f ms max %.3f ms",all.size(),int(showBand),samples[18],samples.back());QVERIFY(score->state()==zoomState);
+                        }
+
                   // Separate inactive callback work from native score rendering. The
                   // same score and runtime exercise all personal surface states.
                   editor->findChild<QAction*>("performanceBandHeight48")->trigger();

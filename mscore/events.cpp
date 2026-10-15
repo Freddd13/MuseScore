@@ -157,8 +157,7 @@ bool ScoreView::gestureEvent(QGestureEvent *event)
 void ScoreView::wheelEvent(QWheelEvent* event)
        {
 #define PIXELSSTEPSFACTOR 5
-      if ((event->modifiers() & (Qt::AltModifier|Qt::ShiftModifier)) == (Qt::AltModifier|Qt::ShiftModifier)
-            && !(event->modifiers() & Qt::ControlModifier) && mscore) {
+      if (mscore && PerformanceEditor::nearestWheelShortcut(event)) {
             if (mscore->performanceEditor()->adjustNearestScoreVelocity(this,event)) return;
             }
 

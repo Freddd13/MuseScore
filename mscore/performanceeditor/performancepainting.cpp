@@ -18,7 +18,7 @@ QString pitchName(int pitch)
       }
 }
 int PerformanceEditor::rangeKind() const
-      { return _parameter->currentIndex() == 0 ? (_relativeActual?0:_axis->currentIndex()) : _parameter->currentIndex() + 1; }
+      { return _parameter->currentIndex() == 0 ? _axis->currentIndex() : _parameter->currentIndex() + 1; }
 void PerformanceEditor::updateSurfaces()
       { if (_canvas) _canvas->update(); if (_noteCanvas) _noteCanvas->update(); if (_ruler) _ruler->update(); if(_workflowPanel&&_workflowPanel->isVisible())for(auto child:_workflowPanel->findChildren<QWidget*>())child->update(); }
 void PerformanceEditor::invalidateVisual()
@@ -43,6 +43,7 @@ void PerformanceEditor::surfaceResized(PerformanceSurface surface)
       }
 void PerformanceEditor::buildGeometry()
       {
+      if(!_noteCanvas || !_noteCanvas->isVisible())return;
       if (_geometryRevision == _visualRevision) return;
       _geometryRevision = _visualRevision; _noteGeometry.clear();
       if (!_noteCanvas || _notes.isEmpty()) return;
@@ -89,7 +90,7 @@ void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface su
                   }
             painter.restore();
             }
-      if (surface == PerformanceSurface::Parameter) {
+      if (surface == PerformanceSurface::Parameter && !(_velocityArrangement&&_parameter->currentIndex()==0)) {
             const auto range = _viewport.ranges[rangeKind()]; const QRectF lane = laneRect();
             const int divisions = rangeKind() == 3 ? 1 : 4;
             for (int i = 0; i <= divisions; ++i) {
@@ -100,6 +101,11 @@ void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface su
                   }
             if (range.minimum <= 0 && range.maximum >= 0) {
                   painter.setPen(QPen(c[PerformanceAppearance::Text], 1, Qt::DashLine)); painter.drawLine(QPointF(lane.left(), yForValue(0, lane)), QPointF(lane.right(), yForValue(0, lane)));
+                  }
+            }
+      if(surface==PerformanceSurface::Parameter && _parameter->currentIndex()==0 && _velocityArrangement){
+            const auto range=_viewport.ranges[rangeKind()];for(int staff:_velocityStaves){const auto lane=velocityLane(_velocityStaffNote.value(staff,-1),laneRect(),false);if(lane.isEmpty())continue;
+                  for(double value:{range.minimum,(range.minimum+range.maximum)/2.,range.maximum}){const double y=yForValue(value,lane);painter.setPen(c[PerformanceAppearance::Grid]);painter.drawLine(QPointF(lane.left(),y),QPointF(lane.right(),y));painter.setPen(c[PerformanceAppearance::Text]);painter.drawText(QRectF(1,y-7,PerformanceViewport::gutter-8,14),Qt::AlignRight|Qt::AlignVCenter,QString::number(value,'f',0));}
                   }
             }
       if (!_score) return;
@@ -132,11 +138,12 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
       painter.save(); painter.setClipRect(rect.adjusted(-2, -3, 2, 0), Qt::IntersectClip);
       const int parameter = _parameter->currentIndex();
       if (parameter == 0) {
+            if(!onScore)paintVelocityHeaders(painter,rect);
             if(_relativeActual)paintOriginalVelocity(painter,rect,onScore);
             const auto active = painter.clipBoundingRect().intersected(rect.adjusted(-8, -8, 8, 8));
             int from = tickForX(active.left() - 8, onScore), until = tickForX(active.right() + 8, onScore);
             auto first = std::lower_bound(_notes.cbegin(), _notes.cend(), from, [](const NoteInfo& n, int t) { return n.tick < t; });
-            const bool dense = !onScore && _viewport.pixelsPerQuarter < 8;
+            const bool dense = !onScore && !_velocityArrangement && _viewport.pixelsPerQuarter < 8;
             // Identical native-time/value marks have identical pixels. Draw each style
             // once; keep every source note in the hit/selection/transaction indexes.
             QSet<QPair<QPair<int, int>, quint64>> marks;
@@ -153,7 +160,9 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
                   if (!it->inScope || (!it->enabled && !_ghostVoices) || !hasNoteValue(*it)) continue;
                   const double x = xForNote(index, onScore);
                   if (x < active.left() - 8 || x > active.right() + 8) continue;
-                  const double y = yForValue(noteValue(index), rect, onScore);
+                  const auto noteLane=velocityLane(index,rect,onScore);if(noteLane.isEmpty())continue;
+                  const double y = velocityY(index, rect, onScore);
+                  const double noteBaseline=qBound(noteLane.top(),yForValue(rangeKind()==1?0:1,noteLane,onScore),noteLane.bottom());
                   if (dense && !it->selected && index != _hover && !_playingNotes.contains(index) && !_pending.contains(it->note)) {
                         const int column = int((x - rect.left()) / columnWidth);
                         if (column >= 0 && column < density.size()) {
@@ -171,11 +180,11 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
                   if (marks.contains(mark)) continue;
                   if (it->selected || index == _hover) emphasis.append(index);
                   marks.insert(mark); painter.setPen(QPen(color, stemWidth));
-                  painter.drawLine(QPointF(x, baseline), QPointF(x, y));
+                  painter.drawLine(QPointF(x, noteBaseline), QPointF(x, y));
                   painter.setBrush(it->audible ? QBrush(color) : Qt::NoBrush); painter.drawEllipse(QPointF(x, y), onScore ? 2.5 : 2.0, onScore ? 2.5 : 2.0);
                   if (!_axis->currentIndex() && !it->generatedVelocities.isEmpty() && (it->selected || index==_hover)) {
                         const auto range=generatedVelocityRange(*it,edit.type,edit.raw);
-                        const double low=yForValue(range.first,rect,onScore),high=yForValue(range.second,rect,onScore);
+                        const double low=yForValue(range.first,noteLane,onScore),high=yForValue(range.second,noteLane,onScore);
                         painter.setPen(QPen(color.lighter(140),1,Qt::DashLine)); painter.drawLine(QPointF(x+4,low),QPointF(x+4,high));
                         painter.drawLine(QPointF(x+2,low),QPointF(x+6,low)); painter.drawLine(QPointF(x+2,high),QPointF(x+6,high));
                         if(!onScore) painter.drawText(QPointF(x+8,high+12),QString("%1–%2").arg(range.first).arg(range.second));
@@ -194,13 +203,15 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
             // overview bins cannot cover the native selection. No time offset.
             for (int index : emphasis) {
                   const auto& note = _notes[index];
-                  const double x = xForNote(index, onScore), y = yForValue(noteValue(index), rect, onScore);
+                  const auto noteLane=velocityLane(index,rect,onScore);if(noteLane.isEmpty())continue;
+                  const double noteBaseline=qBound(noteLane.top(),yForValue(rangeKind()==1?0:1,noteLane,onScore),noteLane.bottom());
+                  const double x = xForNote(index, onScore), y = velocityY(index, rect, onScore);
                   const auto edit = _pending.value(note.note, {note.type, note.raw});
                   QColor color = onScore ? scoreNoteColor(index) : _appearance.noteColor(NoteVelocity::effective(note.base, edit.type, edit.raw), note.track);
                   if (!note.enabled) color.setAlpha(40);
                   const QColor border = index == _hover ? _appearance.colors[PerformanceAppearance::Preview] : (onScore ? QColor("#303a43") : _appearance.colors[PerformanceAppearance::Selection]);
-                  painter.setPen(QPen(border, stemWidth + 2)); painter.drawLine(QPointF(x, baseline), QPointF(x, y));
-                  painter.setPen(QPen(color, stemWidth)); painter.drawLine(QPointF(x, baseline), QPointF(x, y));
+                  painter.setPen(QPen(border, stemWidth + 2)); painter.drawLine(QPointF(x, noteBaseline), QPointF(x, y));
+                  painter.setPen(QPen(color, stemWidth)); painter.drawLine(QPointF(x, noteBaseline), QPointF(x, y));
                   painter.setPen(QPen(border, 2)); painter.setBrush(color); const double radius = qMax(3.0, stemWidth / 2.0 + 1);
                   painter.drawEllipse(QPointF(x, y), radius, radius);
                   }
@@ -328,7 +339,7 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
                   for (auto it = first; it != _notes.cend() && it->tick <= until; ++it) {
                         int i = int(it - _notes.cbegin()); if (!it->enabled || !hasNoteValue(*it)) continue;
                         if (it->selected || i == _hover || _playingNotes.contains(i) || _pending.contains(it->note)) {
-                              const QPointF point(xForTick(it->tick, false), yForValue(noteValue(i), _lane));
+                              if(velocityLane(i,_lane,false).isEmpty())continue;const QPointF point(xForTick(it->tick, false), velocityY(i, _lane,false));
                               const int role = _pending.contains(it->note) ? PerformanceAppearance::Preview : (_playingNotes.contains(i) ? PerformanceAppearance::Playhead : PerformanceAppearance::Selection);
                               const auto outline = qMakePair(qMakePair(qRound(point.x() * 256), qRound(point.y() * 256)), role * 2 + (i == _hover));
                               if (outlines.contains(outline)) continue;

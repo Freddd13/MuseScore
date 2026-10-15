@@ -27,7 +27,7 @@ void TestPerformanceEditor::editorUsabilityRepairs()
       QTest::mouseDClick(canvas,Qt::LeftButton,Qt::AltModifier,endpoint(50));QCOMPARE(score->playPos().ticks(),1440);
       auto actual=editor.findChild<QCheckBox*>("performanceActualVelocity");QVERIFY(actual);axis->setCurrentIndex(1);
       const auto displayState=score->state();const auto oldType=chord[0]->veloType();actual->setChecked(true);QTest::qWait(20);QVERIFY(score->state()==displayState);QCOMPARE(chord[0]->veloType(),oldType);
-      QCOMPARE(editor.findChild<QDoubleSpinBox*>("performanceValue")->suffix(),QString());actual->setChecked(false);axis->setCurrentIndex(0);
+      QCOMPARE(editor.findChild<QDoubleSpinBox*>("performanceValue")->suffix(),QString(" %"));actual->setChecked(false);axis->setCurrentIndex(0);
       // Pick one voice using the modal matrix. Its native selection is retained.
       QTimer dialogTimer;connect(&dialogTimer,&QTimer::timeout,&editor,[&]{auto table=editor.findChild<QTableWidget*>("performanceTrackTable");if(!table)return;
             for(int row=0;row<table->rowCount();++row)for(int v=0;v<4;++v)table->item(row,v)->setCheckState(row==0&&v==0?Qt::Checked:Qt::Unchecked);
@@ -57,4 +57,24 @@ void TestPerformanceEditor::editorUsabilityRepairs()
       QVERIFY(editor.hasPending());QTest::qWait(380);QCOMPARE(chord[0]->veloOffset(),raw+1);QCOMPARE(view->matrix(),matrix);
       // The keyboard and visible-note filters did not silently remove score selection.
       QVERIFY(!score->selection().noteList().empty());QSettings().setValue("performanceEditor/keyboardMode",1);QSettings().setValue("performanceEditor/dragSensitivity",1.);
+      }
+
+void TestPerformanceEditor::editorVelocitySectionsAndInputWheel()
+      {
+      auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));auto view=main->currentScoreView();
+      auto segment=score->tick2segment(Fraction::fromTicks(0),false,SegmentType::ChordRest);
+      score->startCmd();for(auto setting:QList<QPair<int,int>>{{0,80},{4,48}}){auto mark=new Dynamic(score);mark->setTrack(setting.first);mark->setDynamicType(setting.first?"p":"mf");mark->setVelocity(setting.second);mark->setDynRange(Dynamic::Range::STAFF);mark->setParent(segment);score->undoAddElement(mark);}score->endCmd();score->updateVelo();
+      auto upper=noteAt(score),lower=noteAt(score,0,4);QVERIFY(upper&&lower);QCOMPARE(NoteVelocity::referenceBase(upper),80);QCOMPARE(NoteVelocity::referenceBase(lower),48);
+      ParameterEdit::velocities(score,{{upper,{Note::ValueType::OFFSET_VAL,0}},{lower,{Note::ValueType::OFFSET_VAL,0}}});
+      PerformanceEditor editor;editor.setView(view);editor.resize(1100,800);editor.show();QTest::qWait(100);editor.fit();
+      auto actual=editor.findChild<QCheckBox*>("performanceActualVelocity");auto arrangement=editor.findChild<QComboBox*>("performanceVelocityArrangement");auto canvas=editor.findChild<QWidget*>("performanceParameterCanvas");QVERIFY(actual&&arrangement&&canvas);actual->setChecked(true);
+      PerformanceSelection::apply(score,{upper,lower},upper);editor.selectionChanged();QTest::qWait(50);
+      const int x=76+qRound((canvas->width()-90)/4.);const int y=qRound(canvas->height()-6-(80-1)*(canvas->height()-12)/126.);const int dy=qRound(8*(canvas->height()-12)/126.);
+      const int undo=score->undoStack()->getCurIdx();QTest::mousePress(canvas,Qt::LeftButton,Qt::NoModifier,QPoint(x,y));QTest::mouseRelease(canvas,Qt::LeftButton,Qt::NoModifier,QPoint(x,y-dy));QTest::qWait(100);
+      QVERIFY(upper->veloOffset()>0);QVERIFY(std::abs(upper->veloOffset()-lower->veloOffset())<=1);QCOMPARE(score->undoStack()->getCurIdx(),undo+1);QCOMPARE(upper->veloType(),Note::ValueType::OFFSET_VAL);QCOMPARE(lower->veloType(),Note::ValueType::OFFSET_VAL);
+      arrangement->setCurrentIndex(1);QTest::qWait(30);const auto state=score->state();const auto before=canvas->grab().toImage();QTest::mouseClick(canvas,Qt::LeftButton,Qt::NoModifier,QPoint(100,12));QVERIFY(before!=canvas->grab().toImage());QVERIFY(score->state()==state);QTest::mouseClick(canvas,Qt::LeftButton,Qt::NoModifier,QPoint(100,12));
+      auto out=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");if(!out.isEmpty())editor.grab().save(out+"/velocity-sections-048.png");arrangement->setCurrentIndex(0);
+      editor.hide();PerformanceSelection::apply(score,{upper},upper);view->changeState(ViewState::NOTE_ENTRY);QVERIFY(view->noteEntryMode());view->repaint();const auto transform=view->matrix();const QPointF head=view->matrix().mapRect(upper->canvasBoundingRect()).center();const int old=upper->veloOffset();
+      QWheelEvent input(head,view->mapToGlobal(head.toPoint()),QPoint(),QPoint(120,0),Qt::NoButton,Qt::AltModifier|Qt::ShiftModifier,Qt::NoScrollPhase,false);QApplication::sendEvent(view,&input);QVERIFY(editor.hasPending() || main->performanceEditor()->hasPending());QCOMPARE(view->matrix(),transform);QTest::qWait(400);QVERIFY(upper->veloOffset()>old);QCOMPARE(view->matrix(),transform);
+      if(!out.isEmpty())view->grab().save(out+"/nearest-note-input-048.png");view->changeState(ViewState::NORMAL);QTest::qWait(950);
       }

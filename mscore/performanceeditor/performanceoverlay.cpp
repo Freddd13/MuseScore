@@ -206,12 +206,14 @@ void PerformanceEditor::paintOverlay(QPainter& painter)
             }
       QRegion damage;
       painter.save(); painter.resetTransform(); painter.setRenderHint(QPainter::Antialiasing);
-      QVector<int> handles = _selectedIndices;
-      if(_peekHeld || _showValues){rebuildVisibleScoreNotes();for(auto item:_visibleScoreNotes)if(noteEditable(_notes[item.first])&&(_showValues||_peekAll||QLineF(item.second.center(),_overlayPointer).length()<160)&&!handles.contains(item.first))handles.append(item.first);}
-      if (_hover >= 0 && !handles.contains(_hover)) handles.append(_hover);
-      QVector<QPair<int,QRectF>> handleBounds;
-      for(int i:handles)if(i>=0&&i<_notes.size())handleBounds.append({i,_view->matrix().mapRect(_notes[i].bounds)});
-      if(_peekHeld || _showValues)for(auto item:_visibleScoreNotes)if(noteEditable(_notes[item.first])&&(_showValues||_peekAll||QLineF(item.second.center(),_overlayPointer).length()<160)&&!handleBounds.contains(item))handleBounds.append(item);
+      QVector<int> handles;QVector<QPair<int,QRectF>> handleBounds;
+      if(_handles->isChecked() || _band->isChecked() || _peekHeld || _showValues){
+            rebuildVisibleScoreNotes();QSet<int> seen;
+            for(const auto& item:_visibleScoreNotes){const int i=item.first;
+                  if(_notes[i].selected || i==_hover || ((_peekHeld||_showValues)&&(_showValues||_peekAll||QLineF(item.second.center(),_overlayPointer).length()<160))){handles.append(i);handleBounds.append(item);seen.insert(i);}
+                  }
+            if(_hover>=0&&_hover<_notes.size()&&!seen.contains(_hover)){handles.append(_hover);handleBounds.append({_hover,_view->matrix().mapRect(_notes[_hover].bounds)});}
+            }
       if (_handles->isChecked() || _band->isChecked() || _peekHeld || _showValues) for (auto item : handleBounds) {
             const int i=item.first;const auto& note = _notes[i]; const QRectF bounds = item.second;
             if (!_view->rect().intersects(bounds.toRect())) continue;

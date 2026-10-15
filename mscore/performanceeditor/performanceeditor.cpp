@@ -60,9 +60,7 @@ int selectionTrack(Score* score, int fallback)
       }
 }
 QSize PerformanceEditor::minimumSizeHint() const {
-      return _workflowPanel && !_workflowPanel->isHidden() && layout()
-                 ? QSize(260, qMax(240, layout()->minimumSize().height()))
-                 : QSize(260, 240);
+      return QSize(260,layout()?qMax(160,layout()->minimumSize().height()):240);
       }
 
 PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
@@ -191,8 +189,8 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       second->addWidget(_followButton, second->count() / 6, second->count() % 6);
       second->setAlignment(Qt::AlignLeft);
       layout->addLayout(second);
-      _splitter = new QSplitter(Qt::Vertical, this); _splitter->setChildrenCollapsible(false);
-      auto noteArea = new QWidget(_splitter); auto noteLayout = new QVBoxLayout(noteArea); noteLayout->setContentsMargins(0, 0, 0, 0); noteLayout->setSpacing(0);
+      _splitter = new QSplitter(Qt::Vertical, this); _splitter->setChildrenCollapsible(true);
+      auto noteArea = new QWidget(_splitter); noteArea->setObjectName("performanceNotesArea"); auto noteLayout = new QVBoxLayout(noteArea); noteLayout->setContentsMargins(0, 0, 0, 0); noteLayout->setSpacing(0);
       auto paneControls = [this](QVBoxLayout* parent, bool notes) {
             QWidget* controls = nullptr;
             auto row = new QHBoxLayout; row->setContentsMargins(notes ? 3 : 1, 0, notes ? 3 : 1, 0); row->setSpacing(notes ? 3 : 0);
@@ -211,7 +209,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _pitchScroll = new QScrollBar(Qt::Vertical, _noteCanvas); _pitchScroll->setRange(0, 12700);
       connect(_pitchScroll, &QScrollBar::valueChanged, this, [this](int value) { pauseFollow(); _viewport.topPitch = _viewport.pitchAtIndex(_viewport.rowMaximum() - value / 100.0); invalidateVisual(); });
       _splitter->addWidget(noteArea);
-      auto parameterArea = new QWidget(_splitter); auto areaLayout = new QVBoxLayout(parameterArea); areaLayout->setContentsMargins(0, 0, 0, 0); areaLayout->setSpacing(0);
+      auto parameterArea = new QWidget(_splitter); parameterArea->setObjectName("performanceParametersArea"); auto areaLayout = new QVBoxLayout(parameterArea); areaLayout->setContentsMargins(0, 0, 0, 0); areaLayout->setSpacing(0);
       _ruler = new PerformanceCanvas(this, PerformanceSurface::Ruler); _ruler->installEventFilter(this); areaLayout->addWidget(_ruler);
       paneControls(areaLayout, false);
       _parameterHint = new QLabel(this); _parameterHint->setObjectName("performanceParameterHint"); _parameterHint->hide();
@@ -222,12 +220,18 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             range.maximum = limit.maximum - (limit.maximum - limit.minimum - span) * position / 10000.0; range.minimum = range.maximum - span; invalidateVisual();
             });
       _splitter->addWidget(parameterArea); _splitter->setStretchFactor(0, 1); _splitter->setStretchFactor(1, 1); layout->addWidget(_splitter, 1);
-      _splitter->restoreState(QSettings().value("performanceEditor/splitter").toByteArray());
+
       connect(_splitter, &QSplitter::splitterMoved, this, [this] { QSettings().setValue("performanceEditor/splitter", _splitter->saveState()); });
       _scroll = new QScrollBar(Qt::Horizontal, this); layout->addWidget(_scroll);
       addWorkflowLanes(this,&_workflowPanel,_splitter);_splitter->addWidget(_workflowPanel);_workflowPanel->hide();
       auto workflowButton=new QToolButton(this);workflowButton->setObjectName("performanceWorkflowToggle");workflowButton->setText(tr("音轨／演奏对应"));workflowButton->setCheckable(true);second->addWidget(workflowButton,second->count()/6,second->count()%6);
-      connect(workflowButton,&QToolButton::toggled,this,[this](bool show){_workflowPanel->setVisible(show);if(show)_splitter->setSizes({150,130,180});updateGeometry();});
+      connect(workflowButton,&QToolButton::toggled,this,[this](bool show){QSettings().setValue("performanceEditor/area/performanceWorkflowPanel",show);_workflowPanel->setVisible(show);if(show){if(!_splitter->restoreState(QSettings().value("performanceEditor/splitter").toByteArray()))_splitter->setSizes({150,130,180});}updateGeometry();});
+      _splitter->restoreState(QSettings().value("performanceEditor/splitter").toByteArray());
+      auto areas=new QToolButton(this);areas->setText(tr("区域"));areas->setObjectName("performanceAreaMenu");areas->setPopupMode(QToolButton::InstantPopup);auto areaMenu=new QMenu(areas);areas->setMenu(areaMenu);second->addWidget(areas,second->count()/6,second->count()%6);
+      for(auto item:QList<QPair<QString,QWidget*>>{{tr("钢琴卷帘"),noteArea},{tr("力度／速度／踏板"),parameterArea},{tr("音轨／演奏对应"),_workflowPanel}}){auto action=areaMenu->addAction(item.first);action->setCheckable(true);action->setChecked(!item.second->isHidden());connect(action,&QAction::toggled,this,[this,item,workflowButton](bool on){if(item.second==_workflowPanel){workflowButton->setChecked(on);return;}QSettings().setValue("performanceEditor/area/"+item.second->objectName(),on);item.second->setVisible(on);if(on){auto sizes=_splitter->sizes();int n=_splitter->indexOf(item.second);if(n>=0&&sizes[n]<40){sizes[n]=140;_splitter->setSizes(sizes);}}updateGeometry();});connect(areaMenu,&QMenu::aboutToShow,action,[item,action]{QSignalBlocker block(action);action->setChecked(!item.second->isHidden());});}
+      auto restoreAreas=areaMenu->addAction(tr("恢复区域高度"));connect(restoreAreas,&QAction::triggered,this,[this]{_splitter->setSizes({150,130,180});});
+      noteArea->setVisible(QSettings().value("performanceEditor/area/performanceNotesArea",true).toBool());parameterArea->setVisible(QSettings().value("performanceEditor/area/performanceParametersArea",true).toBool());
+      QTimer::singleShot(0,this,[workflowButton]{workflowButton->setChecked(QSettings().value("performanceEditor/area/performanceWorkflowPanel",false).toBool());});
       _status = new QLabel(this); _status->setWordWrap(true); layout->addWidget(_status);
       _refreshTimer.setSingleShot(true);
       connect(&_refreshTimer, &QTimer::timeout, this, &PerformanceEditor::refresh);
@@ -307,10 +311,11 @@ PerformanceEditor::~PerformanceEditor()
 
 void PerformanceEditor::setView(ScoreView* view)
       {
+      if(view!=_view || (view&&view->score()!=_score)){_wheelFeedbackTimer.stop();_wheelFeedbackSurface=nullptr;}
       if (_view == view && _score == (view ? view->score() : nullptr)) return;
       Score* next = view ? view->score() : nullptr;
       if (_score && _score != next && hasPending()) flushPending();
-      finishWheel(false); cancelGesture();
+      finishWheel(false); _wheelFeedbackTimer.stop();_wheelFeedbackSurface=nullptr; cancelGesture();
       if (_score) _viewMemory.insert(_score, {_viewport, _scroll->value()});
       _playTimer.stop(); _playingNotes.clear(); _linkedIndex.clear(); cancelSurfaceGesture();
       for (auto connection : _transportConnections) disconnect(connection); _transportConnections.clear();
@@ -465,7 +470,7 @@ void PerformanceEditor::refresh()
       refreshTempoCurves();
       _hover = -1;
       _state = state; _dirty = false; _geometryDirty = false;
-      rebuildFilter(); invalidateVisual();
+      rebuildScoreNoteRows(); rebuildFilter(); invalidateVisual();
       if (_fitOnRefresh) { fit(); centerPitch(!_selectedIndices.isEmpty()); _fitOnRefresh = false; _following = true; _followButton->setChecked(true); _followButton->setText(tr("跟随播放")); }
       else surfaceResized(PerformanceSurface::Notes);
       if (qEnvironmentVariableIsSet("PERFORMANCE_BENCHMARK")) qInfo("Performance snapshot %d notes: %.2f ms", _notes.size(), snapshotTimer.nsecsElapsed() / 1e6);
@@ -514,7 +519,7 @@ void PerformanceEditor::refreshLayout()
       for (auto& note : _notes) { note.bounds = note.note->canvasBoundingRect(); note.system = note.note->chord()->measure()->system(); if (note.system) _layoutIndex.insert(note.system); }
       for (auto& segment : _segments) if (segment.segment) { segment.position = segment.segment->canvasPos(); segment.system = segment.segment->measure()->system(); if (segment.system) _layoutIndex.insert(segment.system); }
       if (!_segments.isEmpty() && !_segments.back().segment && _score->lastMeasure()) { auto measure = _score->lastMeasure(); _segments.back().system = measure->system(); _segments.back().position = measure->canvasPos() + QPointF(measure->width(), 0); }
-      _geometryDirty = false; invalidateVisual();
+      _geometryDirty = false; rebuildScoreNoteRows(); invalidateVisual();
       setOverlaySystem(systemAtTick(_playTick));
       }
 System* PerformanceEditor::systemAtTick(int tick) const
@@ -612,7 +617,7 @@ double PerformanceEditor::noteValue(int index) const
       const auto& note = _notes[index];
       const auto edit = _pending.value(note.note, {note.type, note.raw});
       if (note.base < 0) return rangeKind()==1 ? edit.raw : qBound(1, edit.raw, 127);
-      if (!_axis->currentIndex()||_relativeActual) return NoteVelocity::effective(note.base, edit.type, edit.raw);
+      if (!_axis->currentIndex()) return NoteVelocity::effective(note.base, edit.type, edit.raw);
       return edit.type == Note::ValueType::OFFSET_VAL ? edit.raw : NoteVelocity::offsetFor(note.base, edit.raw);
       }
 
@@ -621,7 +626,7 @@ void PerformanceEditor::setNoteValue(int index, double value, bool report)
       const auto& note = _notes[index];
       if (!noteEditable(note)) return;
       const auto type = _pending.value(note.note, {note.type, note.raw}).type;
-      const bool relative=_axis->currentIndex()&&!_relativeActual;
+      const bool relative=_axis->currentIndex()!=0;
       const int raw = relative ? qBound(NoteVelocity::minOffset, qRound(value), NoteVelocity::maxOffset) : qBound(1, qRound(value), 127);
       if (note.base < 0 && (relative ? type != Note::ValueType::OFFSET_VAL : type != Note::ValueType::USER_VAL)) return;
       const int stored = note.base < 0 ? raw : (type == Note::ValueType::OFFSET_VAL
@@ -763,10 +768,10 @@ void PerformanceEditor::fit(bool selection)
 bool PerformanceEditor::overlayAllowed() const
       {
       return surfacesActive() && _view && _score && !_score->printing() && !_view->fotoMode()
-            && !_view->editMode() && !_view->noteEntryMode();
+            && !_view->editMode() && (!_view->noteEntryMode() || _closestWheelActive || _wheelIndex >= 0 || _wheelFeedbackTimer.isActive());
       }
 bool PerformanceEditor::surfacesActive() const
-      { return isVisible() || ((_band->isChecked()||_peekHeld||_showValues||_closestWheelActive||(_wheelIndex>=0&&_wheelSurface==_view)) && _view && _view->isVisible()); }
+      { return isVisible() || ((_band->isChecked()||_peekHeld||_showValues||_closestWheelActive||(_wheelIndex>=0&&_wheelSurface==_view)||(_wheelFeedbackTimer.isActive()&&_wheelFeedbackSurface==_view)) && _view && _view->isVisible()); }
 bool PerformanceEditor::scoreBandEnabled() const
       { return _band->isChecked(); }
 void PerformanceEditor::setScoreBandEnabled(bool enabled)
@@ -850,7 +855,7 @@ void PerformanceEditor::beginGesture(QPointF point, QRectF rect, bool onScore, i
       _noteGesture = false; _cycleOnClick = false; _gestureMoved=false; _pressedCandidates.clear(); _scoreGesture = onScore; _dragging = true; _anchor = forcedAnchor; _offsetDrag = false; _unlockedTempo = -1;
       if (_parameter->currentIndex() == 0) {
             if(_tool->currentIndex()==0){_pressedCandidates=hits(point,true,onScore);if(forcedAnchor<0&&!_pressedCandidates.isEmpty())_anchor=_pressedCandidates.front();
-                  _cycleOnClick=_anchor>=0&&_notes[_anchor].selected&&_selectedIndices.size()==1&&_pressedCandidates.size()>1&&std::abs(yForValue(noteValue(_pressedCandidates[1]),rect,onScore)-yForValue(noteValue(_anchor),rect,onScore))<3;
+                  _cycleOnClick=_anchor>=0&&_notes[_anchor].selected&&_selectedIndices.size()==1&&_pressedCandidates.size()>1&&std::abs(velocityY(_pressedCandidates[1],rect,onScore)-velocityY(_anchor,rect,onScore))<3;
                   }
             double distance = _anchor>=0 ? -1 : 13;
             const int from = tickForX(rect.left() - 32, onScore), until = tickForX(rect.right() + 32, onScore);
@@ -861,7 +866,7 @@ void PerformanceEditor::beginGesture(QPointF point, QRectF rect, bool onScore, i
                   const int i = onScore ? _systemIndices[position] : position;
                   const auto& note = _notes[i];
                   if (!noteEditable(note)) continue;
-                  const QPointF center(xForNote(i, onScore), yForValue(noteValue(i), rect, onScore));
+                  const QPointF center(xForNote(i, onScore), velocityY(i, rect, onScore));
                   const double d = QLineF(point, center).length();
                   if (noteEditable(note) && d < distance) { distance = d; _anchor = i; }
                   }
@@ -936,8 +941,14 @@ void PerformanceEditor::moveGesture(QPointF point)
             }
       else if (_offsetDrag) {
             const auto range = (_scoreGesture ? _scoreViewport : _viewport).ranges[rangeKind()];
-            const double delta = (_noteGesture ? (_press.y() - point.y()) * (range.maximum - range.minimum) / qMax(1.0, _gestureLane.height()) : valueForY(point.y(), _gestureLane, _scoreGesture) - valueForY(_press.y(), _gestureLane, _scoreGesture))*_dragSensitivity;
-            for (int index : _dragTargets) setNoteValue(index, _dragOriginal.value(index) + delta, false);
+            const auto valueLane=(_anchor>=0&&!_noteGesture)?velocityLane(_anchor,_gestureLane,_scoreGesture):_gestureLane;
+            if(valueLane.isEmpty())return;
+            const double delta = (_noteGesture ? (_press.y() - point.y()) * (range.maximum - range.minimum) / qMax(1.0, _gestureLane.height()) : valueForY(point.y(), valueLane, _scoreGesture) - valueForY(_press.y(), valueLane, _scoreGesture))*_dragSensitivity;
+            for (int index : _dragTargets) {
+                  const double scale=_groupRelative&&rangeKind()==0&&_dragTargets.size()>1&&_anchor>=0&&_notes[_anchor].base>0&&_notes[index].base>0 ? double(_notes[index].base)/_notes[_anchor].base:1.;
+                  setNoteValue(index, _dragOriginal.value(index) + delta*scale, false);
+                  }
+            if(_groupRelative&&rangeKind()==0&&_dragTargets.size()>1&&_anchor>=0&&_notes[_anchor].base>0)status(tr("一起调整 %1% · 已选%2音").arg(delta*100/_notes[_anchor].base,0,'f',1).arg(_dragTargets.size()));
             }
       else {
             const bool line = _tool->currentIndex() == 2;
@@ -965,7 +976,11 @@ void PerformanceEditor::moveGesture(QPointF point)
                   else {
                         auto first = std::lower_bound(_notes.cbegin(), _notes.cend(), from, [](const NoteInfo& n, int t) { return n.tick < t; });
                         for (auto it = first; it != _notes.cend() && it->tick <= until; ++it)
-                              if (!selected || it->selected) setNoteValue(int(it - _notes.cbegin()), value(it->tick), false);
+                              if (!selected || it->selected) {
+                                    const int index=int(it-_notes.cbegin());const auto lane=velocityLane(index,_gestureLane,false);if(lane.isEmpty())continue;
+                                    if(_velocityArrangement){if(!lane.contains(QPointF(qBound(lane.left(),point.x(),lane.right()),point.y())))continue;const double fraction=until==from?1.:double(it->tick-from)/(until-from);setNoteValue(index,valueForY(start.y()+(point.y()-start.y())*fraction,lane,false),false);}
+                                    else setNoteValue(index, value(it->tick), false);
+                                    }
                         }
                   }
             else {
@@ -1003,7 +1018,7 @@ void PerformanceEditor::finishGesture()
       drainGesture();
       if (!_gestureMoved&&_parameter->currentIndex()==0&&_tool->currentIndex()==0&&_pressedCandidates.size()>1) {
             const auto candidates=_pressedCandidates;const bool cycle=_cycleOnClick;int target=_anchor;double nearest=1e20;
-            for(int i:candidates){double distance=QLineF(_press,QPointF(xForNote(i,_scoreGesture),yForValue(noteValue(i),_gestureLane,_scoreGesture))).length();if(distance<nearest){nearest=distance;target=i;}}
+            for(int i:candidates){double distance=QLineF(_press,QPointF(xForNote(i,_scoreGesture),velocityY(i,_gestureLane,_scoreGesture))).length();if(distance<nearest){nearest=distance;target=i;}}
             cancelGesture();if(cycle)cycleHit(candidates);else{selectIndices({target},Qt::NoModifier);updateHover(target);}return;
             }
       _dragging = false; qApp->removeEventFilter(this);
@@ -1072,7 +1087,7 @@ bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
             QTimer::singleShot(0, this, [this] { syncOverlayTracking(); syncTransport(); scheduleRefresh(); invalidateOverlay(); });
             return false;
             }
-      const bool closestWheel=onScore&&event->type()==QEvent::Wheel&&(static_cast<QWheelEvent*>(event)->modifiers()&(Qt::AltModifier|Qt::ShiftModifier))==(Qt::AltModifier|Qt::ShiftModifier);
+      const bool closestWheel=onScore&&event->type()==QEvent::Wheel&&nearestWheelShortcut(static_cast<QWheelEvent*>(event));
       QScopedValueRollback<bool> wheelScope(_closestWheelActive,closestWheel);
       if (onScore && !overlayAllowed()) return false;
       if(onScore && !_dragging && !_bandResizing && !_scoreRangePanning

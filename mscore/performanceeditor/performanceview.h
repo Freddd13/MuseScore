@@ -50,6 +50,7 @@ class PerformanceCanvas : public QWidget {
       void resizeEvent(QResizeEvent*) override;
    public:
       PerformanceCanvas(PerformanceEditor*, PerformanceSurface);
+      QSize sizeHint() const override { return QSize(480,_surface==PerformanceSurface::Ruler?28:(_surface==PerformanceSurface::Notes?100:90)); }
       PerformanceSurface surface() const { return _surface; }
       };
 }

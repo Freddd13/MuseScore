@@ -41,6 +41,7 @@ void PerformanceEditor::rebuildFilter()
             note.enabled = note.inScope && staffEnabled(note.track) && !_disabledTracks.contains(note.track) && (_voiceMask & (1 << (note.track % VOICES))) && (!_voice->currentIndex() || note.track % VOICES == _voice->currentIndex() - 1);
             changed |= oldScope != note.inScope || oldEnabled != note.enabled;
             }
+      _velocityStaves.clear();_velocityStaffNote.clear();for(const auto& n:_notes)if(n.enabled&&!_velocityStaves.contains(n.track/VOICES)){_velocityStaves.append(n.track/VOICES);_velocityStaffNote.insert(n.track/VOICES,int(&n-_notes.constData()));}std::sort(_velocityStaves.begin(),_velocityStaves.end());
       rebuildPitchRows();_visibleScoreNotes.clear();_visibleScoreRect=QRect();
       _selectionRefreshNeeded = false; _hover = -1; updateSelection(); if (changed) { invalidateVisual(); invalidateOverlay(); }
       }
@@ -92,8 +93,8 @@ QVector<int> PerformanceEditor::hits(QPointF point, bool parameter, bool onScore
             for (int position = begin; position < end; ++position) {
                   const int i = onScore ? _systemIndices[position] : position;
                   const auto it = _notes.cbegin() + i;
-                  if (noteEditable(*it) && std::abs(xForNote(i, onScore) - point.x()) < 7
-                        && ((it->selected&&point.y()>=lane.top()-7)||point.y() >= qMax(lane.top(), yForValue(noteValue(i), lane, onScore)) - 7) && point.y() <= lane.bottom() + 5) result.append(i);
+                  if (noteEditable(*it) && !velocityLane(i,lane,onScore).isEmpty() && velocityLane(i,lane,onScore).adjusted(0,-2,0,5).contains(QPointF(qBound(lane.left(),point.x(),lane.right()),point.y())) && std::abs(xForNote(i, onScore) - point.x()) < 7
+                        && ((it->selected&&point.y()>=lane.top()-7)||point.y() >= qMax(lane.top(), velocityY(i, lane, onScore)) - 7) && point.y() <= lane.bottom() + 5) result.append(i);
                   }
             }
       int nearestTick=-1;double nearestColumn=1e20;
@@ -102,7 +103,7 @@ QVector<int> PerformanceEditor::hits(QPointF point, bool parameter, bool onScore
             if (parameter) {
                   const bool chosenA=_notes[a].tick==nearestTick&&_notes[a].selected,chosenB=_notes[b].tick==nearestTick&&_notes[b].selected;
                   if(chosenA!=chosenB)return chosenA;
-                  const int da = qRound(std::abs(yForValue(noteValue(a), lane, onScore) - point.y())), db = qRound(std::abs(yForValue(noteValue(b), lane, onScore) - point.y()));
+                  const int da = qRound(std::abs(velocityY(a, lane, onScore) - point.y())), db = qRound(std::abs(velocityY(b, lane, onScore) - point.y()));
                   if ((da <= 7) != (db <= 7)) return da <= 7;
                   if (onScore && da <= 7 && db <= 7) {
                         // Quantized distance forms a strict ordering; pairwise
@@ -340,6 +341,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
       if ((event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Space) {
             event->accept(); if (event->type() == QEvent::KeyPress) togglePlayback(); return true;
             }
+      if(event->type()==QEvent::MouseButtonPress && parameter && static_cast<QMouseEvent*>(event)->button()==Qt::LeftButton && velocityHeaderClick(static_cast<QMouseEvent*>(event)->pos()))return true;
       if (event->type() == QEvent::Show) { scheduleRefresh(); syncTransport(); syncOverlayTracking(); }
       if (event->type() == QEvent::MouseButtonPress && parameter && static_cast<QMouseEvent*>(event)->button() == Qt::RightButton
             && tempoCurveMenu(static_cast<QMouseEvent*>(event)->pos(), false)) return true;
@@ -431,7 +433,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
                         }
                   if (!candidates.isEmpty()) {
                         const int target = candidates.front(); const bool cycle = _notes[target].selected && _selectedIndices.size() == 1 && candidates.size() > 1
-                              && std::abs(yForValue(noteValue(candidates[1]), laneRect()) - yForValue(noteValue(target), laneRect())) < 3 && mouse->modifiers() == Qt::NoModifier;
+                              && std::abs(velocityY(candidates[1], laneRect(),false) - velocityY(target, laneRect(),false)) < 3 && mouse->modifiers() == Qt::NoModifier;
                         selectIndices({target}, mouse->modifiers(), !(mouse->modifiers() & Qt::ControlModifier)); updateHover(target); audition(target);
                         if (mouse->modifiers() & Qt::ControlModifier) return true;
                         beginGesture(mouse->pos(), laneRect(), false, target); _cycleOnClick = cycle; _pressedCandidates = candidates; return _dragging;
