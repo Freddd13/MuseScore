@@ -24,6 +24,7 @@
 #include "libmscore/tie.h"
 #include "libmscore/glissando.h"
 #include "libmscore/undo.h"
+#include "libmscore/velocitybackup.h"
 #include "libmscore/xml.h"
 #include "mscore/midicrop/midicroppanel.h"
 #include "mscore/musescore.h"
@@ -156,6 +157,13 @@ private slots:
   QVERIFY(!page["notes"].toList().isEmpty());for(auto v:page["notes"].toList()){auto n=v.toMap();QVERIFY(n.contains("logicalId"));QVERIFY(n.contains("writtenTpc"));QVERIFY(n["velocity"].toInt()>0);QVERIFY(n.contains("tempoProtected"));}
   QVERIFY(o.performanceRange(0,100,0,8,0,16,"stale").contains("error"));
  }
+#ifdef Q_MOC_RUN
+ void expressionVelocitySavedHistory();
+ void expressionPartialApplicationMouse();
+#else
+#include "velocity_history_tests.inc"
+#include "expression_application_tests.inc"
+#endif
  void guardedExpressionUndoAndStale(){
   auto s=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(s);mscore->setCurrentScoreView(mscore->appendScore(s));PluginAPI::Score wrap(s);PluginAPI::ScoreObserver o;o.setScore(&wrap);o.workflowInfo();
   auto scope=o.analysisScope(true);auto page=o.performanceRange(0,scope["end"].toInt(),0,8,0,64,o.analysisRevision());QVariantMap n;
@@ -292,14 +300,23 @@ private slots:
   QVERIFY(click(expression,"expressionLocate"));QCOMPARE(score->selection().noteList().size(),1);QCOMPARE(score->selection().noteList()[0]->pitch(),n["writtenPitch"].toInt());QVERIFY(expression->property("status").toString().contains("已选中"));
   QVERIFY(click(expression,"expressionConfirm"));QTRY_VERIFY(!expression->property("busy").toBool());QVERIFY(expression->property("status").toString().contains("已确认"));
   expression->setProperty("advancedSettings",false);QTRY_VERIFY(expression->property("candidate").value<QJSValue>().isObject());
-  QVERIFY(click(expression,"expressionOriginalAudition"));QVERIFY(expression->property("workspace").toString().isEmpty());QVERIFY(!expression->property("previewWorkspace").toString().isEmpty());QVERIFY(mscore->currentScore()!=score);QVERIFY(expression->property("status").toString().contains("声音设备"));int auditionTabs=mscore->scores().size();QVERIFY(click(expression,"expressionCandidateAudition"));QTRY_COMPARE(mscore->scores().size(),auditionTabs+1);QVERIFY(mscore->currentScore()!=score);QVERIFY(click(expression,"expressionStop"));QTRY_VERIFY2(expression->property("status").toString().contains("试听已停止"),qPrintable(expression->property("status").toString()));expression->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",settings.path())).filePath("return-debug.png"));QVERIFY(click(expression,"expressionReturn"));QTRY_VERIFY2(expression->property("status").toString().contains("已返回原谱"),qPrintable(expression->property("status").toString()));QCOMPARE(mscore->currentScore(),score);QTest::qWait(100);
+  const int auditionTabs=mscore->scores().size();
+  QVERIFY(click(expression,"expressionOriginalAudition"));QTRY_VERIFY2(expression->property("status").toString().contains("声音设备"),qPrintable(expression->property("status").toString()));
+  QCOMPARE(mscore->scores().size(),auditionTabs);QCOMPARE(mscore->currentScore(),static_cast<Score*>(score));
+  QVERIFY(click(expression,"expressionCandidateAudition"));QTRY_VERIFY(expression->property("status").toString().contains("声音设备"));QCOMPARE(mscore->scores().size(),auditionTabs);QVERIFY(!expression->property("previewing").toBool());
+
   auto oldVelocity=score->undoStack()->getCurIdx();auto original=score->selection().noteList().front();int oldRaw=original->veloOffset();
   QVERIFY(click(expression, "expressionOpenEditor"));
   auto editorDock = mscore->findChild<QDockWidget *>("performanceEditorDock");
   QVERIFY(editorDock);
   QTRY_VERIFY(editorDock->isVisible());
-  auto compareLane = editorDock->findChild<QWidget *>("performanceWorkflowLanes");
-  QTRY_VERIFY(compareLane && compareLane->isVisible());
+  auto compareLane = editorDock->findChild<QWidget *>("performanceWorkflowLanes");QVERIFY(compareLane);
+  auto parameterCompare=editorDock->findChild<QToolButton*>("performanceExpressionCompare");QVERIFY(parameterCompare&&parameterCompare->isChecked());
+  auto parameterSelector=editorDock->findChild<QComboBox*>("performanceParameter");QVERIFY(parameterSelector&&parameterSelector->isVisible());
+  QVERIFY(!QRect(parameterSelector->mapTo(editorDock,QPoint()),parameterSelector->size()).intersects(QRect(parameterCompare->mapTo(editorDock,QPoint()),parameterCompare->size())));
+
+  const auto previewOutput=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");if(!previewOutput.isEmpty())editorDock->grab().save(previewOutput+"/editor-expression-main-049.png");
+  QVERIFY(observer->showEditorCorrespondence()["ok"].toBool());QTRY_VERIFY(compareLane->isVisible());
   auto use = editorDock->findChild<QToolButton *>("workflowapply");
   QVERIFY(use && use->isVisible());
   QTest::qWait(80);
@@ -307,6 +324,7 @@ private slots:
   QVERIFY(editorDock->rect().contains(use->mapTo(editorDock,use->rect().center())));
   const auto output=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");if(!output.isEmpty())editorDock->grab().save(output+"/editor-expression-047.png");QTest::mouseClick(use, Qt::LeftButton);
   QTRY_VERIFY(expression->property("status").toString().contains("已使用演奏力度"));
+  QTRY_VERIFY(!expression->property("busy").toBool());QVERIFY(!expression->property("stale").toBool());
   QCOMPARE(score->undoStack()->getCurIdx(), oldVelocity + 1);
   QVERIFY(original->veloOffset() != oldRaw);
   EditData undo;score->undoRedo(true,&undo);QCOMPARE(original->veloOffset(),oldRaw);

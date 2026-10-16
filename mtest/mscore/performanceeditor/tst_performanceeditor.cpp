@@ -1,3 +1,10 @@
+#include <QJsonArray>
+#include <QGridLayout>
+#include <QJsonDocument>
+#include "mscore/plugin/api/score.h"
+#include "mscore/workflow/playbackpreview.h"
+#include "mscore/workflow/workflowcontext.h"
+#include "mscore/workflow/referencebus.h"
 #include "libmscore/handbracket.h"
 #include "mscore/handbracketsettings.h"
 #include "mscore/palette/paletteworkspace.h"
@@ -802,6 +809,13 @@ class TestPerformanceEditor : public QObject, public MTest {
             score->undoRedo(true, &ed); QCOMPARE(a->timingMode(), 0); QCOMPARE(a->intervalMs(), 90.0); QCOMPARE(a->offsetMs(), 35.0);
 
             }
+#ifdef Q_MOC_RUN
+      void expressionPlaybackKeepsScoreAndBeat();
+      void expressionParameterDragAndApply();
+#else
+#include "expression_playback_tests.inc"
+#include "expression_compare_tests.inc"
+#endif
       void arpeggioRealSequencerPreRoll()
             {
             auto main = Ms::mscore; QVERIFY(main); QVERIFY(!Ms::seq);

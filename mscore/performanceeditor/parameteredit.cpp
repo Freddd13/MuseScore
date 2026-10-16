@@ -13,6 +13,7 @@
 #include "libmscore/staff.h"
 #include "libmscore/part.h"
 #include "libmscore/undo.h"
+#include "libmscore/velocitybackup.h"
 #include <QRegularExpression>
 
 namespace Ms {
@@ -120,9 +121,9 @@ static bool temposImpl(Score* score, const QMap<int, double>& bpm, int unlockedT
 
 bool velocities(Score* score,const QMap<Note*,VelocityEdit>& edits) {return velocitiesImpl(score,edits,true,false);}
 bool tempos(Score* score,const QMap<int,double>& bpm,int unlockedTick,QString* error) {return temposImpl(score,bpm,unlockedTick,error,true,false);}
-bool expression(Score* score,const QMap<Note*,VelocityEdit>& velocities,const QMap<int,double>& bpm,QString* error) {
+bool expression(Score* score,const QMap<Note*,VelocityEdit>& velocities,const QMap<int,double>& bpm,QString* error,bool saveOriginal) {
  if(!velocitiesImpl(score,velocities,false,true)||!temposImpl(score,bpm,-1,error,false,true))return false;
- score->startCmd();velocitiesImpl(score,velocities,false,false);temposImpl(score,bpm,-1,error,false,false);score->endCmd();return true;
+ score->startCmd();if(saveOriginal)for(auto it=velocities.cbegin();it!=velocities.cend();++it)VelocityBackup::remember(score,it.key());velocitiesImpl(score,velocities,false,false);temposImpl(score,bpm,-1,error,false,false);score->endCmd();return true;
 }
 bool writeTapTempo(Score* score,int tick,double bpm,bool selectedExisting,QString* error) {
  if(!editable(score))return false;

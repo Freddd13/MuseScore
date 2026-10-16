@@ -35,8 +35,13 @@ def main():
             try:
                 destination.relative_to(REPO)
             except ValueError:
-                errors.append(f"{document.name}: link leaves repository: {target}")
-                continue
+                # The preserved MCP appendix links to the sibling project's documentation.
+                sibling = REPO.parents[1] / "mcp-musescore"
+                try:
+                    destination.relative_to(sibling)
+                except ValueError:
+                    errors.append(f"{document.name}: link leaves project folders: {target}")
+                    continue
             links += 1
             if not destination.exists():
                 errors.append(f"{document.name}: broken link: {target}")
@@ -75,13 +80,17 @@ def main():
             )
         else:
             anchors += 1
-        for test_path in (path for path in row["tests"].split(";") if path and path != "-"):
+        for test_path in (path.strip() for path in row["tests"].split(";") if path.strip() and path.strip() != "-"):
             destination = (REPO / test_path).resolve()
             try:
                 destination.relative_to(REPO)
                 inside_repo = True
             except ValueError:
-                inside_repo = False
+                try:
+                    destination.relative_to(REPO.parents[1] / "muse3_plugins")
+                    inside_repo = True
+                except ValueError:
+                    inside_repo = False
             if not inside_repo or not destination.exists():
                 errors.append(f"source map test path missing/invalid: {test_path}")
 

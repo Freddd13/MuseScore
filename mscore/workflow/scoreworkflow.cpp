@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "mscore/plugin/api/scoreobserver.h"
 #include "midiinput.h"
+#include "workflowcontext.h"
+#include "playbackpreview.h"
 #include "mscore/seq.h"
 #include "mscore/scoreview.h"
+#include "mscore/performanceeditor/performanceeditor.h"
 #include "mscore/musescore.h"
 #include "libmscore/chord.h"
 #include "libmscore/note.h"
 #include "libmscore/notevelocity.h"
+#include "mscore/performanceeditor/markvelocity.h"
 #include "libmscore/measure.h"
 #include "libmscore/segment.h"
 #include "libmscore/tempotext.h"
@@ -52,7 +56,9 @@ QVariantMap ScoreObserver::savePerformanceSource(const QString& source,const QSt
  return {{"ok",true}};
 }
 QVariantMap ScoreObserver::stopWorkflowPlayback() {
+ stopPlaybackPreview();workflowContext()->finishPlaybackSession();
  if(seq&&seq->isPlaying())seq->stopWait();
+ if(seq&&!seq->isPlaying())seq->synchronizeStoppedGui();
  if(seq&&(!seq->backgroundRenderingIdle()||seq->isPlaying()))return {{"error","waiting for stop/render"}};
  return {{"ok",true}};
 }
@@ -63,18 +69,18 @@ QVariantMap ScoreObserver::workflowStatus() {
 QVariantMap ScoreObserver::workflowInfo() {
  if(!_score)return {{"error","no-score"}};
  if(playing() || (seq&&!seq->backgroundRenderingIdle()))return {{"error","playing-or-rendering"}};
- auto master=_score->masterScore();master->updateVelo();
+ auto master=_score->masterScore();master->updateVelo();if(_score!=master)_score->updateVelo();
  QVariantList repeats;for(auto r:master->repeatList())repeats.append(QVariantMap{{"tick",r->tick},{"end",r->tick+r->len()},{"utick",r->utick},{"seconds",r->utime},{"occurrence",r->playbackCount}});
  return {{"revision",analysisRevision()},{"file",master->fileInfo()->absoluteFilePath()},{"name",master->name()},{"dirty",master->dirty()},{"readOnly",master->readOnly()},{"repeats",repeats}};
 }
 QVariantMap ScoreObserver::performanceRange(int start,int end,int firstTrack,int endTrack,int fromTick,int limit,const QString& expected) {
  QElapsedTimer work;work.start();
  // Bounded cache shared by independent workflow observers, invalidated by native content state.
- struct Cache {QPointer<Ms::Score> score;ScoreContentState state;TempoMap clock;QVector<QPair<int,int>> curves;QCache<QString,QVariantMap> pages{64};};static Cache cache;
+ struct Cache {QPointer<Ms::Score> score;ScoreContentState state;TempoMap clock;QVector<QPair<int,int>> curves;MarkVelocityText marks;QCache<QString,QVariantMap> pages{64};};static Cache cache;
  const QString revision=analysisRevision();
  if(!_score||(!expected.isEmpty()&&revision!=expected)||playing())return {{"error","stale-or-playing"}};
  const auto state=_score->masterScore()->state();
- if(cache.score!=_score||cache.state!=state){cache.score=_score;cache.state=state;cache.pages.clear();cache.clock=*_score->tempomap();cache.clock.setRelTempo(1.0);cache.curves.clear();for(auto curve:TempoExpression::curves(_score->masterScore()))cache.curves.append({curve->tick().ticks(),curve->tick2().ticks()});}
+ if(cache.score!=_score||cache.state!=state){cache.score=_score;cache.state=state;cache.pages.clear();cache.clock=*_score->tempomap();cache.clock.setRelTempo(1.0);cache.marks=readMarkVelocityText(_score);cache.curves.clear();for(auto curve:TempoExpression::curves(_score->masterScore()))cache.curves.append({curve->tick().ticks(),curve->tick2().ticks()});}
  QString key=QString("%1:%2:%3:%4:%5:%6").arg(start).arg(end).arg(firstTrack).arg(endTrack).arg(fromTick).arg(limit);
  if(auto saved=cache.pages.object(key)){auto value=*saved;value.insert("revision",revision);value.insert("milliseconds",double(work.nsecsElapsed())/1000000);return value;}
  auto page=analysisRange(start,end,firstTrack,endTrack,fromTick,limit,expected);
@@ -85,6 +91,7 @@ QVariantMap ScoreObserver::performanceRange(int start,int end,int firstTrack,int
   auto n=v.toMap();auto note=resolve(n);if(!note)continue;
   int base=NoteVelocity::referenceBase(note);
   n.insert("scoreSeconds",scoreClock.tick2time(n.value("tick").toInt()));
+  n.insert("velocityMark",markVelocityAt(cache.marks,note->track(),n.value("tick").toInt()));
   n.insert("velocityType",int(note->veloType()));n.insert("velocityRaw",note->veloOffset());n.insert("velocityBase",base);
   n.insert("velocity",NoteVelocity::effective(base,note->veloType(),note->veloOffset()));
   bool manual=note->veloType()!=Ms::Note::ValueType::OFFSET_VAL||note->veloOffset()!=0||note->chord()->playEventType()==PlayEventType::User;
@@ -117,6 +124,7 @@ QVariantMap ScoreObserver::navigateWorkflow(const QVariantMap& range,bool auditi
  if(range.contains("index")){auto note=resolve(range);if(!note)return {{"error","stale note; read the score again"}};element=note;}
  if(element){_score->select(element,SelectType::SINGLE,track/VOICES);view->adjustCanvasPosition(element,false);}
  view->moveCursor(Fraction::fromTicks(tick));
+ if(auto editor=mscore->findChild<PerformanceEditor*>())editor->revealTick(tick);
  if(audition){
   if(!seq||!seq->driver())return {{"error","audio driver unavailable; the independent copy is open"}};
   if(!seq->backgroundRenderingIdle())return {{"error","waiting for render"}};
@@ -134,8 +142,7 @@ QVariantMap ScoreObserver::navigateWorkflow(const QVariantMap& range,bool auditi
   }
   if(utick<0||endUtick<0)return {{"error","requested repeat occurrence/range unavailable"}};
   int fromUtick=qMax(0,utick-(tick-context));int actualContext=repeats.utick2tick(fromUtick);
-  static QPointer<QObject> active;
-  if(active)delete active;auto session=new QObject(this);active=session;
+  workflowContext()->finishPlaybackSession();seq->synchronizeStoppedGui();auto session=new QObject(this);workflowContext()->setPlaybackSession(session);
   auto loop=getAction("loop");bool oldLoop=loop&&loop->isChecked();
   if(loop)loop->setChecked(false);
   auto touched=std::make_shared<bool>(false);

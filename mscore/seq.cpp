@@ -27,6 +27,8 @@
 #include "preferences.h"
 #include "scoreview.h"
 #include "seq.h"
+#include "workflow/playbackpreview.h"
+#include <QCoreApplication>
 #include "workflow/referencebus.h"
 #ifdef SCRIPT_INTERFACE
 #include "workflow/midicapture.h"
@@ -418,6 +420,8 @@ bool Seq::canStart()
 //   start
 //    called from gui thread
 //---------------------------------------------------------
+
+void Seq::synchronizeStoppedGui() { Q_ASSERT(!isPlaying()); QCoreApplication::sendPostedEvents(this,QEvent::MetaCall); }
 
 void Seq::startAtUTick(int utick) {
       if(!cs || isPlaying() || utick<0 || utick>cs->repeatList().ticks())return;
@@ -1537,7 +1541,9 @@ void Seq::collectEvents(int utick)
       if (midiRenderFuture.isRunning())
             midiRenderFuture.waitForFinished();
 
-      if (playlistChanged) {
+      const auto preview=activePlaybackPreviewEvents(cs);
+      if(preview){events=*preview;renderEvents.clear();renderEventsStatus.clear();}
+      else if (playlistChanged) {
             midi.setScoreChanged();
             events.clear();
             renderEvents.clear();
@@ -1549,7 +1555,7 @@ void Seq::collectEvents(int utick)
             }
 
       int unrenderedUtick = renderEventsStatus.occupiedRangeEnd(utick);
-      while (unrenderedUtick - utick < minUtickBufferSize) {
+      while (!preview && unrenderedUtick - utick < minUtickBufferSize) {
             const MidiRenderer::Chunk chunk = midi.getChunkAt(unrenderedUtick);
             if (!chunk)
                   break;
@@ -1571,6 +1577,7 @@ void Seq::collectEvents(int utick)
 
 void Seq::ensureBufferAsync(int utick)
       {
+      if(activePlaybackPreviewEvents(cs))return;
       if (mutex.tryLock()) { // sync with possible collectEvents calls
 
             if (midiRenderFuture.isRunning() || !allowBackgroundRendering) {

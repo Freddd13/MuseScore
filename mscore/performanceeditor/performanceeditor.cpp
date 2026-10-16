@@ -1,4 +1,6 @@
 #include "performanceeditor.h"
+#include <QJsonDocument>
+#include "markvelocity.h"
 #include "performanceselection.h"
 #include "workflowlanes.h"
 #include "../workflow/workflowcontext.h"
@@ -277,11 +279,14 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       connect(&_playTimer, &QTimer::timeout, this, &PerformanceEditor::updatePlayhead);
       _moveTimer.setSingleShot(true); _moveTimer.setInterval(16);
       connect(&_moveTimer, &QTimer::timeout, this, &PerformanceEditor::drainGesture);
-      setupUsabilityControls(); applyAppearance(); status();
+      setupUsabilityControls();setupExpressionComparison();
+      _toolbarReady = true; resizeEvent(nullptr); applyAppearance(); status();
       }
 
 void PerformanceEditor::resizeEvent(QResizeEvent*)
       {
+      if (!_toolbarReady || _toolbarReflowing) return;
+      _toolbarReflowing = true;
       int bar = 0;
       for (auto grid : {_topRow, _actionsRow}) {
             auto& widgets = _toolbarWidgets[bar++];
@@ -299,6 +304,8 @@ void PerformanceEditor::resizeEvent(QResizeEvent*)
                   }
             for(int c=0;c<columns;++c)grid->setColumnMinimumWidth(c,unit);
             }
+      if (layout()) layout()->activate();
+      _toolbarReflowing = false;
       }
 
 PerformanceEditor::~PerformanceEditor()
@@ -404,6 +411,7 @@ void PerformanceEditor::refresh()
       const int track = selectionTrack(_score, _contextTrack);
       _contextTrack = track;
       const int globalMethod = mscore ? mscore->synthesizerState().method() : 1;
+      const auto markNames=readMarkVelocityText(_score);
       _relativeMax = 100; _tempoMax = 240; _measures.clear();
       for (auto measure = _score->firstMeasure(); measure; measure = measure->nextMeasure()) {
             int bar, beat, subtick; _score->sigmap()->tickValues(measure->tick().ticks(), &bar, &beat, &subtick);
@@ -426,7 +434,7 @@ void PerformanceEditor::refresh()
                   auto cr = toChordRest(element);
                   _pedalBoundaries[0][t / VOICES].insert(tick); _pedalBoundaries[1][t / VOICES].insert((cr->tick() + cr->actualTicks()).ticks());
                   if (!element->isChord()) continue;
-                  auto addChord = [this, tick, globalMethod, live, stablePlayback](Chord* chord) {
+                  auto addChord = [this, tick, globalMethod, live, stablePlayback,&markNames](Chord* chord) {
                         for (Note* note : chord->notes()) {
                               const int index = _notes.size();
                               _noteIndex.insert(note, index);
@@ -435,7 +443,7 @@ void PerformanceEditor::refresh()
                               _notes.append({note, tick, chord->endTick().ticks(), note->track(), note->ppitch(),
                                     stablePlayback ? NoteVelocity::referenceBase(note, globalMethod) : -1, note->veloOffset(), 0, 0, note->veloType(),
                                     note->selected(), audible, note->canvasBoundingRect(), chord->measure()->system()});
-                              auto& cached = _notes.back(); cached.baseMin = cached.baseMax = cached.base;
+                              auto& cached = _notes.back(); cached.baseMin = cached.baseMax = cached.base;cached.dynamicText=markVelocityAt(markNames,note->track(),tick);
                               if (!note->tieBack() && note->tieFor()) cached.end = note->lastTiedNote()->chord()->endTick().ticks();
                               cached.name = tpc2name(note->tpc1(), NoteSpellingType::STANDARD, NoteCaseType::AUTO, false) + QString::number((note->ppitch() - static_cast<int>(tpc2alter(note->tpc1()))) / 12 - 1);
                               cached.written = tpc2name(note->tpc(), NoteSpellingType::STANDARD, NoteCaseType::AUTO, false) + QString::number((note->epitch() - static_cast<int>(tpc2alter(note->tpc()))) / 12 - 1); cached.part = note->part(); cached.instrument = cached.part->partName();
@@ -502,7 +510,7 @@ void PerformanceEditor::updateSelection()
             }
       findChild<QPushButton*>("performanceConvertRelative")->setEnabled(_parameter->currentIndex() == 0 && !_snapshotDegraded);
       findChild<QPushButton*>("performanceConvertAbsolute")->setEnabled(_parameter->currentIndex() == 0 && !_snapshotDegraded);
-      updateSurfaces(); status();
+      syncExpressionComparison();updateSurfaces(); status();
       if(_workflowPanel&&_workflowPanel->isVisible()&&!_selectedIndices.isEmpty()&&workflowContext()->current(_score)){
             auto selected=_notes[_selectedIndices.front()];auto data=workflowContext()->expression();auto matches=data.value("result").toMap().value("displayMatches").toList();
             auto it=std::lower_bound(matches.cbegin(),matches.cend(),selected.tick,[](const QVariant& v,int tick){return v.toMap().value("tick").toInt()<tick;});
@@ -660,6 +668,8 @@ void PerformanceEditor::convertSelected(Note::ValueType type)
 
 void PerformanceEditor::setSelectedValue(double value)
       {
+      if(comparisonWaiting()){status(tr("正在更新拟采用效果…"));return;}
+      if(comparisonActive()&&_parameter->currentIndex()==0){QVariantList edits;for(int index:selectedNotes())if(_comparisonValues.contains(index))edits.append(QVariantMap{{"id",_comparisonValues.value(index).value("id")},{"target",rangeKind()==1?NoteVelocity::effective(_notes[index].base,Note::ValueType::OFFSET_VAL,qRound(value)):qBound(1,qRound(value),127)}});if(!edits.isEmpty())workflowContext()->expressionAction("velocityTargets",QString(),QString::fromUtf8(QJsonDocument::fromVariant(edits).toJson(QJsonDocument::Compact)));return;}
       finishWheel(); if (_dirty) refresh(); pauseFollow();
       if (_parameter->currentIndex() == 1 && setTempoCurveNumber(value)) return;
       if (_parameter->currentIndex() == 1 && _selectedTempoTick >= 0) {
@@ -1063,6 +1073,7 @@ void PerformanceEditor::cancelGesture()
 
 bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       {
+      if(comparisonEvent(object,event))return true;
       if ((_scoreRangePanning||_bandResizing) && (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress)
             && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
             event->accept(); if (event->type() == QEvent::KeyPress) cancelGesture(); return true;

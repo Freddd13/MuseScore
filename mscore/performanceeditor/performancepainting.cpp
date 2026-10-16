@@ -140,6 +140,7 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
       if (parameter == 0) {
             if(!onScore)paintVelocityHeaders(painter,rect);
             if(_relativeActual)paintOriginalVelocity(painter,rect,onScore);
+            if(!onScore&&comparisonActive()){paintExpressionComparison(painter,rect);painter.restore();return;}
             const auto active = painter.clipBoundingRect().intersected(rect.adjusted(-8, -8, 8, 8));
             int from = tickForX(active.left() - 8, onScore), until = tickForX(active.right() + 8, onScore);
             auto first = std::lower_bound(_notes.cbegin(), _notes.cend(), from, [](const NoteInfo& n, int t) { return n.tick < t; });
@@ -217,6 +218,7 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
                   }
             }
       else if (parameter == 1) {
+            if(!onScore&&comparisonActive()){paintExpressionComparison(painter,rect);painter.restore();return;}
             auto bpmAt = [this](const SegmentInfo& segment) {
                   const auto original = std::upper_bound(_tempos.cbegin(), _tempos.cend(), segment.tick, [](int t, const TempoInfo& info) { return t < info.tick; });
                   const int originalTick = original == _tempos.cbegin() ? -1 : (original - 1)->tick;

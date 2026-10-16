@@ -28,8 +28,20 @@ namespace {
 double audioAt(const QVariantMap& a,double tick){auto points=a.value("anchors").toList();points.prepend(QVariantMap{{"tick",a.value("start")},{"ms",a.value("from")}});points.append(QVariantMap{{"tick",a.value("end")},{"ms",a.value("until")}});for(int i=1;i<points.size();++i){auto p=points[i-1].toMap(),q=points[i].toMap();if(tick<=q.value("tick").toDouble())return p.value("ms").toDouble()+(tick-p.value("tick").toDouble())*(q.value("ms").toDouble()-p.value("ms").toDouble())/qMax(1.,q.value("tick").toDouble()-p.value("tick").toDouble());}return a.value("until").toDouble();}
 }
 WorkflowLanes::WorkflowLanes(PerformanceEditor* editor):QWidget(editor),_editor(editor){
-      setObjectName("performanceWorkflowLanes");setMinimumHeight(100);setMouseTracking(true);setToolTip(tr("上排是谱面起音，下排是演奏起音；演奏时间按首尾对应缩放到这段谱子的时间尺。线条表示对应关系，? 是漏弹，+ 是多弹。力度细框是原值，实心是拟采用值。滚轮上下浏览音轨。"));connect(workflowContext(),&WorkflowContext::changed,this,QOverload<>::of(&WorkflowLanes::update));
+      setObjectName("performanceWorkflowLanes");setMinimumHeight(100);setMouseTracking(true);setToolTip(tr("上排是谱面起音，下排是演奏起音；每一段使用附近的可靠对应来对齐时间。线条表示对应关系，? 是漏弹，+ 是多弹。力度细框是原值，实心是拟采用值。滚轮上下浏览音轨。"));connect(workflowContext(),&WorkflowContext::changed,this,&WorkflowLanes::refreshExpression);refreshExpression();
       connect(editor-> _scroll,&QScrollBar::valueChanged,this,QOverload<>::of(&WorkflowLanes::update));
+      }
+void WorkflowLanes::refreshExpression(){
+      const auto expression=workflowContext()->expression();
+      const QString version=expression.value("revision").toString()+":"+expression.value("resultVersion").toString();
+      if(version!=_expressionVersion||!expression.contains("resultVersion")){
+            _expressionVersion=version;const auto result=expression.value("result").toMap();
+            _matches=result.value("displayMatches").toList();if(!result.contains("displayMatches"))_matches=result.value("matches").toList();
+            _timing.clear();for(auto value:result.value("timing").toList()){auto p=value.toMap();_timing.append({p.value("seconds").toDouble(),p.value("tick").toDouble()});}
+            // Older panels provide only the endpoints. New panels supply the local clock.
+            if(_timing.isEmpty()&&!_matches.isEmpty()){auto a=_matches.front().toMap(),b=_matches.back().toMap();_timing.append({a.value("seconds").toDouble(),a.value("tick").toDouble()});if(b.value("seconds").toDouble()>_timing.front().first)_timing.append({b.value("seconds").toDouble(),b.value("tick").toDouble()});}
+            }
+      update();
       }
 QObject* WorkflowLanes::wave(const QVariantMap& t){
       const QString key=t.value("path").toString();auto found=_waves.value(key);if(found)return found;
@@ -62,17 +74,20 @@ void WorkflowLanes::paintEvent(QPaintEvent*){
       theme.setColor(QPalette::Highlight,colors[PerformanceAppearance::Selection]);
       theme.setColor(QPalette::Mid,colors[PerformanceAppearance::Grid]);
       QPainter p(this);p.fillRect(rect(),theme.base());_hits.clear();const int gutter=PerformanceViewport::gutter;
-      auto expression=workflowContext()->expression();bool hasExpression=!expression.isEmpty();const bool valid=workflowContext()->current(_editor->score());
+      auto expression=workflowContext()->expression();const auto result=expression.value("result").toMap(),candidate=expression.value("candidate").toMap();bool hasExpression=!result.value("matches").toList().isEmpty()||!result.value("missing").toList().isEmpty()||!result.value("extra").toList().isEmpty()||!candidate.value("velocity").toList().isEmpty()||!candidate.value("tempos").toList().isEmpty();const bool valid=workflowContext()->current(_editor->score());
       const int expressionHeight=qBound(100,height(),136);const double base=expressionHeight-6,scale=qMax(24.,base-64.);
       int y=-_vertical;auto x=[&](double tick){return _editor->xForTick(int(std::lround(tick)),false);};
       if(hasExpression){
             p.setPen(theme.text().color());p.drawText(QRect(4,y+3,70,20),Qt::AlignVCenter,tr("谱面"));p.drawText(QRect(4,y+30,70,20),Qt::AlignVCenter,tr("演奏"));p.drawText(QRect(4,y+64,70,qMax(20,expressionHeight-64)),Qt::AlignVCenter,_tempo?tr("速度"):tr("力度"));
             if(!valid){p.drawText(QRect(gutter,y,width()-gutter,40),Qt::AlignVCenter,tr("乐谱已经改变，请在演奏表达面板重新读取。"));y+=56;}
             else{
-                  auto matches=expression.value("result").toMap().value("displayMatches").toList();if(matches.isEmpty())matches=expression.value("result").toMap().value("matches").toList();const QString selected=expression.value("selectedScoreId").toString();
+                  const auto& matches=_matches;const QString selected=expression.value("selectedScoreId").toString();
                   const auto targets=expression.value("candidate").toMap().value("velocityById").toMap();
-                  double firstTick=0,lastTick=0,firstSeconds=0,lastSeconds=0;if(!matches.isEmpty()){auto a=matches.front().toMap(),b=matches.back().toMap();firstTick=a.value("tick").toDouble();lastTick=b.value("tick").toDouble();firstSeconds=a.value("seconds").toDouble();lastSeconds=b.value("seconds").toDouble();}
-                  auto performanceTick=[&](double seconds){return lastSeconds>firstSeconds?firstTick+(seconds-firstSeconds)*(lastTick-firstTick)/(lastSeconds-firstSeconds):firstTick;};
+                  auto performanceTick=[&](double seconds){
+                        if(_timing.isEmpty())return expression.value("scope").toMap().value("start").toDouble();
+                        if(_timing.size()<2)return _timing.front().second;
+                        auto next=std::upper_bound(_timing.cbegin(),_timing.cend(),seconds,[](double s,const QPair<double,double>& p){return s<p.first;});if(next==_timing.cbegin())++next;if(next==_timing.cend())--next;auto before=next-1;return before->second+(seconds-before->first)*(next->second-before->second)/(next->first-before->first);
+                        };
                   p.save();p.setClipRect(QRect(gutter,y,width()-gutter,expressionHeight));
                   auto from=std::lower_bound(matches.cbegin(),matches.cend(),_editor->tickForX(gutter-8,false),[](const QVariant& v,int tick){return v.toMap().value("tick").toInt()<tick;});
                   const int until=_editor->tickForX(width()+8,false);
@@ -145,7 +160,13 @@ void WorkflowLanes::paintEvent(QPaintEvent*){
                                   {QRectF(px - 7, y + 5, 14, 18), n.value("id").toString(), QString(), -1});
                   }
                   p.setOpacity(1);
-                  for(auto value:expression.value("result").toMap().value("extra").toList()){auto n=value.toMap();if(matches.isEmpty())continue;double px=x(performanceTick(n.value("seconds").toDouble()));p.drawText(QPointF(px-4,y+42),"+");_hits.append({QRectF(px-7,y+28,14,18),QString(),n.value("id").toString(),-1});}
+                  for(auto value:result.value("extra").toList()){
+                        auto n=value.toMap();if(_timing.isEmpty())continue;double px=x(performanceTick(n.value("seconds").toDouble()));
+                        const bool selected=n.value("id").toString()==expression.value("selectedMidiId").toString();
+                        p.setPen(QPen(selected?theme.highlight().color():theme.text().color(),selected?2:1));
+                        if(selected){p.setBrush(Qt::NoBrush);p.drawRoundedRect(QRectF(px-8,y+26,16,21),3,3);}
+                        p.drawText(QPointF(px-4,y+42),"+");_hits.append({QRectF(px-7,y+28,14,18),QString(),n.value("id").toString(),-1,tr("多弹 · MIDI %1 · %2 秒").arg(n.value("pitch").toInt()).arg(n.value("seconds").toDouble(),0,'f',3)});
+                        }
                   if(_tempo){auto tempos=expression.value("candidate").toMap().value("tempos").toList();double low=999,high=5;for(auto value:tempos){auto t=value.toMap();low=qMin(low,qMin(t.value("oldBpm").toDouble(),t.value("bpm").toDouble()));high=qMax(high,qMax(t.value("oldBpm").toDouble(),t.value("bpm").toDouble()));}low=qMax(0.,low-5);high=qMax(low+10,high+5);QPolygonF original,candidate;
                         for(auto value:tempos){auto t=value.toMap();double px=x(t.value("tick").toDouble());original<<QPointF(px,y+base-(t.value("oldBpm").toDouble()-low)/(high-low)*scale);candidate<<QPointF(px,y+base-(t.value("bpm").toDouble()-low)/(high-low)*scale);}
                         p.setBrush(Qt::NoBrush);p.setPen(QPen(theme.text().color(),1,Qt::DashLine));p.drawPolyline(original);p.setPen(QPen(theme.highlight().color(),2));p.drawPolyline(candidate);p.drawText(QPointF(gutter+4,y+61),tempos.isEmpty()?tr("先在演奏表达生成 Rubato 结果。"):tr("速度：虚线是原值，实线是拟采用值。"));}
@@ -165,6 +186,7 @@ void WorkflowLanes::paintEvent(QPaintEvent*){
                   }
             p.restore();p.setPen(theme.mid().color());p.drawLine(0,row+59,width(),row+59);
             }
+      if(_editor->_playTick>=0){const double px=x(_editor->_playTick);if(px>=gutter&&px<=width()){p.setPen(QPen(colors[PerformanceAppearance::Playhead],1.5));p.drawLine(QPointF(px,0),QPointF(px,height()));}}
       if(!hasExpression&&tracks.isEmpty()){p.setPen(theme.text().color());p.drawText(rect().adjusted(8,4,-8,-4),Qt::AlignCenter|Qt::TextWordWrap,tr("从“原曲参考”添加音轨，或从“演奏表达”读取对应。此区域与上方共用时间尺。"));}
       }
 void WorkflowLanes::mousePressEvent(QMouseEvent* event){
@@ -210,8 +232,8 @@ void WorkflowLanes::wheelEvent(QWheelEvent* event){int rows=(_media?_media->prop
 void addWorkflowLanes(PerformanceEditor* editor,QWidget** result,QWidget* parent){
       auto panel=new QWidget(parent);panel->setObjectName("performanceWorkflowPanel");auto layout=new QVBoxLayout(panel);layout->setSizeConstraint(QLayout::SetMinimumSize);layout->setContentsMargins(0,0,0,0);auto row=new QHBoxLayout;layout->addLayout(row);auto lane=new WorkflowLanes(editor);layout->addWidget(lane,1);
       auto mode=new QComboBox(panel);mode->setObjectName("workflowComparisonKind");mode->addItems({QObject::tr("力度对比"),QObject::tr("速度对比")});row->addWidget(mode);QObject::connect(mode,QOverload<int>::of(&QComboBox::currentIndexChanged),lane,[lane](int index){lane->setTempo(index==1);});
-      for (auto item : QList<QPair<QString, QString>>{{QObject::tr("试听原来"), "auditionOriginal"},
-                                                      {QObject::tr("试听新效果"), "auditionCandidate"},
+      for (auto item : QList<QPair<QString, QString>>{{QObject::tr("谱中效果"), "auditionOriginal"},
+                                                      {QObject::tr("拟采用效果"), "auditionCandidate"},
                                                       {QObject::tr("使用力度"), "apply"}}) {
             auto b = new QToolButton(panel);
             b->setText(item.first);
@@ -225,8 +247,8 @@ void addWorkflowLanes(PerformanceEditor* editor,QWidget** result,QWidget* parent
                   auto sync = [b, mode, editor] {
                         const auto candidate = workflowContext()->expression().value("candidate").toMap();
                         const int count =
-                            candidate.value(mode->currentIndex() ? "tempos" : "velocity").toList().size();
-                        b->setEnabled(count > 0 && workflowContext()->current(editor->score()));
+                            workflowContext()->expression().value("applyCounts").toMap().value(mode->currentIndex()?"tempos":"velocity",candidate.value(mode->currentIndex() ? "tempos" : "velocity").toList().size()).toInt();
+                        b->setEnabled(count > 0 && !workflowContext()->expression().value("busy").toBool() && workflowContext()->current(editor->score()));
                         b->setText(mode->currentIndex() ? QObject::tr("使用速度 · %1处").arg(count)
                                                         : QObject::tr("使用力度 · %1音").arg(count));
                         b->setToolTip(

@@ -365,6 +365,8 @@ class Seq : public QObject, public Sequencer {
       const QHash<int, ActivePitchInfo>& activePitches() const;
       const QList<ActiveNoteEventInfo>& activeNoteEvents() const;
 
+      void invalidatePlaybackEvents() { Q_ASSERT(!isPlaying()); playlistChanged=true; }
+      void synchronizeStoppedGui();
       void collectEvents(int utick);
       void ensureBufferAsync(int utick);
       void guiStop();
@@ -446,4 +448,3 @@ extern bool initMidi();
 
 } // namespace Ms
 #endif
-

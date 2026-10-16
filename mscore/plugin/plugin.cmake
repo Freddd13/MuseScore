@@ -15,6 +15,8 @@ set (PLUGIN_API_SRC
     ${PROJECT_SOURCE_DIR}/mscore/workflow/midiinput.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/scoreworkflow.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/workflowexpression.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/playbackpreview.h
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/playbackpreview.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/workflowvariants.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/tapwrite.h
     ${PROJECT_SOURCE_DIR}/mscore/workflow/tapwrite.cpp

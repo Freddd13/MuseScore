@@ -47,6 +47,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
             const Part* part = nullptr;
             bool inScope = true, enabled = true;
             QVector<GeneratedVelocity> generatedVelocities;
+            QString dynamicText;
             };
       void cacheGeneratedVelocity(NoteInfo&, int);
       QPair<int,int> generatedVelocityRange(const NoteInfo&, Note::ValueType, int) const;
@@ -105,6 +106,26 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       double velocityY(int, const QRectF&, bool) const;
       bool velocityHeaderClick(QPointF);
       void paintVelocityHeaders(QPainter&, const QRectF&);
+      QToolButton* _comparisonButton=nullptr;
+      QHash<int,QVariantMap> _comparisonValues;
+      QVariantList _comparisonTempos;
+      QString _comparisonVersion;
+      ScoreContentState _comparisonState;
+      QMap<QString,double> _comparisonDraft;
+      QMap<int,double> _comparisonStarts;
+      bool _comparisonDragging=false,_comparisonDrawing=false;
+      int _comparisonAnchor=-1,_comparisonTempoTick=-1;
+      double _comparisonTempoStart=120;
+      QPointF _comparisonPress,_comparisonLast;
+      void setupExpressionComparison();
+      void syncExpressionComparison();
+      bool comparisonActive()const;
+      bool comparisonWaiting()const;
+      double comparisonValue(int)const;
+      void paintExpressionComparison(QPainter&,const QRectF&);
+      bool comparisonEvent(QObject*,QEvent*);
+      void cancelComparisonDrag();
+      void commitComparisonDrag();
       int _keyboardMode = 1;
       QSet<int> _disabledTracks, _usedPitches;
       bool _peekHeld=false, _peekAll=false, _closestWheelActive=false;
@@ -235,6 +256,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QDoubleSpinBox* _number;
       QScrollBar* _scroll = nullptr;
       QGridLayout *_topRow = nullptr, *_actionsRow = nullptr;
+      bool _toolbarReady = false, _toolbarReflowing = false;
       std::array<QVector<QWidget*>, 2> _toolbarWidgets;
       QTimer _refreshTimer, _commitTimer;
       ScoreContentState _state;
@@ -299,6 +321,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       void setSelectedValue(double);
       QPair<int,int> actualVelocityRange(const Note*) const;
       void fit(bool selection = false);
+      void revealTick(int tick);
       bool hasPending() const { return !_pending.isEmpty() || !_propertyPending.isEmpty(); }
       void queueProperty(Element*, Pid, const QVariant&);
       void flushPending();

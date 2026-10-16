@@ -163,6 +163,15 @@ void PerformanceEditor::togglePlayback(bool startOnly)
       if (startOnly && seq->isPlaying()) return;
       _view->cmd("play"); syncTransport();
       }
+void PerformanceEditor::revealTick(int tick)
+      {
+      if (!_score || !isVisible()) return;
+      const double position=xForTick(tick,false);
+      if(position<PerformanceViewport::gutter+24 || position>_canvas->width()-24){
+            pauseFollow();_scroll->setValue(qMax(0,tick-qRound((_canvas->width()-PerformanceViewport::gutter)*.35*DIVISION/_viewport.pixelsPerQuarter)));
+            }
+      updateSurfaces();
+      }
 void PerformanceEditor::locateSelection()
       {
       if (!_score) return;
@@ -281,6 +290,7 @@ void PerformanceEditor::updatePlayhead()
                   if (!line.isEmpty()) _view->update(line.toAlignedRect());
                   }
             }
+      if(_workflowPanel&&_workflowPanel->isVisible())if(auto lane=_workflowPanel->findChild<QWidget*>("performanceWorkflowLanes"))lane->update();
       for (QWidget* canvas : {static_cast<QWidget*>(_noteCanvas), static_cast<QWidget*>(_ruler), _canvas}) {
             const int oldX = qRound(xForTick(previous, false)), newX = qRound(xForTick(tick, false));
             if (previous >= 0) canvas->update(QRect(oldX - 3, 0, 7, canvas->height()));
@@ -349,7 +359,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
       if (event->type() == QEvent::Leave && !_dragging && !_marquee) updateHover(-1);
       if (event->type() == QEvent::Wheel) {
             auto wheel = static_cast<QWheelEvent*>(event);
-            if (!ruler && wheelVelocity(wheel, notes)) return true;
+            if (!ruler && !(parameter&&comparisonActive()) && wheelVelocity(wheel, notes)) return true;
             finishWheel(); pauseFollow(); cancelSurfaceGesture(); cancelGesture();
             const double factor = wheel->angleDelta().y() > 0 ? 1.2 : 1 / 1.2;
             if (wheel->modifiers() & Qt::ControlModifier) {

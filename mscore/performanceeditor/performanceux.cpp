@@ -177,15 +177,41 @@ bool PerformanceEditor::peekKeyEvent(QObject* object,QEvent* event)
 void PerformanceEditor::paintOriginalVelocity(QPainter& painter,const QRectF& rect,bool onScore)
       {
       if(rangeKind()!=0)return;
-      QHash<int,QPointF> previous;QHash<int,bool> labelled;
+      QHash<int,QPointF> previous;QHash<int,QColor> lineColors;
+      QSet<QString> labelled;
+      QVector<QRectF> labels;
       const int from=tickForX(rect.left(),onScore),until=tickForX(rect.right(),onScore);
-      auto candidates=onScore?_systemIndices:_intervals.query(from,until);std::sort(candidates.begin(),candidates.end());
-      for(int i:candidates){const auto& n=_notes[i];if(!n.inScope||(!n.enabled&&!_ghostVoices)||n.base<0)continue;
-            double x=xForNote(i,onScore);if(x<rect.left()||x>rect.right())continue;const auto noteLane=velocityLane(i,rect,onScore);if(noteLane.isEmpty())continue;const QPointF p(x,yForValue(n.base,noteLane,onScore));int staff=n.track/VOICES, line=n.track;
-            QColor color=_appearance.staves[(n.track/VOICES)%8];if(!n.enabled)color.setAlpha(45);painter.setPen(QPen(color,1,Qt::DashLine));
-            if(previous.contains(line)){auto old=previous.value(line);painter.drawLine(old,QPointF(p.x(),old.y()));painter.drawLine(QPointF(p.x(),old.y()),p);}else painter.drawLine(QPointF(p.x()-4,p.y()),QPointF(p.x()+4,p.y()));
-            if(!labelled.value(line)){painter.drawText(QPointF(p.x()+3,p.y()-4),tr("谱表 %1 · 声部 %2 · 记号力度 %3").arg(staff+1).arg(n.track%VOICES+1).arg(n.base));labelled[line]=true;}previous[line]=p;}
-      for(auto it=previous.cbegin();it!=previous.cend();++it){painter.setPen(QPen(_appearance.staves[(it.key()/VOICES)%8],1,Qt::DashLine));painter.drawLine(it.value(),QPointF(rect.right(),it.value().y()));}
+      auto candidates=onScore?_systemIndices:_intervals.query(from,until);
+      std::sort(candidates.begin(),candidates.end());
+      for(int i:candidates){
+            const auto& n=_notes[i];
+            if(!n.inScope||(!n.enabled&&!_ghostVoices)||n.base<0)continue;
+            const double x=xForNote(i,onScore);
+            if(x<rect.left()||x>rect.right())continue;
+            const auto lane=velocityLane(i,rect,onScore);if(lane.isEmpty())continue;
+            const QPointF point(x,yForValue(n.base,lane,onScore));
+            const int staff=n.track/VOICES,line=n.track;
+            QColor color=_appearance.staves[staff%8];if(!n.enabled)color.setAlpha(45);
+            painter.setPen(QPen(color,1,Qt::DashLine));
+            lineColors[line]=color;
+            if(previous.contains(line)){auto old=previous.value(line);if(qAbs(old.y()-point.y())>.001){painter.drawLine(old,QPointF(point.x(),old.y()));painter.drawLine(QPointF(point.x(),old.y()),point);previous[line]=point;}}
+            else previous[line]=point;
+            const QString key=QString("%1:%2:%3").arg(staff).arg(n.base).arg(n.dynamicText);
+            if(labelled.contains(key))continue;
+            const QString text=tr("谱表 %1 · %2 %3").arg(staff+1).arg(n.dynamicText.isEmpty()?tr("记号力度"):n.dynamicText).arg(n.base);
+            const double width=painter.fontMetrics().horizontalAdvance(text)+8,height=painter.fontMetrics().height()+2;
+            const double offsets[4]={-height-3,3,-2*height-5,height+5};
+            for(int attempt=0;attempt<12;++attempt){
+                  const double left=qBound(lane.left(),point.x()+4+(attempt/4)*(width+6),qMax(lane.left(),lane.right()-width));
+                  QRectF box(left,point.y()+offsets[attempt%4],width,height);
+                  if(!lane.contains(box))continue;
+                  bool overlaps=false;for(const auto& used:labels)if(box.intersects(used)){overlaps=true;break;}
+                  if(overlaps)continue;
+                  painter.setPen(QPen(color,1));painter.fillRect(box,_appearance.colors[PerformanceAppearance::Background]);painter.drawText(box.adjusted(4,0,-4,0),Qt::AlignVCenter,text);
+                  labels.append(box);labelled.insert(key);break;
+                  }
+            }
+      for(auto it=previous.cbegin();it!=previous.cend();++it){painter.setPen(QPen(lineColors.value(it.key()),1,Qt::DashLine));painter.drawLine(it.value(),QPointF(rect.right(),it.value().y()));}
       }
 void PerformanceEditor::rebuildScoreNoteRows()
       {

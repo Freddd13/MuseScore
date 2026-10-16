@@ -18,6 +18,10 @@ class WorkflowLanes : public QWidget {
             QString tooltip;
       };
       QVector<Hit> _hits;
+      QString _expressionVersion;
+      QVariantList _matches;
+      QVector<QPair<double,double>> _timing;
+      void refreshExpression();
       QString _scoreId,_midiId;
       int _vertical=0;
       bool _tempo=false;
