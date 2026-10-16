@@ -7,6 +7,10 @@
 #include "hook.h"
 #include "accidental.h"
 #include "beam.h"
+#include "ledgerline.h"
+#include "stafflines.h"
+#include "skyline.h"
+#include <QSet>
 #include "segment.h"
 #include "measure.h"
 #include "system.h"
@@ -19,13 +23,35 @@ int role(SymId id) {
       case SymId::keyboardPlayWithRH:return 2;case SymId::keyboardPlayWithRHEnd:return 3;default:return -1;}
       }
 Style styles[4]={{.75,-1.8,.12,false},{-.75,-1.8,.12,false},{.75,-1.8,.12,false},{-.75,-1.8,.12,false}};
-void chordRects(const Chord* chord,const QPointF& origin,QVector<QRectF>* result) {
+void chordRects(Chord* chord,const QPointF& origin,const QRectF& window,QVector<QRectF>* result) {
+      auto add=[&](QRectF r){if(r.right()>=window.left()&&r.left()<=window.right())result->append(r);};
       for(auto note:chord->notes()) {
-            result->append(note->bbox().translated(origin+note->pos()));
-            if(note->accidental())result->append(note->accidental()->bbox().translated(origin+note->pos()+note->accidental()->pos()));
+            add(note->bbox().translated(origin+note->pos()));
+            if(note->accidental())add(note->accidental()->bbox().translated(origin+note->pos()+note->accidental()->pos()));
             }
-      if(chord->stem())result->append(chord->stem()->bbox().translated(origin+chord->stem()->pos()));
-      if(chord->hook())result->append(chord->hook()->bbox().translated(origin+chord->hook()->pos()));
+      if(chord->stem())add(chord->stem()->bbox().translated(origin+chord->stem()->pos()));
+      if(chord->hook())add(chord->hook()->bbox().translated(origin+chord->hook()->pos()));
+      const double staffOffset=chord->measure()->staffLines(chord->vStaffIdx())->y();
+      for(auto line=chord->ledgerLines();line;line=line->next())add(line->bbox().translated(origin+QPointF(line->x(),line->y()-chord->y()-staffOffset)));
+      }
+QVector<QRectF> inkRects(const Symbol* symbol) {
+      const double sp=symbol->spatium()*symbol->mag();
+      const double h=symbol->getProperty(Pid::HAND_BRACKET_H).toDouble()*sp,v=symbol->getProperty(Pid::HAND_BRACKET_V).toDouble()*sp;
+      const double pad=symbol->getProperty(Pid::HAND_BRACKET_WIDTH).toDouble()*sp/2,y=symbol->handLeft()?v:0.;
+      QVector<QRectF> result{QRectF(-pad,qMin(0.,v)-pad,2*pad,std::abs(v)+2*pad),QRectF(qMin(0.,h)-pad,y-pad,std::abs(h)+2*pad,2*pad)};
+      if(symbol->getProperty(Pid::HAND_BRACKET_TEXT).toBool()){auto shape=symbol->shape();if(shape.size()>2)result.append(shape.back());}
+      return result;
+      }
+void beamRects(Beam* beam,const QPointF& origin,const QRectF& window,QVector<QRectF>* result) {
+      Skyline outline;beam->addSkyline(outline);auto north=outline.north().begin(),south=outline.south().begin();
+      while(north!=outline.north().end()&&south!=outline.south().end()) {
+            const double first=qMax(north->x,south->x),last=qMin(north->x+north->w,south->x+south->w);
+            if(last>first&&outline.north().valid(*north)&&outline.south().valid(*south)) {
+                  auto r=QRectF(first,north->y,last-first,south->y-north->y).normalized().translated(origin);
+                  if(r.right()>=window.left()&&r.left()<=window.right())result->append(r);
+                  }
+            if(north->x+north->w<south->x+south->w)++north;else if(south->x+south->w<north->x+north->w)++south;else{++north;++south;}
+            }
       }
 }
 Style defaults(SymId id) {const int i=role(id);return i<0 ? Style{}:styles[i];}
@@ -35,41 +61,52 @@ bool setDefaults(SymId id,const Style& style) {
       styles[i]=style;return true;
       }
 QPointF position(const Symbol* symbol) {
-      auto parent=symbol->parent();if(!parent || (!parent->isNote() && !parent->isChord()))return {};
-      auto chord=parent->isNote() ? toNote(parent)->chord():toChord(parent);
-      auto anchor=parent->isNote() ? toNote(parent):symbol->handLeft()?chord->upNote():chord->downNote();
-      const double sp=symbol->spatium()*symbol->mag();
-      const QPointF anchorPosition=parent->isNote() ? QPointF():anchor->pos();
-      const auto head=anchor->bbox().translated(anchorPosition);
-      const double vertical=symbol->getProperty(Pid::HAND_BRACKET_V).toDouble()*sp;
-      const double corner=symbol->handLeft()?head.top()-.3*sp:head.bottom()+.3*sp;
-      QPointF base(symbol->handEnd()?head.right()+.45*sp:head.left()-.45*sp,corner-(symbol->handLeft()?vertical:0));
-      int ordinal=0;const auto& list=parent->isNote() ? toNote(parent)->el():toChord(parent)->el();
-      for(auto other:list) {if(other==symbol)break;if(other->isSymbol() && toSymbol(other)->handBracket() && toSymbol(other)->handLeft()==symbol->handLeft())++ordinal;}
-      base.ry()+=(symbol->handLeft()?-1:1)*ordinal*.65*sp;
-      if(!symbol->autoplace())return base;
-      QVector<QRectF> obstacles;
-      const QPointF origin=chord->pagePos()-parent->pagePos();
-      chordRects(chord,origin,&obstacles);
-      auto segment=chord->segment();int count=0;
-      // Only nearby chord groups, with a strict bound independent of score length.
-      for(int side:{-1,1}) {
-            auto s=segment;for(int i=0;i<16;++i) {
-                  s=side<0 ? s->prev1(SegmentType::ChordRest):s->next1(SegmentType::ChordRest);
-                  if(!s || s->measure()->system()!=chord->measure()->system())break;
-                  for(int track=chord->staffIdx()*VOICES;track<(chord->staffIdx()+1)*VOICES;++track) {
-                        auto element=s->element(track);if(element && element->isChord())chordRects(toChord(element),element->pagePos()-parent->pagePos(),&obstacles);
+      auto parent=symbol->parent();if(!parent||(!parent->isNote()&&!parent->isChord()))return {};
+      auto chord=parent->isNote()?toNote(parent)->chord():toChord(parent);
+      auto anchor=parent->isNote()?toNote(parent):symbol->handLeft()?chord->upNote():chord->downNote();
+      const double sp=symbol->spatium()*symbol->mag(),grid=chord->spatium();if(sp<=0||grid<=0)return {};
+      const QPointF anchorPosition=parent->isNote()?QPointF():anchor->pos();
+      const auto head=anchor->bbox().translated(anchorPosition);auto measure=chord->measure();auto system=measure?measure->system():nullptr;
+      const double staffTop=-chord->y()-(parent->isNote()?anchor->y():0.);
+      const double h=symbol->getProperty(Pid::HAND_BRACKET_H).toDouble()*sp,v=symbol->getProperty(Pid::HAND_BRACKET_V).toDouble()*sp;
+      const double edge=symbol->handLeft()?head.top()-.08*sp:head.bottom()+.08*sp;
+      const double space=(edge-staffTop)/grid-.5;
+      const double nearCorner=staffTop+((symbol->handLeft()?std::floor(space):std::ceil(space))+.5)*grid;
+      int ordinal=0;const auto& list=parent->isNote()?toNote(parent)->el():toChord(parent)->el();
+      for(auto other:list){if(other==symbol)break;if(other->isSymbol()&&toSymbol(other)->handBracket()&&toSymbol(other)->handLeft()==symbol->handLeft())++ordinal;}
+      auto baseAt=[&](double gap,int move){
+            const double corner=nearCorner+(symbol->handLeft()?-1:1)*(ordinal+move)*grid;
+            const double x=h>=0?head.left()-h-gap*sp:head.right()-h+gap*sp;
+            return QPointF(x,corner-(symbol->handLeft()?v:0));
+            };
+      const auto initial=baseAt(.28,0);if(!symbol->autoplace()||!system||!chord->segment())return initial;
+      const double reach=qMax(8.,std::abs(h)/sp+6)*sp;
+      const auto window=head.adjusted(-reach,-6*sp,reach,6*sp);
+      QVector<QRectF> obstacles;QSet<Beam*> beams;
+      auto addChord=[&](Chord* c){
+            chordRects(c,c->pagePos()-parent->pagePos(),window,&obstacles);
+            if(c->beam()&&c->beam()->system()==system)beams.insert(c->beam());
+            };
+      addChord(chord);
+      for(int side:{-1,1}){
+            auto segment=chord->segment();
+            for(int i=0;i<16;++i){
+                  segment=side<0?segment->prev1(SegmentType::ChordRest):segment->next1(SegmentType::ChordRest);
+                  if(!segment||segment->measure()->system()!=system)break;
+                  if(std::abs(segment->pagePos().x()-chord->pagePos().x())>reach+2*sp)break;
+                  for(int staff:QSet<int>{chord->staffIdx(),chord->vStaffIdx()})for(int track=staff*VOICES;track<(staff+1)*VOICES;++track){
+                        auto element=segment->element(track);if(element&&element->isChord())addChord(toChord(element));
                         }
-                  if(++count>=32)break;
+                  if(obstacles.size()>2048)break;
                   }
             }
-      if(chord->beam())obstacles.append(chord->beam()->bbox().translated(chord->beam()->pagePos()-parent->pagePos()));
-      const auto shape=symbol->shape();QPointF best=base;int bestHits=INT_MAX;
-      for(double move:{0.,.4,.8,1.2,1.6,2.4,3.2}) {
-            const QPointF candidate=base+QPointF(0,(symbol->handLeft()?-1:1)*move*sp);
-            int hits=0;for(const auto& part:shape)for(const auto& obstacle:obstacles)
-                  if(part.translated(candidate).intersects(obstacle.adjusted(-.15*sp,-.15*sp,.15*sp,.15*sp)))++hits;
-            if(hits<bestHits){bestHits=hits;best=candidate;}if(!hits)break;
+      for(auto beam:beams)beamRects(beam,beam->pagePos()-parent->pagePos(),window,&obstacles);
+      const auto ink=inkRects(symbol);QPointF best=initial;double bestCost=1e30;
+      for(int move:{0,1,2,3})for(double gap:{.28,.45,.7,1.,1.4}){
+            const auto candidate=baseAt(gap,move);int hits=0;
+            for(const auto& part:ink)for(const auto& obstacle:obstacles)if(part.translated(candidate).intersects(obstacle.adjusted(-.12*sp,-.12*sp,.12*sp,.12*sp)))++hits;
+            const double cost=hits*1000.+move*.65+gap*.35;
+            if(cost<bestCost){bestCost=cost;best=candidate;}
             }
       return best;
       }

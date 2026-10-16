@@ -14,32 +14,29 @@ namespace Ms {
 static QString lineFontFace(Score* score) { TempoText text(score); return text.getProperty(Pid::FONT_FACE).toString(); }
 void appendPlayableTempoSymbols(PalettePanel* panel)
       {
-      if (!panel || panel->type() != PalettePanel::Type::Tempo || !gscore) return;
-      bool hasRit=false, hasRestore=false;
-      for (int i=0;i<panel->ncells();++i) {
-            auto element=panel->cell(i)->element.get();if(!element)continue;
-            hasRit |= element->isTextLine() && static_cast<TextLine*>(element)->ritPlay();
-            hasRestore |= element->isTempoText() && toTempoText(element)->restoreMode()==1;
-            }
-      for (int i=0;i<panel->ncells();++i) {
-            auto cell=panel->cell(i);
-            if(cell->tag=="kumo-rit" || cell->tag=="kumo-a-tempo")cell->tag.clear();
-            }
-      if (!hasRit) {
-            auto line=new TextLine(gscore,true);line->setLen(7*gscore->spatium());
-            TempoText prototype(gscore);
+      if(!panel||panel->type()!=PalettePanel::Type::Tempo||!gscore)return;
+      auto makeRit=[](){
+            auto line=new TextLine(gscore,true);line->setLen(4*gscore->spatium());TempoText prototype(gscore);
             line->setBeginText("rit.");line->setContinueText("(rit.)");
             line->setProperty(Pid::BEGIN_FONT_FACE,prototype.getProperty(Pid::FONT_FACE));line->setProperty(Pid::BEGIN_FONT_SIZE,prototype.getProperty(Pid::FONT_SIZE));line->setProperty(Pid::BEGIN_FONT_STYLE,prototype.getProperty(Pid::FONT_STYLE));
-            line->setLineStyle(Qt::DashLine);line->setProperty(Pid::RIT_MODE,true);line->setProperty(Pid::RIT_PLAY,true);
-            panel->append(line,QObject::tr("渐慢 rit.（可播放）"),QString(),.8);
+            line->setLineStyle(Qt::DashLine);line->setProperty(Pid::RIT_MODE,true);line->setProperty(Pid::RIT_PLAY,true);return line;
+            };
+      auto makeRestore=[](){auto text=new TempoText(gscore);text->setFollowText(false);text->setXmlText("a tempo");text->setProperty(Pid::TEMPO_RESTORE_MODE,1);text->setProperty(Pid::FONT_FACE,lineFontFace(gscore));return text;};
+      bool found[2]={false,false};
+      for(int i=0;i<panel->ncells();) {
+            auto cell=panel->cell(i);auto e=cell->element.get();if(!e){++i;continue;}
+            const bool oldRit=cell->tag=="kumo-rit",oldRestore=cell->tag=="kumo-a-tempo";
+            int role=oldRit||(e->isTextLine()&&toTextLine(e)->ritPlay())?0:oldRestore||(e->isTempoText()&&toTempoText(e)->restoreMode()==1)?1:-1;
+            if(role<0||(cell->custom&&!oldRit&&!oldRestore)){++i;continue;}
+            if(found[role]){panel->takeCells(i,1);continue;}found[role]=true;
+            if(oldRit||oldRestore){cell->element.reset(role==0?static_cast<Element*>(makeRit()):static_cast<Element*>(makeRestore()));cell->custom=false;e=cell->element.get();}
+            cell->tag.clear();cell->name=role==0?QObject::tr("渐慢 rit.（可播放）"):QObject::tr("a tempo（恢复渐变前的速度）");
+            cell->mag=role==0?1.:1.1;if(role==0)toTextLine(e)->setLen(4*gscore->spatium());++i;
             }
-      if (!hasRestore) {
-            auto text=new TempoText(gscore);text->setFollowText(false);text->setXmlText("a tempo");
-            text->setProperty(Pid::TEMPO_RESTORE_MODE,1);
-            text->setProperty(Pid::FONT_FACE,lineFontFace(gscore));
-            panel->append(text,QObject::tr("a tempo（恢复渐变前的速度）"),QString(),1.1);
-            }
+      if(!found[0])panel->append(makeRit(),QObject::tr("渐慢 rit.（可播放）"),QString(),1.);
+      if(!found[1])panel->append(makeRestore(),QObject::tr("a tempo（恢复渐变前的速度）"),QString(),1.1);
       }
+
 bool isPlayableTempoSymbol(const Element* element)
       {
       return element && ((element->isTextLine() && static_cast<const TextLine*>(element)->ritPlay())

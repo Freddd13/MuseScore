@@ -43,6 +43,17 @@ QmlPlugin::QmlPlugin(QQuickItem* parent)
    : QQuickItem(parent)
       {}
 
+QmlPlugin::~QmlPlugin()
+      {
+      auto release=[this](QPointer<QDockWidget>& pointer,QPointer<QQuickWindow>& window) {
+            auto dock=pointer.data();pointer.clear();
+            if(!dock)return;dock->removeEventFilter(this);disconnect(dock,nullptr,this,nullptr);
+            if(window){const auto items=window->contentItem()->childItems();for(auto item:items)item->setParentItem(nullptr);}
+            window.clear();dock->deleteLater();
+            };
+      release(_summaryDock,_summaryWindow);release(_detailDock,_detailWindow);
+      }
+
 void QmlPlugin::attachPanelDock(QDockWidget* dock)
       {
       _panelDock = dock;

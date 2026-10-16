@@ -79,3 +79,15 @@
   config["summaryOrder"]=0;QVERIFY(QMetaObject::invokeMethod(root,"applyPreferences",Q_ARG(QVariant,QVariant(config))));QTest::qWait(80);QVERIFY(root->summaryPanelHost()->height()<60);
   root->setVisible(false);root->deleteLater();QTest::qWait(50);
  }
+
+ void assistantSurfaceLifetime(){
+  auto score=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);mscore->setCurrentScoreView(mscore->appendScore(score));mscore->resize(1250,900);mscore->show();
+  const QString path=QString(TESTROOT)+"/share/plugins/HarmonyAssistant/HarmonyAssistant_MS3.qml";
+  for(int i=0;i<6;++i){
+   PluginDescription description;description.path=path;QVERIFY(collectPluginMetaInformation(&description));mscore->registerPlugin(&description);mscore->pluginTriggered(path);QTest::qWait(80);
+   QPointer<QmlPlugin> root;for(auto window:QGuiApplication::allWindows())if(auto view=qobject_cast<QQuickView*>(window))if(auto item=qobject_cast<QmlPlugin*>(view->rootObject()))if(item->menuPath().endsWith("Harmony Assistant"))root=item;QVERIFY(root);
+   auto config=root->property("configuration").value<QJSValue>().toVariant().toMap();config["dualPanel"]=true;config["chordLabels"]=true;QVERIFY(QMetaObject::invokeMethod(root,"applyPreferences",Q_ARG(QVariant,QVariant(config))));QTest::qWait(80);
+   const auto panels=mscore->findChildren<QDockWidget*>("kumoPanel/HarmonyAssistant_MS3");QVERIFY(!panels.isEmpty());auto primary=panels.back();primary->setFloating(false);mscore->addDockWidget(i%2?Qt::RightDockWidgetArea:Qt::TopDockWidgetArea,primary);QTest::qWait(100);
+   root->setVisible(false);primary->setAttribute(Qt::WA_DeleteOnClose,true);primary->close();QTRY_VERIFY(root.isNull());QTest::qWait(80);mscore->currentScoreView()->update();QTest::qWait(40);
+   }
+ }

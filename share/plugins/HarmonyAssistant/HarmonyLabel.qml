@@ -19,6 +19,6 @@ Item {
     }
     implicitWidth:rendered&&rendered.width?rendered.width:fallback.implicitWidth
     implicitHeight:rendered&&rendered.height?rendered.height:fallback.implicitHeight
-    Image {anchors.fill:parent;source:label.rendered&&label.rendered.source?label.rendered.source:"";fillMode:Image.PreserveAspectFit;horizontalAlignment:Image.AlignLeft;smooth:true;cache:false}
+    Image {anchors.fill:parent;source:label.rendered&&label.rendered.source?label.rendered.source:"";fillMode:Image.PreserveAspectFit;horizontalAlignment:Image.AlignLeft;smooth:true;cache:true;asynchronous:false}
     Text {id:fallback;visible:!label.rendered||!label.rendered.source;text:label.chord+(label.chord&&label.degree?"  ":"")+label.degree;font.family:"Edwin";font.pixelSize:label.pixels;color:label.color;anchors.verticalCenter:parent.verticalCenter}
 }

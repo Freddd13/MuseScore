@@ -8,6 +8,7 @@
 #include "mscore/workflow/referencebus.h"
 #include "libmscore/handbracket.h"
 #include "mscore/handbracketsettings.h"
+#include "mscore/temposymbols.h"
 #include "mscore/palette/paletteworkspace.h"
 #include <QStackedWidget>
 #include <QtTest/QtTest>
@@ -905,6 +906,10 @@ class TestPerformanceEditor : public QObject, public MTest {
       void handSymbolPlacementAndDefaults();
       void restoredTempoLayout();
       void handSymbolInspectorAndGrips();
+      void freeSlurRoutedGeometry();
+      void freeSlurRoutedPersistenceAndControls();
+      void handSymbolPlacementExamples();
+      void notationPaletteMigration();
       void freeSlurModelAndReflow();
       void freeSlurAutomaticGeometry();
       void freeSlurBeamAvoidance();
@@ -1090,6 +1095,7 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "envelope_editor_tests.inc"
 #include "freeslur_tests.inc"
 #include "handsymbol_tests.inc"
+#include "notation_051_tests.inc"
 #include "rit_editor_tests.inc"
 QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"

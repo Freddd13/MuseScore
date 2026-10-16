@@ -25,13 +25,18 @@ bool decode(const QString& data, QVector<FreeSlurNode>* result)
       if(error.error!=QJsonParseError::NoError || !document.isArray() || document.array().size()>maximumNodes) return false;
       QVector<FreeSlurNode> nodes;
       for(const auto item:document.array()) {
-            if(!item.isArray() || (item.toArray().size()!=5 && item.toArray().size()!=6)) return false;
+            if(!item.isArray() || (item.toArray().size()!=5 && item.toArray().size()!=6 && item.toArray().size()!=8)) return false;
             const auto values=item.toArray();
             for(int i=0;i<5;++i) if(!values[i].isDouble() || !std::isfinite(values[i].toDouble())) return false;
             if(values[0].toDouble()<=0 || values[0].toDouble()>=1) return false;
             for(int i=1;i<5;++i) if(std::abs(values[i].toDouble())>(i<3 ? 100 : 400)) return false;
-            if(values.size()==6 && !values[5].isBool()) return false;
-            nodes.append({values[0].toDouble(),{values[1].toDouble(),values[2].toDouble()},{values[3].toDouble(),values[4].toDouble()},values.size()==5 || values[5].toBool()});
+            if(values.size()>=6 && !values[5].isBool()) return false;
+            int before=0,after=0;
+            if(values.size()==8){
+                  for(int i=6;i<8;++i)if(!values[i].isDouble()||values[i].toDouble()!=values[i].toInt()||values[i].toInt()<-1||values[i].toInt()>1)return false;
+                  before=values[6].toInt();after=values[7].toInt();
+                  }
+            nodes.append({values[0].toDouble(),{values[1].toDouble(),values[2].toDouble()},{values[3].toDouble(),values[4].toDouble()},values.size()==5 || values[5].toBool(),before,after});
             }
       std::sort(nodes.begin(),nodes.end(),[](const FreeSlurNode& a,const FreeSlurNode& b){return a.position<b.position;});
       for(int i=1;i<nodes.size();++i) if(nodes[i].position-nodes[i-1].position<.00001) return false;
@@ -42,10 +47,34 @@ QString encode(const QVector<FreeSlurNode>& nodes)
       QJsonArray values;
       for(const auto& n:nodes) {
             QJsonArray row{n.position,n.offset.x(),n.offset.y(),n.tangent.x(),n.tangent.y()};
-            if(!n.locked) row.append(false); // unchanged five-value legacy form for locked nodes
+            if(n.before||n.after){row.append(n.locked);row.append(n.before);row.append(n.after);}
+            else if(!n.locked)row.append(false);
             values.append(row);
             }
       return QString::fromUtf8(QJsonDocument(values).toJson(QJsonDocument::Compact));
+      }
+bool removeNode(QVector<FreeSlurNode>* nodes,int index)
+      {
+      if(index<0||index>=nodes->size())return false;
+      const int before=(*nodes)[index].before,after=index+1<nodes->size()?(*nodes)[index+1].before:(*nodes)[index].after;
+      const int joined=before==after?before:0;
+      if(index+1<nodes->size())(*nodes)[index+1].before=joined;else if(index)(*nodes)[index-1].after=joined;
+      nodes->removeAt(index);return true;
+      }
+QVector<Route> routing(const QVector<FreeSlurNode>& nodes,double from,double until)
+      {
+      QVector<Route> result;if(nodes.isEmpty()||until<=from)return result;
+      for(int i=0;i<=nodes.size();++i){
+            const double left=i?nodes[i-1].position:0.,right=i<nodes.size()?nodes[i].position:1.;
+            const int direction=i<nodes.size()?nodes[i].before:nodes.back().after;
+            const double a=qMax(left,from),b=qMin(right,until);
+            if(direction&&b>a){
+                  const double begin=(a-from)/(until-from),end=(b-from)/(until-from);
+                  if(!result.isEmpty()&&result.back().direction==direction&&std::abs(result.back().until-begin)<1e-8)result.back().until=end;
+                  else result.append({begin,end,direction});
+                  }
+            }
+      return result;
       }
 }
 QVariant Slur::getProperty(Pid id) const
@@ -112,6 +141,36 @@ QPainterPath curvePath(const QVector<CurvePoint>& points,QPointF thickness)
       return path;
       }
 }
+bool FreeSlur::smoothNode(Slur* owner,int index,FreeSlurNode* result)
+      {
+      if(!owner||index<0||index>=owner->freeNodes().size()||!result)return false;
+      for(auto native:owner->spannerSegments()){
+            auto segment=toSlurSegment(native);FreeSlurNode shown;
+            if(!segment->system()||!segment->displayedFreeNode(index,&shown))continue;
+            const auto grips=segment->gripsPositions();if(grips.size()<int(Grip::GRIPS))continue;
+            const auto p0=grips[int(Grip::START)],p1=grips[int(Grip::BEZIER1)],p2=grips[int(Grip::BEZIER2)],p3=grips[int(Grip::END)];
+            const int first=qMax(owner->tick().ticks(),segment->system()->firstMeasure()->tick().ticks());
+            const int last=qMin(owner->tick2().ticks(),segment->system()->lastMeasure()->endTick().ticks());if(last<=first)continue;
+            const CubicBezier base(p0,p1,p2,p3);const double sp=segment->spatium();
+            QVector<CurvePoint> points{{0,p0,{}}};int selected=-1;
+            for(int i=0;i<owner->freeNodes().size();++i){
+                  FreeSlurNode node;if(!segment->displayedFreeNode(i,&node))continue;
+                  const double tick=owner->tick().ticks()+node.position*owner->ticks().ticks();
+                  if(tick<first||tick>=last)continue;const double t=qBound(.00000001,(tick-first)/(last-first),.99999999);
+                  if(i==index)selected=points.size();points.append({t,base.pointAtPercent(t)+node.offset*sp,{}});
+                  }
+            points.append({1,p3,{}});if(selected<1||selected>=points.size()-1)continue;
+            const auto& a=points[selected-1];const auto& n=points[selected];const auto& b=points[selected+1];
+            const double left=n.t-a.t,right=b.t-n.t;if(left<.0001||right<.0001)continue;
+            const auto before=(n.p-a.p)/left,after=(b.p-n.p)/right;
+            auto harmonic=[&](double x,double y){return x*y<=0?0.:(3*(left+right))/((2*right+left)/x+(right+2*left)/y);};
+            const auto nativeTangent=derivative(p0,p1,p2,p3,n.t);
+            const double slope=harmonic(before.y()/qMax(.01*sp,before.x()),after.y()/qMax(.01*sp,after.x()));
+            const QPointF desired(nativeTangent.x(),slope*nativeTangent.x());
+            *result=shown;result->locked=true;result->tangent=(desired-nativeTangent)/sp;return true;
+            }
+      return false;
+      }
 bool SlurSegment::computeFreeBezier(QPointF thickness)
       {
       _freeGrips.clear();_freeCurvePoints.clear();
@@ -124,6 +183,7 @@ bool SlurSegment::computeFreeBezier(QPointF thickness)
       const CubicBezier base(p0,p1,p2,p3); const double sp=spatium();
       QVector<CurvePoint> points {{0,p0,derivative(p0,p1,p2,p3,0)}};
       const auto& nodes=slur()->freeNodes();
+      const auto routes=FreeSlur::routing(nodes,double(first-slur()->tick().ticks())/slur()->ticks().ticks(),double(last-slur()->tick().ticks())/slur()->ticks().ticks());
       for(int i=0;i<nodes.size();++i) {
             const auto& node=nodes[i]; const double tick=slur()->tick().ticks()+node.position*slur()->ticks().ticks();
             if(tick<first || tick>=last) continue;
@@ -133,7 +193,7 @@ bool SlurSegment::computeFreeBezier(QPointF thickness)
             points.append({t,p,d,node.locked}); _freeGrips.append({i,p,{}, {},0,0});
             }
       points.append({1,p3,derivative(p0,p1,p2,p3,1)});
-      if(slur()->freeAuto() && autoplace()) {
+      if((slur()->freeAuto() && autoplace()) || !routes.isEmpty()) {
             QVector<QRectF> obstacles;QSet<Beam*> beams;
             const double padding=qMax(.2*sp,score()->styleP(Sid::slurMinDistance));
             auto ss=slur()->startSegment();auto es=slur()->endSegment();
@@ -162,7 +222,7 @@ bool SlurSegment::computeFreeBezier(QPointF thickness)
             // Native endpoint/control edits also constrain the automatic end tangents.
             points.front().locked=!ups(Grip::START).off.isNull() || !ups(Grip::BEZIER1).off.isNull();
             points.back().locked=!ups(Grip::END).off.isNull() || !ups(Grip::BEZIER2).off.isNull();
-            const auto result=FreeSlur::avoid(points,obstacles,slur()->up(),sp);
+            const auto result=FreeSlur::avoid(points,obstacles,slur()->up(),sp,routes,slur()->freeAuto()&&autoplace());
             points=result.points;_freeCollisions=result.collisions;_freeLimited=result.limited;
             }
       for(int i=0;i<_freeGrips.size();++i) {
@@ -237,7 +297,8 @@ bool SlurSegment::displayedFreeNode(int index,FreeSlurNode* result) const
       {
       const auto& nodes=slur()->freeNodes();if(index<0 || index>=nodes.size())return false;
       if(nodes[index].locked || !slur()->freeAuto()){*result=nodes[index];return true;}
-      return displayedFreeNode(nodes[index].position,result);
+      if(!displayedFreeNode(nodes[index].position,result))return false;
+      result->before=nodes[index].before;result->after=nodes[index].after;return true;
       }
 void SlurSegment::startEditDrag(EditData& ed)
       {
@@ -282,7 +343,7 @@ bool SlurSegment::editFreeNode(EditData& ed)
       if(ed.key==Qt::Key_Delete || ed.key==Qt::Key_Backspace || ed.key==Qt::Key_Home) {
             auto nodes=slur()->freeNodes(); const int n=_freeGrips[index/3].index;
             if(ed.key==Qt::Key_Home) { if(index%3==0) nodes[n].offset={}; else nodes[n].tangent={}; }
-            else nodes.removeAt(n);
+            else FreeSlur::removeNode(&nodes,n);
             slur()->undoChangeProperty(Pid::FREE_SLUR_NODES,FreeSlur::encode(nodes)); computeBezier();
             ed.curGrip=Grip::DRAG; ed.grips=gripsCount(); return true;
             }

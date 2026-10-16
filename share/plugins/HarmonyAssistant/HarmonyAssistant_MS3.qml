@@ -16,7 +16,7 @@ MuseScore {
     UiTheme {id:theme}
     menuPath: "Plugins.Harmony Assistant"
     description: "钢琴和声助手：持续音识别、级数、音程功能与可选谱面配色。"
-    version: "1.10.0"
+    version: "1.10.1"
     requiresScore: true
     pluginType: "dock"
     dockArea: "right"
@@ -27,7 +27,23 @@ MuseScore {
     property bool loadingConfiguration: false
     property bool ribbon: (width > 460 && height < 300) ||
         (typeof panelPlacement === "string" && (panelPlacement === "top" || panelPlacement === "bottom") && height < 400)
-    property bool expanded: flick.width >= 680
+
+    // Settings outlive the widgets in each dock surface.
+    property QtObject keyTonic: QtObject {property int currentIndex:0}
+    property QtObject keyMode: QtObject {property int currentIndex:0}
+    property QtObject autoChord: QtObject {property bool checked:true}
+    property QtObject pedalContext: QtObject {property bool checked:true}
+    property QtObject arpeggioWindow: QtObject {property int currentIndex:0}
+    property QtObject scope: QtObject {property int currentIndex:0}
+    property QtObject rootCombo: QtObject {property int currentIndex:0}
+    property QtObject qualityCombo: QtObject {property int currentIndex:0}
+    property QtObject followPlayback: QtObject {property bool checked:true}
+    property QtObject scoreColoring: QtObject {property bool checked:false}
+    property QtObject allColor: QtObject {property bool checked:false}
+    property QtObject showChords: QtObject {property bool checked:false}
+    property QtObject showFunctions: QtObject {property bool checked:false}
+    property var detailFlick:root.dualDetailActive?auxHarmonyDetails.item:root.ribbon?popupHarmonyDetails.item:inlineHarmonyDetails.item
+    property bool expanded:detailFlick?detailFlick.width>=680:false
     property bool advancedNative: observer && typeof observer.contextSnapshot === "function"
     property bool fixedChordNative: observer && typeof observer.setActiveScorePreview === "function"
     property bool dualDetailActive:ribbon && configuration.dualPanel && typeof root.detailPanelVisible==="boolean" && root.detailPanelVisible
@@ -262,7 +278,7 @@ MuseScore {
         if(root.ribbon)openDetails()
         settingsExpanded=true;scoreRangeEditing=true
         if(configuration.collapsedSections.indexOf("range")>=0)toggleSection("range")
-        syncScoreRangeEditor();Qt.callLater(function(){flick.contentY=Math.max(0,rangeCard.y-6)})
+        syncScoreRangeEditor();Qt.callLater(function(){if(root.detailFlick)root.detailFlick.scrollRange()})
     }
     function syncDetailPanel() {
         if(!started || loadingConfiguration)return
@@ -1171,15 +1187,16 @@ MuseScore {
         id:backdrop
         anchors.fill: parent
         color: theme.background
-        Flickable {
+        Component {id:harmonyDetails
+Flickable {
             id: flick
-            parent:root.dualDetailActive ? root.detailPanelHost : root.ribbon ? detailPopup.contentItem : backdrop
+            function scrollRange(){contentY=Math.max(0,rangeCard.y-6)}
             anchors.fill: parent
             clip: true
             contentWidth: width
             contentHeight: panel.height + 16
             boundsBehavior: Flickable.StopAtBounds
-            visible:!root.ribbon || detailPopup.opened || root.dualDetailActive
+            visible:true
             ScrollBar.vertical: ScrollBar { }
             Flow {
                 id: panel
@@ -1328,13 +1345,13 @@ MuseScore {
                         UiLabel {text:"调性"; color:muted; font.pixelSize:12}
                         DeskComboBox {
                             font.family: theme.fontFamily;
-                            id:keyTonic; Layout.fillWidth:true; Layout.minimumWidth:55; implicitHeight:28
+                            id:keyTonicControl;currentIndex:root.keyTonic.currentIndex;onCurrentIndexChanged:if(currentIndex>=0)root.keyTonic.currentIndex=currentIndex; Layout.fillWidth:true; Layout.minimumWidth:55; implicitHeight:28
                             model:Harmony.rootNames; font.pixelSize:12
                             onActivated:{manualKey=true; updateTexts(); optionsChanged()}
                         }
                         DeskComboBox {
                             font.family: theme.fontFamily;
-                            id:keyMode; Layout.preferredWidth:80; implicitHeight:28
+                            id:keyModeControl;currentIndex:root.keyMode.currentIndex;onCurrentIndexChanged:if(currentIndex>=0)root.keyMode.currentIndex=currentIndex; Layout.preferredWidth:80; implicitHeight:28
                             model:["大调","小调"]; font.pixelSize:12
                             onActivated:{if(!manualKey && currentTick>=0) initializeKey(currentTick); updateTexts(); optionsChanged()}
                         }
@@ -1343,7 +1360,7 @@ MuseScore {
                     RowLayout {
                         width:parent.width
                         DeskSwitch {
-                            font.family: theme.fontFamily;id:autoChord; text:"自动识别"; checked:true; font.pixelSize:12; onToggled:{analyze(); optionsChanged()}}
+                            font.family: theme.fontFamily;id:autoChordControl; text:"自动识别"; checked:root.autoChord.checked; font.pixelSize:12; onToggled:{root.autoChord.checked=checked;analyze(); optionsChanged()}}
                         Item {Layout.fillWidth:true}
                         DeskButton {
                             font.family: theme.fontFamily;text:"读调号"; implicitHeight:28; font.pixelSize:11; onClicked:{manualKey=false; if(currentTick>=0)initializeKey(currentTick); updateTexts(); optionsChanged()}}
@@ -1357,25 +1374,25 @@ MuseScore {
                         DeskComboBox {model:["当前调式","同名大调"];currentIndex:configuration.degreeMode;Layout.fillWidth:true;onActivated:{var c=Timeline.clone(configuration);c.degreeMode=currentIndex;configuration=Preferences.clean(c);rebuildRegions();updateTexts();optionsChanged()}}
                     }
                     UiLabel {width:parent.width;text:keyMode.currentIndex===1 ? (configuration.degreeMode===0?"小调第三、六、七级记为 III / VI / VII；升高导音记为 ♯VII。":"小调第三、六、七级相对同名大调记为 ♭III / ♭VI / ♭VII。") : "大调两种参照相同。";color:muted;font.pixelSize:10;wrapMode:Text.Wrap}
-                    DeskSwitch {id:pedalContext; text:"踏板保持"; checked:true; enabled:advancedNative; onToggled:optionsChanged()}
+                    DeskSwitch {id:pedalContextControl; text:"踏板保持"; checked:root.pedalContext.checked; enabled:advancedNative; onToggled:{root.pedalContext.checked=checked;optionsChanged()}}
                     RowLayout {
                         width:parent.width
                         UiLabel {text:"无踏板聚合"; color:muted; font.pixelSize:11}
-                        DeskComboBox {id:arpeggioWindow; model:["即时","半拍","1 拍","2 拍","4 拍"]; Layout.fillWidth:true; implicitHeight:28; onActivated:optionsChanged()}
+                        DeskComboBox {id:arpeggioWindowControl;currentIndex:root.arpeggioWindow.currentIndex;onCurrentIndexChanged:if(currentIndex>=0)root.arpeggioWindow.currentIndex=currentIndex; model:["即时","半拍","1 拍","2 拍","4 拍"]; Layout.fillWidth:true; implicitHeight:28; onActivated:optionsChanged()}
                     }
                     UiLabel {width:parent.width; text:"聚合限当前小节，休止截断。快速转和弦时建议即时或半拍；踏板保持不等同于声学残响。"; color:muted; font.pixelSize:10; wrapMode:Text.Wrap; visible:settingsExpanded}
                     DeskComboBox {
                             font.family: theme.fontFamily;
-                        id:scope; width:parent.width; implicitHeight:28; font.pixelSize:12
+                        id:scopeControl;currentIndex:root.scope.currentIndex;onCurrentIndexChanged:if(currentIndex>=0)root.scope.currentIndex=currentIndex; width:parent.width; implicitHeight:28; font.pixelSize:12
                         model:["当前乐器（钢琴双谱表）","全谱"]
                         onActivated:{requestRefresh(true); optionsChanged()}
                     }
                     RowLayout {
                         width:parent.width
                         DeskComboBox {
-                            font.family: theme.fontFamily;id:rootCombo; Layout.preferredWidth:76; implicitHeight:28; model:Harmony.rootNames; font.pixelSize:12; onActivated:{autoChord.checked=false; analyze(); optionsChanged()}}
+                            font.family: theme.fontFamily;id:rootComboControl;currentIndex:root.rootCombo.currentIndex;onCurrentIndexChanged:if(currentIndex>=0)root.rootCombo.currentIndex=currentIndex; Layout.preferredWidth:76; implicitHeight:28; model:Harmony.rootNames; font.pixelSize:12; onActivated:{autoChord.checked=false; analyze(); optionsChanged()}}
                         DeskComboBox {
-                            font.family: theme.fontFamily;id:qualityCombo; Layout.fillWidth:true; Layout.minimumWidth:80; implicitHeight:28; model:qualityNames; font.pixelSize:12; onActivated:{autoChord.checked=false; analyze(); optionsChanged()}}
+                            font.family: theme.fontFamily;id:qualityComboControl;currentIndex:root.qualityCombo.currentIndex;onCurrentIndexChanged:if(currentIndex>=0)root.qualityCombo.currentIndex=currentIndex; Layout.fillWidth:true; Layout.minimumWidth:80; implicitHeight:28; model:qualityNames; font.pixelSize:12; onActivated:{autoChord.checked=false; analyze(); optionsChanged()}}
                     }
                 }
                 PanelCard {
@@ -1383,9 +1400,9 @@ MuseScore {
                     width:root.expanded ? (panel.width-10)/2 : panel.width
                     DeskSwitch {
                             font.family: theme.fontFamily;
-                        id:followPlayback; text:"跟随播放"; checked:true; enabled:playbackAvailable; font.pixelSize:12
+                        id:followPlaybackControl; text:"跟随播放"; checked:root.followPlayback.checked; enabled:playbackAvailable; font.pixelSize:12
                         visible:settingsExpanded && playbackAvailable
-                        onToggled:{lastPlayTick=-1; requestRefresh(false); configurationTimer.restart()}
+                        onToggled:{root.followPlayback.checked=checked;lastPlayTick=-1; requestRefresh(false); configurationTimer.restart()}
                     }
                     UiLabel {
                         width:parent.width; font.pixelSize:10; color:muted; wrapMode:Text.Wrap
@@ -1394,12 +1411,12 @@ MuseScore {
                     }
                     DeskSwitch {
                             font.family: theme.fontFamily;
-                        id:scoreColoring; text:"谱面临时配色"; checked:false; font.pixelSize:12
-                        onToggled:{if(checked)undoPause=false; if(!internalChange){repaintNotes(); optionsChanged()}}
+                        id:scoreColoringControl; text:"谱面临时配色"; checked:root.scoreColoring.checked; font.pixelSize:12
+                        onToggled:{root.scoreColoring.checked=checked;if(checked)undoPause=false; if(!internalChange){repaintNotes(); optionsChanged()}}
                     }
-                    DeskSwitch {id:allColor; text:"配色覆盖全部小节"; checked:false; enabled:advancedNative && scoreColoring.checked; onToggled:optionsChanged()}
-                    DeskSwitch {id:showChords; text:"谱面上方显示和弦 / 级数"; checked:false; enabled:advancedNative; onToggled:optionsChanged()}
-                    DeskSwitch {id:showFunctions; text:"音旁显示功能名"; checked:false; enabled:advancedNative; onToggled:optionsChanged()}
+                    DeskSwitch {id:allColorControl; text:"配色覆盖全部小节"; checked:root.allColor.checked; enabled:advancedNative && scoreColoring.checked; onToggled:{root.allColor.checked=checked;optionsChanged()}}
+                    DeskSwitch {id:showChordsControl; text:"谱面上方显示和弦 / 级数"; checked:root.showChords.checked; enabled:advancedNative; onToggled:{root.showChords.checked=checked;optionsChanged()}}
+                    DeskSwitch {id:showFunctionsControl; text:"音旁显示功能名"; checked:root.showFunctions.checked; enabled:advancedNative; onToggled:{root.showFunctions.checked=checked;optionsChanged()}}
                     UiLabel {
                         width:parent.width; font.pixelSize:10; color:muted; wrapMode:Text.Wrap
                         visible:scoreColoring.checked || settingsExpanded
@@ -1451,10 +1468,15 @@ MuseScore {
                 }
             }
         }
-        Item {
+}
+        Loader {id:inlineHarmonyDetails;anchors.fill:parent;active:!root.ribbon;sourceComponent:harmonyDetails}
+        Loader {id:popupHarmonyDetails;parent:detailPopup.contentItem;anchors.fill:parent;active:root.ribbon&&!root.dualDetailActive;sourceComponent:harmonyDetails}
+        Loader {id:auxHarmonyDetails;parent:root.detailPanelHost;anchors.fill:parent;active:root.dualDetailActive&&!!root.detailPanelHost;sourceComponent:harmonyDetails}
+
+        Component {id:harmonySummary
+Item {
             id:summarySurface
-            parent:root.dualSummaryActive ? root.summaryPanelHost : backdrop
-            visible:root.ribbon || root.dualSummaryActive; anchors.fill:parent; clip:true
+            visible:true; anchors.fill:parent; clip:true
             Rectangle {anchors.fill:parent;color:theme.background}
             Item {
                 id:ribbonGroup; objectName:"harmonyRibbonGroup"
@@ -1485,5 +1507,9 @@ MuseScore {
 
             }
         }
+}
+        Loader {anchors.fill:parent;active:root.ribbon&&!root.dualSummaryActive;sourceComponent:harmonySummary}
+        Loader {parent:root.summaryPanelHost;anchors.fill:parent;active:root.dualSummaryActive&&!!root.summaryPanelHost;sourceComponent:harmonySummary}
+
     }
 }

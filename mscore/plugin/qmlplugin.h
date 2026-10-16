@@ -83,6 +83,7 @@ class QmlPlugin : public QQuickItem {
 
    public:
       QmlPlugin(QQuickItem* parent = 0);
+      ~QmlPlugin() override;
       void attachPanelDock(QDockWidget* dock);
       QString panelPlacement() const { return _panelPlacement; }
       bool panelFloating() const;

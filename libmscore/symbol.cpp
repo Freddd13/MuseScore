@@ -118,21 +118,22 @@ QPainterPath Symbol::handPath() const
 
 QFont Symbol::handFont() const
       {
-      QFont font("FreeSerif"); font.setPixelSize(qMax(1,qRound(.9 * spatium() * mag())));
+      QFont font("FreeSerif"); font.setItalic(true); font.setPixelSize(qMax(1,qRound(.9 * spatium() * mag())));
       return font;
       }
 
 QPointF Symbol::handTextPosition() const
       {
       const qreal unit = spatium() * mag();
-      const qreal width = QFontMetricsF(handFont(), MScore::paintDevice()).horizontalAdvance(handLeft() ? "LH" : "RH");
-      return QPointF(_handH * unit + (_handH >= 0 ? .3 * unit : -.3 * unit - width),
-         (handLeft() ? _handV * unit : 0) + .3 * unit);
+      const qreal width = QFontMetricsF(handFont(), MScore::paintDevice()).horizontalAdvance(handLeft() ? "l.h." : "r.h.");
+      const qreal x=_handH>=0 ? -.3*unit-width : .3*unit;
+      const qreal y=handLeft() ? -.2*unit : _handV*unit+.3*unit;
+      return QPointF(x,y);
       }
 
 QRectF Symbol::handTextRect() const
       {
-      return _handText ? QFontMetricsF(handFont(), MScore::paintDevice()).boundingRect(handLeft() ? "LH" : "RH").translated(handTextPosition()) : QRectF();
+      return _handText ? QFontMetricsF(handFont(), MScore::paintDevice()).boundingRect(handLeft() ? "l.h." : "r.h.").translated(handTextPosition()) : QRectF();
       }
 
 Shape Symbol::shape() const
@@ -259,7 +260,7 @@ void Symbol::draw(QPainter* p) const
             p->save();p->setBrush(Qt::NoBrush);
             p->setPen(QPen(curColor(),_handWidth*spatium()*mag(),Qt::SolidLine,Qt::SquareCap,Qt::MiterJoin));
             p->drawPath(handPath());
-            if (_handText) {p->setPen(curColor());p->setFont(handFont());p->drawText(handTextPosition(),handLeft() ? "LH" : "RH");}
+            if (_handText) {p->setPen(curColor());p->setFont(handFont());p->drawText(handTextPosition(),handLeft() ? "l.h." : "r.h.");}
             p->restore();return;
             }
       if (!isNoteDot() || !staff()->isTabStaff(tick())) {

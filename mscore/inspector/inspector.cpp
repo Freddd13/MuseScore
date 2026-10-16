@@ -1447,7 +1447,7 @@ InspectorHandSymbol::InspectorHandSymbol(QWidget* parent)
       auto h=scrubProperty(_details,tr("水平长度"),Pid::HAND_BRACKET_H,.05,40,.1,tr(" sp"));
       auto v=scrubProperty(_details,tr("竖直长度"),Pid::HAND_BRACKET_V,.05,40,.1,tr(" sp"));
       auto width=scrubProperty(_details,tr("线宽"),Pid::HAND_BRACKET_WIDTH,.02,2,.01,tr(" sp"));
-      auto text=new QCheckBox(tr("显示 LH / RH"),_details);text->setObjectName("handBracketText");details->addWidget(text,details->rowCount(),0,1,3);
+      auto text=new QCheckBox(tr("显示 l.h.／r.h."),_details);text->setObjectName("handBracketText");details->addWidget(text,details->rowCount(),0,1,3);
       auto horizontal=new QPushButton(tr("水平反向"),_details),vertical=new QPushButton(tr("竖直反向"),_details);
       horizontal->setObjectName("handBracketFlipH");vertical->setObjectName("handBracketFlipV");int row=details->rowCount();details->addWidget(horizontal,row,0);details->addWidget(vertical,row,1,1,2);
       auto lengthChanged=[this](Pid id,double value) {

@@ -62,17 +62,19 @@ void completeHandBracketPalette(PalettePanel* panel) {
       if(!panel || panel->type()!=PalettePanel::Type::Fingering || !gscore)return;loadHandBracketDefaults();
       const std::pair<SymId,const char*> entries[]={{SymId::keyboardPlayWithLH,"左手弹（可伸缩）"},{SymId::keyboardPlayWithRH,"右手弹（可伸缩）"},{SymId::keyboardPlayWithLHEnd,"左手结束（可伸缩）"},{SymId::keyboardPlayWithRHEnd,"右手结束（可伸缩）"}};
       for(const auto& entry:entries) {
-            bool found=false;for(int i=0;i<panel->ncells();++i) {auto cell=panel->cell(i);if(cell->element && cell->element->isSymbol() && toSymbol(cell->element.get())->sym()==entry.first && toSymbol(cell->element.get())->handBracket()) {
-                  found=true;if(cell->mag==1)cell->mag=.65;
-                  auto symbol=toSymbol(cell->element.get());
-                  // Upgrade the old factory cells; custom palette shapes keep their values.
-                  if(!cell->custom && std::abs(symbol->getProperty(Pid::HAND_BRACKET_H).toDouble()-(symbol->handEnd()?-2.:2.))<.0001
-                        && std::abs(symbol->getProperty(Pid::HAND_BRACKET_V).toDouble()+1.)<.0001
-                        && std::abs(symbol->getProperty(Pid::HAND_BRACKET_WIDTH).toDouble()-.12)<.0001
-                        && !symbol->getProperty(Pid::HAND_BRACKET_TEXT).toBool()) {symbol->applyHandPreset();symbol->layout();}
-                  break;
-                  }}
-            if(found)continue;auto symbol=new Symbol(gscore);symbol->setSym(entry.first);symbol->applyHandPreset();panel->append(symbol,QString::fromUtf8(entry.second),QString(),.65);
+            bool found=false;
+            for(int i=0;i<panel->ncells();) {
+                  auto cell=panel->cell(i);auto e=cell->element.get();
+                  if(cell->custom||!e||!e->isSymbol()||toSymbol(e)->sym()!=entry.first){++i;continue;}
+                  if(found){panel->takeCells(i,1);continue;}found=true;
+                  auto symbol=toSymbol(e);cell->mag=.55;cell->name=QString::fromUtf8(entry.second);
+                  const bool oldFactory=std::abs(symbol->getProperty(Pid::HAND_BRACKET_H).toDouble()-(symbol->handEnd()?-2.:2.))<.0001
+                        &&std::abs(symbol->getProperty(Pid::HAND_BRACKET_V).toDouble()+1.)<.0001
+                        &&std::abs(symbol->getProperty(Pid::HAND_BRACKET_WIDTH).toDouble()-.12)<.0001
+                        &&!symbol->getProperty(Pid::HAND_BRACKET_TEXT).toBool();
+                  if(!symbol->handBracket()||oldFactory){symbol->applyHandPreset();symbol->layout();}++i;
+                  }
+            if(!found){auto symbol=new Symbol(gscore);symbol->setSym(entry.first);symbol->applyHandPreset();panel->append(symbol,QString::fromUtf8(entry.second),QString(),.55);}
             }
       }
 }

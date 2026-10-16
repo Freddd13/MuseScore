@@ -15,7 +15,7 @@ MuseScore {
     id:root
     menuPath:"Plugins.Arrangement Check"
     description:"编配检查：和声疑点、基础对位与上下文可弹性；只读分析。"
-    version:"1.3.0"
+    version:"1.3.1"
     requiresScore:true
     pluginType:"dock"
     dockArea:"right"
@@ -49,7 +49,9 @@ MuseScore {
     property var roles:[]
     property var imported:[]
     property var counts:({harmony:0,counterpoint:0,playability:0})
-    property var current:list.currentIndex>=0 && list.currentIndex<issues.length ? issues[list.currentIndex] : null
+    property int currentIssueIndex:-1
+    property var details:root.dualDetailActive?auxArrangementDetails.item||root:root.ribbon?popupArrangementDetails.item||root:inlineArrangementDetails.item||root
+    property var current:root.currentIssueIndex>=0 && root.currentIssueIndex<issues.length ? issues[root.currentIssueIndex] : null
     property string status:"点击更新结果开始"
     property string revision:""
     property bool analyzed:false
@@ -98,7 +100,7 @@ MuseScore {
         var index=issues.findIndex(function(issue){return issue.tick===tick})
         if(index<0)return
         hintTick=tick
-        if(!current||current.tick!==tick)list.currentIndex=index
+        if(!current||current.tick!==tick)root.currentIssueIndex=index
         positionProblemHint();problemHint.show();problemHint.raise()
     }
     function persist() {if(observer)observer.saveConfiguration("ArrangementAssistant",config)}
@@ -199,7 +201,7 @@ MuseScore {
             for(var i=0;i<output.length;++i)totals[output[i].type]++
             issues=output;counts=totals;roles=result.roles;analyzed=true;stale=false;running=false;task=null;snapshot=null
             status="已更新"+(localRefresh?" · 局部刷新":"")+(imported.length?" · 使用导入解释，请核对来源":"")+(scope.noncontiguous?" · 非连续选择按起止范围检查":"")
-            list.currentIndex=issues.length?0:-1;work.stop();workerToken=0;contentRevision=typeof observer.analysisContentRevision==="function"?observer.analysisContentRevision():revision;publishMarkers()
+            root.currentIssueIndex=issues.length?0:-1;work.stop();workerToken=0;contentRevision=typeof observer.analysisContentRevision==="function"?observer.analysisContentRevision():revision;publishMarkers()
     }
     function locate(keepScoreFocus) {
         if(!current || !curScore)return
@@ -261,7 +263,7 @@ MuseScore {
         if(!ownerId)return
         scoreCache[ownerId]={scope:scope,config:Rules.clone(config),issues:issues,roles:roles,imported:imported,
             counts:counts,analyzed:analyzed,requested:requested,cachedData:cachedData,stale:stale||running,
-            contentRevision:contentRevision,current:list.currentIndex,status:status}
+            contentRevision:contentRevision,current:root.currentIssueIndex,status:status}
         var order=cachedScores.filter(function(key){return key!==root.ownerId});order.push(ownerId)
         while(order.length>4)delete scoreCache[order.shift()]
         cachedScores=order
@@ -279,7 +281,7 @@ MuseScore {
             counts=saved.counts;analyzed=saved.analyzed;requested=saved.requested;cachedData=saved.cachedData
             contentRevision=saved.contentRevision;revision=observer.analysisRevision()
             stale=saved.stale || (typeof observer.analysisContentRevision==="function" && contentRevision!==observer.analysisContentRevision())
-            list.currentIndex=Math.min(saved.current,issues.length-1);status=stale?"正在检查更新":saved.status
+            root.currentIssueIndex=Math.min(saved.current,issues.length-1);status=stale?"正在检查更新":saved.status
         } else {
             var c=Rules.clone(config);c.roles={};c.handOverrides=[];c.ignored=[];c.chords=[];config=c
             scope={start:0,end:0,firstTrack:0,endTrack:8};imported=[];issues=[];roles=[];counts={harmony:0,counterpoint:0,playability:0}
@@ -332,9 +334,10 @@ MuseScore {
         }
     }
     Rectangle {anchors.fill:parent;color:theme.background}
-    RowLayout {
-        id:summary;parent:root.dualSummaryActive?root.summaryPanelHost:root
-        visible:root.ribbon||root.dualSummaryActive
+    Component {id:arrangementSummary
+RowLayout {
+        id:summary
+        visible:true
         anchors.top:parent.top;anchors.left:parent.left;anchors.right:parent.right;anchors.margins:root.dualSummaryActive?0:4;height:28;spacing:4
         Item {Layout.fillWidth:true;visible:root.config.alignment>0}
         Label {text:"编配检查";font.bold:true;color:theme.text;visible:summary.width>780}
@@ -346,11 +349,15 @@ MuseScore {
         Desk.DeskButton {text:"详情";onClicked:root.openDetails()}
         Desk.DeskButton {id:summaryClose;objectName:"arrangementSummaryClose";text:"×";flat:true;Layout.preferredWidth:28;implicitWidth:28;onHoveredChanged:{if(typeof root.showPanelHint==="function")root.showPanelHint(hovered?"隐藏摘要，详情继续保留":"",summaryClose)} onClicked:root.hideSummary()}
     }
-    Item {
+}
+    Loader {anchors.fill:parent;active:root.ribbon&&!root.dualSummaryActive;sourceComponent:arrangementSummary}
+    Loader {parent:root.summaryPanelHost;anchors.fill:parent;active:root.dualSummaryActive&&!!root.summaryPanelHost;sourceComponent:arrangementSummary}
+
+    Component {id:arrangementDetails
+Item {
         id:details
-        parent:root.ribbon ? (typeof root.detailPanelVisible==="boolean" && root.detailPanelVisible ? root.detailPanelHost : floatingDetails.contentItem) : root
         anchors.fill:parent;anchors.margins:8
-        visible:!root.ribbon || (typeof root.detailPanelVisible==="boolean" && root.detailPanelVisible) || floatingDetails.visible
+        visible:true
         ColumnLayout {
             anchors.fill:parent;spacing:6
             RowLayout {
@@ -376,7 +383,7 @@ MuseScore {
             Desk.DeskComboBox {id:styleBox;model:["调性钢琴／流行","严格对位","爵士"];currentIndex:root.config.style;Layout.fillWidth:true;onActivated:{var c=Rules.clone(root.config);c.style=currentIndex;root.config=c;root.persist();root.markDirty()}}
             Label {text:root.status;Layout.fillWidth:true;Layout.preferredHeight:28;Layout.minimumHeight:28;Layout.maximumHeight:28;maximumLineCount:2;elide:Text.ElideRight;wrapMode:Text.WordWrap;color:theme.muted;font.pixelSize:11}
             ListView {
-                id:list;objectName:"arrangementIssues";Layout.fillWidth:true;Layout.fillHeight:true;Layout.minimumHeight:100;Layout.preferredHeight:270;clip:true;model:root.issues;spacing:1
+                id:list;currentIndex:root.currentIssueIndex;onCurrentIndexChanged:if(currentIndex>=0&&count>0)root.currentIssueIndex=currentIndex;objectName:"arrangementIssues";Layout.fillWidth:true;Layout.fillHeight:true;Layout.minimumHeight:100;Layout.preferredHeight:270;clip:true;model:root.issues;spacing:1
                 ScrollBar.vertical:ScrollBar {}
                 delegate:Rectangle {
                     width:list.width;height:58;color:ListView.isCurrentItem?theme.selected:theme.field
@@ -384,7 +391,7 @@ MuseScore {
                         Text {text:"第"+modelData.bar+"小节 · 第"+Number(modelData.beat).toFixed(2)+"拍 · "+modelData.severity;color:theme.muted;font.pixelSize:10}
                         Text {text:modelData.title;width:parent.width;elide:Text.ElideRight;color:theme.text;font.pixelSize:12}
                     }
-                    MouseArea {anchors.fill:parent;hoverEnabled:true;ToolTip.visible:containsMouse;ToolTip.text:"单击定位，双击在谱旁查看";onClicked:{list.currentIndex=index;if(!root.observer || !root.observer.playing){root.locate();if(root.config.scoreHints)root.openProblemHint(modelData.tick)}} onDoubleClicked:root.openProblemHint(modelData.tick)}
+                    MouseArea {anchors.fill:parent;hoverEnabled:true;ToolTip.visible:containsMouse;ToolTip.text:"单击定位，双击在谱旁查看";onClicked:{root.currentIssueIndex=index;if(!root.observer || !root.observer.playing){root.locate();if(root.config.scoreHints)root.openProblemHint(modelData.tick)}} onDoubleClicked:root.openProblemHint(modelData.tick)}
                 }
             }
             Rectangle {Layout.fillWidth:true;height:1;color:theme.subtleLine}
@@ -396,13 +403,18 @@ MuseScore {
             }
             RowLayout {
                 Desk.DeskButton {text:"定位相关音";enabled:!!root.current;onClicked:root.locate();ToolTip.visible:hovered;ToolTip.text:"选中涉及的音，并在谱面短暂标出所在小节"}
-                Desk.DeskButton {text:"上一条";enabled:list.currentIndex>0;onClicked:{list.currentIndex--;root.locate()}}
-                Desk.DeskButton {text:"下一条";enabled:list.currentIndex+1<root.issues.length;onClicked:{list.currentIndex++;root.locate()}}
+                Desk.DeskButton {text:"上一条";enabled:root.currentIssueIndex>0;onClicked:{root.currentIssueIndex--;root.locate()}}
+                Desk.DeskButton {text:"下一条";enabled:root.currentIssueIndex+1<root.issues.length;onClicked:{root.currentIssueIndex++;root.locate()}}
                 Desk.DeskButton {text:"忽略此处";enabled:!!root.current;onClicked:root.ignore()}
             }
             Desk.DeskButton {text:"声部与左右手";onClicked:roleDialog.open();ToolTip.visible:hovered;ToolTip.text:"指定旋律、低音和内声部，或为所选音校正左右手"}
         }
     }
+}
+    Loader {id:inlineArrangementDetails;anchors.fill:parent;active:!root.ribbon;sourceComponent:arrangementDetails}
+    Loader {id:popupArrangementDetails;parent:floatingDetails.contentItem;anchors.fill:parent;active:root.ribbon&&!root.dualDetailActive;sourceComponent:arrangementDetails}
+    Loader {id:auxArrangementDetails;parent:root.detailPanelHost;anchors.fill:parent;active:root.dualDetailActive&&!!root.detailPanelHost;sourceComponent:arrangementDetails}
+
     Menu {
         id:moreMenu;parent:details;width:230
         MenuItem {objectName:"arrangementChordExplanation";text:"指定局部和弦…";onTriggered:{chordStart.value=root.current?root.current.tick:root.scope.start;chordEnd.value=root.scope.end;exactChordPosition.checked=false;chordDialog.open()}}
@@ -416,7 +428,7 @@ MuseScore {
             Label {Layout.fillWidth:true;wrapMode:Text.WordWrap;font.bold:true;color:theme.text;text:root.current?"第 "+root.current.bar+" 小节 · "+root.current.title:"编配提示"}
             ListView {Layout.fillWidth:true;Layout.preferredHeight:Math.min(90,root.nearbyIssues.length*30);clip:true;model:root.nearbyIssues
                 ScrollBar.vertical:ScrollBar {}
-                delegate:ItemDelegate {width:parent.width;height:30;text:modelData.title;highlighted:root.current&&root.current.id===modelData.id;onClicked:{list.currentIndex=root.issues.findIndex(function(issue){return issue.id===modelData.id});root.locate(true)}}
+                delegate:ItemDelegate {width:parent.width;height:30;text:modelData.title;highlighted:root.current&&root.current.id===modelData.id;onClicked:{root.currentIssueIndex=root.issues.findIndex(function(issue){return issue.id===modelData.id});root.locate(true)}}
             }
             ScrollView {Layout.fillWidth:true;Layout.fillHeight:true;clip:true
                 Text {width:problemHint.width-28;wrapMode:Text.WordWrap;color:theme.text;text:root.current?root.current.basis:""}

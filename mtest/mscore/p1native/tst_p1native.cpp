@@ -83,6 +83,7 @@
 #include <QtTest>
 #include <algorithm>
 #include <cmath>
+#include "crashreport.inc"
 static void initP1Resources(){Q_INIT_RESOURCE(musescorefonts_Petaluma);}
 using namespace Ms;
 class TestP1Native:public QObject{
@@ -90,6 +91,7 @@ class TestP1Native:public QObject{
  QTemporaryDir settings;
 private slots:
  void initTestCase(){
+  installTestCrashReport();
   QCoreApplication::setOrganizationName("KumoP1Regression");QCoreApplication::setApplicationName("P1");
   QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,settings.path());dataPath=settings.path();
   MScore::noGui=true;noSeq=true;converterMode=true;initMuseScoreResources();initP1Resources();QStringList args;MuseScore::init(args);QVERIFY(mscore);
@@ -162,6 +164,7 @@ private slots:
  void expressionPartialApplicationMouse();
  void analysisIdentityAndPositionHint();
  void nativeHarmonySummaryGlyphs();
+ void assistantSurfaceLifetime();
  void harmonyScoreRangeAndPositionDrag();
  void arrangementRetainsRangeAndSurfaces();
 #else

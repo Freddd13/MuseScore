@@ -78,16 +78,16 @@ MIDI左右手拆分	importexport/midiimport/importmidi_lrhand.h	void splitIntoLe
 插件实时观察	mscore/plugin/api/scoreobserver.cpp	ScoreObserver::ScoreObserver(	52	GUI 心跳与生命周期；不修改音频回调	mtest/mscore/scoreobserver
 持续音缓存	mscore/plugin/api/scoreobserver.cpp	void ScoreObserver::ensureIndex(	170	内容状态/范围失效，每声部二分持续音	mtest/mscore/scoreobserver
 屏幕临时音符颜色	mscore/scoreview.cpp	void ScoreView::setNotePreviewColors(	5764	按 owner 隔离的屏幕色层，旧新局部重绘	mtest/mscore/scoreobserver
-和声辅助插件	share/plugins/HarmonyAssistant/HarmonyAssistant_MS3.qml	    function followNativePosition()	1000	插件音乐解释、级数、功能音和 GUI 播放合并	mtest/mscore/scoreobserver
+和声辅助插件	share/plugins/HarmonyAssistant/HarmonyAssistant_MS3.qml	    function followNativePosition()	1016	插件音乐解释、级数、功能音和 GUI 播放合并	mtest/mscore/scoreobserver
 踏板/琶音上下文	mscore/plugin/api/scoreobserver.cpp	QVariantMap ScoreObserver::contextSnapshot(	341	即时音/上下文分离，小节/休止/踏板边界	mtest/mscore/scoreobserver
 谱面屏幕标注	mscore/plugin/api/scoreobserver.cpp	void ScoreObserver::applyPreview(	421	独立和声变化标记、原谱优先与两层避让	mtest/mscore/pluginhost
-插件停靠状态	mscore/plugin/qmlplugin.cpp	void QmlPlugin::attachPanelDock(	46	实际区域/悬浮通知，可选横条高度	mtest/mscore/pluginhost
+插件停靠状态	mscore/plugin/qmlplugin.cpp	void QmlPlugin::attachPanelDock(	57	实际区域/悬浮通知，可选横条高度	mtest/mscore/pluginhost
 插件菜单/析构回归	mtest/mscore/pluginhost/tst_pluginhost.cpp	class TestPluginHost	44	真实 Qt 主窗口、菜单、重排和停靠	mtest/mscore/pluginhost
 plugin-preview	mscore/plugin/api/scoreobserver.cpp	ScoreObserver::setActiveScorePreview	621	固定区间高亮，不复制全谱色表	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-preview	mscore/scoreview.cpp	ScoreView::activateNotePreview	5784	固定记号点击命中与弱目标转发	mtest/mscore/pluginhost/tst_pluginhost.cpp
-plugin-preview	mscore/plugin/qmlplugin.cpp	QmlPlugin::focusPanel	79	聚焦已有插件窗口，保留停靠状态	mtest/mscore/pluginhost/tst_pluginhost.cpp
+plugin-preview	mscore/plugin/qmlplugin.cpp	QmlPlugin::focusPanel	90	聚焦已有插件窗口，保留停靠状态	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-display	mscore/plugin/api/scoreobserver.cpp	static qreal previewTickX	405	变化节拍定位，无新音时插值	mtest/mscore/pluginhost/tst_pluginhost.cpp
-plugin-display	mscore/plugin/qmlplugin.cpp	QmlPlugin::showDetailPanel	145	共享控件的单辅助停靠窗口	mtest/mscore/pluginhost/tst_pluginhost.cpp
+plugin-display	mscore/plugin/qmlplugin.cpp	QmlPlugin::showDetailPanel	156	共享控件的单辅助停靠窗口	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-display	mscore/scoreview.cpp	QRectF ScoreView::previewEditBounds	1241	原生编辑/拖动优先区域	mtest/mscore/pluginhost/tst_pluginhost.cpp
 SF2/SF3解析	audio/midi/fluid/sfont.cpp	bool SFont::load()	840	标准RIFF/LIST边界与HYDRA元数据	mtest/audio/sfloader
 大型SF2预加载	audio/midi/fluid/sfont.cpp	bool SFont::preloadSamples()	115	按引用去重预加载后发布	mtest/audio/sfloader;mtest/audio/sfloadergui
@@ -165,16 +165,16 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 包络检视器	mscore/inspector/envelopeinspector.h	inline std::vector<InspectorItem> envelopeInspectorControls	17	数字／名称拖拽、单事务预设	mtest/mscore/performanceeditor/envelope_editor_tests.inc
 实际发声范围	mscore/performanceeditor/envelopepreview.cpp	void PerformanceEditor::cacheGeneratedVelocity	7	停播缓存、双音按源、范围和预览	mtest/mscore/performanceeditor/envelope_editor_tests.inc
 自由曲线校验	libmscore/freeslur.cpp	bool decode	21	有限参数／规范化节点	mtest/mscore/performanceeditor/freeslur_tests.inc
-分段自由圆滑线	libmscore/freeslur.cpp	bool SlurSegment::computeFreeBezier	115	相对时间分配／共同导数／原生渐尖路径	mtest/mscore/performanceeditor/freeslur_tests.inc
-自由曲线拖动	libmscore/freeslur.cpp	void SlurSegment::endEditDrag	264	根属性一次Undo／分谱传播	mtest/mscore/performanceeditor/freeslur_tests.inc
-自由曲线检视器	mscore/inspector/freeslurinspector.h	class FreeSlurInspector	13	数字／名称拖动／安全队列	mtest/mscore/performanceeditor/freeslur_tests.inc
+分段自由圆滑线	libmscore/freeslur.cpp	bool SlurSegment::computeFreeBezier	174	相对时间分配／共同导数／原生渐尖路径	mtest/mscore/performanceeditor/freeslur_tests.inc
+自由曲线拖动	libmscore/freeslur.cpp	void SlurSegment::endEditDrag	325	根属性一次Undo／分谱传播	mtest/mscore/performanceeditor/freeslur_tests.inc
+自由曲线检视器	mscore/inspector/freeslurinspector.h	class FreeSlurInspector	15	数字／名称拖动／安全队列	mtest/mscore/performanceeditor/freeslur_tests.inc
 谱带鼠标隔离	mscore/performanceeditor/performanceoverlay.cpp	bool PerformanceEditor::overlayEvent	52	完整frame阻断／原生双向选音	mtest/mscore/performanceeditor
 力度柱宽	mscore/performanceeditor/performancesettings.cpp	bool PerformanceAppearance::edit	94	1–8逻辑像素／取消和默认／独立设置	mtest/mscore/performanceeditor
 谱带重叠回归	mtest/mscore/performanceeditor/performance_controls_tests.inc	void reaperStemsAndStripSelection	62	双谱行和弦／真实选择拖拽／一次Undo	mtest/mscore/performanceeditor
 独立谱带入口	mscore/musescore.cpp	auto bandAction = new QAction	2002	共享菜单／工具栏Action与面板同步	mtest/mscore/performanceeditor
 独立谱带生命周期	mscore/performanceeditor/performanceeditor.cpp	bool PerformanceEditor::surfacesActive() const	783	面板或谱带激活／关闭停刷	mtest/mscore/performanceeditor
 hand-bracket-geometry	libmscore/symbol.cpp	QPainterPath Symbol::handPath	109	Optional SMuFL hand geometry in spatium	mtest/mscore/performanceeditor/handsymbol_tests.inc
-hand-bracket-grips	libmscore/symbol.cpp	void Symbol::startEditDrag	159	Native Undo and cancellable endpoint preview	mtest/mscore/performanceeditor/handsymbol_tests.inc
+hand-bracket-grips	libmscore/symbol.cpp	void Symbol::startEditDrag	160	Native Undo and cancellable endpoint preview	mtest/mscore/performanceeditor/handsymbol_tests.inc
 hand-bracket-inspector	mscore/inspector/inspector.cpp	InspectorHandSymbol::InspectorHandSymbol	1440	Numeric scrubbing and safe property submission	mtest/mscore/performanceeditor/handsymbol_tests.inc
 hand-bracket-hit	mscore/scoreview.cpp	QList<Element*> ScoreView::elementsNear	5524	Prefer directly hit hand child over its Note/Chord container	mtest/mscore/performanceeditor/handsymbol_tests.inc
 和弦空位搜索	mscore/notepreview.h	inline QRectF findPreviewChordBox	112	保持 x；按障碍上沿查空隙，页面有限边界	mtest/mscore/pluginhost
@@ -220,12 +220,9 @@ MIDI导出	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::voiceSelection	225	�
 输入净谱	libmscore/inputnotation.cpp	bool joinTiedChords	33	完整延音、同小节与手动分组保护	mtest/libmscore/inputrhythm;mtest/libmscore/beam;mtest/mscore/p0native
 输入净谱	libmscore/inputnotation.cpp	void coordinateTieStems	48	紧凑普通音组的自动方向协调	mtest/libmscore/inputrhythm;mtest/libmscore/beam;mtest/mscore/p0native
 输入净谱	mscore/inputnotationmenu.cpp	void addInputNotationMenu	13	工具菜单、设置记忆及停止播放后排版	mtest/libmscore/inputrhythm;mtest/libmscore/beam;mtest/mscore/p0native
-速度符号面板	mscore/temposymbols.cpp	void appendPlayableTempoSymbols	15	补齐速度格子，保留已有内容	mtest/mscore/p1native
-速度符号面板	mscore/temposymbols.cpp	bool applyPlayableTempoSymbol	66	双击的范围、播放与冲突检查	mtest/mscore/p1native
-速度符号面板	mscore/temposymbols.cpp	bool applyPlayableTempoDrop	74	拖放位置与小节末尾范围	mtest/mscore/p1native
-自由圆滑线	libmscore/freesluravoidance.cpp	AvoidanceResult avoid(	100	限次曲线候选、碰撞检查与锁定点保护	mtest/mscore/performanceeditor
-自由圆滑线	libmscore/freeslur.cpp	bool SlurSegment::displayedFreeNode(double	223	从当前显示位置添加和锁定节点	mtest/mscore/performanceeditor
-分手标记	libmscore/handbracket.cpp	QPointF position(	37	附着音附近的有限位置候选与碰撞检查	mtest/mscore/performanceeditor;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
+速度符号面板	mscore/temposymbols.cpp	bool applyPlayableTempoSymbol	63	双击的范围、播放与冲突检查	mtest/mscore/p1native
+速度符号面板	mscore/temposymbols.cpp	bool applyPlayableTempoDrop	71	拖放位置与小节末尾范围	mtest/mscore/p1native
+自由圆滑线	libmscore/freeslur.cpp	bool SlurSegment::displayedFreeNode(double	283	从当前显示位置添加和锁定节点	mtest/mscore/performanceeditor
 分手标记	mscore/handbracketsettings.cpp	void addHandBracketDefaultControls(	41	四种个人默认形状、设置读写与面板按钮	mtest/mscore/performanceeditor;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 分手标记	mscore/handbracketsettings.cpp	void completeHandBracketPalette(	61	四种格子补齐与缩小显示	mtest/mscore/performanceeditor;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 分手标记	mscore/plugin/api/arrangementsnapshot.cpp	auto handData	81	完整分手含义与附着音信息	mtest/mscore/performanceeditor;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
@@ -247,10 +244,10 @@ MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	234	�
 方案保存	libmscore/regionalvariants.cpp	bool save(	691	普通主方案入口和本分支当前组合恢复	mtest/mscore/p1native/regional_tests.inc
 方案面板	mscore/workflow/regionalpanel.cpp	void showRegionalVariantPanel(	640	菜单、停靠、复制切换、旧文件和普通版导出	mtest/mscore/p1native/regional_tests.inc
 演奏快捷调整	mscore/events.cpp	ScoreView::wheelEvent	157	最近音力度入口	mscore/performanceeditor
-和弦独立摘要	mscore/plugin/qmlplugin.cpp	void QmlPlugin::showSummaryPanel(	183	顶部摘要与右侧面板独立显示	mtest/mscore/performanceeditor;mtest/mscore/p1native
-参考播放空格	mscore/plugin/qmlplugin.cpp	bool QmlPlugin::eventFilter(	116	只在参考面板获得焦点时处理空格，文字输入沿用原行为	mtest/mscore/p1native
+和弦独立摘要	mscore/plugin/qmlplugin.cpp	void QmlPlugin::showSummaryPanel(	194	顶部摘要与右侧面板独立显示	mtest/mscore/performanceeditor;mtest/mscore/p1native
+参考播放空格	mscore/plugin/qmlplugin.cpp	bool QmlPlugin::eventFilter(	127	只在参考面板获得焦点时处理空格，文字输入沿用原行为	mtest/mscore/p1native
 演奏直接试听	mscore/workflow/workflowexpression.cpp	QString ScoreObserver::temporaryWorkflowProject(	141	自动准备试听材料位置	mtest/mscore/p1native
-分手折线控制点	libmscore/symbol.cpp	void Symbol::editDrag(	168	端点调整长度，拐点移动整条折线	mtest/mscore/performanceeditor/handsymbol_tests.inc
+分手折线控制点	libmscore/symbol.cpp	void Symbol::editDrag(	169	端点调整长度，拐点移动整条折线	mtest/mscore/performanceeditor/handsymbol_tests.inc
 分手默认形状	mscore/handbracketsettings.cpp	static void refreshHandPaletteDefaults(	17	保存后更新所有默认符号面板	mtest/mscore/performanceeditor/handsymbol_tests.inc
 实时MIDI录制	mscore/workflow/midicapture.cpp	MidiCaptureSession::begin(	63	独立录制、时间、松手与自动结束	mtest/mscore/p1native
 Windows录制输入	audiodrivers/pm.cpp	void PortMidiDriver::read(	183	保留PortMidi时间的录制入口	mtest/mscore/p1native
@@ -276,3 +273,8 @@ MIDI松手说明	mscore/midicrop/midicroppanel.cpp	QString reasonText(	21	原长
 和弦摘要字体	mscore/workflow/harmonylabel.cpp	ScoreObserver::harmonyLabel	13	音乐字体和级数紧凑渲染	mtest/mscore/p1native/assistant_surface_tests.inc
 谱面和弦编辑	mscore/workflow/chordeditor.cpp	ScoreObserver::setChordEditRegion	108	作用范围和显示位置拖动	mtest/mscore/p1native/assistant_surface_tests.inc
 原曲联合播放	mscore/workflow/referenceworkflow.cpp	ScoreObserver::startReferencePlayback	109	独立结束、循环与设置恢复	mtest/mscore/performanceeditor/expression_playback_tests.inc
+圆滑线区段走向	libmscore/freeslur.cpp	QVector<Route> routing	64	区段与跨谱行坐标	mtest/mscore/performanceeditor/notation_051_tests.inc
+圆滑线整理切线	libmscore/freeslur.cpp	bool FreeSlur::smoothNode	144	保持点位置整理共用切线	mtest/mscore/performanceeditor/notation_051_tests.inc
+圆滑线绕行	libmscore/freesluravoidance.cpp	AvoidanceResult avoid(	180	方向约束与形状复用	mtest/mscore/performanceeditor/notation_051_tests.inc
+分手折线位置	libmscore/handbracket.cpp	QPointF position(	63	谱间位置与音头符杠碰撞	mtest/mscore/performanceeditor/notation_051_tests.inc
+速度符号升级	mscore/temposymbols.cpp	void appendPlayableTempoSymbols	15	升级旧格子并保留自制符号	mtest/mscore/performanceeditor/notation_051_tests.inc
