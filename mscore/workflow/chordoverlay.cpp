@@ -2,6 +2,7 @@
 #include "mscore/scoreview.h"
 #include "libmscore/score.h"
 #include <QPainter>
+#include <QLineF>
 namespace Ms {
 void ScoreView::paintTopChordPreview(QPainter& painter)
       {
@@ -12,6 +13,12 @@ void ScoreView::paintTopChordPreview(QPainter& painter)
       _notePreviewLayers.forEachChord([&](const NotePreviewEntry& entry,bool active){
             if(!entry.onTop)return;const QRectF box=entry.chordBox.translated(entry.anchor);
             if(!box.intersects(visible)||(entry.avoidScoreContent&&box.intersects(protectedArea)))return;
+            if(entry.leader){
+                  const auto source=entry.leaderAnchor;
+                  const QPointF edge(qBound(box.left(),source.x(),box.right()),qBound(box.top(),source.y(),box.bottom()));
+                  const QLineF line(source,edge);
+                  if(line.length()>entry.spatium){auto color=entry.chordColor;color.setAlpha(100);painter.setPen(QPen(color,entry.spatium*.06));painter.drawLine(line.pointAt(qMin(.5,entry.spatium*.6/line.length())),edge);}
+                  }
             painter.save();painter.translate(box.topLeft());
             if(entry.chordMask){painter.setPen(Qt::NoPen);painter.setBrush(active?entry.highlightBackground:QColor(255,255,255,235));
                   painter.drawRoundedRect(QRectF(QPointF(),box.size()),entry.spatium*.18,entry.spatium*.18);}

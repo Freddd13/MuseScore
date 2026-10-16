@@ -77,6 +77,7 @@ class ScoreObserver : public QObject {
       int _indexBuildCount = 0;
       double _indexBuildMilliseconds = 0.0;
       bool _enabled = true;
+      QPointer<QObject> _chordEditor, _workflowRepeat;
       bool _surfaceVisible = true;
       bool _auxiliarySurfaceVisible = false;
       void ensureIndex(int firstTrack, int endTrack);
@@ -107,13 +108,16 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QVariantMap startReferencePlayback(const QVariantMap&);
       Q_INVOKABLE QVariantMap stopReferencePlayback();
       Q_INVOKABLE QVariantMap setEditorComparison(const QVariantMap&);
-      Q_INVOKABLE QVariantMap setReferenceTracks(const QVariantList&);
       Q_INVOKABLE QVariantMap updateEditorComparisonState(const QVariantMap&);
+      Q_INVOKABLE QVariantMap setReferenceTracks(const QVariantList&);
       Q_INVOKABLE QVariantMap workflowFingerprint(int from,int limit,const QString& expected);
       Q_INVOKABLE QVariantMap returnWorkflowSource();
       Q_INVOKABLE QString temporaryWorkflowProject();
       Q_INVOKABLE QVariantMap showEditorComparison();
       Q_INVOKABLE QVariantMap showEditorCorrespondence();
+      Q_INVOKABLE QString analysisScoreId() const;
+      Q_INVOKABLE QString analysisContentRevision() const;
+      Q_INVOKABLE QVariantMap scoreLocation(int tick,int track) const;
       Q_INVOKABLE QVariantMap previewExpression(const QString& workspace,const QVariantMap& candidate,const QVariantMap& scope);
       Q_INVOKABLE QVariantMap openWorkflowScore(const QString& filename,bool baseline = false,const QString& expectedHash = QString());
       Q_INVOKABLE QVariantMap copyWorkflowScore(const QString& destination,const QString& expected,bool overwrite = false);
@@ -138,6 +142,10 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE void clearNotePreviewColors();
       Q_INVOKABLE void clearAllPreviews();
       Q_INVOKABLE void setScorePreview(const QVariantList& notes);
+      Q_INVOKABLE void setChordEditRegion(const QVariantMap& region);
+      Q_INVOKABLE QVariantMap musicalPosition(int tick) const;
+      Q_INVOKABLE void setExpressionAuditionLoop(bool enabled);
+      Q_INVOKABLE QVariantMap harmonyLabel(const QString& chord, const QString& degree, const QVariantMap& style) const;
       Q_INVOKABLE void setActiveScorePreview(int tick);
       Q_INVOKABLE QVariantMap previewStatus() const { return property("previewStatus").toMap(); }
       Q_INVOKABLE void activatePreview(int tick, int track) { emit previewActivated(tick, track); }
@@ -151,8 +159,12 @@ class ScoreObserver : public QObject {
       void performanceMidiReady(int token,const QVariantMap& result);
       void readOnlyJobFinished(int token, const QVariantMap& result);
       void scoreChanged();
+      void activeScoreChanged();
       void positionChanged();
+      void workflowPlaybackError(const QString& message);
       void previewActivated(int tick, int track);
+      void previewRangeEdited(int start,int end,int track);
+      void previewPositionEdited(int tick,int track,qreal x,qreal y);
       void enabledChanged();
       void indexChanged();
       void surfaceVisibleChanged();

@@ -18,6 +18,7 @@
 #include "libmscore/pedal.h"
 #include "libmscore/spannermap.h"
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QPointer>
 #include <QAction>
 #include <QSignalBlocker>
@@ -71,16 +72,24 @@ QVariantMap ScoreObserver::referencePlan(const QVariantMap& request){
   auto track=value.toMap();if(track.value("mute").toBool()||!track.value("participate",true).toBool()||(solo&&!track.value("solo").toBool()))continue;
   QVariantList pieces;
   const double trackSpeed=mode==0?track.value("speed",speed).toDouble():speed;if(!std::isfinite(trackSpeed)||trackSpeed<.5||trackSpeed>1.5)return {{"error",tr("音轨速度应在 50–150% 之间。")}};
-  for(auto av:track.value("associations").toList()){
+  auto associations=track.value("associations").toList();
+  std::sort(associations.begin(),associations.end(),[](const QVariant& a,const QVariant& b){return a.toMap().value("start").toInt()<b.toMap().value("start").toInt();});
+  int previousEnd=-1;double previousOutputEnd=0;
+  for(auto av:associations){
    auto a=av.toMap();if(!a.value("active",true).toBool()||a.value("occurrence",1).toInt()!=occurrence||a.value("end").toInt()<=start||a.value("start").toInt()>=end)continue;
    if(a.value("stale").toBool())return {{"error",tr("音轨“%1”的关联需要重新核对。").arg(track.value("name").toString())}};
-   const int first=qMax(start,a.value("start").toInt()),last=qMin(end,a.value("end").toInt());QVector<int> ticks{first,last};
+   const int first=qMax(start,a.value("start").toInt()),last=qMin(end,a.value("end").toInt());
+   if(previousEnd>first)return {{"error",tr("音轨“%1”在同一谱位选了多个片段。请在关联列表中选择本次使用的一条；需要叠加时可放入另一音轨。").arg(track.value("name").toString())}};
+   const double independentAt=previousEnd<0?(seconds(first)-origin)*1000:previousOutputEnd+(seconds(first)-seconds(previousEnd))*1000;
+   QVector<int> ticks{first,last};
    if(mode!=0){for(int t=first+120;t<last;t+=120)ticks.append(t);for(auto v:a.value("anchors").toList()){int t=v.toMap().value("tick").toInt();if(t>first&&t<last)ticks.append(t);}if(mode==2)for(auto v:leader.value("anchors").toList()){int t=v.toMap().value("tick").toInt();if(t>first&&t<last)ticks.append(t);}}
    std::sort(ticks.begin(),ticks.end());ticks.erase(std::unique(ticks.begin(),ticks.end()),ticks.end());
-   for(int i=1;i<ticks.size();++i){int p=ticks[i-1],q=ticks[i];double audioFrom=audioAt(a,p),audioUntil=audioAt(a,q),at=(outputAt(p)-origin)*1000,duration=mode==0?(audioUntil-audioFrom)/trackSpeed:(outputAt(q)-outputAt(p))*1000;
+   for(int i=1;i<ticks.size();++i){int p=ticks[i-1],q=ticks[i];double audioFrom=audioAt(a,p),audioUntil=audioAt(a,q),at=mode==0?independentAt:(outputAt(p)-origin)*1000,duration=mode==0?(audioUntil-audioFrom)/trackSpeed:(outputAt(q)-outputAt(p))*1000;
     if(duration<=0)return {{"error",tr("对齐点顺序不正确。")}};
     pieces.append(QVariantMap{{"from",audioFrom},{"until",audioUntil},{"at",at},{"duration",duration},{"fade",request.value("fade",true)}});
+    previousOutputEnd=at+duration;
    }
+   previousEnd=last;
   }
   std::sort(pieces.begin(),pieces.end(),[](const QVariant& a,const QVariant& b){return a.toMap().value("at").toDouble()<b.toMap().value("at").toDouble();});
   QVariantList merged;
@@ -95,32 +104,55 @@ QVariantMap ScoreObserver::referencePlan(const QVariantMap& request){
  if(segment)for(int track=0;track<_score->ntracks();++track){auto e=segment->element(track);if(!e||!e->isChord())continue;for(auto n:toChord(e)->notes()){QSet<Ms::Note*> visited;while(n->tieBack()&&n->tieBack()->startNote()&&!visited.contains(n)){visited.insert(n);n=n->tieBack()->startNote();context=qMin(context,n->chord()->tick().ticks());}}}
  for(auto pair:_score->spannerMap().map()){auto line=pair.second;if(line->isPedal()&&line->tick().ticks()<start&&line->tick2().ticks()>start)context=qMin(context,line->tick().ticks());}
  int launch=qMax(0,from-(start-context));
- return {{"ok",true},{"revision",analysisRevision()},{"clips",clips},{"clock",clockValues},{"joint",true},{"volume",request.value("volume",.8)},{"fromUtick",launch},{"untilUtick",until},{"startFrame",int(origin*MScore::sampleRate)},{"actualStart",master->repeatList().utick2tick(launch)},{"start",start},{"end",end},{"mode",mode}};
+ return {{"ok",true},{"revision",analysisRevision()},{"clips",clips},{"clock",clockValues},{"joint",true},{"volume",request.value("volume",.8)},{"fromUtick",launch},{"startUtick",from},{"untilUtick",until},{"startFrame",int(origin*MScore::sampleRate)},{"actualStart",master->repeatList().utick2tick(launch)},{"start",start},{"end",end},{"mode",mode}};
 }
 QVariantMap ScoreObserver::startReferencePlayback(const QVariantMap& plan){
+ delete _workflowRepeat.data();_workflowRepeat.clear();
  if(!plan.value("usesPreview").toBool())stopPlaybackPreview();
  if(!_score||!mscore||mscore->currentScore()!=_score||plan.value("revision").toString()!=analysisRevision())return {{"error",tr("请回到关联的乐谱，重新准备播放。")}};
  if(!seq||!seq->driver()||seq->isPlaying()||!seq->backgroundRenderingIdle())return {{"error",tr("请停止播放并检查声音设备。")}};
- if(mscore->countIn()||mscore->loop())return {{"error",tr("请先关闭预备拍和乐谱循环；联合循环使用原曲面板的循环按钮。")}};
  const int from=plan.value("fromUtick",-1).toInt(),end=plan.value("untilUtick",-1).toInt();
  if(from<0||end<=from||end>_score->masterScore()->repeatList().ticks())return {{"error",tr("谱段范围不正确，请重新准备播放。")}};
  QVector<QPair<double,double>> clock;for(auto v:plan.value("clock").toList()){auto p=v.toMap();double a=p.value("score").toDouble(),b=p.value("output").toDouble();if(!std::isfinite(a)||!std::isfinite(b)||(!clock.isEmpty()&&(a<=clock.back().first||b<=clock.back().second)))return {{"error",tr("时间对应不是连续向前的，请重新设置对齐点。")}};clock.append({a,b});}
  workflowContext()->finishPlaybackSession();seq->synchronizeStoppedGui();
  auto project=referenceProject();if(!project->property("available").toBool())return {{"error",project->property("status")}};
- QVariantMap result;QMetaObject::invokeMethod(project,"start",Q_RETURN_ARG(QVariantMap,result),Q_ARG(QVariantMap,plan));if(result.contains("error"))return result;
+ auto audioPlan=plan;audioPlan["loop"]=false;QVariantMap result;QMetaObject::invokeMethod(project,"start",Q_RETURN_ARG(QVariantMap,result),Q_ARG(QVariantMap,audioPlan));if(result.contains("error"))return result;project->setProperty("repeatSelection",plan.value("loop",false));
  setReferenceClock(clock);setReferenceEndTick(end);
- auto session=new QObject(this);workflowContext()->setPlaybackSession(session);auto task=new QTimer(session);task->setInterval(20);auto guarded=QPointer<Ms::Score>(_score);auto state=_score->masterScore()->state();auto started=std::make_shared<bool>(false),natural=std::make_shared<bool>(false);const bool independent=plan.value("mode").toInt()==0;
- connect(session,&QObject::destroyed,project,[project,guarded]{QMetaObject::invokeMethod(project,"stop");if(seq&&guarded&&seq->score()==guarded->masterScore()&&seq->isPlaying())seq->stopWait();setReferenceClock({});setReferenceEndTick(-1);});
- connect(task,&QTimer::timeout,this,[this,session,guarded,state,project,from,started,natural]{
-  if(!guarded||guarded->masterScore()->state()!=state||mscore->currentScore()!=guarded||!project->property("playing").toBool()){session->deleteLater();return;}
-  if(!*started&&project->property("prepared").toBool()){*started=true;seq->setScoreView(mscore->currentScoreView());if(auto play=getAction("play")){QSignalBlocker block(play);play->setChecked(true);}seq->startAtUTick(from);}
-  if(*started&&seq&&seq->isPlaying())project->setProperty("scoreTick",guarded->masterScore()->repeatList().utick2tick(seq->getCurTick()));
-  Q_UNUSED(natural);
+ auto session=new QObject(this);workflowContext()->setPlaybackSession(session);auto task=new QTimer(session);task->setInterval(20);auto guarded=QPointer<Ms::Score>(_score);auto state=_score->masterScore()->state();auto startWait=std::make_shared<QElapsedTimer>();auto heard=std::make_shared<bool>(false);auto started=std::make_shared<bool>(false),natural=std::make_shared<bool>(false),finished=std::make_shared<bool>(false);const bool usesPreview=plan.value("usesPreview").toBool();
+ struct SavedOption {QPointer<QAction> action;bool before=false,touched=false;};
+ auto options=std::make_shared<QVector<SavedOption>>();
+ if(!usesPreview)for(const char* name:{"countin","loop"})if(auto action=getAction(name)){
+  options->append({action,action->isChecked(),false});action->setChecked(false);const int index=options->size()-1;
+  connect(action,&QAction::toggled,session,[options,index](bool){(*options)[index].touched=true;});
+ }
+ connect(session,&QObject::destroyed,project,[project,guarded,options,finished]{*finished=true;QMetaObject::invokeMethod(project,"stop");if(seq&&guarded&&seq->score()==guarded->masterScore()&&seq->isPlaying())seq->stopWait();setReferenceClock({});setReferenceEndTick(-1);for(const auto& option:*options)if(option.action&&!option.touched)option.action->setChecked(option.before);});
+ auto complete=[this,session,plan,finished,usesPreview,project]{
+  if(*finished)return;*finished=true;
+  std::function<void()> restart;
+  if(project->property("repeatSelection").toBool())restart=usesPreview?playbackPreviewRepeat():std::function<void()>([this,plan,project]{if(!project->property("repeatSelection").toBool())return;auto next=plan;next["loop"]=true;next["fromUtick"]=plan.value("startUtick",plan.value("fromUtick"));auto result=startReferencePlayback(next);if(result.contains("error"))emit workflowPlaybackError(result.value("error").toString());});
+  session->deleteLater();
+  if(restart){auto pending=new QObject(this);_workflowRepeat=pending;QTimer::singleShot(40,pending,[this,pending,restart]{_workflowRepeat.clear();pending->deleteLater();restart();});}
+ };
+ auto position=[usesPreview,end](){if(referenceReachedTick()==end)return end;return usesPreview?workflowContext()->audition().value("tick",-1).toInt():(seq?seq->getCurTick():-1);};
+ connect(task,&QTimer::timeout,this,[this,session,guarded,state,project,from,end,started,natural,finished,complete,position,heard,startWait]{
+  if(*finished)return;
+  if(!guarded||guarded->masterScore()->state()!=state||mscore->currentScore()!=guarded){session->deleteLater();return;}
+  const bool audio=project->property("playing").toBool();
+  if(!*started){if(!audio){session->deleteLater();return;}if(project->property("prepared").toBool()){*started=true;startWait->start();seq->setScoreView(mscore->currentScoreView());if(auto play=getAction("play")){QSignalBlocker block(play);play->setChecked(true);}seq->startAtUTick(from);}return;}
+  const bool music=seq&&seq->isPlaying();if(music)*heard=true;
+  if(!music&&!*heard){if(startWait->elapsed()>5000){emit workflowPlaybackError(tr("乐谱播放尚未开始，请检查声音设备后再试。"));session->deleteLater();}return;}
+  if(music)project->setProperty("scoreTick",guarded->masterScore()->repeatList().utick2tick(seq->getCurTick()));
+  else if(position()>=end-1)*natural=true;
+  const bool audioEnded=!audio&&project->property("completed").toBool();
+  if((!music&&!*natural)||(!audio&&!audioEnded)){session->deleteLater();return;}
+  if(!music&&audioEnded)complete();
+
  });task->start();
+ connect(seq,&Seq::started,session,[heard]{*heard=true;});
  connect(seq,&Seq::heartBeat,session,[guarded,end,natural](int,int tick,int){if(guarded&&seq->score()==guarded->masterScore()&&tick>=end){*natural=true;seq->stop();seq->stopNotes();}});
- connect(seq,&Seq::stopped,session,[session,natural,independent,end]{if(independent&&(*natural||(seq&&seq->getCurTick()>=end)))return;session->deleteLater();});
+ connect(seq,&Seq::stopped,session,[session,natural,finished,end,position]{if(*finished)return;if(position()>=end-1)*natural=true;if(!*natural)session->deleteLater();});
  connect(this,&ScoreObserver::scoreChanged,session,[session,project]{QMetaObject::invokeMethod(project,"stop");if(seq&&seq->isPlaying())seq->stop();setReferenceClock({});session->deleteLater();});
  return {{"ok",true},{"preparing",true}};
 }
-QVariantMap ScoreObserver::stopReferencePlayback(){auto p=referenceProject();QMetaObject::invokeMethod(p,"stop");if(seq&&seq->isPlaying())seq->stopWait();setReferenceClock({});setReferenceEndTick(-1);return {{"ok",true}};}
+QVariantMap ScoreObserver::stopReferencePlayback(){delete _workflowRepeat.data();_workflowRepeat.clear();workflowContext()->finishPlaybackSession();auto p=referenceProject();QMetaObject::invokeMethod(p,"stop");if(seq&&seq->isPlaying())seq->stopWait();setReferenceClock({});setReferenceEndTick(-1);return {{"ok",true}};}
 }}

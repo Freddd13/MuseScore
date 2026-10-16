@@ -283,3 +283,18 @@ function workerBundle(sources) {
     }
     return "(function(){\n"+module("Harmony",sources.harmony)+module("Timeline",sources.timeline)+"return {regions:Timeline.build(input.frames,input.config,input.part,[])};})()";
 }
+
+// Move a boundary together with the neighboring harmony, keeping a continuous timeline.
+function resizeNeighbours(regions,region,start,end) {
+    var edits=[],previous=null,next=null;
+    regions.forEach(function(r){if(r.part!==region.part)return;if(r.end===region.start)previous=r;if(r.start===region.end)next=r;});
+    if(start!==region.start){
+        if(previous && start>previous.start){var left=clone(previous);left.end=start;left.source="manual";edits.push(left);}
+        else if(start>region.start){var gap=clone(region);gap.end=start;gap.suppressed=true;edits.push(gap);}
+    }
+    if(end!==region.end){
+        if(next && end<next.end){var right=clone(next);right.start=end;right.source="manual";edits.push(right);}
+        else if(end<region.end){var tail=clone(region);tail.start=end;tail.suppressed=true;edits.push(tail);}
+    }
+    return edits;
+}

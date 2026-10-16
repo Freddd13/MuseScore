@@ -6,10 +6,14 @@ Column {
     id:editor
     UiTheme {id:theme}
     objectName:"harmonyRangeEditor"
+    property var observer:null
+    function position(tick){return observer&&typeof observer.musicalPosition==="function"?observer.musicalPosition(tick).text:String(tick)}
     property var region:null
     property var regions:[]
     property int tick:0
     property int scoreEnd:2147483647
+    property bool handlesVisible:false
+    signal editingChanged(bool enabled)
     property bool canUndo:false
     property bool canRedo:false
     property var qualities:[]
@@ -18,9 +22,8 @@ Column {
     signal action(string command,int start,int end,int rootIndex,int qualityIndex,int bassIndex)
     onRegionChanged:if(region){root.currentIndex=Math.max(0,editor.rootPcs.indexOf(region.root));quality.currentIndex=Math.max(0,region.definition)}
     spacing:8
-    UiLabel {text:"和声范围编辑";font.bold:true;color:theme.text;font.pixelSize:13}
-    UiLabel {width:parent.width;text:region ? region.chord+" · ticks "+region.start+"–"+region.end : "选择一个记号或谱面位置";wrapMode:Text.Wrap;color:theme.muted;font.pixelSize:11}
-    DeskSwitch {id:editing;objectName:"harmonyRangeEditing";text:"显示可拖动的范围手柄"}
+    UiLabel {width:parent.width;text:region ? (region.chord||"待指定和弦")+" · "+position(region.start)+" 至 "+position(region.end) : "选择一个记号或谱面位置";wrapMode:Text.Wrap;color:theme.muted;font.pixelSize:11}
+    DeskSwitch {id:editing;objectName:"harmonyRangeEditing";text:"在谱面和面板显示范围手柄";checked:editor.handlesVisible;onClicked:editor.editingChanged(checked)}
     Rectangle {
         id:strip;width:parent.width;height:70;visible:editing.checked;color:theme.section;radius:4
         property int leftTick:region?Math.max(0,region.start-480):Math.max(0,tick-480)
@@ -42,16 +45,17 @@ Column {
             Rectangle {id:handle;width:12;height:48;y:10;radius:3;color:theme.accent
                 objectName:index===0?"harmonyRangeStart":"harmonyRangeEnd"
                 x:strip.xFor(index===0?editor.region.start:editor.region.end)-width/2
-                MouseArea {anchors.fill:parent;drag.target:handle;drag.axis:Drag.XAxis;drag.minimumX:0;drag.maximumX:strip.width-handle.width
+                MouseArea {anchors.fill:parent;preventStealing:true;drag.target:handle;drag.axis:Drag.XAxis;drag.minimumX:0;drag.maximumX:strip.width-handle.width
                     onReleased:{var value=strip.tickFor(handle.x+handle.width/2);editor.action("range",index===0?value:editor.region.start,index===0?editor.region.end:value,0,0,0)}}
             }
         }
     }
-    RowLayout {width:parent.width
+    DeskSwitch {id:exactPosition;text:"输入精确位置数值（tick）"}
+    RowLayout {width:parent.width;visible:exactPosition.checked
         UiLabel {text:"起点 tick";font.pixelSize:11;color:theme.muted}
         DeskSpinBox {id:start;Layout.fillWidth:true;from:0;to:Math.max(0,editor.scoreEnd-1);value:editor.region?editor.region.start:Math.max(0,editor.tick);stepSize:60;editable:true}
     }
-    RowLayout {width:parent.width
+    RowLayout {width:parent.width;visible:exactPosition.checked
         UiLabel {text:"终点 tick";font.pixelSize:11;color:theme.muted}
         DeskSpinBox {id:end;Layout.fillWidth:true;from:1;to:editor.scoreEnd;value:editor.region?editor.region.end:Math.min(editor.scoreEnd,Math.max(0,editor.tick)+480);stepSize:60;editable:true}
     }
@@ -69,9 +73,10 @@ Column {
         DeskButton {text:"在当前位置拆分";enabled:!!editor.region && editor.tick>editor.region.start && editor.tick<editor.region.end;onClicked:editor.action("split",editor.tick,end.value,0,0,0)}
         DeskButton {text:"合并前一段";enabled:!!editor.region;onClicked:editor.action("merge",start.value,end.value,0,0,0)}
         DeskButton {text:"排除此范围";onClicked:editor.action("suppress",start.value,end.value,0,0,0)}
+        DeskButton {text:"恢复记号自动位置";enabled:!!editor.region;onClicked:editor.action("position",start.value,end.value,0,0,0)}
         DeskButton {text:"恢复自动";onClicked:editor.action("restore",start.value,end.value,0,0,0)}
         DeskButton {text:"撤销修正";enabled:editor.canUndo;onClicked:editor.action("undo",0,0,0,0,0)}
         DeskButton {text:"重做修正";enabled:editor.canRedo;onClicked:editor.action("redo",0,0,0,0,0)}
     }
-    UiLabel {width:parent.width;text:"手柄吸附至 1/8 拍；数值输入可精确到 tick。只改分析范围，原谱音符和原生撤销不变。删除识别边界请用合并。";wrapMode:Text.Wrap;color:theme.muted;font.pixelSize:10}
+    UiLabel {width:parent.width;text:"拖两端手柄调整和弦作用范围；拖谱面记号本身调整位置。面板和谱面同步更新，撤销修正可退回上一步。手柄每格为四分音符的八分之一。";wrapMode:Text.Wrap;color:theme.muted;font.pixelSize:10}
 }

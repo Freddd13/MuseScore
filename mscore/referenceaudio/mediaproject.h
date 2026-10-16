@@ -13,7 +13,10 @@ class ReferenceMediaProject : public QObject {
       Q_OBJECT
       Q_PROPERTY(bool available READ available CONSTANT)
       Q_PROPERTY(bool playing READ playing NOTIFY changed)
+      Q_PROPERTY(double volume READ volume WRITE setVolume NOTIFY volumeChanged)
       Q_PROPERTY(bool joint READ joint NOTIFY changed)
+      Q_PROPERTY(bool completed READ completed NOTIFY changed)
+      Q_PROPERTY(bool repeatSelection MEMBER _repeatSelection NOTIFY changed)
       Q_PROPERTY(QString status READ status NOTIFY changed)
       Q_PROPERTY(double position READ position NOTIFY changed)
       Q_PROPERTY(QVariantList tracks READ tracks NOTIFY tracksChanged)
@@ -35,7 +38,8 @@ class ReferenceMediaProject : public QObject {
       bool _expressionPreview=false;
       int _scoreTick=0;
       QString _status;
-      bool _joint=false;
+      bool _joint=false, _completed=false, _repeatSelection=false;
+      double _volume=.8;
       static void mix(void*,float*,unsigned,int,bool);
       void poll();
 public:
@@ -44,8 +48,11 @@ public:
       bool available()const{return true;}
       bool playing()const{return bool(_session);}
       bool joint()const{return _joint;}
+      bool completed()const{return _completed;}
       QString status()const{return _status;}
       double position()const;
+      double volume()const;
+      void setVolume(double);
       QVariantList tracks()const{return _tracks;}
       QVariantMap diagnostics()const;
       Q_INVOKABLE QVariantMap setTracks(const QVariantList&);
@@ -56,6 +63,7 @@ public:
       Q_INVOKABLE void requestJoint();
 signals:
       void changed();
+      void volumeChanged();
       void tracksChanged();
       void finished(bool wasJoint);
       void independentRequested();

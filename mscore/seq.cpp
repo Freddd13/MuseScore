@@ -1356,7 +1356,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                   if (cs->playMode() == PlayMode::SYNTHESIZER) {
                         const unsigned before=referenceStopFrame<0?framesRemain:unsigned(qBound(0,referenceStopFrame-*pPlayFrame,int(framesRemain)));
                         if(before){metronome(before,p,inCountIn);_synti->process(before,p);}
-                        if(referenceStopFrame>=0&&*pPlayFrame+int(before)>=referenceStopFrame){stopNotes(-1,true);stopTransport();}
+                        if(referenceStopFrame>=0&&*pPlayFrame+int(before)>=referenceStopFrame){markReferenceEndReached(referenceStopTick);stopNotes(-1,true);stopTransport();}
                         if(before<framesRemain)_synti->process(framesRemain-before,p+before*2);
 
                         independentMetronome(framesRemain, p);
@@ -1400,7 +1400,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                               startTransport();
                               }
                         }
-                  else
+                  else if(referenceStopFrame<0 || *pPlayFrame>=referenceStopFrame)
                         stopTransport();
                   }
             }

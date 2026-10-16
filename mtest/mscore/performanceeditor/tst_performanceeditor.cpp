@@ -4,6 +4,7 @@
 #include "mscore/plugin/api/score.h"
 #include "mscore/workflow/playbackpreview.h"
 #include "mscore/workflow/workflowcontext.h"
+#include "mscore/workflow/referencefactory.h"
 #include "mscore/workflow/referencebus.h"
 #include "libmscore/handbracket.h"
 #include "mscore/handbracketsettings.h"

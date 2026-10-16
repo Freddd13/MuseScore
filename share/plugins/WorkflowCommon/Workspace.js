@@ -37,3 +37,5 @@ function mapped(association,tick) {
     for(var i=1;i<points.length;++i)if(tick<=points[i].tick){var a=points[i-1],b=points[i];return a.ms+(b.ms-a.ms)*(tick-a.tick)/(b.tick-a.tick);}
     return association.until;
 }
+
+function sameScore(a,b){return a===b || !!(a&&b&&typeof a.is==="function"&&a.is(b));}

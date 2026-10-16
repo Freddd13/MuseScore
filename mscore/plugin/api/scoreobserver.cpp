@@ -13,6 +13,7 @@
 #include "scoreobserver.h"
 #include "score.h"
 #include "mscore/scoreview.h"
+#include "mscore/workflow/workflowcontext.h"
 #include "mscore/seq.h"
 #include "mscore/musescore.h"
 #include "libmscore/chord.h"
@@ -61,6 +62,8 @@ ScoreObserver::ScoreObserver(QObject* parent) : QObject(parent)
             connect(seq, &Seq::started, this, &ScoreObserver::notifyPosition);
             connect(seq, &Seq::stopped, this, &ScoreObserver::notifyPosition);
             }
+      auto context=workflowContext();context->setActiveScore(mscore?mscore->currentScore():nullptr);
+      connect(context,&WorkflowContext::activeScoreChanged,this,&ScoreObserver::activeScoreChanged);
       watchSurface();
       }
 
@@ -448,6 +451,7 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
             entry.label=value.value("label").toString().left(24);
             entry.active=value.value("active").toBool();
             entry.anchor=note->canvasPos();entry.spatium=sp;
+            entry.leader=value.value("leader",false).toBool();entry.leaderAnchor=note->canvasBoundingRect().center();
             const QPointF anchor=note->pagePos();
             auto collides=[&](const QRectF& candidate) {
                   if (!page->bbox().contains(candidate)) return true;
@@ -503,6 +507,7 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
             if (entry.chord.isEmpty() && entry.degree.isEmpty()) continue;
             entry.annotationTrack=note->staff()->part()->startTrack();entry.activationTarget=this;
             entry.sourceAnchor=note;entry.chordMask=value.value("chordMask",true).toBool();
+            entry.manualOffset=QPointF(qBound(-100.,value.value("offsetX",0.).toDouble(),100.),qBound(-100.,value.value("offsetY",0.).toDouble(),100.))*sp;
             entry.onTop=value.value("onTop",false).toBool();entry.avoidScoreContent=value.value("avoidScoreContent",true).toBool();entry.avoidOtherPreviews=value.value("avoidOtherPreviews",false).toBool();
             entry.label.clear();entry.labelBox={};entry.color={};entry.active=false;entry.bounds={};
             // This anchor belongs to the change's system, even if its sustained source note is on a prior line.
@@ -535,14 +540,15 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
                         Harmony harmony(scratch.get());
                         if (!value.value("chordFont").toString().isEmpty()) harmony.setProperty(Pid::FONT_FACE,family);
                         harmony.setProperty(Pid::FONT_SIZE,_score->styleD(Sid::chordSymbolAFontSize)*scale);
-                        harmony.setHarmony(entry.chord);harmony.calculateBoundingRect();
+                        const bool symbolic=QString("ABCDEFGabcdefg").contains(entry.chord.front());
+                        if(symbolic){harmony.setHarmony(entry.chord);harmony.calculateBoundingRect();}
                         const auto nativeBox=harmony.bbox();
                         NotePreviewEntry glyphs;glyphs.renderedChordSize=nativeBox.size();glyphs.renderedChordKey=renderKey;
                         auto record=[&](const QColor& color,QPicture& picture) {
                               harmony.setColor(color);QPainter painter(&picture);painter.translate(-nativeBox.topLeft());
                               static_cast<const Element&>(harmony).draw(&painter);painter.end();
                               };
-                        record(entry.chordColor,glyphs.chordPicture);record(entry.highlightColor,glyphs.activeChordPicture);
+                        if(symbolic&&!nativeBox.isEmpty()){record(entry.chordColor,glyphs.chordPicture);record(entry.highlightColor,glyphs.activeChordPicture);}
                         // Include rendered bytes: score style/font/chord-list edits must invalidate equal-sized glyphs.
                         glyphs.renderedChordKey += QCryptographicHash::hash(
                               QByteArray(glyphs.chordPicture.data(),glyphs.chordPicture.size()),QCryptographicHash::Sha256).toHex();
@@ -587,6 +593,7 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
                               }
                         auto placed=entry.avoidScoreContent?findPreviewChordBox(preferred,pageBounds,obstacles,gap):stackVisiblePreviewChord(preferred,pageBounds,chordBoxes[page],gap);
                         if(placed.isEmpty()&&entry.onTop)placed=stackVisiblePreviewChord(preferred,pageBounds,chordBoxes[page],gap);
+                        if(!placed.isEmpty())placed.translate(entry.manualOffset);
                         entry.chordBox=placed.isEmpty() ? QRectF() : placed.translated(-positions[index]);
                         if (placed.isEmpty()) {
                               ++hidden;
@@ -595,6 +602,7 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
                               }
                         else {occupied[page].append(placed);chordBoxes[page].append(placed);}
                         entry.bounds=entry.chordBox.isEmpty() ? QRectF() : entry.chordBox.translated(entry.anchor);
+                        if(entry.leader&&!entry.bounds.isEmpty())entry.bounds=entry.bounds.united(QRectF(entry.leaderAnchor-QPointF(entry.spatium*.12,entry.spatium*.12),QSizeF(entry.spatium*.24,entry.spatium*.24)));
                         }
 
                   }
@@ -622,7 +630,7 @@ void ScoreObserver::clearPreview(QObject* owner)
       { for (auto& view : _previewViews) if (view) view->setNotePreviewColors(owner, {}); }
 void ScoreObserver::clearNotePreviewColors() { clearPreview(this); }
 void ScoreObserver::clearAllPreviews()
-      { clearPreview(this); clearPreview(&_baseOwner); _baseColors.clear(); _baseChordBoxes.clear(); _previewViews.clear(); _activePreviewTick=-1;
+      { setChordEditRegion({});clearPreview(this); clearPreview(&_baseOwner); _baseColors.clear(); _baseChordBoxes.clear(); _previewViews.clear(); _activePreviewTick=-1;
         setProperty("previewStatus",QVariantMap{{"hidden",0},{"unplaced",QVariantList{}},{"fontFallback",QString()}}); }
 
 static QString localPath(const QString& path)

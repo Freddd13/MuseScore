@@ -531,6 +531,7 @@ class ScoreView : public QWidget, public MuseScoreView {
       void setNotePreviewColors(QObject* owner, const NotePreviewColors& colors, const NotePreviewMarkers& markers = {});
       void setActiveNotePreview(QObject* owner, int tick);
       QVector<QRectF> notePreviewMarkerBoxes(QObject* exceptOwner = nullptr) const { return _notePreviewLayers.markerBoxes(exceptOwner); }
+      QRectF notePreviewMarkerBox(QObject* target,int tick,int track) const { return _notePreviewLayers.markerBox(target,tick,track); }
       bool activateNotePreview(const QPointF& canvasPosition);
 
       virtual Element* elementNear(QPointF) override;

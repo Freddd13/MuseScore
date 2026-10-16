@@ -15,6 +15,11 @@ set (PLUGIN_API_SRC
     ${PROJECT_SOURCE_DIR}/mscore/workflow/midiinput.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/scoreworkflow.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/workflowexpression.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/analysisidentity.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/harmonylabel.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/chordeditor.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/positionhint.h
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/positionhint.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/playbackpreview.h
     ${PROJECT_SOURCE_DIR}/mscore/workflow/playbackpreview.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/workflowvariants.cpp

@@ -435,6 +435,10 @@ void MuseScore::pluginTriggered(QString pp)
       if (pp.isEmpty())
             return;
 
+      // An independently hidden workflow panel keeps its result and other surfaces.
+      for(auto window:QGuiApplication::allWindows())if(auto view=qobject_cast<QQuickView*>(window))
+            if(auto existing=qobject_cast<QmlPlugin*>(view->rootObject()))
+                  if(existing->property("independentPanelSurfaces").toBool() && existing->property("workflowPluginPath").toString()==pp){existing->setVisible(true);existing->focusPanel();return;}
       QmlPluginEngine* engine = getPluginEngine();
       QmlPlugin* p = pluginFromPath(engine, pp);
       if (!p)
@@ -477,6 +481,7 @@ void MuseScore::pluginTriggered(QString pp)
                   dock->setWidget(w);
                   addDockWidget(area, dock);
                   const bool restored=arrangeWorkflowDock(this,dock,QFileInfo(pp).completeBaseName(),p->property("preferredPanelGroup").toString(),area);
+                  if(p->property("independentPanelSurfaces").toBool())p->setProperty("workflowPluginPath",pp);
                   p->attachPanelDock(dock);
                   const bool workflowPanel=!p->property("preferredPanelGroup").toString().isEmpty();
                   const bool side=area==Qt::RightDockWidgetArea || area==Qt::LeftDockWidgetArea;
@@ -539,4 +544,3 @@ bool collectPluginMetaInformation(PluginDescription* d)
       return isQmlPlugin;
       }
 }
-

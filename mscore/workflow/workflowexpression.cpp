@@ -178,12 +178,14 @@ QVariantMap ScoreObserver::closeExpressionPreviewTabs(){
  }
  return {{"ok",true},{"closed",closed},{"kept",kept}};
 }
-QVariantMap ScoreObserver::finishExpressionAudition(){workflowContext()->finishPlaybackSession();stopPlaybackPreview(true);return {{"ok",true}};}
+void ScoreObserver::setExpressionAuditionLoop(bool enabled){setPlaybackPreviewLoop(_score,enabled);if(workflowContext()->current(_score)){auto project=referenceProject();if(project->property("joint").toBool())project->setProperty("repeatSelection",enabled);}}
+QVariantMap ScoreObserver::finishExpressionAudition(){delete _workflowRepeat.data();_workflowRepeat.clear();workflowContext()->finishPlaybackSession();stopPlaybackPreview(true);return {{"ok",true}};}
 QVariantMap ScoreObserver::auditionExpression(const QString& workspace,const QVariantMap& candidate,const QVariantMap& scope,bool proposed){
  Q_UNUSED(workspace);
  if(!_score||candidate.value("revision").toString()!=analysisRevision())return {{"error",tr("乐谱已有修改，请更新演奏对应后试听。")}};
  if(!seq||!seq->driver())return {{"error",tr("请在软件设置中启用声音设备后试听。")}};
- const QVariantMap settings{{"candidate",candidate},{"scope",scope},{"relTempo",_score->tempomap()->relTempo()}};
+ auto cacheScope=scope;cacheScope.remove("loopRestart");
+ const QVariantMap settings{{"candidate",candidate},{"scope",cacheScope},{"relTempo",_score->tempomap()->relTempo()}};
  const QString key=analysisRevision()+QString::fromLatin1(QCryptographicHash::hash(QJsonDocument::fromVariant(settings).toJson(QJsonDocument::Compact),QCryptographicHash::Sha256).toHex());
  if(playbackPreviewPrepared(_score,key)&&playbackPreviewActive(_score,proposed)){auto state=workflowContext()->audition();state["ok"]=true;state["continuing"]=true;return state;}
  if(!playbackPreviewPrepared(_score,key)){
@@ -205,9 +207,10 @@ QVariantMap ScoreObserver::auditionExpression(const QString& workspace,const QVa
   auto changed=renderPlaybackPreview(_score,target);changed.reference=reference();if(changed.reference.contains("error"))return changed.reference;alignPreviewReference(changed);
   preparePlaybackPreview(_score,key,std::move(original),std::move(changed));
  }
+ auto guard=QPointer<ScoreObserver>(this);setPlaybackPreviewRepeat(this,[guard,candidate,scope,proposed]{if(guard){auto again=scope;again["loop"]=playbackPreviewLoop();again["loopRestart"]=true;auto result=guard->auditionExpression(QString(),candidate,again,proposed);if(result.contains("error"))emit guard->workflowPlaybackError(result.value("error").toString());}});
  auto range=scope;range["deferStart"]=scope.contains("reference");auto started=startPlaybackPreview(_score,proposed,range);
  if(started.contains("error")||!scope.contains("reference"))return started;
- auto plan=playbackPreviewReferencePlan(_score,proposed,started.value("fromUtick").toInt());plan["revision"]=analysisRevision();auto audio=startReferencePlayback(plan);if(audio.contains("error")){stopPlaybackPreview(true);return audio;}
+ auto plan=playbackPreviewReferencePlan(_score,proposed,started.value("fromUtick").toInt());plan["revision"]=analysisRevision();plan["loop"]=scope.value("loop",false);auto audio=startReferencePlayback(plan);if(audio.contains("error")){stopPlaybackPreview(true);return audio;}
  started["preparing"]=true;return started;
 }
 QVariantMap ScoreObserver::previewExpression(const QString& workspace,const QVariantMap& candidate,const QVariantMap& scope){

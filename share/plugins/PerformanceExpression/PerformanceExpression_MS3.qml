@@ -13,7 +13,7 @@ MuseScore {
  id:root
  menuPath:"Plugins.Performance Expression"
  description:"演奏表达：把 MIDI 演奏的力度和速度用于选中的乐谱。"
- version:"1.5.0";requiresScore:true;pluginType:"dock";dockArea:"right"
+ version:"1.5.1";requiresScore:true;pluginType:"dock";dockArea:"right"
  implicitWidth:440;implicitHeight:720
  property var observer:null
  property var editorContext:null
@@ -33,6 +33,7 @@ MuseScore {
  function recordingPitch(p){return ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"][p%12]+(Math.floor(p/12)-1)}
  function saveCaptureOptions(){if(observer)observer.saveConfiguration("expression-recording",{endMode:captureEndMode,duration:captureDuration,monitor:captureMonitor})}
  property bool auditionAudio:false
+ property bool auditionLoop:false
  property string publishedComparisonKey:""
  function publishComparison(){
   if(!observer||typeof observer.setEditorComparison!=="function"||stale)return;
@@ -277,7 +278,7 @@ MuseScore {
   if(!materials){pendingFeedback=useCandidate?"试听新效果":"试听原版";saveDialog.open();status="选择试听材料的保存位置。";return}
   if(typeof observer.previewExpression!=="function"){status="副本试听接口尚不可用";return}
   previewing=true;
-  var range=Project.copy(scope);range.occurrence=Math.max(1,occurrence);
+  var range=Project.copy(scope);range.loop=auditionLoop;range.occurrence=Math.max(1,occurrence);
   if(auditionAudio&&audioProject&&audioProject.available){var settings=audioProject.playbackSettings,track=audioProject.tracks[settings.selectedTrack||0],leader=track&&track.associations[settings.selectedAssociation||0];if(!leader){previewing=false;status="请先在原曲参考中选择一条关联。";return;}range.reference={tracks:audioProject.tracks,leader:leader,mode:settings.mode||0,speed:settings.speed||1,volume:settings.volume===undefined?.5:settings.volume,fade:settings.fade!==false,occurrence:occurrence};}
   if(typeof observer.auditionExpression==="function"){
    var prepared=candidate||{revision:revision,scope:scope,velocity:[],tempos:[]};
@@ -298,13 +299,16 @@ MuseScore {
   workerSource=observer.readTextFile(String(Qt.resolvedUrl("Alignment.js")));
   if(typeof observer.performanceRange!=="function")status="需要支持 P1 演奏快照的版本";
  }
- onScoreStateChanged:{
+ function updateScoreContext(){
   if((previewing&&legacyAudition)||applying||refreshingApplication)return;
   if(observer&&observer.score!==curScore)observer.score=curScore;
   refreshLiveSelection();
   if(notes.length&&observer&&observer.analysisRevision()!==revision){stale=true;candidate=null;cancel();status="乐谱已修改，点击“重新对应”更新效果"}
+
  }
+ onScoreStateChanged:root.updateScoreContext()
  onVisibleChanged:{if(!visible){candidateTimer.stop();cancel();if(observer&&typeof observer.cancelPerformanceMidi==="function")observer.cancelPerformanceMidi()}else if(candidate&&previewUpdating)candidateTimer.restart()}
+ Connections {target:observer;ignoreUnknownSignals:true;onWorkflowPlaybackError:root.fail(message);onActiveScoreChanged:root.updateScoreContext()}
  Component.onDestruction:{if(previewing&&observer)returnOriginal();cancel()}
  Connections {
   target:root.captureSession;ignoreUnknownSignals:true
@@ -421,6 +425,7 @@ MuseScore {
   RowLayout {visible:!root.compact;Layout.fillWidth:true
    Desk.DeskButton {objectName:"expressionOriginalAudition";Layout.fillWidth:true;text:"谱中效果";enabled:root.notes.length>0&&!root.busy&&!root.stale;onClicked:root.audition(false)}
    Desk.DeskButton {objectName:"expressionCandidateAudition";Layout.fillWidth:true;text:"拟采用效果";enabled:root.candidate!==null&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.audition(true)}
+   Desk.DeskButton {text:"循环";checkable:true;checked:root.auditionLoop;onClicked:{root.auditionLoop=checked;if(root.observer&&typeof root.observer.setExpressionAuditionLoop==="function")root.observer.setExpressionAuditionLoop(checked)}}
    Desk.DeskButton {objectName:"expressionStop";text:"停止";visible:root.previewing;onClicked:root.stopAudition()}
   }
   RowLayout {visible:!root.compact;Layout.fillWidth:true

@@ -19,7 +19,7 @@ function defaults() {
         ribbonAlign:1,ribbonPosition:50,chordContent:2,chordOrder:0,chordFont:0,chordScale:100,
         chordColor:"#343a3f",highlightColor:"#0043ce",highlightBackground:"#d0e2ff",
         chromaticAccent:true,chromaticColor:"#a2191f",respectExistingHarmony:true,avoidScoreContent:false,chordMask:true,dualPanel:true,
-        pedalMode:0,summaryMode:1,detailMode:0,repeatBars:false,degreeFont:"Arial",degreeMode:1};
+        pedalMode:0,summaryMode:1,detailMode:0,repeatBars:false,degreeFont:"Edwin",degreeMode:1,summaryPixels:20,summaryDegreeRatio:100,summaryGap:6,summaryOrder:0,collapsedSections:[]};
 }
 function clean(source) {
     if(!source || source.schema!==1) throw Error("配置版本应为 1");
@@ -47,6 +47,9 @@ function clean(source) {
         }
     }
     for(i=0;i<12;++i) if(source.noteLabels && typeof source.noteLabels[i]==="string" && source.noteLabels[i].length<=24) out.noteLabels[i]=source.noteLabels[i];
+    var summaryLimits={summaryPixels:[12,32],summaryDegreeRatio:[60,140],summaryGap:[0,20],summaryOrder:[0,3]};
+    for(var field in summaryLimits)if(typeof source[field]==="number" && isFinite(source[field]))out[field]=Math.round(Math.max(summaryLimits[field][0],Math.min(summaryLimits[field][1],source[field])));
+    if(Array.isArray(source.collapsedSections))out.collapsedSections=source.collapsedSections.filter(function(key,index,all){return ["tones","key","display","appearance","range","exchange"].indexOf(key)>=0 && all.indexOf(key)===index;});
     return out;
 }
 function preset(config, name) {

@@ -14,6 +14,7 @@
 #define __QMLPLUGIN_H__
 
 #include <QPointer>
+#include <QVariantMap>
 #include "libmscore/mscore.h"
 #include "libmscore/musescoreCore.h"
 #include "libmscore/utils.h"
@@ -87,6 +88,11 @@ class QmlPlugin : public QQuickItem {
       bool panelFloating() const;
       Q_INVOKABLE void setPanelFloating(bool floating);
       Q_INVOKABLE void focusPanel();
+      Q_INVOKABLE void hidePanel();
+      Q_INVOKABLE void resizePanel(int width,int height);
+      Q_INVOKABLE void showPanelHint(const QString& text, QQuickItem* target);
+      Q_INVOKABLE QVariantMap panelScreen(QQuickItem* target) const;
+      Q_INVOKABLE void fitPanelHeight(int height,bool auxiliary,bool reset);
       QQuickItem* detailPanelHost() const;
       bool detailPanelVisible() const;
       Q_INVOKABLE void showDetailPanel(bool visible);

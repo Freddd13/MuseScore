@@ -11,6 +11,8 @@ double referenceOutputTime(double);
 double referenceScoreTime(double);
 void setReferenceEndTick(int);
 int referenceEndTick();
+void markReferenceEndReached(int);
+int referenceReachedTick();
 class ReferenceAudioPeriod {
       float* _output;unsigned _frames;int _musicFrame;bool _musicPlaying;
    public:

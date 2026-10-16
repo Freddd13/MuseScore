@@ -25,7 +25,8 @@ struct NotePreviewEntry {
       QRectF labelBox;
       QRectF chordBox;
       bool active = false;
-      QPointF anchor;
+      QPointF anchor, leaderAnchor, manualOffset;
+      bool leader = false;
       qreal spatium = 0;
       QString degree;
       QPicture chordPicture {-1};
@@ -50,7 +51,7 @@ struct NotePreviewEntry {
             {
             return color == other.color && bounds == other.bounds && label == other.label && chord == other.chord
                   && labelBox == other.labelBox && chordBox == other.chordBox && active == other.active
-                  && anchor == other.anchor && spatium == other.spatium && degree == other.degree
+                  && anchor == other.anchor && manualOffset == other.manualOffset && leaderAnchor == other.leaderAnchor && leader == other.leader && spatium == other.spatium && degree == other.degree
                   && renderedChordKey == other.renderedChordKey && renderedChordSize == other.renderedChordSize
                   && chordFont == other.chordFont && degreeFont == other.degreeFont
                   && primaryBox == other.primaryBox && secondaryBox == other.secondaryBox
@@ -230,6 +231,12 @@ class NotePreviewLayers {
             {
             for (const auto& layer : _layers) for (const auto& group : layer.chords)
                   for (int index : group) callback(layer.markers[index],layer.activeChords.contains(index));
+            }
+      QRectF markerBox(QObject* target,int tick,int track) const
+            {
+            QRectF result;
+            forEachChord([&](const NotePreviewEntry& entry,bool){if(entry.activationTarget==target && entry.chordTick==tick && entry.annotationTrack==track)result=entry.chordBox.translated(entry.anchor);});
+            return result;
             }
       bool activate(const QPointF& canvasPosition) const
             {

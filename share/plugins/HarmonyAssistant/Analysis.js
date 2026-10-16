@@ -1,9 +1,9 @@
 .pragma library
 
 // Exchange data has numeric anchors, no native wrappers or serialized score mutations.
-function document(frames, fingerprint, config, regions, overrides) {
+function document(frames, fingerprint, config, regions, overrides, positions) {
     return {format:"HarmonyAssistant.analysis",schema:2,ticksPerQuarter:480,
-        fingerprint:fingerprint,configuration:config,frames:frames,regions:regions||[],overrides:overrides||[]};
+        fingerprint:fingerprint,configuration:config,frames:frames,regions:regions||[],overrides:overrides||[],positions:positions||[]};
 }
 function validate(source) {
     if(!source || source.format!=="HarmonyAssistant.analysis" || (source.schema!==1 && source.schema!==2) || source.ticksPerQuarter!==480)
@@ -33,7 +33,7 @@ function validate(source) {
             degree:typeof f.degree==="string"?f.degree.slice(0,24):"",notes:notes});
         last=f.tick;
     }
-    return {frames:frames,fingerprint:source.fingerprint,regions:source.schema===2?source.regions||[]:[],overrides:source.schema===2?source.overrides||[]:[]};
+    return {frames:frames,fingerprint:source.fingerprint,regions:source.schema===2?source.regions||[]:[],overrides:source.schema===2?source.overrides||[]:[],positions:source.schema===2?source.positions||[]:[]};
 }
 function atTick(frames, tick) {
     var lo=0,hi=frames.length;

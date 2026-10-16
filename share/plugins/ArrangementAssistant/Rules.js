@@ -161,16 +161,28 @@ function harmonic(s,frame) {
         if(Math.max(a.pitch,b.pitch)<60 && distance>0 && distance<=2 && Math.min(a.soundingEnd===undefined?a.logicalEnd:a.soundingEnd,b.soundingEnd===undefined?b.logicalEnd:b.soundingEnd)-tick>=240)
             issue(s,"harmony","low-cluster",tick,[a,b],"低音区持续密集冲突","间隔 "+distance+" 半音；至少持续半拍。可考虑拉开低音排列，或确认这是刻意的簇音。",s.config.style===2?"提示":"注意");
     }
-    if(!chord || chord.root<0 || !Harmony.defs[chord.definition] || (chord.alternatives && chord.alternatives.length))return;
-    var defined=chord.source && chord.source!=="auto",intervals=Harmony.defs[chord.definition].intervals;
+    if(!chord || chord.root<0 || !Harmony.defs[chord.definition])return;
+    var candidates=[chord].concat(chord.alternatives||[]);
+    // Check a common finding across every complete interpretation.
+    for(i=0;i<candidates.length;++i)if(candidates[i].root<0 || !Harmony.defs[candidates[i].definition])return;
+    var defined=chord.source && chord.source!=="auto",names=candidates.map(function(c){return Harmony.sharpNames[Harmony.mod12(c.root)]+Harmony.defs[c.definition].suffix;});
     for(i=0;i<held.length;++i) {
-        var n=held[i],pc=Harmony.mod12(n.pitch-chord.root);if(intervals.indexOf(pc)>=0)continue;
-        // Extensions are not errors; even in a strict preset they need contextual review.
-        if([2,5,9].indexOf(pc)>=0)continue;
-        var explanation=explained(s,n,tick,chord);if(explanation)continue;
-        if((n.soundingEnd===undefined?n.logicalEnd:n.soundingEnd)-tick<480 || n.grace)continue;
-        var clash=false;for(j=0;j<intervals.length;++j)if([1,11].indexOf(Harmony.mod12(pc-intervals[j]))>=0)clash=true;
-        if(clash && defined)issue(s,"harmony","chord-color",tick,[n],"持续音可能改变指定和弦色彩","依据："+(chord.source||"局部指定")+"；音 "+Harmony.spelledName(n.tpc,n.pitch,false)+" 与和弦音形成半音关系，未找到近期级进解决。请确认是否为预期变化音。","需核查");
+        var n=held[i];if((n.soundingEnd===undefined?n.logicalEnd:n.soundingEnd)-tick<480 || n.grace)continue;
+        var common=true,partners=[];
+        for(var c=0;c<candidates.length && common;++c) {
+            var candidate=candidates[c],intervals=Harmony.defs[candidate.definition].intervals,pc=Harmony.mod12(n.pitch-candidate.root);
+            if(intervals.indexOf(pc)>=0 || [2,5,9].indexOf(pc)>=0 || explained(s,n,tick,candidate)) {common=false;break;}
+            var adjacent=held.filter(function(other){return other!==n && intervals.indexOf(Harmony.mod12(other.pitch-candidate.root))>=0 && [1,11].indexOf(Harmony.mod12(n.pitch-other.pitch))>=0;});
+            if(!adjacent.length && !(defined && intervals.some(function(interval){return [1,11].indexOf(Harmony.mod12(pc-interval))>=0;}))){common=false;break;}
+            adjacent.forEach(function(other){if(partners.indexOf(other)<0)partners.push(other);});
+        }
+        if(!common)continue;
+        var tone=Harmony.spelledName(n.tpc,n.pitch,false),otherNames=partners.map(function(other){return Harmony.spelledName(other.tpc,other.pitch,false);}).filter(function(name,index,list){return list.indexOf(name)===index;});
+        var title=defined?"持续音可能改变指定和弦色彩":"持续音与和弦音形成半音关系";
+        var basis="按 "+names.join(" / ")+" 理解，"+tone+" 与 "+(otherNames.length?otherNames.join("、"):"所指定和弦的构成音")+" 形成半音关系，并持续至少一拍。";
+        basis+=defined?"和弦来自"+chord.source+"。":"这是根据当前音符识别的和弦。";
+        basis+="可试听这两个音的摩擦感；需要更柔和时，可试着错开起音、缩短持续音，或改变排列。若这是需要的色彩，可忽略此处。";
+        issue(s,"harmony",defined?"chord-color":"auto-chord-color",tick,[n].concat(partners),title,basis,defined?"需核查":"提示");
     }
 }
 function ruleEnabled(config,name) {

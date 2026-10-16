@@ -4,6 +4,7 @@ import QtQuick.Layouts 1.3
 import MuseScore 3.0
 import "Harmony.js" as Harmony
 import "Preferences.js" as Preferences
+import "AnnotationEdits.js" as AnnotationEdits
 import "Analysis.js" as Analysis
 import "Timeline.js" as Timeline
 import QtQuick.Dialogs 1.3
@@ -15,7 +16,7 @@ MuseScore {
     UiTheme {id:theme}
     menuPath: "Plugins.Harmony Assistant"
     description: "钢琴和声助手：持续音识别、级数、音程功能与可选谱面配色。"
-    version: "1.9.0"
+    version: "1.10.0"
     requiresScore: true
     pluginType: "dock"
     dockArea: "right"
@@ -73,7 +74,13 @@ MuseScore {
     property bool analysisDirty: true
     property string pendingFileAction: ""
     property string pendingExport: ""
-    property int preferredRibbonHeight: 32
+    property int desiredSummaryHeight:Math.max(32,Math.ceil(configuration.summaryPixels*(configuration.summaryOrder>=2?1+configuration.summaryDegreeRatio/100:Math.max(1,configuration.summaryDegreeRatio/100))*1.3+(configuration.summaryOrder>=2?configuration.summaryGap:0)+6))
+    property int preferredRibbonHeight:desiredSummaryHeight
+    property bool compactPanelTitle:true
+    property int lastSummaryHeight:32
+    onDesiredSummaryHeightChanged:resizeSummary(false)
+    property bool independentPanelSurfaces:true
+    property string summaryPanelTitle:"和弦摘要"
     property bool ribbonContentHeight: true
     property string detailPanelTitle:"和声助手 · 详细面板"
     property color detailPanelBackground:theme.background
@@ -124,6 +131,40 @@ MuseScore {
     property color muted: theme.muted
     property var qualityNames: Harmony.defs.map(function(d) { return d.name })
 
+    property var manualPositions:[]
+    property var positionIndex:AnnotationEdits.index(manualPositions)
+    property bool scoreRangeEditing:false
+    onScoreRangeEditingChanged:syncScoreRangeEditor()
+    onOwnedRegionChanged:syncScoreRangeEditor()
+    onAnalysisDirtyChanged:syncScoreRangeEditor()
+    function editSnapshot(){return {overrides:Timeline.clone(manualOverrides),positions:Timeline.clone(manualPositions)}}
+    function syncScoreRangeEditor(){
+        if(!observer || typeof observer.setChordEditRegion!=="function")return
+        var region=ownedRegion
+        if(!region || !scoreRangeEditing || analysisDirty || lastPlaying || !showChords.checked){observer.setChordEditRegion({});return}
+        var position=positionIndex[region.part+":"+region.start]||{x:0,y:0}
+        observer.setChordEditRegion({start:region.start,end:region.end,track:region.part,offsetX:position.x,offsetY:position.y})
+    }
+    function moveAnnotation(tick,part,x,y){
+        editUndo=editUndo.concat([editSnapshot()]).slice(-100);editRedo=[]
+        manualPositions=AnnotationEdits.moved(manualPositions,tick,part,x,y)
+        saveCorrections();applyScorePreview();syncScoreRangeEditor()
+    }
+    function resizeSummary(force){
+        if(!started || !(ribbon||dualSummaryActive) || typeof root.fitPanelHeight!=="function")return
+        var current=dualSummaryActive&&root.summaryPanelHost?root.summaryPanelHost.height:height
+        root.fitPanelHeight(desiredSummaryHeight,dualSummaryActive,force||current<=lastSummaryHeight+4);lastSummaryHeight=desiredSummaryHeight
+    }
+    function placeWindow(window,anchor){
+        if(typeof root.panelScreen!=="function")return
+        var area=root.panelScreen(window.placed?window.contentItem:anchor||root);if(!area.width)return
+        window.width=Math.min(window.width,area.width-16);window.height=Math.min(window.height,area.height-16)
+        if(!window.placed){window.x=area.x+(area.width-window.width)/2;window.y=area.y+(area.height-window.height)/2;window.placed=true}
+        window.x=Math.max(area.x,Math.min(window.x,area.x+area.width-window.width));window.y=Math.max(area.y,Math.min(window.y,area.y+area.height-window.height))
+    }
+    function openSummarySettings(anchor){placeWindow(summarySettings,anchor);summarySettings.show();summarySettings.raise();summarySettings.requestActivate()}
+    function toggleSection(key){var c=Timeline.clone(configuration),index=c.collapsedSections.indexOf(key);if(index<0)c.collapsedSections.push(key);else c.collapsedSections.splice(index,1);configuration=Preferences.clean(c);configurationTimer.restart()}
+    function changeSummary(key,value){var c=Timeline.clone(configuration);c[key]=value;configuration=Preferences.clean(c);configurationTimer.restart()}
     function windowTicks() {return [0,240,480,960,1920][arpeggioWindow.currentIndex] || 0}
     function windowHeight() {return 650}
     function setRibbonPosition(index) {
@@ -140,28 +181,29 @@ MuseScore {
     }
     function loadCorrections() {
         if(!advancedNative || loadedFingerprint===analysisFingerprint)return
-        if(manualOverrides.length && loadedFingerprint.length) {
+        if((manualOverrides.length || manualPositions.length) && loadedFingerprint.length) {
             manualNeedsReview=true;noticeText="谱面已变更；人工范围暂未应用，请复核后确认。";return
         }
         loadedFingerprint=analysisFingerprint
         var saved=observer.loadConfiguration("HarmonyAssistant-regions-"+analysisFingerprint)
         if(saved.schema===1 && saved.fingerprint===analysisFingerprint) {
-            try{manualOverrides=Timeline.validEdits(saved.overrides)}catch(error){noticeText="人工范围未读取："+error}
+            try{manualOverrides=Timeline.validEdits(saved.overrides);manualPositions=AnnotationEdits.positions(saved.positions)}catch(error){noticeText="人工范围未读取："+error}
         }
     }
     function saveCorrections() {
         if(!advancedNative || !loadedFingerprint.length || manualNeedsReview)return
-        if(!observer.saveConfiguration("HarmonyAssistant-regions-"+loadedFingerprint,{schema:1,fingerprint:loadedFingerprint,overrides:manualOverrides}))noticeText="人工范围保存失败。"
+        if(!observer.saveConfiguration("HarmonyAssistant-regions-"+loadedFingerprint,{schema:1,fingerprint:loadedFingerprint,overrides:manualOverrides,positions:manualPositions}))noticeText="人工范围保存失败。"
     }
     function editRange(command,start,end,rootIndex,qualityIndex,bassIndex) {
         if(analysisDirty){noticeText="正在更新和声区间，请稍候。";return}
         if(command==="select"){openAnnotation(start,focusedPart);return}
+        if(command==="position" && ownedRegion){moveAnnotation(ownedRegion.start,ownedRegion.part,0,0);return}
         if(command==="review"){loadedFingerprint=analysisFingerprint;manualNeedsReview=false;rebuildRegions();saveCorrections();applyScorePreview();return}
         var next=Timeline.clone(manualOverrides),region=ownedRegion
         if(command==="undo" || command==="redo") {
             var source=command==="undo"?editUndo:editRedo,target=command==="undo"?editRedo:editUndo
             if(!source.length)return
-            target=target.concat([Timeline.clone(manualOverrides)]);next=source[source.length-1];source=source.slice(0,-1)
+            target=target.concat([editSnapshot()]);var saved=source[source.length-1];next=Array.isArray(saved)?saved:saved.overrides;manualPositions=Array.isArray(saved)?manualPositions:AnnotationEdits.positions(saved.positions);source=source.slice(0,-1)
             if(command==="undo"){editUndo=source;editRedo=target}else{editRedo=source;editUndo=target}
         } else {
             if(manualNeedsReview){noticeText="请先复核已有人工范围。";return}
@@ -176,6 +218,7 @@ MuseScore {
                 if(command==="restore")next=Timeline.restore(next,start,end,partForTrack(selectionTrack))
                 else {
                     if(region && region.source==="manual")next=next.filter(function(n){return !(n.part===region.part && n.start===region.start && n.end===region.end)})
+                    if(command==="range" && region)next=next.concat(Timeline.resizeNeighbours(analysisRegions,region,start,end))
                     var edit=region?Timeline.clone(region):{part:partForTrack(selectionTrack),notes:Timeline.clone(currentNotes)}
                     if(!edit.notes.length) {
                         // A rest still has a time position. Use a nearby numeric anchor in this part.
@@ -198,7 +241,8 @@ MuseScore {
                     edit.start=start;edit.end=end;edit.source="manual";edit.suppressed=command==="suppress";next.push(edit);annotationTick=start
                 }
             }
-            editUndo=editUndo.concat([Timeline.clone(manualOverrides)]).slice(-100);editRedo=[]
+            editUndo=editUndo.concat([editSnapshot()]).slice(-100);editRedo=[]
+            if(command==="range" && region && start!==region.start){var prior=positionIndex[region.part+":"+region.start];if(prior){manualPositions=AnnotationEdits.moved(manualPositions,region.start,region.part,0,0);manualPositions=AnnotationEdits.moved(manualPositions,start,region.part,prior.x,prior.y)}}
         }
         manualOverrides=Timeline.validEdits(next);loadedFingerprint=analysisFingerprint
         rebuildRegions();saveCorrections();analyze();applyScorePreview()
@@ -216,7 +260,9 @@ MuseScore {
         }
         if(typeof root.focusPanel==="function")root.focusPanel()
         if(root.ribbon)openDetails()
-        flick.contentY=0
+        settingsExpanded=true;scoreRangeEditing=true
+        if(configuration.collapsedSections.indexOf("range")>=0)toggleSection("range")
+        syncScoreRangeEditor();Qt.callLater(function(){flick.contentY=Math.max(0,rangeCard.y-6)})
     }
     function syncDetailPanel() {
         if(!started || loadingConfiguration)return
@@ -243,6 +289,7 @@ MuseScore {
         else detailPopup.open()
     }
     function openDetailWindow() {
+        if(!ribbon&&typeof root.setPanelFloating==="function"){root.setPanelFloating(true);root.focusPanel();return}
         var c=JSON.parse(JSON.stringify(configuration));c.dualPanel=false
         configuration=Preferences.clean(c);syncDetailPanel();configurationTimer.restart();detailPopup.open()
     }
@@ -254,12 +301,13 @@ MuseScore {
     function chordDescriptor(note,frame) {
         var d=JSON.parse(JSON.stringify(note))
         if(fixedChordNative) {
-            d.chord=configuration.chordContent===1 ? "" : frame.chord
-            d.degree=configuration.chordContent===0 ? "" : frame.degree
+            d.chord=configuration.chordContent===1 ? "" : frame.chord || (frame.notes.length?"?":"")
+            d.degree=configuration.chordContent===0 ? "" : frame.degree || (frame.root<0 && frame.notes.length && configuration.chordContent===1?"?":"")
             d.chordTick=frame.start===undefined?frame.tick:frame.start;d.chordUntil=frame.end===undefined?frame.tick:frame.end
             d.chordOrder=configuration.chordOrder;d.chordScale=configuration.chordScale/100
             d.chordFont=["","Edwin","Arial"][configuration.chordFont]
             d.degreeFont=configuration.degreeFont
+            var position=positionIndex[frame.part+":"+d.chordTick];if(position){d.offsetX=position.x;d.offsetY=position.y}
             d.chordColor=configuration.chromaticAccent && frame.chromatic ? configuration.chromaticColor : configuration.chordColor
             d.highlightColor=configuration.highlightColor;d.highlightBackground=configuration.highlightBackground
             d.preferExistingHarmony=configuration.respectExistingHarmony
@@ -430,7 +478,7 @@ MuseScore {
                 }
             }
         }
-        observer.setScorePreview(descriptors)
+        observer.setScorePreview(descriptors);syncScoreRangeEditor()
         observer.clearNotePreviewColors();repaintNotes()
         if(typeof observer.previewStatus==="function") {
             var status=observer.previewStatus()
@@ -463,7 +511,7 @@ MuseScore {
                     var context=observer.contextSnapshot(0,firstTrack,endTrack,pedalContext.checked,windowTicks(),false),fingerprint=context.fingerprint
                     if(imported.fingerprint!==fingerprint)throw Error("分析与当前乐谱 / 乐器范围不一致，未应用")
                     overrides.concat(regions).forEach(function(r){if((context.scoreEnd && r.end>context.scoreEnd) || r.part<firstTrack || r.part>=endTrack || partForTrack(r.part)!==r.part)throw Error("分析区间超出乐谱 / 乐器范围")})
-                    manualOverrides=overrides;loadedFingerprint=fingerprint;manualNeedsReview=false;editUndo=[];editRedo=[];saveCorrections()
+                    manualOverrides=overrides;manualPositions=AnnotationEdits.positions(imported.positions);loadedFingerprint=fingerprint;manualNeedsReview=false;editUndo=[];editRedo=[];saveCorrections()
                     importedRegions=regions;importedRegions.forEach(function(r){r.source="imported"})
                     importedRecords=importedRegions.length?[]:imported.frames; analysisDirty=true; scheduleAnalysis(); requestRefresh(false)
                     noticeText="已导入 "+imported.frames.length+" 个分析切片。"
@@ -471,7 +519,7 @@ MuseScore {
             } else {
                 content=action==="export-config" ? JSON.stringify(collectPreferences(),null,2) :
                     action==="csv" ? Analysis.csvRegions(analysisRegions) :
-                    JSON.stringify(Analysis.document(analysisRecords,analysisFingerprint,collectPreferences(),analysisRegions,manualOverrides),null,2)
+                    JSON.stringify(Analysis.document(analysisRecords,analysisFingerprint,collectPreferences(),analysisRegions,manualOverrides,manualPositions),null,2)
                 var suffix=action==="csv"?".csv":".json"
                 if(path.toLowerCase().slice(-suffix.length)!==suffix)path+=suffix
                 if(!observer.writeTextFile(path,content))throw Error("无法写入文件")
@@ -564,7 +612,7 @@ MuseScore {
         undoPause = false
         timeline = []
         cancelRegionJob();analysisTimer.stop()
-        manualOverrides=[];editUndo=[];editRedo=[];analysisRegions=[];automaticRegions=[];regionBuilder=null;loadedFingerprint="";manualNeedsReview=false;annotationTick=-1
+        manualOverrides=[];manualPositions=[];scoreRangeEditing=false;editUndo=[];editRedo=[];analysisRegions=[];automaticRegions=[];regionBuilder=null;loadedFingerprint="";manualNeedsReview=false;annotationTick=-1
         unplacedMarkers=[];unplacedIndex=({});placementNotice=""
         importedRecords = []
         importedRegions = []
@@ -620,7 +668,7 @@ MuseScore {
         setScope()
         if (oldFirst !== firstTrack || oldEnd !== endTrack) {
             cancelRegionJob();analysisTimer.stop()
-            saveCorrections();manualOverrides=[];editUndo=[];editRedo=[];loadedFingerprint="";manualNeedsReview=false
+            saveCorrections();manualOverrides=[];manualPositions=[];scoreRangeEditing=false;editUndo=[];editRedo=[];loadedFingerprint="";manualNeedsReview=false
             analysisRegions=[];automaticRegions=[];regionBuilder=null;cacheDirty=true;analysisDirty=true;importedRecords=[];importedRegions=[];annotationTick=-1
             unplacedMarkers=[];unplacedIndex=({});placementNotice=""
             if(advancedNative)observer.setScorePreview([])
@@ -1009,8 +1057,8 @@ MuseScore {
         else if(advancedNative) {analysisDirty=true; scheduleAnalysis()}
         if (surfaceActive) {followNativePosition(); requestRefresh(false)}
     }
-    onRibbonChanged:syncDetailPanel()
-    onDualSummaryActiveChanged:syncAnalysisSurface()
+    onRibbonChanged:{syncDetailPanel();resizeSummary(false)}
+    onDualSummaryActiveChanged:{syncAnalysisSurface();resizeSummary(false)}
     onDualDetailActiveChanged:syncAnalysisSurface()
     Component.onDestruction: {cancelRegionJob();if (started) {savePreferences();saveCorrections(); undoPause = false; restoreColors(true); if(advancedNative)observer.clearAllPreviews()}}
     Timer {id:configurationTimer; interval:350; onTriggered:savePreferences()}
@@ -1038,13 +1086,19 @@ MuseScore {
         id:detailPopup; width:760; height:650; visible:false
         title:"和声助手 · 详细面板"; flags:Qt.Tool
         property bool opened:visible
-        function open(){visible=true; requestActivate()}
+        property bool placed:false
+        function open(){root.placeWindow(detailPopup,ribbonMenuWindow.anchorItem);visible=true;requestActivate()}
     }
     Window {
-        id:ribbonMenuWindow;objectName:"harmonyRibbonMenuWindow";width:230;height:positionOnly?(configuration.ribbonAlign===3?188:148):(root.dualSummaryActive?146:112)
+        id:ribbonMenuWindow;objectName:"harmonyRibbonMenuWindow";width:230;height:menuColumn.implicitHeight+16
         visible:false;flags:Qt.Popup|Qt.FramelessWindowHint;color:theme.background
         property bool positionOnly:true
-        function openAt(item,position){positionOnly=position;var point=item.mapToGlobal(0,item.height);x=point.x;y=point.y;show();raise();requestActivate()}
+        property var anchorItem:null
+        property var area:({})
+        function clamp(){if(!visible||!area.width)return;x=Math.max(area.x,Math.min(x,area.x+area.width-width));y=Math.max(area.y,Math.min(y,area.y+area.height-height))}
+        onHeightChanged:clamp()
+        function openAt(item,position){anchorItem=item;positionOnly=position;area=typeof root.panelScreen==="function"?root.panelScreen(item):{};var point=item.mapToGlobal(0,item.height+3);x=point.x;y=point.y;show();clamp();raise();requestActivate()}
+
         Column {
             id:menuColumn;x:8;y:8;width:parent.width-16;spacing:4
             Column {
@@ -1059,9 +1113,34 @@ MuseScore {
             Column {
                 width:parent.width;visible:!ribbonMenuWindow.positionOnly;spacing:4
                 DeskButton {objectName:"harmonyRibbonMarkerList";width:parent.width;text:root.unplacedMarkers.length?"记号列表（有待检查项）":"记号列表";enabled:root.advancedNative;onClicked:{ribbonMenuWindow.hide();markerWindow.show();markerWindow.raise();markerWindow.requestActivate()}}
-                DeskButton {width:parent.width;text:"隐藏顶部摘要";visible:root.dualSummaryActive;onClicked:{ribbonMenuWindow.hide();root.toggleDetailPanel()}}
+                DeskButton {width:parent.width;text:"隐藏顶部摘要";onClicked:{ribbonMenuWindow.hide();if(root.dualSummaryActive)root.toggleDetailPanel();else if(typeof root.hidePanel==="function")root.hidePanel()}}
+                DeskButton {objectName:"harmonyRibbonAppearance";width:parent.width;text:"摘要外观与调性";onClicked:{ribbonMenuWindow.hide();root.openSummarySettings(ribbonMenuWindow.anchorItem)}}
                 DeskButton {width:parent.width;text:"详细窗口";onClicked:{ribbonMenuWindow.hide();root.openDetailWindow()}}
                 DeskButton {width:parent.width;text:(root.dualSummaryActive && typeof root.summaryPanelFloating==="boolean" ? root.summaryPanelFloating : root.panelFloating)?"停靠这个面板":"悬浮这个面板";enabled:typeof root.setPanelFloating==="function";onClicked:{ribbonMenuWindow.hide();(root.dualSummaryActive && typeof root.setSummaryPanelFloating==="function")?root.setSummaryPanelFloating(!root.summaryPanelFloating):root.setPanelFloating(!root.panelFloating)}}
+            }
+        }
+    }
+    Window {
+        id:summarySettings;objectName:"harmonySummarySettings";title:"和弦摘要外观与调性";width:360;height:400;minimumWidth:320;flags:Qt.Tool;color:theme.background
+        property bool placed:false
+        ScrollView {anchors.fill:parent;anchors.margins:12;clip:true
+            Column {width:summarySettings.width-32;spacing:10
+                HarmonyLabel {observer:root.observer;chord:root.summaryChordText;degree:root.summaryDegreeText;color:root.summaryInk;pixels:configuration.summaryPixels;degreeRatio:configuration.summaryDegreeRatio/100;gap:configuration.summaryGap;order:configuration.summaryOrder;degreeFont:configuration.degreeFont;chordFont:["","Edwin","Arial"][configuration.chordFont];revision:root.analysisFingerprint}
+                RowLayout {width:parent.width
+                    UiLabel {text:"主音与调式";color:ink}
+                    DeskComboBox {Layout.fillWidth:true;model:Harmony.rootNames;currentIndex:keyTonic.currentIndex;onActivated:{keyTonic.currentIndex=currentIndex;manualKey=true;root.updateTexts();root.optionsChanged()}}
+                    DeskComboBox {model:["大调","小调"];currentIndex:keyMode.currentIndex;onActivated:{keyMode.currentIndex=currentIndex;root.updateTexts();root.optionsChanged()}}
+                }
+                Repeater {model:[{key:"summaryPixels",title:"字号",min:12,max:32},{key:"summaryDegreeRatio",title:"级数相对大小（%）",min:60,max:140},{key:"summaryGap",title:"和弦与级数间距",min:0,max:20}]
+                    RowLayout {width:parent.width
+                        UiLabel {text:modelData.title;color:ink;Layout.fillWidth:true}
+                        DeskSpinBox {from:modelData.min;to:modelData.max;value:configuration[modelData.key];onValueModified:root.changeSummary(modelData.key,value)}
+                    }
+                }
+                DeskComboBox {width:parent.width;model:["和弦在左，级数在右","级数在左，和弦在右","和弦在上，级数在下","级数在上，和弦在下"];currentIndex:configuration.summaryOrder;onActivated:root.changeSummary("summaryOrder",currentIndex)}
+                UiLabel {width:parent.width;wrapMode:Text.Wrap;text:"摘要使用乐谱中的和弦字体和专用音乐符号。上下排列时，可拖动面板下边缘增加高度。";color:muted;font.pixelSize:11}
+                DeskButton {text:"恢复摘要默认外观";onClicked:{root.changeSummary("summaryPixels",20);root.changeSummary("summaryDegreeRatio",100);root.changeSummary("summaryGap",6);root.changeSummary("summaryOrder",0);root.resizeSummary(true)}}
+                DeskButton {text:"关闭";onClicked:summarySettings.hide()}
             }
         }
     }
@@ -1074,7 +1153,10 @@ MuseScore {
         ignoreUnknownSignals:true
         onPositionChanged:{if(!playbackTimer.running)playbackTimer.start()}
         onScoreChanged:requestRefresh(true)
+        onActiveScoreChanged:requestRefresh(true)
         onPreviewActivated:root.openAnnotation(tick,track)
+        onPreviewRangeEdited:root.editRange("range",start,end,0,0,0)
+        onPreviewPositionEdited:root.moveAnnotation(tick,track,x,y)
         onReadOnlyJobFinished: {
             if(token!==root.regionJobToken)return
             root.regionJobToken=0
@@ -1135,11 +1217,11 @@ MuseScore {
                     width: root.expanded ? (panel.width-10)/2 : panel.width
                     minimumBodyHeight:settingsExpanded ? 190 : 156
                     StableLabel {text:positionText; color:muted; font.pixelSize:11}
-                    StableLabel {text:chordText; color:chordInk; font.pixelSize:28; font.bold:true}
+                    HarmonyLabel {width:Math.min(parent.width,implicitWidth);height:implicitHeight;observer:root.observer;chord:root.chordText;color:root.chordInk;pixels:24;chordFont:["","Edwin","Arial"][configuration.chordFont];revision:root.analysisFingerprint}
                     RowLayout {
                         width: parent.width
                         UiLabel {text:"级数"; color:muted; font.pixelSize:12}
-                        StableLabel {Layout.fillWidth:true; text:degreeText; color:chordInk; font.pixelSize:18; font.bold:true}
+                        HarmonyLabel {Layout.preferredWidth:implicitWidth;Layout.preferredHeight:implicitHeight;observer:root.observer;degree:root.degreeText;color:root.chordInk;pixels:24;degreeFont:configuration.degreeFont;revision:root.analysisFingerprint}
                     }
                     StableLabel {reservedLines:2; text:matchText+(configuration.chromaticAccent && chromaticChord?" · 含调外音":""); color:muted; font.pixelSize:12}
                     StableLabel {reservedLines:2; text:alternativesText; color:muted; font.pixelSize:11}
@@ -1148,10 +1230,11 @@ MuseScore {
                     StableLabel {visible:settingsExpanded; reservedLines:2; text:voicingText; color:ink; font.pixelSize:12}
                 }
                 PanelCard {
+                    heading:"音程功能";collapsed:configuration.collapsedSections.indexOf("tones")>=0;onToggleRequested:root.toggleSection("tones")
                     id:tonesCard; objectName:"harmonyFunctions"
                     width: root.expanded ? (panel.width-10)/2 : panel.width
                     minimumBodyHeight:body.width>=290 ? 224 : 292
-                    UiLabel {text:"音程功能"; color:ink; font.bold:true; font.pixelSize:13}
+
                     Flow {
                         width: parent.width
                         spacing: 6
@@ -1236,9 +1319,10 @@ MuseScore {
                     }
                 }
                 PanelCard {
+                    heading:"识别与调性";collapsed:configuration.collapsedSections.indexOf("key")>=0;onToggleRequested:root.toggleSection("key")
                     width:root.expanded ? (panel.width-10)/2 : panel.width
                     visible:settingsExpanded
-                    UiLabel {text:"识别与调性"; color:ink; font.bold:true; font.pixelSize:13}
+
                     RowLayout {
                         width:parent.width
                         UiLabel {text:"调性"; color:muted; font.pixelSize:12}
@@ -1295,6 +1379,7 @@ MuseScore {
                     }
                 }
                 PanelCard {
+                    heading:"谱面显示与着色";collapsed:configuration.collapsedSections.indexOf("display")>=0;onToggleRequested:root.toggleSection("display")
                     width:root.expanded ? (panel.width-10)/2 : panel.width
                     DeskSwitch {
                             font.family: theme.fontFamily;
@@ -1330,6 +1415,7 @@ MuseScore {
                     StableLabel {reservedLines:2; text:placementNotice || noticeText; color:muted; font.pixelSize:10}
                 }
                 PanelCard {
+                    heading:"外观与功能色";collapsed:configuration.collapsedSections.indexOf("appearance")>=0;onToggleRequested:root.toggleSection("appearance")
                     width:root.expanded ? (panel.width-10)/2 : panel.width
                     visible:settingsExpanded
                     ConfigurationEditor {width:parent.width; configuration:root.configuration; onModified:{root.configuration=configuration; rebuildRegions();analyze();optionsChanged(false)}}
@@ -1341,17 +1427,19 @@ MuseScore {
                     UiLabel {width:parent.width; text:"设置自动保存，下次启动自动读取。"; color:muted; font.pixelSize:10; wrapMode:Text.Wrap}
                 }
                 PanelCard {
+                    id:rangeCard;heading:"修改和弦与范围";collapsed:configuration.collapsedSections.indexOf("range")>=0;onToggleRequested:root.toggleSection("range")
                     width:root.expanded ? (panel.width-10)/2 : panel.width
                     visible:settingsExpanded && advancedNative
-                    RangeEditor {width:parent.width;region:root.ownedRegion;regions:root.analysisRegions.filter(function(n){return n.part===root.focusedPart})
+                    RangeEditor {width:parent.width;observer:root.observer;handlesVisible:root.scoreRangeEditing;onEditingChanged:root.scoreRangeEditing=enabled;region:root.ownedRegion;regions:root.analysisRegions.filter(function(n){return n.part===root.focusedPart})
                         tick:Math.max(0,root.currentTick);scoreEnd:root.analysisEnd;canUndo:root.editUndo.length>0;canRedo:root.editRedo.length>0
                         roots:Harmony.rootNames;rootPcs:Harmony.rootPcs;qualities:root.qualityNames;onAction:root.editRange(command,start,end,rootIndex,qualityIndex,bassIndex)}
                     DeskButton {text:"复核完成：应用原人工范围";visible:root.manualNeedsReview;onClicked:root.editRange("review",0,0,0,0)}
                 }
                 PanelCard {
+                    heading:"全谱和弦分析";collapsed:configuration.collapsedSections.indexOf("exchange")>=0;onToggleRequested:root.toggleSection("exchange")
                     width:root.expanded ? (panel.width-10)/2 : panel.width
                     visible:settingsExpanded
-                    UiLabel {text:"全谱和弦分析"; color:ink; font.bold:true; font.pixelSize:13}
+
                     Flow {
                         width:parent.width; spacing:6
                         DeskButton {text:"导出 JSON"; enabled:advancedNative; onClicked:prepareExport("json")}
@@ -1370,18 +1458,17 @@ MuseScore {
             Rectangle {anchors.fill:parent;color:theme.background}
             Item {
                 id:ribbonGroup; objectName:"harmonyRibbonGroup"
-                width:Math.min(850,Math.max(100,parent.width-ribbonControls.width-36))
-                height:Math.min(38,parent.height-4);anchors.verticalCenter:parent.verticalCenter
+                width:Math.min(ribbonChord.implicitWidth+8+(ribbonStatus.visible?Math.min(230,ribbonStatus.implicitWidth)+8:0)+(ribbonTones.visible?ribbonTones.implicitWidth+8:0),Math.max(60,parent.width-ribbonControls.width-24))
+                height:parent.height-4;anchors.verticalCenter:parent.verticalCenter
                 x:{var maximum=Math.max(12,parent.width-ribbonControls.width-width-36);
                     return configuration.ribbonAlign===0 ? 12 : configuration.ribbonAlign===2 ? maximum :
                         configuration.ribbonAlign===3 ? 12+(maximum-12)*configuration.ribbonPosition/100 : Math.max(12,Math.min(maximum,(parent.width-ribbonControls.width-width)/2))}
                 RowLayout {
-                    anchors.fill:parent;spacing:10
-                    StableLabel {objectName:"harmonyRibbonChord";text:root.summaryChordText;color:root.summaryInk;font.pixelSize:20;font.bold:true;Layout.preferredWidth:Math.min(240,Math.max(70,ribbonGroup.width*.4));Layout.alignment:Qt.AlignVCenter}
-                    StableLabel {text:root.summaryDegreeText;color:root.summaryInk;font.pixelSize:13;Layout.preferredWidth:Math.min(80,ribbonGroup.width*.22);Layout.alignment:Qt.AlignVCenter}
-                    StableLabel {text:(configuration.summaryMode===0?"实时":"所属和弦")+" · "+positionText+" · "+root.analysisStatus;color:muted;font.pixelSize:11;visible:ribbonGroup.width>360;Layout.fillWidth:true;Layout.alignment:Qt.AlignVCenter}
+                    id:ribbonRow;anchors.fill:parent;spacing:8
+                    HarmonyLabel {id:ribbonChord;objectName:"harmonyRibbonChord";observer:root.observer;chord:root.summaryChordText;degree:root.summaryDegreeText;color:root.summaryInk;pixels:configuration.summaryPixels;degreeRatio:configuration.summaryDegreeRatio/100;gap:configuration.summaryGap;order:configuration.summaryOrder;degreeFont:configuration.degreeFont;chordFont:["","Edwin","Arial"][configuration.chordFont];revision:root.analysisFingerprint;Layout.preferredWidth:implicitWidth;Layout.preferredHeight:implicitHeight;Layout.maximumHeight:ribbonGroup.height;Layout.maximumWidth:Math.max(50,ribbonGroup.width-90);Layout.alignment:Qt.AlignVCenter}
+                    UiLabel {id:ribbonStatus;text:(root.analysisDirty?"分析中":root.analysisStatus.indexOf("已更新")===0?"已更新":root.analysisStatus)+" · "+positionText.replace(/^当前位置[：:]\s*/,"")+" · "+(configuration.summaryMode===0?"实时":"所属");color:muted;font.pixelSize:11;visible:summarySurface.width>660;elide:Text.ElideRight;Layout.preferredWidth:Math.min(230,implicitWidth);Layout.fillWidth:true;Layout.alignment:Qt.AlignVCenter}
                     Row {
-                        id:ribbonTones;visible:ribbonGroup.width>=760;spacing:3;Layout.alignment:Qt.AlignVCenter
+                        id:ribbonTones;visible:summarySurface.width>=1200;spacing:3;Layout.alignment:Qt.AlignVCenter
                         Repeater {model:root.summaryToneRows;delegate:Rectangle {
                             width:26;height:24;color:theme.field;radius:1
                             Rectangle{x:0;y:5;width:2;height:14;color:modelData.present?modelData.color:"#d0d0d0"}

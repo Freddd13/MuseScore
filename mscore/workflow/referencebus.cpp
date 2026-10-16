@@ -15,7 +15,7 @@ using Clock=QVector<QPair<double,double>>;
 std::atomic<const Clock*> clock{nullptr};
 std::unique_ptr<Clock> ownedClock;
 std::atomic<unsigned> clockReaders{0};
-std::atomic<int> endTick{-1};
+std::atomic<int> endTick{-1},reachedTick{-1};
 double mapped(double value,bool reverse) {
       ++clockReaders;const Clock* points=clock.load();double result=value;
       if(points && points->size()>1){auto x=[reverse](const QPair<double,double>& p){return reverse?p.second:p.first;};auto y=[reverse](const QPair<double,double>& p){return reverse?p.first:p.second;};
@@ -43,7 +43,9 @@ void setReferenceClock(const QVector<QPair<double,double>>& points){
       }
 double referenceOutputTime(double value){if(!clock.load())return value;return mapped(value,false);}
 double referenceScoreTime(double value){if(!clock.load())return value;return mapped(value,true);}
-void setReferenceEndTick(int tick){endTick=tick;}
+void setReferenceEndTick(int tick){if(tick>=0)reachedTick=-1;endTick=tick;}
+void markReferenceEndReached(int tick){reachedTick=tick;}
+int referenceReachedTick(){return reachedTick.load();}
 int referenceEndTick(){return endTick.load();}
 void mixReferenceAudio(float* output,unsigned frames,int musicFrame,bool playing) {
       if(!callback.load())return;

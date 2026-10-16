@@ -94,6 +94,7 @@ MuseScore {
   return e.comparison.same?"同条件比较":e.comparison.reasons.join("；");
  }
  onRun:{if(typeof newScoreObserver!=="function"){fail("需要 P1 方案宿主");return}observer=newScoreObserver();observer.score=curScore;refresh()}
+ Connections {target:root.observer;ignoreUnknownSignals:true;onActiveScoreChanged:{if(!root.switching)root.refresh()}}
  onScoreStateChanged:if(!switching&&visible){refresh();if(busy&&observer.analysisRevision()!==queryRevision){paging.stop();busy=false;status="谱面变化，比较待更新"}}
  onVisibleChanged:{if(!visible){paging.stop();busy=false}else if(observer)refresh()}
  Timer {id:paging;interval:1;repeat:true;onTriggered:root.page()}

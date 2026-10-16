@@ -12,7 +12,7 @@ class WorkflowContext : public QObject {
       Q_PROPERTY(QVariantMap audition READ audition NOTIFY auditionChanged)
       QVariantMap _audition;
       QPointer<QObject> _playbackSession;
-      QPointer<Score> _score;
+      QPointer<Score> _score, _activeScore;
       ScoreContentState _state;
       QVariantMap _expression;
       QString _feedback;
@@ -22,6 +22,7 @@ class WorkflowContext : public QObject {
       ScoreContentState _previewState;
 public:
       explicit WorkflowContext(QObject* parent):QObject(parent){}
+      void setActiveScore(Score* score){if(_activeScore==score)return;_activeScore=score;emit activeScoreChanged();}
       QVariantMap expression()const{return _expression;}
       QVariantMap audition()const{return _audition;}
       void finishPlaybackSession(){auto old=_playbackSession.data();_playbackSession.clear();delete old;}
@@ -37,9 +38,11 @@ public:
       Q_INVOKABLE void expressionAction(const QString& action,const QString& scoreId,const QString& midiId){emit requested(action,scoreId,midiId);}
 signals:
       void changed();
+      void activeScoreChanged();
       void feedbackChanged();
       void auditionChanged();
       void requested(const QString& action,const QString& scoreId,const QString& midiId);
 };
 WorkflowContext* workflowContext();
+void notifyWorkflowCurrentScore(Score*);
 }

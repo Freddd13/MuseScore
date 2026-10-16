@@ -37,7 +37,11 @@ struct Session {
       QString key;
       PlaybackPreviewMaterial original, proposed;
       EventMap activeEvents;
-      bool active=false, candidate=false, restoringLoop=false, loopTouched=false, oldLoop=false;
+      bool active=false,candidate=false,restoringLoop=false,loopTouched=false,oldLoop=false;
+      bool restoringCount=false,countTouched=false,oldCount=false,repeating=false,stopping=false,joint=false;
+      quint64 generation=0;
+      QPointer<QObject> restartOwner;
+      std::function<void()> restart;
       int position=-1, begin=-1, end=-1;
       QPointer<QObject> connections;
 };
@@ -58,6 +62,7 @@ void release(){
       auto& s=session();s.active=false;setReferenceClock({});setReferenceEndTick(-1);
       if(seq)seq->invalidatePlaybackEvents();
       if(auto action=getAction("loop")){if(!s.loopTouched){s.restoringLoop=true;action->setChecked(s.oldLoop);s.restoringLoop=false;}}
+      if(auto action=getAction("countin")){if(!s.countTouched){s.restoringCount=true;action->setChecked(s.oldCount);s.restoringCount=false;}}
       publish(false);
 }
 double mapClock(const QVector<QPair<double,double>>& points,double value,bool inverse=false){
@@ -139,9 +144,10 @@ void preparePlaybackPreview(Score* score,const QString& key,PlaybackPreviewMater
       if(seq){
             QObject::connect(seq,&Seq::started,context,[]{if(session().active)publish(true);});
             QObject::connect(seq,&Seq::heartBeat,context,[](int,int tick,int){auto& s=session();if(!s.active)return;if(!current(s.score)||seq->score()!=s.score->masterScore()||!mscore->currentScore()||mscore->currentScore()!=s.score){stopPlaybackPreview(true);return;}s.position=tick;});
-            QObject::connect(seq,&Seq::stopped,context,[]{auto& s=session();if(s.active&&!seq->isPlaying()){s.position=seq->getCurTick();release();}});
+            QObject::connect(seq,&Seq::stopped,context,[]{auto& s=session();if(s.active&&!seq->isPlaying()){s.position=referenceReachedTick()==s.end?s.end:seq->getCurTick();const bool again=s.repeating&&!s.stopping&&!s.joint&&s.position>=s.end;auto callback=playbackPreviewRepeat();const auto generation=s.generation;release();if(again&&callback)QTimer::singleShot(40,s.connections,[generation,callback]{auto& now=session();if(now.generation==generation&&!now.active&&now.repeating&&current(now.score))callback();});}});
             }
       if(auto loop=getAction("loop"))QObject::connect(loop,&QAction::toggled,context,[](bool){auto& s=session();if(s.active&&!s.restoringLoop)s.loopTouched=true;});
+      if(auto count=getAction("countin"))QObject::connect(count,&QAction::toggled,context,[](bool){auto& s=session();if(s.active&&!s.restoringCount)s.countTouched=true;});
 }
 QVariantMap startPlaybackPreview(Score* score,bool proposed,const QVariantMap& range){
       if(!current(score)||!mscore||mscore->currentScore()!=score)return {{"error",QObject::tr("请回到这份乐谱，更新演奏对应后试听。")}};
@@ -157,16 +163,22 @@ QVariantMap startPlaybackPreview(Score* score,bool proposed,const QVariantMap& r
       int context=tick;auto measure=score->tick2measure(Fraction::fromTicks(tick));if(measure&&measure->prevMeasure())context=measure->prevMeasure()->tick().ticks();
       if(auto seg=score->tick2segment(Fraction::fromTicks(tick),false,SegmentType::ChordRest))for(int track=0;track<score->ntracks();++track){auto e=seg->element(track);if(!e||!e->isChord())continue;for(auto n:toChord(e)->notes()){QSet<Note*> visited;while(n->tieBack()&&n->tieBack()->startNote()&&!visited.contains(n)){visited.insert(n);n=n->tieBack()->startNote();context=qMin(context,n->chord()->tick().ticks());}}}
       for(auto item:score->spannerMap().map())if(item.second->isPedal()&&item.second->tick().ticks()<tick&&item.second->tick2().ticks()>tick)context=qMin(context,item.second->tick().ticks());
-      const int begin=qMax(0,from-(tick-context));if(resume<begin||resume>=until)resume=begin;
+      const int begin=range.value("loopRestart").toBool()?from:qMax(0,from-(tick-context));if(resume<begin||resume>=until)resume=begin;
       s.activeEvents=resumePlaybackPreview(proposed?s.proposed.events:s.original.events,resume);
-      s.begin=begin;s.end=until;s.position=resume;s.candidate=proposed;s.active=true;s.loopTouched=false;
+      NPlayEvent endpoint;endpoint.setType(ME_INVALID);s.activeEvents.insert({until,endpoint});
+      s.begin=begin;s.end=until;s.position=resume;s.candidate=proposed;s.active=true;s.loopTouched=false;s.countTouched=false;s.joint=range.value("deferStart").toBool();s.repeating=range.value("loop",false).toBool();++s.generation;
       if(auto action=getAction("loop")){s.oldLoop=action->isChecked();s.restoringLoop=true;action->setChecked(false);s.restoringLoop=false;}
+      if(auto action=getAction("countin")){s.oldCount=action->isChecked();s.restoringCount=true;action->setChecked(false);s.restoringCount=false;}
       setReferenceClock(proposed?s.proposed.clock:QVector<QPair<double,double>>());setReferenceEndTick(until);
       seq->invalidatePlaybackEvents();seq->setScoreView(mscore->currentScoreView());
       if(range.value("deferStart").toBool()){publish(false);auto state=workflowContext()->audition();state["preparing"]=true;workflowContext()->setAudition(state);}
       else {if(auto play=getAction("play")){QSignalBlocker block(play);play->setChecked(true);}seq->startAtUTick(resume);publish(true);}
       return {{"ok",true},{"mode",proposed?"candidate":"score"},{"fromUtick",resume},{"untilUtick",until}};
 }
-void stopPlaybackPreview(bool finish){auto& s=session();if(s.active&&seq){if(seq->isPlaying())seq->stopWait();if(!seq->isPlaying())seq->synchronizeStoppedGui();}if(s.active)release();if(finish)s.position=-1;}
+void stopPlaybackPreview(bool finish){auto& s=session();++s.generation;s.stopping=true;if(s.active&&seq){if(seq->isPlaying())seq->stopWait();if(!seq->isPlaying())seq->synchronizeStoppedGui();}if(s.active)release();if(finish)s.position=-1;s.stopping=false;}
+void setPlaybackPreviewLoop(Score* score,bool enabled){if(current(score))session().repeating=enabled;}
+bool playbackPreviewLoop(){return session().repeating;}
+void setPlaybackPreviewRepeat(QObject* owner,std::function<void()> callback){auto& s=session();s.restartOwner=owner;s.restart=std::move(callback);}
+std::function<void()> playbackPreviewRepeat(){auto& s=session();if(!s.restartOwner||!s.restart)return {};auto owner=s.restartOwner;auto callback=s.restart;return [owner,callback]{if(owner)callback();};}
 const EventMap* activePlaybackPreviewEvents(MasterScore* score){auto& s=session();return s.active&&current(s.score)&&s.score->masterScore()==score?&s.activeEvents:nullptr;}
 }

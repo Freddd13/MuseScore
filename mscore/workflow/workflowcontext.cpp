@@ -2,5 +2,7 @@
 #include "workflowcontext.h"
 #include <QCoreApplication>
 namespace Ms {
-WorkflowContext* workflowContext(){static QPointer<WorkflowContext> context;if(!context)context=new WorkflowContext(qApp);return context;}
+namespace { QPointer<WorkflowContext> context; }
+WorkflowContext* workflowContext(){if(!context)context=new WorkflowContext(qApp);return context;}
+void notifyWorkflowCurrentScore(Score* score){if(context)context->setActiveScore(score);}
 }

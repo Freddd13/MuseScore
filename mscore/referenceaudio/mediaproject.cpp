@@ -20,14 +20,15 @@ QString localPath(QString path){return QUrl(path).isLocalFile()?QUrl(path).toLoc
 class RingDevice : public QIODevice {
       PcmRing* _ring;
       bool _integer;
+      const std::atomic<float>* _gain;
 public:
-      RingDevice(PcmRing* ring,QObject* parent,bool integer=false):QIODevice(parent),_ring(ring),_integer(integer){open(QIODevice::ReadOnly);}
+      RingDevice(PcmRing* ring,QObject* parent,const std::atomic<float>* gain,bool integer=false):QIODevice(parent),_ring(ring),_integer(integer),_gain(gain){open(QIODevice::ReadOnly);}
       bool isSequential()const override{return true;}
       qint64 bytesAvailable()const override{return qint64(_ring->available())*(_integer?4:8)+QIODevice::bytesAvailable();}
       qint64 readData(char* data,qint64 size)override{
-            if(!_integer){const unsigned count=unsigned(size/8);_ring->pop(reinterpret_cast<float*>(data),count);return qint64(count)*8;}
+            if(!_integer){const unsigned count=unsigned(size/8);_ring->pop(reinterpret_cast<float*>(data),count,false,_gain->load(std::memory_order_relaxed));return qint64(count)*8;}
             const unsigned count=unsigned(size/4);std::array<float,2048> samples;unsigned written=0;
-            while(written<count){unsigned n=qMin(1024u,count-written);_ring->pop(samples.data(),n);for(unsigned i=0;i<n*2;++i){qint16 value=qint16(std::lround(qBound(-1.f,samples[i],1.f)*32767));std::memcpy(data+(written*2+i)*2,&value,2);}written+=n;}return qint64(count)*4;
+            while(written<count){unsigned n=qMin(1024u,count-written);_ring->pop(samples.data(),n,false,_gain->load(std::memory_order_relaxed));for(unsigned i=0;i<n*2;++i){qint16 value=qint16(std::lround(qBound(-1.f,samples[i],1.f)*32767));std::memcpy(data+(written*2+i)*2,&value,2);}written+=n;}return qint64(count)*4;
             }
       qint64 writeData(const char*,qint64)override{return -1;}
 };
@@ -37,7 +38,7 @@ struct ReferenceMediaProject::Session {
       std::atomic<qint64> expected{-1},outputFrames{0};
       int rate=48000,startFrame=0;
       qint64 total=0;
-      float master=.8f;
+      std::atomic<float> master{.8f};
       bool joint=false,attached=false,loop=false;
       std::atomic_bool started{false};
       PcmRing output;
@@ -52,6 +53,8 @@ ReferenceMediaProject::ReferenceMediaProject(QObject* parent,const KumoReference
       _status=tr("添加音频后，选择要播放的片段。");
       }
 ReferenceMediaProject::~ReferenceMediaProject(){stop();_pool.waitForDone();}
+double ReferenceMediaProject::volume()const{return _session?_session->master.load(std::memory_order_relaxed):_volume;}
+void ReferenceMediaProject::setVolume(double value){if(!std::isfinite(value))return;value=qBound(0.,value,1.);_volume=value;if(_session)_session->master.store(float(value),std::memory_order_relaxed);emit volumeChanged();}
 double ReferenceMediaProject::position()const{if(!_session)return 0;auto s=_session;auto frame=s->outputFrames.load();if(s->loop&&s->total>0)frame%=s->total;return double(frame)*1000/s->rate;}
 QVariantMap ReferenceMediaProject::diagnostics()const {
       if(!_session)return {};auto s=_session;
@@ -71,7 +74,7 @@ QVariantMap ReferenceMediaProject::start(const QVariantMap& plan) {
       if(rate<8000||rate>192000)return {{"error",tr("声音设备的采样率不受支持。")}};
       auto s=std::make_shared<Session>();s->rate=rate;s->joint=plan.value("joint").toBool();s->startFrame=plan.value("startFrame").toInt();
       s->loop=plan.value("loop").toBool();if(s->loop&&s->joint)return {{"error",tr("联合循环请使用原曲面板的循环按钮。")}};
-      const double master=plan.value("volume",.8).toDouble();if(!std::isfinite(master)||master<0||master>1)return {{"error",tr("总音量应在 0–100% 之间。")}};s->master=float(master);
+      const double master=plan.value("volume",.8).toDouble();if(!std::isfinite(master)||master<0||master>1)return {{"error",tr("总音量应在 0–100% 之间。")}};s->master=float(master);_volume=master;
       // Complete validation before starting any producer.
       for(auto clipValue:clips){auto clip=clipValue.toMap();const auto pieces=clip.value("pieces").toList();if(pieces.isEmpty()||pieces.size()>4096)return {{"error",tr("片段为空或对齐点过多。")}};
             QString path=localPath(clip.value("path").toString());QFileInfo file(path);if(!file.exists()||!file.isFile())return {{"error",tr("找不到音频：%1").arg(path)}};
@@ -82,7 +85,7 @@ QVariantMap ReferenceMediaProject::start(const QVariantMap& plan) {
                   previous=at+duration;s->total=qMax(s->total,qint64(std::llround(previous*rate/1000)));}
             }
       if(s->total<=0||(s->loop&&s->total<s->rate/5))return {{"error",tr("多音轨循环至少选择 0.2 秒的片段。更短的循环可使用单曲播放器。")}};
-      _session=s;_joint=s->joint;_status=tr("正在准备 %1 条音频…").arg(clips.size());
+      _completed=false;_session=s;_joint=s->joint;_status=tr("正在准备 %1 条音频…").arg(clips.size());
       for(auto clipValue:clips){auto clip=clipValue.toMap();auto ring=std::make_shared<PcmRing>();s->lanes.push_back(ring);QString path=localPath(clip.value("path").toString());auto pieces=clip.value("pieces").toList();const float gain=float(clip.value("volume",1).toDouble());
             QtConcurrent::run(&_pool,[s,ring,path,pieces,gain]{
                   qint64 written=0;std::array<float,8192> silence{};
@@ -103,7 +106,7 @@ QVariantMap ReferenceMediaProject::start(const QVariantMap& plan) {
             std::array<float,2048> mixed,temp;qint64 produced=0;
             while((s->loop||produced<s->total)&&!s->canceled){unsigned n=unsigned(qMin<qint64>(1024,s->total-produced%s->total));bool available=true;for(auto lane:s->lanes)if(lane->available()<n&&!lane->done.load())available=false;
                   if(!available){std::this_thread::sleep_for(std::chrono::milliseconds(1));continue;}
-                  std::fill(mixed.begin(),mixed.end(),0.f);for(auto lane:s->lanes){lane->pop(temp.data(),n);for(unsigned i=0;i<n*2;++i)mixed[i]+=temp[i]*s->master;}
+                  std::fill(mixed.begin(),mixed.end(),0.f);for(auto lane:s->lanes){lane->pop(temp.data(),n);for(unsigned i=0;i<n*2;++i)mixed[i]+=temp[i];}
                   if(!s->output.push(mixed.data(),n,s->canceled))break;produced+=n;
                   if(s->output.available()>=qMin<qint64>(8192,s->total))s->ready=true;
                   }
@@ -117,7 +120,7 @@ void ReferenceMediaProject::mix(void* context,float* buffer,unsigned count,int f
       if(!s->started){if(!playing||qint64(frame)+count<=s->startFrame)return;skipped=unsigned(qMax(0,s->startFrame-frame));s->started=true;s->expected=frame;}
       const qint64 expected=s->expected.load();
       if(playing&&std::abs(qint64(frame)-expected)>qint64(count)*2){s->discontinuous=true;return;}
-      const auto got=s->output.pop(buffer+skipped*2,count-skipped,true);if(got<count-skipped&&!s->output.done)s->canceled=true;s->outputFrames+=count-skipped;s->expected=expected+count;
+      const auto got=s->output.pop(buffer+skipped*2,count-skipped,true,s->master.load(std::memory_order_relaxed));if(got<count-skipped&&!s->output.done)s->canceled=true;s->outputFrames+=count-skipped;s->expected=expected+count;
       }
 void ReferenceMediaProject::poll() {
       auto s=_session;if(!s)return;
@@ -129,10 +132,10 @@ void ReferenceMediaProject::poll() {
             QAudioFormat f;f.setSampleRate(s->rate);f.setChannelCount(2);f.setSampleSize(32);f.setSampleType(QAudioFormat::Float);f.setByteOrder(QAudioFormat::LittleEndian);f.setCodec("audio/pcm");auto device=QAudioDeviceInfo::defaultOutputDevice();
             bool integer=false;if(!device.isFormatSupported(f)){f.setSampleSize(16);f.setSampleType(QAudioFormat::SignedInt);integer=true;}
             if(device.isNull()||!device.isFormatSupported(f)){stop();_status=tr("声音设备不能播放此采样格式。");emit changed();return;}
-            _device=new RingDevice(&s->output,this,integer);_audio=new QAudioOutput(device,f,this);_audio->setBufferSize(s->rate*(integer?4:8)/10);_audio->start(_device);s->started=true;_status=tr("音频播放中。");
+            _device=new RingDevice(&s->output,this,&s->master,integer);_audio=new QAudioOutput(device,f,this);_audio->setBufferSize(s->rate*(integer?4:8)/10);_audio->start(_device);s->started=true;_status=tr("音频播放中。");
             }
       if(!s->joint){qint64 frames=_audio?_audio->processedUSecs()*s->rate/1000000:0;s->outputFrames=s->loop?frames:qMin(s->total,frames);}
-      if(s->started&&!s->loop&&s->outputFrames>=s->total){bool wasJoint=s->joint;stop();_status=tr("片段播放结束。");emit changed();emit finished(wasJoint);return;}emit changed();
+      if(s->started&&!s->loop&&s->outputFrames>=s->total){bool wasJoint=s->joint;stop();_completed=true;_status=tr("片段播放结束。");emit changed();emit finished(wasJoint);return;}emit changed();
       }
 void ReferenceMediaProject::stop(){
       _timer.stop();setProperty("prepared",false);if(!_session)return;auto s=_session;s->canceled=true;_pool.clear();if(s->joint&&_host.detach)_host.detach(s.get());

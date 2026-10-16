@@ -3,6 +3,7 @@
 #include "midiinput.h"
 #include "workflowcontext.h"
 #include "playbackpreview.h"
+#include "positionhint.h"
 #include "mscore/seq.h"
 #include "mscore/scoreview.h"
 #include "mscore/performanceeditor/performanceeditor.h"
@@ -56,6 +57,7 @@ QVariantMap ScoreObserver::savePerformanceSource(const QString& source,const QSt
  return {{"ok",true}};
 }
 QVariantMap ScoreObserver::stopWorkflowPlayback() {
+ delete _workflowRepeat.data();_workflowRepeat.clear();
  stopPlaybackPreview();workflowContext()->finishPlaybackSession();
  if(seq&&seq->isPlaying())seq->stopWait();
  if(seq&&!seq->isPlaying())seq->synchronizeStoppedGui();
@@ -125,6 +127,7 @@ QVariantMap ScoreObserver::navigateWorkflow(const QVariantMap& range,bool auditi
  if(element){_score->select(element,SelectType::SINGLE,track/VOICES);view->adjustCanvasPosition(element,false);}
  view->moveCursor(Fraction::fromTicks(tick));
  if(auto editor=mscore->findChild<PerformanceEditor*>())editor->revealTick(tick);
+ if(!audition)showWorkflowPositionHint(view,range);
  if(audition){
   if(!seq||!seq->driver())return {{"error","audio driver unavailable; the independent copy is open"}};
   if(!seq->backgroundRenderingIdle())return {{"error","waiting for render"}};

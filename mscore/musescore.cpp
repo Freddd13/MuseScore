@@ -11,6 +11,7 @@
 //=============================================================================
 
 #include "musescore.h"
+#include "workflow/workflowcontext.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -3265,6 +3266,7 @@ void MuseScore::setCurrentScoreView(ScoreView* view)
             cs = 0;
 
       if (_performanceEditor) _performanceEditor->setView(cv);
+      notifyWorkflowCurrentScore(cs);
       scorePageLayoutChanged();
 
       updateWindowTitle(cs);

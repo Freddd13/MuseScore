@@ -333,7 +333,7 @@ QCOMPARE(input.value("value").toInt(),7);
             QRectF hint;for(const auto& box:boxes)if(box!=harmonyBox)hint=box;QVERIFY(!hint.isEmpty());
             view->adjustCanvasPosition(toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(anchor["track"].toInt()))->upNote(),false);QTest::qWait(40);
             QVERIFY(view->width()>300 && view->height()>200);const auto point=view->toPhysical(hint.center()).toPoint();QVERIFY(view->rect().contains(point));
-            QTest::mouseClick(view,Qt::LeftButton,Qt::NoModifier,point);QTRY_VERIFY(panel->property("status").toString().startsWith(QString::fromUtf8("已定位")));
+            QTest::mouseClick(view,Qt::LeftButton,Qt::NoModifier,point);auto nearby=panel->findChild<QQuickWindow*>("arrangementProblemHint");QTRY_VERIFY(nearby&&nearby->isVisible());QCOMPARE(panel->property("current").value<QJSValue>().toVariant().toMap().value("id").toString(),QString("hint"));
             const auto output=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");if(!output.isEmpty()){const auto image=view->grab(view->toPhysical(score->firstMeasure()->canvasBoundingRect().united(hint)).adjusted(-45,-25,45,25).intersected(view->rect()));QVERIFY(!image.isNull());QVERIFY(image.save(output+"/arrangement-hint.png"));mscore->grab().save(output+"/arrangement-main.png");QTRY_VERIFY(panel->window()->width()>300);QVERIFY(panel->window()->grabWindow().save(output+"/arrangement-panel.png"));}
             config["scoreHints"]=false;panel->setProperty("config",config);QVERIFY(QMetaObject::invokeMethod(panel,"publishMarkers"));QCOMPARE(view->notePreviewMarkerBoxes().size(),1);
             panel->setPanelFloating(true);QVERIFY(panel->panelFloating());panel->setPanelFloating(false);
