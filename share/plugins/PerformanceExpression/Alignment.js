@@ -196,9 +196,10 @@ function candidates(input) {
         var n=m.original,vs=config.velocityStrength===undefined?strength:config.velocityStrength/100;
         if(!config.velocity)return;
         if(n.protected&&config.keepManual!==false&&unlock.indexOf(n.id)<0){kept.push({id:n.id,reason:n.protection||"保留手动调整"});return}
+        if(config.velocityWriteMode==="follow"&&n.velocityBase<=0){kept.push({id:n.id,reason:"当前位置的力度参考为 0；选择逐音固定力度即可采用演奏值。"});return;}
         var measured=Math.max(1,Math.min(127,Math.round((m.velocity-(config.deviceCenter||64))*(config.deviceGain||1)+64)));
         var target=Math.max(1,Math.min(127,Math.round(n.velocity*(1-vs)+measured*vs)));
-        velocity.push({id:n.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,writtenPitch:n.writtenPitch,writtenTpc:n.writtenTpc,graceIndex:n.graceIndex,oldType:n.velocityType,oldRaw:n.velocityRaw,oldBase:n.velocityBase,target:target,source:"measured",unlock:config.keepManual===false||unlock.indexOf(n.id)>=0});
+        velocity.push({id:n.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,writtenPitch:n.writtenPitch,writtenTpc:n.writtenTpc,graceIndex:n.graceIndex,oldType:n.velocityType,oldRaw:n.velocityRaw,oldBase:n.velocityBase,target:target,originalVelocity:n.velocity,writeMode:config.velocityWriteMode||"preserve",sourceSeconds:m.seconds,scoreSeconds:n.scoreSeconds===undefined?n.onSeconds:n.scoreSeconds,source:"measured",unlock:config.keepManual===false||unlock.indexOf(n.id)>=0});
     });
     if(config.accompaniment&&velocity.length){
         (input.notes||[]).forEach(function(n){
@@ -207,7 +208,7 @@ function candidates(input) {
             confirmed.forEach(function(m){if(Math.abs(m.tick-n.tick)<distance){distance=Math.abs(m.tick-n.tick);nearest=m}});
             if(!nearest||distance>480)return;
             var vs=config.velocityStrength===undefined?strength:config.velocityStrength/100,calibrated=Math.max(1,Math.min(127,(nearest.velocity-(config.deviceCenter||64))*(config.deviceGain||1)+64)),ratio=calibrated/Math.max(1,nearest.original.velocity),target=Math.round(n.velocity*(1-vs+vs*ratio));
-            velocity.push({id:n.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,writtenPitch:n.writtenPitch,writtenTpc:n.writtenTpc,graceIndex:n.graceIndex,oldType:n.velocityType,oldRaw:n.velocityRaw,oldBase:n.velocityBase,target:Math.max(1,Math.min(127,target)),source:"inferred"});
+            velocity.push({id:n.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,writtenPitch:n.writtenPitch,writtenTpc:n.writtenTpc,graceIndex:n.graceIndex,oldType:n.velocityType,oldRaw:n.velocityRaw,oldBase:n.velocityBase,target:Math.max(1,Math.min(127,target)),writeMode:config.velocityWriteMode||"preserve",source:"inferred",unlock:config.keepManual===false||unlock.indexOf(n.id)>=0});
         });
     }
     var sourceCounts={};velocity.forEach(function(v){var key=[v.tick,v.track,v.index,v.graceIndex].join(":");sourceCounts[key]=(sourceCounts[key]||0)+1});

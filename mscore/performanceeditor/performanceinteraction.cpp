@@ -168,7 +168,7 @@ void PerformanceEditor::revealTick(int tick)
       if (!_score || !isVisible()) return;
       const double position=xForTick(tick,false);
       if(position<PerformanceViewport::gutter+24 || position>_canvas->width()-24){
-            pauseFollow();_scroll->setValue(qMax(0,tick-qRound((_canvas->width()-PerformanceViewport::gutter)*.35*DIVISION/_viewport.pixelsPerQuarter)));
+            pauseFollow();_scroll->setValue(qMax(0,leftTickForAnchor(tick,PerformanceViewport::gutter+(_canvas->width()-PerformanceViewport::gutter)*.35)));
             }
       updateSurfaces();
       }
@@ -274,8 +274,9 @@ void PerformanceEditor::updatePlayhead()
       if (_following && playing && !_dragging && !_marquee && !_seeking) {
             _followButton->setText(tr("跟随播放"));
             const int span = _scroll->pageStep();
-            if (tick < _scroll->value() || tick > _scroll->value() + span * 0.85) {
-                  _automaticScroll = true; _scroll->setValue(qMax(0, tick - int(span * 0.12))); _automaticScroll = false;
+            const int shown=comparisonPlayTick(tick);
+            if (shown < _scroll->value() || shown > _scroll->value() + span * 0.85) {
+                  _automaticScroll = true; _scroll->setValue(qMax(0, shown - int(span * 0.12))); _automaticScroll = false;
                   }
             }
       if (playing && _band->isChecked() && !_geometryDirty && !_dirty) {
@@ -292,7 +293,7 @@ void PerformanceEditor::updatePlayhead()
             }
       if(_workflowPanel&&_workflowPanel->isVisible())if(auto lane=_workflowPanel->findChild<QWidget*>("performanceWorkflowLanes"))lane->update();
       for (QWidget* canvas : {static_cast<QWidget*>(_noteCanvas), static_cast<QWidget*>(_ruler), _canvas}) {
-            const int oldX = qRound(xForTick(previous, false)), newX = qRound(xForTick(tick, false));
+            const int oldX = qRound(xForTick(comparisonPlayTick(previous), false)), newX = qRound(xForTick(comparisonPlayTick(tick), false));
             if (previous >= 0) canvas->update(QRect(oldX - 3, 0, 7, canvas->height()));
             canvas->update(QRect(newX - 3, 0, 7, canvas->height()));
             }
@@ -371,7 +372,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
                         const int tick = tickForX(wheel->position().x(), false);
                         _viewport.pixelsPerQuarter = qBound(0.01, _viewport.pixelsPerQuarter * factor, 1000.0);
                         surfaceResized(PerformanceSurface::Parameter);
-                        _scroll->setValue(qMax(0, tick - qRound((wheel->position().x() - PerformanceViewport::gutter) * DIVISION / _viewport.pixelsPerQuarter)));
+                        _scroll->setValue(qMax(0, leftTickForAnchor(tick,wheel->position().x())));
                         }
                   }
             else if (wheel->modifiers() & Qt::ShiftModifier) _scroll->setValue(_scroll->value() - wheel->angleDelta().y() * DIVISION / 120);

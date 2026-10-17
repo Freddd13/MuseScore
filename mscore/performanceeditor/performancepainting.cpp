@@ -37,8 +37,9 @@ void PerformanceEditor::surfaceResized(PerformanceSurface surface)
             _pitchScroll->setPageStep(qRound(rows * 100)); _pitchScroll->setSingleStep(100);
             _pitchScroll->setValue(qRound((_viewport.rowMaximum() - _viewport.pitchIndex(_viewport.topPitch)) * 100));
             }
-      const int span = qMax(1, qRound(qMax(10, _canvas->width() - PerformanceViewport::gutter - PerformanceViewport::rightMargin) * DIVISION / _viewport.pixelsPerQuarter));
-      _scroll->setPageStep(span); _scroll->setRange(0, qMax(0, _endTick - span));
+      const double units=qMax(10,_canvas->width()-PerformanceViewport::gutter-PerformanceViewport::rightMargin)/_viewport.pixelsPerQuarter;
+      const int span=qMax(1,comparisonTimeActive()?_score->tempomap()->time2tick(_score->tempomap()->tick2time(_scroll->value())+units*.5)-_scroll->value():qRound(units*DIVISION));
+      _scroll->setPageStep(span); _scroll->setRange(0, qMax(0, (comparisonTimeActive()?qMax(_endTick,_comparisonEnd):_endTick) - span));
       invalidateVisual();
       }
 void PerformanceEditor::buildGeometry()
@@ -111,6 +112,18 @@ void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface su
       if (!_score) return;
       painter.save(); painter.setClipRect(QRectF(PerformanceViewport::gutter, 0, widget->width() - PerformanceViewport::gutter - PerformanceViewport::rightMargin, widget->height()));
       const int from = tickForX(PerformanceViewport::gutter, false), until = tickForX(widget->width(), false);
+      if(comparisonTimeActive()){
+            const double origin=_score->tempomap()->tick2time(_scroll->value());
+            const double left=_score->tempomap()->tick2time(from),right=_score->tempomap()->tick2time(until);
+            const double desired=80/(2*_viewport.pixelsPerQuarter);
+            const double magnitude=std::pow(10.,std::floor(std::log10(desired)));const double ratio=desired/magnitude;const double step=magnitude*(ratio<=1?1:ratio<=2?2:ratio<=5?5:10);
+            for(double seconds=std::ceil(left/step)*step;seconds<=right;seconds+=step){
+                  const double x=PerformanceViewport::gutter+(seconds-origin)*2*_viewport.pixelsPerQuarter;
+                  painter.setPen(QPen(c[PerformanceAppearance::Grid],.7));painter.drawLine(QPointF(x,surface==PerformanceSurface::Parameter?laneRect().top():0),QPointF(x,surface==PerformanceSurface::Parameter?laneRect().bottom():widget->height()));
+                  if(surface==PerformanceSurface::Ruler){const int minutes=int(seconds)/60;const QString label=QString("%1:%2").arg(minutes).arg(seconds-minutes*60,4,'f',1,QChar('0'));painter.setPen(c[PerformanceAppearance::Text]);painter.drawText(QPointF(x+3,19),label);}
+                  }
+            painter.restore();return;
+            }
       double lastLabel = -1000;
       for (const auto& measure : _measures) {
             if (measure.until < from) continue;
@@ -353,7 +366,7 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
                   }
             }
       const int tick = _seeking ? _seekTick : _playTick;
-      if (tick >= 0) { painter.setPen(QPen(c[_seeking ? PerformanceAppearance::Preview : PerformanceAppearance::Playhead], 1.5)); const double x = xForTick(tick, false); painter.drawLine(QPointF(x, surface == PerformanceSurface::Parameter ? laneRect().top() : 0), QPointF(x, surface == PerformanceSurface::Parameter ? laneRect().bottom() : widget->height())); }
+      if (tick >= 0) { painter.setPen(QPen(c[_seeking ? PerformanceAppearance::Preview : PerformanceAppearance::Playhead], 1.5)); const double x = xForTick(comparisonPlayTick(tick), false); painter.drawLine(QPointF(x, surface == PerformanceSurface::Parameter ? laneRect().top() : 0), QPointF(x, surface == PerformanceSurface::Parameter ? laneRect().bottom() : widget->height())); }
       painter.restore();
       if (_dragging && ((surface == PerformanceSurface::Parameter && !_noteGesture) || (surface == PerformanceSurface::Notes && _noteGesture))) {
             const QString value = _parameter->currentIndex() == 0 && _anchor >= 0 ? QString::number(noteValue(_anchor), 'f', 0) : QString::number(valueForY(_last.y(), _gestureLane), 'f', 0);

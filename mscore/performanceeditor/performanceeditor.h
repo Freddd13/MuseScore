@@ -9,6 +9,7 @@
 #include <QTransform>
 #include "libmscore/mscoreview.h"
 #include "libmscore/score.h"
+#include "libmscore/tempo.h"
 #include "parameteredit.h"
 #include "performanceview.h"
 #include "performancesettings.h"
@@ -48,6 +49,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
             bool inScope = true, enabled = true;
             QVector<GeneratedVelocity> generatedVelocities;
             QString dynamicText;
+            int markBase = -1;
             };
       void cacheGeneratedVelocity(NoteInfo&, int);
       QPair<int,int> generatedVelocityRange(const NoteInfo&, Note::ValueType, int) const;
@@ -107,6 +109,16 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       bool velocityHeaderClick(QPointF);
       void paintVelocityHeaders(QPainter&, const QRectF&);
       QToolButton* _comparisonButton=nullptr;
+      QComboBox* _comparisonView=nullptr;
+      TempoMap _comparisonClock;
+      QVector<QPair<int,int>> _comparisonPositions;
+      int _comparisonEnd=0;
+      bool _comparisonGuides=false, _comparisonTime=false;
+      bool comparisonTimeActive()const;
+      int comparisonDisplayTick(int)const;
+      QVector<int> comparisonVisible(int,int)const;
+      int comparisonPlayTick(int)const;
+      int leftTickForAnchor(int,double)const;
       QHash<int,QVariantMap> _comparisonValues;
       QVariantList _comparisonTempos;
       QString _comparisonVersion;

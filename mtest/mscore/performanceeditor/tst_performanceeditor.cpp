@@ -820,6 +820,7 @@ class TestPerformanceEditor : public QObject, public MTest {
       void gatePlaybackKeepsScoreAndBeat();
       void regionalPlaybackSwitchesSamePhrase();
       void expressionParameterDragAndApply();
+      void expressionVelocityModesAndComparison();
 #else
 #include "expression_playback_tests.inc"
 #include "gate_playback_tests.inc"

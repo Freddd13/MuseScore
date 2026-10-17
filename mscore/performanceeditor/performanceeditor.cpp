@@ -443,7 +443,7 @@ void PerformanceEditor::refresh()
                               _notes.append({note, tick, chord->endTick().ticks(), note->track(), note->ppitch(),
                                     stablePlayback ? NoteVelocity::referenceBase(note, globalMethod) : -1, note->veloOffset(), 0, 0, note->veloType(),
                                     note->selected(), audible, note->canvasBoundingRect(), chord->measure()->system()});
-                              auto& cached = _notes.back(); cached.baseMin = cached.baseMax = cached.base;cached.dynamicText=markVelocityAt(markNames,note->track(),tick);
+                              auto& cached = _notes.back(); cached.baseMin = cached.baseMax = cached.base;cached.dynamicText=markVelocityAt(markNames,note->track(),tick);cached.markBase=stablePlayback?note->staff()->velocities().val(Fraction::fromTicks(tick)):-1;
                               if (!note->tieBack() && note->tieFor()) cached.end = note->lastTiedNote()->chord()->endTick().ticks();
                               cached.name = tpc2name(note->tpc1(), NoteSpellingType::STANDARD, NoteCaseType::AUTO, false) + QString::number((note->ppitch() - static_cast<int>(tpc2alter(note->tpc1()))) / 12 - 1);
                               cached.written = tpc2name(note->tpc(), NoteSpellingType::STANDARD, NoteCaseType::AUTO, false) + QString::number((note->epitch() - static_cast<int>(tpc2alter(note->tpc()))) / 12 - 1); cached.part = note->part(); cached.instrument = cached.part->partName();
@@ -763,15 +763,17 @@ void PerformanceEditor::flushForScore(Score* score)
 
 void PerformanceEditor::fit(bool selection)
       {
-      int from = 0, until = _endTick;
+      int from = 0, until = comparisonTimeActive()?qMax(_endTick,_comparisonEnd):_endTick;
       if (selection) {
             const auto chosen = selectedNotes();
             if (chosen.isEmpty()) return;
             from = _notes[chosen.front()].tick; until = from + 1;
-            for (int index : chosen) { from = qMin(from, _notes[index].tick); until = qMax(until, _notes[index].end); }
+            for (int index : chosen) { from = qMin(from, _notes[index].tick); until = qMax(until, _notes[index].end);if(comparisonTimeActive()&&_comparisonValues.contains(index)){from=qMin(from,comparisonDisplayTick(index));until=qMax(until,_score->tempomap()->time2tick(_comparisonClock.tick2time(_notes[index].end)));} }
             }
-      _viewport.pixelsPerQuarter = qBound(0.01, double(qMax(100, _canvas->width() - PerformanceViewport::gutter - PerformanceViewport::rightMargin)) * DIVISION / qMax(1, until - from), 1000.0);
-      _scroll->setRange(0, qMax(0, _endTick - (until - from))); _scroll->setPageStep(until - from); _scroll->setValue(from);
+      const double width=qMax(100,_canvas->width()-PerformanceViewport::gutter-PerformanceViewport::rightMargin);
+      const double units=comparisonTimeActive()?qMax(.001,2*(_score->tempomap()->tick2time(until)-_score->tempomap()->tick2time(from))):double(qMax(1,until-from))/DIVISION;
+      _viewport.pixelsPerQuarter=qBound(.01,width/units,1000.);
+      _scroll->setRange(0, qMax(0, (comparisonTimeActive()?qMax(_endTick,_comparisonEnd):_endTick) - (until - from))); _scroll->setPageStep(until - from); _scroll->setValue(from);
       pauseFollow(); invalidateVisual();
       }
 
@@ -798,7 +800,10 @@ double PerformanceEditor::xForNote(int index, bool onScore) const
 
 double PerformanceEditor::xForTick(int tick, bool onScore) const
       {
-      if (!onScore) return PerformanceViewport::gutter + (tick - _scroll->value()) * _viewport.pixelsPerQuarter / DIVISION;
+      if (!onScore) {
+            const double units=comparisonTimeActive()?2*(_score->tempomap()->tick2time(tick)-_score->tempomap()->tick2time(_scroll->value())):double(tick-_scroll->value())/DIVISION;
+            return PerformanceViewport::gutter+units*_viewport.pixelsPerQuarter;
+            }
       if (!_view) return 0;
       if (_systemSegments.isEmpty()) return 0;
       auto next = std::lower_bound(_systemSegments.cbegin(), _systemSegments.cend(), tick, [](const SegmentInfo& s, int t) { return s.tick < t; });
@@ -811,7 +816,11 @@ double PerformanceEditor::xForTick(int tick, bool onScore) const
 
 int PerformanceEditor::tickForX(double x, bool onScore) const
       {
-      if (!onScore) return qBound(0, qRound((x - PerformanceViewport::gutter) * DIVISION / _viewport.pixelsPerQuarter) + _scroll->value(), _endTick);
+      if (!onScore) {
+            const double units=(x-PerformanceViewport::gutter)/_viewport.pixelsPerQuarter;
+            const int tick=comparisonTimeActive()?_score->tempomap()->time2tick(_score->tempomap()->tick2time(_scroll->value())+units*.5):qRound(units*DIVISION)+_scroll->value();
+            return qBound(0,tick,comparisonTimeActive()?qMax(_endTick,_comparisonEnd):_endTick);
+            }
       if (_systemSegments.isEmpty()) return 0;
       const double logical = _view->matrix().inverted().map(QPointF(x, 0)).x();
       auto next = std::lower_bound(_systemSegments.cbegin(), _systemSegments.cend(), logical, [](const SegmentInfo& s, double v) { return s.position.x() < v; });

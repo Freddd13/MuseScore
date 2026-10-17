@@ -58,15 +58,15 @@ void PerformanceEditor::setupUsabilityControls()
       keyMode->addItems({tr("完整键盘"),tr("淡化无关音高"),tr("只显示相关音高")}); keyMode->setCurrentIndex(_keyboardMode);
       keyMode->setToolTip(tr("相关音高来自当前筛选允许显示的音符；收起音高时网格和选音一起调整。"));
       connect(keyMode,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int mode){finishWheel();cancelGesture();_keyboardMode=mode;QSettings().setValue("performanceEditor/keyboardMode",mode);rebuildPitchRows();centerPitch(false,true);invalidateVisual();}); add(keyMode);
-      auto actual=new QCheckBox(tr("显示记号力度线"),this);actual->setObjectName("performanceActualVelocity");
+      auto actual=new QCheckBox(tr("显示力度参考线"),this);actual->setObjectName("performanceActualVelocity");
       actual->setToolTip(tr("MIDI力度视图中，虚线显示各谱表由力度记号给出的力度。显示方式由上方的MIDI力度／相对%选择；音符继续按原来的相对或固定方式保存。"));
       connect(actual,&QCheckBox::toggled,this,[this](bool on){finishWheel();cancelGesture();_relativeActual=on;_visibleScoreRect=QRect();_number->setSuffix(rangeKind()==1?" %":QString());_number->setRange(rangeKind()==1?NoteVelocity::minOffset:1,rangeKind()==1?NoteVelocity::maxOffset:127);invalidateVisual();invalidateOverlay();updateSelection();});add(actual);
       actual->setChecked(settings.value("performanceEditor/markVelocityLines",true).toBool());
-      connect(actual,&QCheckBox::toggled,this,[](bool on){QSettings().setValue("performanceEditor/markVelocityLines",on);});
+      connect(actual,&QCheckBox::toggled,this,[this](bool on){QSettings().setValue(_comparisonGuides?"performanceEditor/comparisonVelocityLines":"performanceEditor/markVelocityLines",on);});
       auto arrangement=new QComboBox(this);arrangement->setObjectName("performanceVelocityArrangement");arrangement->addItems({tr("力度同图"),tr("按谱表分区")});arrangement->setCurrentIndex(qBound(0,settings.value("performanceEditor/velocityArrangement",0).toInt(),1));_velocityArrangement=arrangement->currentIndex();
       connect(arrangement,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int i){finishWheel();cancelGesture();_velocityArrangement=i;QSettings().setValue("performanceEditor/velocityArrangement",i);invalidateVisual();});add(arrangement);
       auto together=new QComboBox(this);together->setObjectName("performanceGroupVelocity");together->addItems({tr("一起增减百分比"),tr("相同MIDI差值")});_groupRelative=settings.value("performanceEditor/groupRelative",true).toBool();together->setCurrentIndex(_groupRelative?0:1);
-      together->setToolTip(tr("百分比方式分别按各音的记号力度换算；例如80和48同时增加10%，得到88和53。"));
+      together->setToolTip(tr("百分比方式分别按各音的力度参考线换算；例如80和48同时增加10%，得到88和53。"));
       connect(together,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int i){finishWheel();cancelGesture();_groupRelative=i==0;QSettings().setValue("performanceEditor/groupRelative",_groupRelative);});add(together);
       connect(_parameter,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[actual,arrangement,together](int i){actual->setVisible(i==0);arrangement->setVisible(i==0);together->setVisible(i==0);});
       auto sensitivity=new QComboBox(this);sensitivity->setObjectName("performanceDragSensitivity");
@@ -189,16 +189,17 @@ void PerformanceEditor::paintOriginalVelocity(QPainter& painter,const QRectF& re
             const double x=xForNote(i,onScore);
             if(x<rect.left()||x>rect.right())continue;
             const auto lane=velocityLane(i,rect,onScore);if(lane.isEmpty())continue;
-            const QPointF point(x,yForValue(n.base,lane,onScore));
+            const int reference=n.markBase>=0?n.markBase:n.base;
+            const QPointF point(x,yForValue(reference,lane,onScore));
             const int staff=n.track/VOICES,line=n.track;
             QColor color=_appearance.staves[staff%8];if(!n.enabled)color.setAlpha(45);
             painter.setPen(QPen(color,1,Qt::DashLine));
             lineColors[line]=color;
             if(previous.contains(line)){auto old=previous.value(line);if(qAbs(old.y()-point.y())>.001){painter.drawLine(old,QPointF(point.x(),old.y()));painter.drawLine(QPointF(point.x(),old.y()),point);previous[line]=point;}}
             else previous[line]=point;
-            const QString key=QString("%1:%2:%3").arg(staff).arg(n.base).arg(n.dynamicText);
+            const QString key=QString("%1:%2:%3").arg(staff).arg(reference).arg(n.dynamicText);
             if(labelled.contains(key))continue;
-            const QString text=tr("谱表 %1 · %2 %3").arg(staff+1).arg(n.dynamicText.isEmpty()?tr("记号力度"):n.dynamicText).arg(n.base);
+            const QString text=tr("谱表 %1 · %2 %3").arg(staff+1).arg(n.dynamicText.isEmpty()?tr("力度参考线"):n.dynamicText).arg(reference);
             const double width=painter.fontMetrics().horizontalAdvance(text)+8,height=painter.fontMetrics().height()+2;
             const double offsets[4]={-height-3,3,-2*height-5,height+5};
             for(int attempt=0;attempt<12;++attempt){
@@ -246,7 +247,7 @@ void PerformanceEditor::paintVelocityHeaders(QPainter& painter,const QRectF& rec
       int expanded=0;for(int s:_velocityStaves)if(!_collapsedVelocityStaves.contains(s))++expanded;
       const double body=qMax(12.,(rect.height()-17*_velocityStaves.size())/qMax(1,expanded));double top=rect.top();
       for(int s:_velocityStaves){const bool closed=_collapsedVelocityStaves.contains(s);painter.fillRect(QRectF(rect.left(),top,rect.width(),17),_appearance.colors[PerformanceAppearance::NaturalRow]);painter.setPen(_appearance.colors[PerformanceAppearance::Text]);
-            painter.drawText(QRectF(rect.left()+4,top,rect.width()-8,17),Qt::AlignVCenter,(closed?QString::fromUtf8("▸ "):QString::fromUtf8("▾ "))+tr("谱表 %1 · 记号力度／谱中力度").arg(s+1));top+=17+(closed?0:body);}
+            painter.drawText(QRectF(rect.left()+4,top,rect.width()-8,17),Qt::AlignVCenter,(closed?QString::fromUtf8("▸ "):QString::fromUtf8("▾ "))+tr("谱表 %1 · 参考线／谱中力度").arg(s+1));top+=17+(closed?0:body);}
       }
 
 }

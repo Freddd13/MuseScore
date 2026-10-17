@@ -1,3 +1,4 @@
+import "ExpressionSettings.js" as ExpressionSettings
 import QtQuick 2.9
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.3
@@ -141,11 +142,13 @@ MuseScore {
  property real untilSeconds:999999
  property bool whole:false
  property bool advancedSettings:false
- property var config:({strength:50,velocityStrength:50,rubatoStrength:50,velocity:true,rubato:false,keepDuration:true,accompaniment:false,deviceCenter:64,deviceGain:1,keepManual:false,unlocked:[]})
+ property var config:ExpressionSettings.defaults()
  property bool compact:height<170 || (typeof panelPlacement==="string"&&panelPlacement==="top")
  Desk.UiTheme {id:theme}
  function openMenu(menu,control){var where=control.mapToItem(root,0,control.height);menu.x=Math.max(0,Math.min(where.x,root.width-menu.implicitWidth));menu.y=Math.max(0,Math.min(where.y,root.height-menu.implicitHeight));menu.open()}
  function fail(e){status=Messages.readable(e)}
+ function freshVelocitySettings(){var next=Project.copy(config);next.velocityStrength=100;next.velocityWriteMode="fixed";config=next}
+ function velocityWriteText(item){var mode=item.writeMode||"preserve";return mode==="fixed"||mode==="preserve"&&item.oldType===1?"固定力度 "+item.target:"跟随力度记号 "+Math.round((item.target-item.oldBase)*100/item.oldBase)+"%"}
  function cancel(){var wasBusy=busy||captureState.recording||captureState.stopping||captureState.saving;readForCapture=false;refreshingApplication=false;if(captureSession)captureSession.cancel();pendingAudition=null;auditionRetry.stop();paging.stop();if(observer){observer.cancelReadOnlyJob();if(typeof observer.cancelPerformanceMidi==="function")observer.cancelPerformanceMidi()}busy=false;if(wasBusy)status="已取消，可以继续导入或录制。"}
  function runAlignment(){
   if(!midi||!notes.length){status="需要谱面起音与 MIDI";return}
@@ -234,7 +237,7 @@ MuseScore {
  function load(url){
   try{
    var data=Project.read(observer,url).expression;if(!data)throw new Error("无表达项目");
-   workspace=String(url);appliedProgress=data.applied||({velocity:{},tempos:{}});loadedSourceHash=data.sha256||"";scope=data.scope;notes=data.notes||[];manualAnchors=data.anchors||[];links=data.links||[];mode=data.mode||0;role=data.role||0;selectedTrack=data.track||0;occurrence=data.occurrence||1;config=data.config||config;fromSeconds=data.from||0;untilSeconds=data.until||999999;
+   workspace=String(url);appliedProgress=data.applied||({velocity:{},tempos:{}});loadedSourceHash=data.sha256||"";scope=data.scope;notes=data.notes||[];manualAnchors=data.anchors||[];links=data.links||[];mode=data.mode||0;role=data.role||0;selectedTrack=data.track||0;occurrence=data.occurrence||1;config=ExpressionSettings.restored(data.config);fromSeconds=data.from||0;untilSeconds=data.until||999999;
    info=data.score||{};revision=observer.analysisRevision();stale=true;
    midiToken=observer.readPerformanceMidi(Project.fileUrl(Project.resolve(url,data.source)));status="已恢复人工对应；重新读取谱面以验证候选";
   }catch(e){fail(e)}
@@ -314,7 +317,7 @@ MuseScore {
   target:root.captureSession;ignoreUnknownSignals:true
   onFailed:{root.busy=false;root.fail(message)}
   onFinished:{
-   root.appliedProgress=({velocity:{},tempos:{}});root.recordingImport=true;root.loadedSourceHash="";root.manualAnchors=[];root.links=[];root.passageChoice=0;root.fromSeconds=0;root.untilSeconds=999999;root.busy=true;root.dirtyProject=true;
+   root.freshVelocitySettings();root.appliedProgress=({velocity:{},tempos:{}});root.recordingImport=true;root.loadedSourceHash="";root.manualAnchors=[];root.links=[];root.passageChoice=0;root.fromSeconds=0;root.untilSeconds=999999;root.busy=true;root.dirtyProject=true;
    root.midiToken=root.observer.readPerformanceMidi(path);root.status=reason+"，正在对应选段…";
   }
  }
@@ -411,7 +414,7 @@ MuseScore {
    visible:!root.compact;columns:2;Layout.fillWidth:true
    CheckBox {text:"力度";checked:root.config.velocity;onToggled:root.editConfig("velocity",checked)}
    CheckBox {text:"Rubato（全声部速度）";checked:root.config.rubato;onToggled:root.editConfig("rubato",checked)}
-   Label {text:root.config.rubato?"力度 / 速度强度 %":"力度强度 %";color:theme.muted}
+   Label {text:root.config.rubato?"采用演奏效果的比例（力度／速度）":"采用演奏力度的比例";color:theme.muted}
    RowLayout {Desk.DeskSpinBox {from:0;to:100;value:root.config.velocityStrength===undefined?root.config.strength:root.config.velocityStrength;onValueModified:root.editConfig("velocityStrength",value)}
    Desk.DeskSpinBox {visible:root.config.rubato;from:0;to:100;value:root.config.rubatoStrength===undefined?root.config.strength:root.config.rubatoStrength;onValueModified:root.editConfig("rubatoStrength",value)}}
    CheckBox {visible:root.config.rubato;text:"保持这段时长和两端速度";checked:root.config.keepDuration;onToggled:root.editConfig("keepDuration",checked)}
@@ -420,6 +423,10 @@ MuseScore {
   RowLayout {visible:!root.compact;Layout.fillWidth:true
    Label {text:"使用范围";color:theme.text}
    Desk.DeskComboBox {objectName:"expressionApplicationScope";Layout.fillWidth:true;model:["选中音","当前选段","全部已对应范围"];currentIndex:root.applicationScope;onActivated:root.applicationScope=currentIndex}
+  }
+  RowLayout {Layout.fillWidth:true
+   Label {text:"保存方式";color:theme.muted}
+   Desk.DeskComboBox {objectName:"expressionVelocityWriteMode";Layout.fillWidth:true;model:["逐音固定力度","继续跟随力度记号","保留各音原保存方式"];currentIndex:root.config.velocityWriteMode==="fixed"?0:root.config.velocityWriteMode==="follow"?1:2;onActivated:root.editConfig("velocityWriteMode",["fixed","follow","preserve"][currentIndex]);ToolTip.visible:hovered;ToolTip.text:currentIndex===0?"这些音直接采用演奏力度，谱上的力度记号继续显示。":currentIndex===1?"按各音的力度记号换算增减百分比；以后调整记号，这些音一起变化。":"各音继续使用原来的相对或固定方式。"}
   }
   Label {visible:!root.compact&&root.previewing;Layout.fillWidth:true;elide:Text.ElideRight;color:theme.accent;text:(root.playbackState.preparing?"正在准备：":root.playbackState.playing?"正在播放：":"已暂停：")+(root.playbackState.mode==="candidate"?"拟采用效果":"谱中效果")}
   RowLayout {visible:!root.compact;Layout.fillWidth:true
@@ -545,12 +552,12 @@ MuseScore {
     }
    }
    ListView {Layout.fillWidth:true;Layout.fillHeight:true;clip:true;model:root.candidate?root.candidate.velocity.concat(root.candidate.tempos).concat(root.candidate.kept):[]
-    delegate:ItemDelegate {width:parent.width;text:modelData.reason||((modelData.source==="inferred"?"推算 · ":"实测 · ")+(modelData.id||("tick "+modelData.tick))+" · 原 "+(modelData.oldBpm||modelData.oldBase)+" → "+(modelData.target||modelData.bpm)+ (modelData.target?"（写回 "+(modelData.oldType===1?modelData.target:Math.round((modelData.target-modelData.oldBase)*100/modelData.oldBase))+"）":""));onClicked:{if(!modelData.id)return;var c=Project.copy(root.config);if(c.unlocked.indexOf(modelData.id)<0)c.unlocked.push(modelData.id);root.config=c;root.candidate=null;changes.close();root.build()}}
+    delegate:ItemDelegate {width:parent.width;text:modelData.reason||((modelData.source==="inferred"?"推算 · ":"实测 · ")+(modelData.id||("tick "+modelData.tick))+" · 原 "+(modelData.oldBpm||modelData.originalVelocity||modelData.oldBase)+" → "+(modelData.target||modelData.bpm)+ (modelData.target?"（写回 "+root.velocityWriteText(modelData)+"）":""));onClicked:{if(!modelData.id)return;var c=Project.copy(root.config);if(c.unlocked.indexOf(modelData.id)<0)c.unlocked.push(modelData.id);root.config=c;root.candidate=null;changes.close();root.build()}}
    }
    Desk.DeskButton {text:"应用到当前原谱（一次撤销）";enabled:root.candidate!==null&&!root.stale;onClicked:{root.apply();changes.close()}}
   }
  }
- Files.FileDialog {id:midiDialog;title:"导入演奏 MIDI（不打开新谱）";nameFilters:["MIDI (*.mid *.midi)"];onAccepted:{root.appliedProgress=({velocity:{},tempos:{}});root.loadedSourceHash="";root.passageChoice=0;root.manualAnchors=[];root.links=[];root.candidate=null;root.midi=null;root.busy=true;root.status="正在读取演奏MIDI…";root.midiToken=root.observer.readPerformanceMidi(String(fileUrl))}}
+ Files.FileDialog {id:midiDialog;title:"导入演奏 MIDI（不打开新谱）";nameFilters:["MIDI (*.mid *.midi)"];onAccepted:{root.freshVelocitySettings();root.appliedProgress=({velocity:{},tempos:{}});root.loadedSourceHash="";root.passageChoice=0;root.manualAnchors=[];root.links=[];root.candidate=null;root.midi=null;root.busy=true;root.status="正在读取演奏MIDI…";root.midiToken=root.observer.readPerformanceMidi(String(fileUrl))}}
  Files.FileDialog {id:loadDialog;nameFilters:["Kumo 工作区 (*.json)"];onAccepted:root.load(String(fileUrl))}
  Files.FileDialog {id:saveDialog;selectExisting:false;nameFilters:["Kumo 工作区 (*.json)"];onAccepted:root.save(String(fileUrl))}
 }

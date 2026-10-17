@@ -75,7 +75,11 @@ QVariantMap ScoreObserver::applyExpression(const QVariantMap& candidate){
   if(target<1||target>127||!v.contains("oldType")||!v.contains("oldRaw")||!v.contains("oldBase")||int(note->veloType())!=v["oldType"].toInt()||note->veloOffset()!=v["oldRaw"].toInt()||base!=v["oldBase"].toInt())return {{"error","changed velocity or playback base"}};
   bool protectedNote=note->veloType()!=Ms::Note::ValueType::OFFSET_VAL||note->veloOffset()!=0||note->chord()->playEventType()==PlayEventType::User||(v.contains("graceIndex")&&v["graceIndex"].isValid()&&!v["graceIndex"].isNull());
   if(protectedNote&&!v.value("unlock").toBool())return {{"error","protected note has not been explicitly unlocked"}};
-  auto type=note->veloType();velocities.insert(note,{type,type==Ms::Note::ValueType::USER_VAL?target:NoteVelocity::offsetFor(base,target)});
+  const auto mode=v.value("writeMode","preserve").toString();
+  if(mode!="fixed"&&mode!="follow"&&mode!="preserve")return {{"error",tr("请选择逐音固定力度、跟随力度记号或保留原保存方式。")}};
+  if(mode=="follow"&&base<=0)return {{"error",tr("当前位置的力度参考为 0，选择逐音固定力度后可以采用演奏值。")}};
+  auto type=mode=="fixed"?Ms::Note::ValueType::USER_VAL:mode=="follow"?Ms::Note::ValueType::OFFSET_VAL:note->veloType();
+  velocities.insert(note,{type,type==Ms::Note::ValueType::USER_VAL?target:NoteVelocity::offsetFor(base,target)});
  }
  for(auto value:tempoValues){
   auto v=value.toMap();int tick=v.value("tick",-1).toInt();double target=v.value("bpm").toDouble(),old=v.value("oldBpm").toDouble();
