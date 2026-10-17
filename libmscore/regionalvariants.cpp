@@ -575,9 +575,10 @@ QVariantMap create(Score *score, int start, int end, const QVariantList &values,
                                 {"variants", QVariantList{v}}});
       data["schema"] = 2;
       data["groups"] = groups;
-      score->startCmd();
+      const bool ownCommand = !score->undoStack()->active();
+      if (ownCommand) score->startCmd();
       score->undo(new ChangeState(score->masterScore(), data));
-      score->endCmd();
+      if (ownCommand) score->endCmd();
       return {{"ok", true}, {"group", group}, {"variant", variant}};
 }
 QVariantMap duplicate(Score *score, const QString &group, const QString &name, bool activate) {
@@ -886,9 +887,10 @@ QVariantMap importVersion(Score *score, Score *source, const QString &group, con
       g["variants"] = versions;
       groups[index] = g;
       data["groups"] = groups;
-      score->startCmd();
+      const bool ownCommand = !score->undoStack()->active();
+      if (ownCommand) score->startCmd();
       score->undo(new ChangeState(score->masterScore(), data));
-      score->endCmd();
+      if (ownCommand) score->endCmd();
       return {{"ok", true}, {"variant", key}};
 }
 bool exportOrdinary(Score *score, QIODevice *destination, const QString &filename, bool useMain) {

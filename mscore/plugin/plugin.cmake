@@ -71,6 +71,8 @@ list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/referencepanel.
 
 list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/builtinpanels.cpp ${PROJECT_SOURCE_DIR}/mscore/workflow/builtinpanels.h)
 
+list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/arrangementreader.cpp ${PROJECT_SOURCE_DIR}/mscore/workflow/arrangementoptions.cpp ${PROJECT_SOURCE_DIR}/mscore/workflow/suggestionpanel.cpp ${PROJECT_SOURCE_DIR}/mscore/workflow/arrangement.h)
+
 set (PLUGIN_SRC
     ${PLUGIN_API_SRC}
     ${CMAKE_CURRENT_LIST_DIR}/mscorePlugins.cpp
@@ -92,3 +94,13 @@ set (PLUGIN_UI
     ${CMAKE_CURRENT_LIST_DIR}/pluginManager.ui
     ${CMAKE_CURRENT_LIST_DIR}/pluginCreator.ui
     )
+
+
+# The local MCP bridge loads QtWebSockets through QML, so deployment tools do
+# not discover this DLL from the executable's import table.
+if(WIN32)
+    get_filename_component(KUMO_QT_PREFIX "${Qt5Core_DIR}/../../.." ABSOLUTE)
+    if(EXISTS "${KUMO_QT_PREFIX}/bin/Qt5WebSockets.dll")
+        install(FILES "${KUMO_QT_PREFIX}/bin/Qt5WebSockets.dll" DESTINATION bin)
+    endif()
+endif()

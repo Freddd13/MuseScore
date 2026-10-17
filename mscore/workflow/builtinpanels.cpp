@@ -1,5 +1,6 @@
 // GPL-2.0-or-later. Native ownership with one shared view per tool.
 #include "builtinpanels.h"
+#include "arrangement.h"
 #include "paneldock.h"
 #include "mscore/musescore.h"
 #include "mscore/shortcut.h"
@@ -106,6 +107,7 @@ void showExpressionPanel(){
  if(auto dock=qobject_cast<QDockWidget*>(mscore->performanceEditor()->parentWidget()))if(!dock->isFloating())mscore->resizeDocks({dock},{qBound(260,before.height()/2,540)},Qt::Vertical);
 }
 void addBuiltinPanelActions(QMenu* menu){
+ addSuggestionPanelAction(menu);
  auto harmony=getAction("harmony-assistant");harmony->setCheckable(true);menu->addAction(harmony);
  auto expression=getAction("performance-expression");menu->addAction(expression);
 }

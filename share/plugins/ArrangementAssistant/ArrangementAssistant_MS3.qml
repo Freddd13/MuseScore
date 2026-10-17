@@ -181,6 +181,10 @@ MuseScore {
             for(var i=0;i<names.length;++i)Array.prototype.push.apply(snapshot[names[i]],page[names[i]]||[])
             snapshot.next=page.nextTick
             if(page.done) {
+                if(typeof observer.arrangementState==="function") {
+                    var shared=observer.arrangementState({scope:snapshot.scope}).harmonyAnalysis
+                    if(shared && shared.freshness==="current")snapshot.harmonyRegions=shared.regions||[]
+                }
                 pendingData=snapshot
                 status="检查和声、对位与手位…"
                 if(typeof observer.startReadOnlyJob==="function" && workerSource.length) {

@@ -407,7 +407,7 @@ function step(s,budget) {
                 s.phase=2;
             }
         } else if(s.phase===2) {
-            if(Timeline.step(s.builder,1)) {s.regions=s.builder.regions;s.phase=3;s.index=0;}
+            if(Timeline.step(s.builder,1)) {s.regions=Timeline.overlay(s.builder.regions,s.data.harmonyRegions||[]);s.phase=3;s.index=0;}
         } else if(s.phase===3) {
             if(s.index<s.frames.length) {var frame=s.frames[s.index++];harmonic(s,frame);counterpoint(s,frame);playability(s,frame);}
             else {s.issues.sort(function(a,b){return a.tick-b.tick || a.type.localeCompare(b.type);});s.phase=4;return true;}

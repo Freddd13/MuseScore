@@ -102,6 +102,11 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE int startReadOnlyJob(const QString& source, const QVariantMap& input);
       Q_INVOKABLE void cancelReadOnlyJob();
       Q_INVOKABLE QString analysisRevision();
+      Q_INVOKABLE void prepareLocalBridge();
+      Q_INVOKABLE QVariantMap arrangementState(const QVariantMap& request = QVariantMap());
+      Q_INVOKABLE QVariantMap arrangementRange(const QVariantMap& request);
+      Q_INVOKABLE QVariantMap arrangementRequest(const QString& action,const QVariantMap& request);
+      Q_INVOKABLE void publishHarmonyAnalysis(const QVariantMap& result);
       Q_INVOKABLE QVariantMap workflowStatus();
       Q_INVOKABLE QVariantMap stopWorkflowPlayback();
       Q_INVOKABLE QString referenceStructureKey() const;

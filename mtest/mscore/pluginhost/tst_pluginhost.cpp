@@ -22,6 +22,9 @@
 #include <QDataStream>
 #include <QToolButton>
 #include <QListWidget>
+#include <QPushButton>
+#include <QTreeWidget>
+#include "mscore/workflow/arrangement.h"
 #include <QComboBox>
 #include <cmath>
 #include "mscore/performanceeditor/performanceeditor.h"
@@ -29,7 +32,16 @@
 #include <QFileDialog>
 #include <QLineEdit>
 #include <QQuickItem>
+#include <QQmlComponent>
+#include <QJsonDocument>
+
+#include "mscore/plugin/qmlpluginengine.h"
 #include "libmscore/notevelocity.h"
+#include "libmscore/regionalvariants.h"
+#include "libmscore/excerpt.h"
+#include "libmscore/tie.h"
+#include "libmscore/slur.h"
+#include "libmscore/tuplet.h"
 #include "mtest/testutils.h"
 #include "mscore/musescore.h"
 #include "mscore/scoreview.h"
@@ -255,6 +267,122 @@ class TestPluginHost : public QObject {
             tabs->setCurrentIndex(0);QVERIFY(!pane->isVisible());main->currentScoreView()->cmd("escape");
             }
       static int gutterForTest(){return 76;}
+
+
+      void arrangementMcpTransport(){
+            const auto bridge=qEnvironmentVariable("P2_CONTEXT_BRIDGE");const auto done=qEnvironmentVariable("P2_CONTEXT_DONE");
+            if(bridge.isEmpty()||done.isEmpty())QSKIP("Run P2/test_context_host.py for the real MCP connection");
+            auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));
+            QmlPluginEngine engine;QQmlComponent component(&engine,QUrl::fromLocalFile(bridge));QVERIFY2(!component.isError(),qPrintable(component.errorString()));
+            std::unique_ptr<QmlPlugin> root(qobject_cast<QmlPlugin*>(component.create()));QVERIFY2(root,qPrintable(component.errorString()));root->runPlugin();
+            QElapsedTimer clock;clock.start();bool reloaded=false;
+            const auto restart=qEnvironmentVariable("P2_CONTEXT_RELOAD");
+            while(!QFile::exists(done)&&clock.elapsed()<30000){
+                if(!reloaded&&!restart.isEmpty()&&QFile::exists(restart)){
+                    root.reset();root.reset(qobject_cast<QmlPlugin*>(component.create()));QVERIFY(root);root->runPlugin();reloaded=true;QFile ack(restart+".ready");QVERIFY(ack.open(QIODevice::WriteOnly));ack.write("ready");ack.close();
+                }
+                QTest::qWait(25);
+            }
+            QFile file(done);QVERIFY2(file.open(QIODevice::ReadOnly),"MCP client did not finish");auto report=QJsonDocument::fromJson(file.readAll()).toVariant().toMap();QCOMPARE(report.value("status").toString(),QString("passed"));showSuggestionPanel(false);
+            root.reset();
+
+      }
+
+      void arrangementAiWorkflow(){
+            auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));main->resize(1280,960);main->show();
+            PluginAPI::Score wrapped(score);PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);
+            auto n=toChord(score->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest)->element(0))->notes()[0];
+            score->select(n,SelectType::SINGLE);const int before=score->undoStack()->getCurIdx();
+            const auto state=observer.arrangementState();QVERIFY(!state.contains("error"));const auto selected=state.value("scope").toMap();QCOMPARE(selected.value("start").toInt(),480);QCOMPARE(selected.value("end").toInt(),960);
+            auto all=observer.arrangementState({{"whole",true}});const auto snapshot=all.value("snapshotId").toString();QVERIFY(!snapshot.isEmpty());
+            auto page=observer.arrangementRange({{"snapshotId",snapshot},{"scope",all.value("scope")},{"fromTick",0},{"limit",1}});QVERIFY2(!page.contains("error"),qPrintable(page.value("error").toString()));QCOMPARE(page.value("notes").toList().size(),3);QCOMPARE(page.value("nextTick").toInt(),480);
+            auto note=page.value("notes").toList()[0].toMap();QCOMPARE(note.value("quarterDuration").toMap().value("numerator").toInt(),2);QVERIFY(note.contains("tpc2"));QVERIFY(note.contains("velocityBase"));QCOMPARE(score->undoStack()->getCurIdx(),before);QCOMPARE(score->selection().element(),static_cast<Element*>(n));
+            observer.publishHarmonyAnalysis({{"snapshotId",snapshot},{"regions",QVariantList{QVariantMap{{"start",0},{"end",1920},{"chord","C"}}}}});QCOMPARE(observer.arrangementState().value("harmonyAnalysis").toMap().value("freshness").toString(),QString("current"));
+            const QVariantMap option{{"title","力度与指法"},{"summary","左手低音更轻，标出小指。"},{"scope",all.value("scope")},{"changes",QVariantList{QVariantMap{{"ref",note.value("ref")},{"velocity",53},{"finger",5}}}}};
+            auto submit=observer.arrangementRequest("submitArrangementOptions",{{"snapshotId",snapshot},{"options",QVariantList{option}},{"operationId","submit-ui-1"}});QVERIFY2(!submit.contains("error"),qPrintable(submit.value("error").toString()));QCOMPARE(score->undoStack()->getCurIdx(),before);QCOMPARE(submit.value("options").toList().size(),1);
+            const auto id=submit.value("options").toList()[0].toMap().value("id");
+            const auto rendered=observer.arrangementRequest("arrangementOption",{{"optionId",id},{"action","performance"}});QVERIFY(!rendered.value("original").toList().isEmpty());bool heardBass=false;for(auto v:rendered.value("proposed").toList()){auto e=v.toMap();if(e.value("pitch").toInt()==36){QCOMPARE(e.value("velocity").toInt(),53);heardBass=true;}}QVERIFY(heardBass);
+
+            auto repeated=observer.arrangementRequest("submitArrangementOptions",{{"snapshotId",snapshot},{"options",QVariantList{option}},{"operationId","submit-ui-1"}});QCOMPARE(repeated,submit);
+            auto panel=main->findChild<QWidget*>("arrangementSuggestionPanel");QVERIFY(panel);QVERIFY(panel->isVisible());
+            auto choices=panel->findChild<QTreeWidget*>("arrangementChoices");QVERIFY(choices);QCOMPARE(choices->topLevelItemCount(),1);
+            auto preview=panel->findChild<QPushButton*>("arrangement-preview");QVERIFY(preview);QTest::mouseClick(preview,Qt::LeftButton);QVERIFY(main->currentScoreView()->findChild<QWidget*>("regionalDifferenceLayer")->isVisible());
+            auto image=main->grab();image.save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("arrangement-options-060.png"));
+            auto apply=panel->findChild<QPushButton*>("arrangement-apply");QVERIFY(apply);QTest::mouseClick(apply,Qt::LeftButton);
+            auto bass=toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(4))->notes()[0];QCOMPARE(bass->veloOffset(),53);QCOMPARE(bass->veloType(),Note::ValueType::USER_VAL);QCOMPARE(score->undoStack()->getCurIdx(),before+1);QVERIFY(!bass->el().empty());QVERIFY(!observer.workflowData("arrangement").value("adoptions").toList().isEmpty());
+            const auto path=_settings.filePath("ai-applied.mscz");QFileInfo info(path);QVERIFY(score->saveCompressedFile(info,false,false));std::unique_ptr<MasterScore> restored(main->readScore(path));QVERIFY(restored);QCOMPARE(restored->metaTag("kumo.arrangement"),score->metaTag("kumo.arrangement"));
+            const auto artifact=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");if(!artifact.isEmpty()){QFile out(QDir(artifact).filePath("ai-applied-060.mscz"));if(out.open(QIODevice::WriteOnly)){QFile input(path);QVERIFY(input.open(QIODevice::ReadOnly));out.write(input.readAll());}}
+            EditData edit;score->undoRedo(true,&edit);QCOMPARE(bass->veloType(),Note::ValueType::OFFSET_VAL);QCOMPARE(bass->veloOffset(),0);QVERIFY(bass->el().empty());QVERIFY(observer.workflowData("arrangement").isEmpty());
+            QVERIFY(observer.arrangementRange({{"snapshotId",snapshot},{"scope",all.value("scope")}}).contains("error"));
+            auto status=observer.arrangementRequest("arrangementOperationStatus",{{"operationId","submit-ui-1"}});QCOMPARE(status,submit);
+            showSuggestionPanel(false);main->currentScoreView()->cmd("escape");
+      }
+      void arrangementVoiceReplacement(){
+            auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));PluginAPI::Score wrapped(score);PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);
+            score->startCmd();score->insertMeasure(ElementType::VBOX,score->first());score->endCmd();
+            score->startCmd();auto linked=new Score(score);auto excerpt=new Excerpt(score);excerpt->setPartScore(linked);excerpt->setParts({score->parts().front()});excerpt->setTitle("Piano part");Excerpt::createExcerpt(excerpt);score->excerpts().append(excerpt);score->endCmd();
+            const QVariantMap scope{{"start",0},{"end",1920},{"firstTrack",4},{"endTrack",5}};
+            const auto state=observer.arrangementState({{"scope",scope}});auto snapshot=state.value("snapshotId");
+            auto pitch=[](int p,int tpc){return QVariantMap{{"pitch",p},{"tpc1",tpc},{"tpc2",tpc}};};
+            const QVariantList events{QVariantMap{{"quarterDuration",QVariantMap{{"numerator",1},{"denominator",1}}},{"pitches",QVariantList{pitch(36,14),pitch(55,15)}}},QVariantMap{{"quarterDuration",QVariantMap{{"numerator",1},{"denominator",1}}},{"pitches",QVariantList{pitch(52,18),pitch(55,15)}}},QVariantMap{{"quarterDuration",QVariantMap{{"numerator",2},{"denominator",1}}},{"pitches",QVariantList{}}}};
+            const QVariantMap option{{"title","左手拆成两组"},{"summary","先低音和五度，再接内声。"},{"scope",scope},{"voices",QVariantList{QVariantMap{{"track",4},{"events",events}}}}};
+            auto submit=observer.arrangementRequest("submitArrangementOptions",{{"snapshotId",snapshot},{"options",QVariantList{option}},{"operationId","voice-submit"}});QVERIFY2(!submit.contains("error"),qPrintable(submit.value("error").toString()));
+            auto id=submit.value("options").toList()[0].toMap().value("id");int before=score->undoStack()->getCurIdx();
+            auto used=observer.arrangementRequest("arrangementOption",{{"optionId",id},{"action","apply"},{"operationId","voice-apply"}});QVERIFY2(!used.contains("error"),qPrintable(used.value("error").toString()));QCOMPARE(score->undoStack()->getCurIdx(),before+1);
+            auto first=toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(4));QCOMPARE(first->actualTicks().ticks(),480);QCOMPARE(first->notes().size(),size_t(2));
+            auto next=toChord(score->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest)->element(4));QCOMPARE(next->notes()[0]->pitch(),52);auto partChord=toChord(linked->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest)->element(4));QCOMPARE(partChord->notes()[0]->pitch(),52);QCOMPARE(partChord->actualTicks().ticks(),480);QVERIFY(next->notes()[0]->links());
+            auto same=observer.arrangementRequest("arrangementOption",{{"optionId",id},{"action","apply"},{"operationId","voice-apply"}});QCOMPARE(same,used);QCOMPARE(score->undoStack()->getCurIdx(),before+1);
+            EditData edit;score->undoRedo(true,&edit);first=toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(4));QCOMPARE(first->actualTicks().ticks(),960);QCOMPARE(first->notes().size(),size_t(3));QCOMPARE(toChord(linked->firstMeasure()->first(SegmentType::ChordRest)->element(4))->actualTicks().ticks(),960);
+            showSuggestionPanel(false);
+      }
+
+
+      void arrangementTripletsAndVariant(){
+            auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));PluginAPI::Score wrapped(score);PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);
+            const QVariantMap scope{{"start",0},{"end",1920},{"firstTrack",4},{"endTrack",5}};
+            const auto snapshot=observer.analysisContentRevision();QVariantList events;
+            for(auto p:QList<QPair<int,int>>{{36,14},{52,18},{55,15}})events.append(QVariantMap{{"quarterDuration",QVariantMap{{"numerator",1},{"denominator",3}}},{"pitches",QVariantList{QVariantMap{{"pitch",p.first},{"tpc1",p.second},{"tpc2",p.second}}}}});
+            events.append(QVariantMap{{"quarterDuration",QVariantMap{{"numerator",3},{"denominator",1}}},{"pitches",QVariantList{}}});
+            const QVariantMap tuplet{{"quarterTime",QVariantMap{{"numerator",0},{"denominator",1}}},{"quarterDuration",QVariantMap{{"numerator",1},{"denominator",1}}},{"actual",3},{"normal",2}};
+            const QVariantMap option{{"title","三连音分解"},{"summary","把第一拍分成三个音。"},{"scope",scope},{"voices",QVariantList{QVariantMap{{"track",4},{"events",events},{"tuplets",QVariantList{tuplet}}}}}};
+            auto submitted=observer.arrangementRequest("submitArrangementOptions",{{"snapshotId",snapshot},{"options",QVariantList{option}},{"operationId","triplet-submit"}});QVERIFY2(!submitted.contains("error"),qPrintable(submitted.value("error").toString()));auto id=submitted.value("options").toList()[0].toMap().value("id");
+            int before=score->undoStack()->getCurIdx();auto stored=observer.arrangementRequest("arrangementOption",{{"optionId",id},{"action","variant"},{"operationId","triplet-variant"}});QVERIFY2(!stored.contains("error"),qPrintable(stored.value("error").toString()));QCOMPARE(score->undoStack()->getCurIdx(),before+1);QCOMPARE(RegionalVariants::state(score).value("groups").toList().size(),1);QCOMPARE(toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(4))->notes().size(),size_t(3));
+            auto applied=observer.arrangementRequest("arrangementOption",{{"optionId",id},{"action","apply"},{"operationId","triplet-apply"}});QVERIFY2(!applied.contains("error"),qPrintable(applied.value("error").toString()));QCOMPARE(score->undoStack()->getCurIdx(),before+2);
+            for(int at:{0,160,320}){auto e=score->tick2segment(Fraction::fromTicks(at),false,SegmentType::ChordRest)->element(4);QVERIFY(e&&e->isChord());auto chord=toChord(e);QVERIFY(chord->tuplet());QCOMPARE(chord->actualTicks().ticks(),160);}
+            EditData edit;score->undoRedo(true,&edit);QCOMPARE(toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(4))->notes().size(),size_t(3));score->undoRedo(true,&edit);QVERIFY(RegionalVariants::state(score).value("groups").toList().isEmpty());showSuggestionPanel(false);
+      }
+      void arrangementKeepsBoundaryConnections(){
+            auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/p1native/regionalconnection.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));
+            auto chordAt=[&](int tick){return toChord(score->tick2segment(Fraction::fromTicks(tick),false,SegmentType::ChordRest)->element(0));};auto a=chordAt(0)->notes()[0],b=chordAt(1920)->notes()[0];
+            score->startCmd();auto tie=new Tie(score);tie->setStartNote(a);tie->setEndNote(b);tie->setTrack(0);tie->setTick(a->tick());tie->setTick2(b->tick());tie->setParent(a);score->undoAddElement(tie);auto slur=new Slur(score);slur->setStartElement(chordAt(0));slur->setEndElement(chordAt(3840));slur->setTick(Fraction(0,1));slur->setTick2(Fraction(2,1));slur->setTrack(0);slur->setTrack2(0);score->undoAddElement(slur);score->endCmd();
+            PluginAPI::Score wrapped(score);PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);const QVariantMap scope{{"start",0},{"end",1920},{"firstTrack",0},{"endTrack",1}};auto snapshot=observer.analysisContentRevision();
+            auto page=observer.arrangementRange({{"scope",scope},{"snapshotId",snapshot}});QVERIFY(!page.value("boundaryRelations").toList().isEmpty());
+            const QVariantMap newNote{{"pitch",60},{"tpc1",14},{"tpc2",14},{"velocity",53}};
+            const QVariantMap event{{"quarterDuration",QVariantMap{{"numerator",4},{"denominator",1}}},{"pitches",QVariantList{newNote}}};
+            const QVariantMap voice{{"track",0},{"events",QVariantList{event}}};
+            const QVariantMap option{{"title","保持延音连接"},{"scope",scope},{"voices",QVariantList{voice}}};
+            auto submitted=observer.arrangementRequest("submitArrangementOptions",{{"snapshotId",snapshot},{"options",QVariantList{option}},{"taskBrief",QVariantMap{{"allowMelodyChanges",true}}},{"operationId","links-submit"}});QVERIFY2(!submitted.contains("error"),qPrintable(submitted.value("error").toString()));auto id=submitted.value("options").toList()[0].toMap().value("id");int before=score->undoStack()->getCurIdx();auto applied=observer.arrangementRequest("arrangementOption",{{"optionId",id},{"action","apply"},{"operationId","links-apply"}});QVERIFY2(!applied.contains("error"),qPrintable(applied.value("error").toString()));QCOMPARE(score->undoStack()->getCurIdx(),before+1);auto changed=chordAt(0)->notes()[0];QVERIFY(changed->tieFor());QCOMPARE(changed->tieFor()->endNote(),b);QCOMPARE(b->tieBack()->startNote(),changed);bool linked=false;for(auto pair:score->spannerMap().map())if(pair.second->isSlur())linked|=pair.second->startElement()==chordAt(0)&&pair.second->endElement()==chordAt(3840);QVERIFY(linked);
+            EditData edit;score->undoRedo(true,&edit);QCOMPARE(chordAt(0)->notes()[0],a);QCOMPARE(a->tieFor(),tie);QCOMPARE(b->tieBack(),tie);showSuggestionPanel(false);
+      }
+
+
+      void arrangementInformationAndPreflight(){
+            auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));PluginAPI::Score wrapped(score);PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);
+            int before=score->undoStack()->getCurIdx();
+            auto save=[&](const QVariantMap& data,const QString& id){return observer.arrangementRequest("storeArrangementInfo",{{"snapshotId",observer.analysisContentRevision()},{"information",data},{"operationId",id}});};
+            const QVariantMap statement{{"id","role-1"},{"kind","roleAssignment"},{"target",QVariantMap{{"start",0},{"end",1920},{"track",0}}},{"value","旋律"},{"origin",QVariantMap{{"kind","user"}}},{"status","accepted"}};
+            auto result=save({{"assertions",QVariantList{statement}}},"info-1");QVERIFY2(result.value("ok").toBool(),qPrintable(result.value("error").toString()));
+            const QVariantMap material{{"id","reference-1"},{"type","arrangementNote"},{"text","左手保留低音"},{"origin",QVariantMap{{"kind","user"}}}};
+            result=save({{"materials",QVariantList{material}}},"info-2");QVERIFY(result.value("ok").toBool());QCOMPARE(observer.workflowData("arrangement").value("assertions").toList().size(),1);QCOMPARE(observer.workflowData("arrangement").value("materials").toList().size(),1);QCOMPARE(score->undoStack()->getCurIdx(),before+2);
+            EditData edit;score->undoRedo(true,&edit);QCOMPARE(observer.workflowData("arrangement").value("assertions").toList().size(),1);QVERIFY(observer.workflowData("arrangement").value("materials").toList().isEmpty());score->undoRedo(true,&edit);QVERIFY(observer.workflowData("arrangement").isEmpty());
+            const auto state=observer.arrangementState({{"whole",true}});const auto snapshot=state.value("snapshotId");const QVariantMap noteRef{{"snapshotId",snapshot},{"id","480:0:0"}};
+            const QVariantMap forbidden{{"title","受保护旋律"},{"scope",state.value("scope")},{"changes",QVariantList{QVariantMap{{"ref",noteRef},{"pitch",71},{"tpc1",19},{"tpc2",19}}}}};
+            auto rejected=observer.arrangementRequest("submitArrangementOptions",{{"snapshotId",snapshot},{"options",QVariantList{forbidden}},{"operationId","protect-melody"}});QVERIFY(rejected.contains("error"));QCOMPARE(score->undoStack()->getCurIdx(),before);
+            const QVariantMap valid{{"title","力度"},{"scope",state.value("scope")},{"changes",QVariantList{QVariantMap{{"ref",noteRef},{"velocity",57}}}}};
+            const QVariantMap invalid{{"title","错误音高"},{"scope",state.value("scope")},{"changes",QVariantList{QVariantMap{{"ref",noteRef},{"pitch",140},{"tpc1",19},{"tpc2",19}}}}};
+            rejected=observer.arrangementRequest("submitArrangementOptions",{{"snapshotId",snapshot},{"options",QVariantList{valid,invalid}},{"operationId","atomic-options"}});QVERIFY(rejected.contains("error"));QCOMPARE(score->undoStack()->getCurIdx(),before);QVERIFY(arrangementSuggestions(score).value("options").toList().isEmpty());showSuggestionPanel(false);
+      }
+
       void nativeWorkflowDocumentAndTypography(){
             auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));
             PluginAPI::Score wrapped(score);PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);

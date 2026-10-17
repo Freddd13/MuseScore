@@ -8,7 +8,7 @@
 #include <QFileInfo>
 #include <QUrl>
 namespace Ms {namespace PluginAPI {
-static bool documentSection(const QString& section){return section=="harmony"||section=="reference"||section=="transcription";}
+static bool documentSection(const QString& section){return section=="harmony"||section=="reference"||section=="transcription"||section=="arrangement";}
 QVariantMap ScoreObserver::workflowData(const QString& section) const {
  if(!_score||!documentSection(section))return {};
  const auto bytes=_score->masterScore()->metaTag("kumo."+section).toUtf8();

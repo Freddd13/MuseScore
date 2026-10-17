@@ -196,6 +196,8 @@ MuseScore {
     function highlightedTick() {return lastPlaying && followPlayback.checked ? currentTick : annotationTick>=0 ? annotationTick : currentTick}
     function rebuildRegions() {
         analysisRegions=Timeline.overlay(Timeline.overlay(automaticRegions,importedRegions),manualNeedsReview?[]:manualOverrides)
+        if(!analysisDirty && observer && typeof observer.publishHarmonyAnalysis==="function")
+            observer.publishHarmonyAnalysis({snapshotId:observer.analysisContentRevision(),regions:analysisRegions,source:"HarmonyAssistant",schema:1})
     }
     function loadCorrections() {
         if(!advancedNative || loadedFingerprint===analysisFingerprint)return
