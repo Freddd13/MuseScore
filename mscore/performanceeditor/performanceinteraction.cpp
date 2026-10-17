@@ -1,5 +1,8 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performanceeditor.h"
+#ifdef SCRIPT_INTERFACE
+#include "spectrumpane.h"
+#endif
 #include "performanceselection.h"
 #include "mscore/seq.h"
 #include "mscore/scoreview.h"
@@ -208,6 +211,9 @@ void PerformanceEditor::syncValueScroll()
       }
 void PerformanceEditor::applyAppearance()
       {
+#ifdef SCRIPT_INTERFACE
+      if(_spectrum)_spectrum->applyAppearance();
+#endif
       setAttribute(Qt::WA_StyledBackground, true);
       setStyleSheet(QString("QWidget#performanceEditor {background:%1;} QLabel,QCheckBox {color:%2;} QToolButton,QPushButton,QComboBox,QDoubleSpinBox {background:#484848;color:%2;border:1px solid #696969;border-radius:2px;padding:3px;} QComboBox QAbstractItemView {background:#484848;color:%2;selection-background-color:#687860;selection-color:#ffffff;} QComboBox QAbstractItemView::item {color:%2;min-height:22px;} QMenu {background:#484848;color:%2;border:1px solid #696969;} QMenu::item:selected {background:#687860;color:#ffffff;} QToolButton:hover,QPushButton:hover {background:#595959;} QToolButton:checked {background:#626d5c;} QScrollBar {background:#303030;} QScrollBar::handle {background:#797979;min-height:12px;min-width:12px;} QScrollBar::add-line,QScrollBar::sub-line {width:0;height:0;} QScrollBar::add-page,QScrollBar::sub-page {background:#383838;} QScrollBar::handle:disabled {background:#454545;} QSplitter::handle {background:#686868;}").arg(_appearance.colors[PerformanceAppearance::Background].name(), _appearance.colors[PerformanceAppearance::Text].name()));
       }

@@ -31,10 +31,14 @@ class System;
 class TempoText;
 class TextLine;
 class PerformanceCanvas;
+class SpectrumPane;
 class PerformanceEditor : public QWidget, public MuseScoreView {
       Q_OBJECT
       friend class PerformanceCanvas;
       friend class WorkflowLanes;
+      friend class SpectrumPane;
+      friend void installSpectrumPane(PerformanceEditor*,QSplitter*);
+      SpectrumPane* _spectrum=nullptr;
       QWidget* _workflowPanel=nullptr;
       struct GeneratedVelocity { int base; double factor; };
       struct NoteInfo {

@@ -1,6 +1,7 @@
 #include "performanceeditor.h"
 #ifdef SCRIPT_INTERFACE
 #include "mscore/workflow/builtinpanels.h"
+#include "spectrumpane.h"
 #endif
 #include <QJsonDocument>
 #include "markvelocity.h"
@@ -239,6 +240,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       QTimer::singleShot(0,this,[workflowButton]{workflowButton->setChecked(QSettings().value("performanceEditor/area/performanceWorkflowPanel",false).toBool());});
 #ifdef SCRIPT_INTERFACE
       installExpressionTools(this,_splitter,layout);
+      installSpectrumPane(this,_splitter);
 #endif
       _status = new QLabel(this); _status->setWordWrap(true); layout->addWidget(_status);
       _refreshTimer.setSingleShot(true);
@@ -371,6 +373,9 @@ void PerformanceEditor::setView(ScoreView* view)
                   }
             }
       _dirty = true; scheduleRefresh(); syncTransport(); syncOverlayTracking();
+#ifdef SCRIPT_INTERFACE
+      if(_spectrum)_spectrum->scoreChanged();
+#endif
       }
 
 void PerformanceEditor::scheduleRefresh()
@@ -1088,6 +1093,9 @@ void PerformanceEditor::cancelGesture()
 
 bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       {
+#ifdef SCRIPT_INTERFACE
+      if(object==_noteCanvas && _spectrum && _spectrum->overlayEvent(event))return true;
+#endif
       if(comparisonEvent(object,event))return true;
       if ((_scoreRangePanning||_bandResizing) && (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress)
             && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {

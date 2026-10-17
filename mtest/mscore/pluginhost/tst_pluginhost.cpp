@@ -17,6 +17,13 @@
 #include "mscore/musescoredialogs.h"
 #include "personalbranding.h"
 #include "mscore/workflow/builtinpanels.h"
+#include "mscore/workflow/referencefactory.h"
+#include "mscore/workflow/workflowcontext.h"
+#include <QDataStream>
+#include <QToolButton>
+#include <QListWidget>
+#include <QComboBox>
+#include <cmath>
 #include "mscore/performanceeditor/performanceeditor.h"
 #include <QTabBar>
 #include <QFileDialog>
@@ -219,6 +226,35 @@ class TestPluginHost : public QObject {
             QVERIFY(root->window());QTest::qWait(80);QVERIFY(root->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("builtin-expression-controls-058.png")));
             tabs->setCurrentIndex(0);main->showPerformanceEditor(false);
             }
+      void transcriptionManualFlow()
+            {
+            auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));main->resize(1280,960);main->show();
+            const auto path=_settings.filePath("spectral-a440.wav");QFile file(path);QVERIFY(file.open(QIODevice::WriteOnly));QDataStream data(&file);data.setByteOrder(QDataStream::LittleEndian);data.writeRawData("RIFF",4);data<<quint32(36+44100*4);data.writeRawData("WAVEfmt ",8);data<<quint32(16)<<quint16(1)<<quint16(1)<<quint32(44100)<<quint32(88200)<<quint16(2)<<quint16(16);data.writeRawData("data",4);data<<quint32(44100*4);for(int i=0;i<88200;++i)data<<qint16(15000*std::sin(2*3.14159265358979323846*440*i/44100));file.close();
+            auto media=referenceProject();QVariantMap response;const QVariantList tracks{QVariantMap{{"id","spectral-test"},{"name","440 Hz"},{"path",path},{"associations",QVariantList{QVariantMap{{"start",0},{"end",1920},{"from",0.},{"until",2000.},{"name","第1小节"},{"active",true}}}}}};
+            workflowContext()->setReferenceScore(score);QVERIFY(QMetaObject::invokeMethod(media,"setTracks",Q_RETURN_ARG(QVariantMap,response),Q_ARG(QVariantList,tracks)));QVERIFY(response.value("ok").toBool());
+            main->showPerformanceEditor(true);auto editor=main->performanceEditor();auto tabs=editor->findChild<QTabBar*>("workflowExpressionTabs");QVERIFY(tabs);QCOMPARE(tabs->count(),3);tabs->setCurrentIndex(2);QTest::qWait(150);
+            auto pane=editor->findChild<QWidget*>("transcriptionSpectrumPane");QVERIFY(pane&&pane->isVisible());auto session=pane->findChild<QObject*>("transcriptionSpectrumSession");QVERIFY(session);QVERIFY(session->property("available").toBool());
+            QTRY_VERIFY_WITH_TIMEOUT(!qvariant_cast<QImage>(session->property("image")).isNull(),10000);
+            auto playback=pane->findChild<QToolButton*>("transcriptionPlay");QVERIFY(playback);QTRY_VERIFY(playback->isEnabled());const auto oldVolume=media->property("volume");media->setProperty("volume",0.);QSignalSpy playbackChanged(media,SIGNAL(changed()));QTest::mouseClick(playback,Qt::LeftButton);QVERIFY(playbackChanged.count()>0);QTRY_VERIFY_WITH_TIMEOUT(!media->property("playing").toBool()||media->property("diagnostics").toMap().value("outputFrames").toLongLong()>0,4000);if(media->property("playing").toBool())QTest::mouseClick(playback,Qt::LeftButton);QTRY_VERIFY(!media->property("playing").toBool());media->setProperty("volume",oldVolume);
+            auto canvas=pane->findChild<QWidget*>("transcriptionSpectrumCanvas");QVERIFY(canvas);auto mark=pane->findChild<QToolButton*>("transcriptionMark");auto input=pane->findChild<QToolButton*>("transcriptionInput");QVERIFY(mark&&input);
+            auto rest=score->findCR(Fraction(),0);QVERIFY(rest&&rest->isRest());score->select(rest);main->currentScoreView()->cmd("note-input");score->inputState().setDuration(TDuration(TDuration::DurationType::V_QUARTER));
+            QTest::mouseClick(canvas,Qt::LeftButton,Qt::NoModifier,QPoint(gutterForTest()+100,qRound((108.5-69)/88.*canvas->height())));
+            QTest::mouseMove(canvas,QPoint(canvas->width()-20,canvas->height()-2));const int before=score->undoStack()->getCurIdx();QTest::mouseClick(mark,Qt::LeftButton);QTRY_COMPARE(score->undoStack()->getCurIdx(),before+1);
+            const auto saved=QJsonDocument::fromJson(score->masterScore()->metaTag("kumo.transcription").toUtf8()).toVariant().toMap();QCOMPARE(saved.value("pitches").toList().size(),1);QCOMPARE(saved.value("pitches").toList().front().toMap().value("pitch").toInt(),69);
+            auto marks=pane->findChild<QListWidget*>("transcriptionMarks");QVERIFY(marks&&marks->count()==1);marks->item(0)->setSelected(true);QTest::mouseClick(input,Qt::LeftButton);QTRY_COMPARE(score->undoStack()->getCurIdx(),before+2);auto chord=score->findCR(Fraction(),0);QVERIFY(chord&&chord->isChord());QCOMPARE(toChord(chord)->notes().front()->pitch(),69);
+            Shortcut::load();for(const char* key:{"undo","redo"}){auto shortcut=Shortcut::getShortcut(key);shortcut->setStandardKey(shortcut->standardKey());}QVERIFY(!getAction("undo")->shortcut().isEmpty());main->activateWindow();canvas->setFocus();QTest::keySequence(canvas,getAction("undo")->shortcut());QTRY_VERIFY(score->findCR(Fraction(),0)->isRest());QTest::keySequence(canvas,getAction("undo")->shortcut());QTRY_VERIFY(score->masterScore()->metaTag("kumo.transcription").isEmpty());QTRY_COMPARE(marks->count(),0);QTest::keySequence(canvas,getAction("redo")->shortcut());QTest::keySequence(canvas,getAction("redo")->shortcut());QTRY_VERIFY(score->findCR(Fraction(),0)->isChord());
+            QFileInfo info(_settings.filePath("spectral-mark.mscz"));QVERIFY(score->saveCompressedFile(info,false,false));std::unique_ptr<MasterScore> restored(main->readScore(info.absoluteFilePath()));QVERIFY(restored);QCOMPARE(restored->metaTag("kumo.transcription"),score->masterScore()->metaTag("kumo.transcription"));
+            const auto out=QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path()));
+            QFile savedInput(info.absoluteFilePath());QVERIFY(savedInput.open(QIODevice::ReadOnly));QFile savedOutput(out.filePath("transcription-compat-059.mscz"));QVERIFY(savedOutput.open(QIODevice::WriteOnly));QCOMPARE(savedOutput.write(savedInput.readAll()),savedInput.size());savedOutput.close();
+            QVERIFY(pane->grab().save(out.filePath("transcription-separate-059.png")));
+            auto display=pane->findChild<QComboBox*>("transcriptionDisplay");QVERIFY(display);display->setCurrentIndex(1);QTest::qWait(100);QVERIFY(editor->grab().save(out.filePath("transcription-overlay-059.png")));display->setCurrentIndex(0);
+            auto clips=pane->findChild<QComboBox*>("transcriptionClips");QVERIFY(clips);
+            auto updated=tracks.front().toMap();auto firstClip=updated.value("associations").toList().front().toMap();firstClip["id"]="clip-one";auto secondClip=firstClip;secondClip["id"]="clip-two";secondClip["name"]="第二个片段";secondClip["from"]=500.;secondClip["until"]=1500.;updated["associations"]=QVariantList{firstClip,secondClip};QVariantList changed{updated};
+            QMetaObject::invokeMethod(media,"setTracks",Q_RETURN_ARG(QVariantMap,response),Q_ARG(QVariantList,changed));clips->setCurrentIndex(2);updated["volume"]=.5;changed=QVariantList{updated};QMetaObject::invokeMethod(media,"setTracks",Q_RETURN_ARG(QVariantMap,response),Q_ARG(QVariantList,changed));QCOMPARE(clips->currentData().toMap().value("id").toString(),QString("clip-two"));
+            clips->setCurrentIndex(0);updated["volume"]=.6;changed=QVariantList{updated};QMetaObject::invokeMethod(media,"setTracks",Q_RETURN_ARG(QVariantMap,response),Q_ARG(QVariantList,changed));QCOMPARE(clips->currentIndex(),0);
+            tabs->setCurrentIndex(0);QVERIFY(!pane->isVisible());main->currentScoreView()->cmd("escape");
+            }
+      static int gutterForTest(){return 76;}
       void nativeWorkflowDocumentAndTypography(){
             auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));
             PluginAPI::Score wrapped(score);PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);

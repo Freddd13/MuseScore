@@ -1,5 +1,8 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performanceeditor.h"
+#ifdef SCRIPT_INTERFACE
+#include "spectrumpane.h"
+#endif
 #include "libmscore/select.h"
 #include "libmscore/pedal.h"
 #include "libmscore/staff.h"
@@ -20,7 +23,11 @@ QString pitchName(int pitch)
 int PerformanceEditor::rangeKind() const
       { return _parameter->currentIndex() == 0 ? _axis->currentIndex() : _parameter->currentIndex() + 1; }
 void PerformanceEditor::updateSurfaces()
-      { if (_canvas) _canvas->update(); if (_noteCanvas) _noteCanvas->update(); if (_ruler) _ruler->update(); if(_workflowPanel&&_workflowPanel->isVisible())for(auto child:_workflowPanel->findChildren<QWidget*>())child->update(); }
+      {
+#ifdef SCRIPT_INTERFACE
+      if(_spectrum)_spectrum->viewChanged();
+#endif
+      if (_canvas) _canvas->update(); if (_noteCanvas) _noteCanvas->update(); if (_ruler) _ruler->update(); if(_workflowPanel&&_workflowPanel->isVisible())for(auto child:_workflowPanel->findChildren<QWidget*>())child->update(); }
 void PerformanceEditor::invalidateVisual()
       { ++_visualRevision; syncValueScroll(); updateSurfaces(); }
 void PerformanceEditor::surfaceResized(PerformanceSurface surface)

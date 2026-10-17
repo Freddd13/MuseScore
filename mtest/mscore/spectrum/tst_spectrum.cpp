@@ -1,0 +1,227 @@
+// Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
+#include <QtTest>
+#include <QPluginLoader>
+#include <QTemporaryDir>
+#include <QImage>
+#include <QDataStream>
+#include <QElapsedTimer>
+#include "referenceaudio/spectrumfactory.h"
+#include <cmath>
+
+class TestSpectrum : public QObject {
+    Q_OBJECT
+    QTemporaryDir _dir{
+        QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS", QDir::tempPath())).filePath("spectrum-XXXXXX")};
+    QPluginLoader _loader;
+    QObject *_session = nullptr;
+    QString tone(const QString &name, int rate = 44100, int channels = 1, bool silent = false,
+                 double frequency = 440, bool harmonics = false, double startAt = 0) {
+        const auto path = _dir.filePath(name + ".wav");
+        QFile file(path);
+        if (!file.open(QIODevice::WriteOnly))
+            return {};
+        const int frames = rate * 2;
+        QDataStream s(&file);
+        s.setByteOrder(QDataStream::LittleEndian);
+        s.writeRawData("RIFF", 4);
+        s << quint32(36 + frames * channels * 2);
+        s.writeRawData("WAVEfmt ", 8);
+        s << quint32(16) << quint16(1) << quint16(channels) << quint32(rate) << quint32(rate * channels * 2)
+          << quint16(channels * 2) << quint16(16);
+        s.writeRawData("data", 4);
+        s << quint32(frames * channels * 2);
+        for (int f = 0; f < frames; ++f) {
+            const double phase = 2 * 3.14159265358979323846 * frequency * f / rate;
+            const double v =
+                silent || f < startAt * rate ? 0
+                : harmonics ? .30 * std::sin(phase) + .15 * std::sin(2 * phase) + .10 * std::sin(3 * phase)
+                            : .45 * std::sin(phase);
+            for (int c = 0; c < channels; ++c)
+                s << qint16(v * (c ? -1 : 1) * 32767);
+        }
+        return path;
+    }
+    QVariantMap options(const QString &path) const {
+        return {{"path", path},  {"from", 200.}, {"until", 1200.},
+                {"columns", 96}, {"rows", 352},  {"fftSize", 16384}};
+    }
+    void request(const QVariantMap &value) {
+        QVERIFY(QMetaObject::invokeMethod(_session, "request", Q_ARG(QVariantMap, value)));
+    }
+    QImage image() const { return qvariant_cast<QImage>(_session->property("image")); }
+  private slots:
+    void initTestCase() {
+        QVERIFY(_dir.isValid());
+        _loader.setFileName(qEnvironmentVariable(
+            "KUMO_SPECTRUM_MODULE", QCoreApplication::applicationDirPath() + "/kumo_referenceaudio"));
+        auto factory = qobject_cast<KumoSpectrumFactory *>(_loader.instance());
+        QVERIFY2(factory, qPrintable(_loader.errorString()));
+        _session = factory->createSpectrum(this);
+        QVERIFY(_session);
+        QVERIFY(_session->property("available").toBool());
+        QVERIFY(QMetaObject::invokeMethod(_session, "setCacheOptions", Q_ARG(QString, _dir.path()),
+                                          Q_ARG(int, 8), Q_ARG(int, 8)));
+    }
+    void monoPitchAndDiskRestore() {
+        auto value = options(tone("a440"));
+        QElapsedTimer timer;
+        timer.start();
+        request(value);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
+        auto result = image();
+        QVERIFY2(!result.isNull(), qPrintable(_session->property("status").toString()));
+        int maximum = -1, row = -1;
+        for (int y = 0; y < result.height(); ++y) {
+            const int v = result.constScanLine(y)[48];
+            if (v > maximum) {
+                maximum = v;
+                row = y;
+            }
+        }
+        const double pitch = 108.5 - (row + .5) / 352 * 88.;
+        QVERIFY(qAbs(pitch - 69) < .6);
+        QVERIFY(maximum > 200);
+        qInfo() << "STFT mono milliseconds" << timer.elapsed();
+        const auto files = QDir(_dir.filePath("kumo-spectrum-v1")).entryList({"*.kspec"}, QDir::Files);
+        QCOMPARE(files.size(), 1);
+        auto factory = qobject_cast<KumoSpectrumFactory *>(_loader.instance());
+        QScopedPointer<QObject> restored(factory->createSpectrum(this));
+        QMetaObject::invokeMethod(restored.data(), "setCacheOptions", Q_ARG(QString, _dir.path()),
+                                  Q_ARG(int, 8), Q_ARG(int, 8));
+        QMetaObject::invokeMethod(restored.data(), "request", Q_ARG(QVariantMap, value));
+        QTRY_VERIFY_WITH_TIMEOUT(!restored->property("busy").toBool(), 10000);
+        QCOMPARE(qvariant_cast<QImage>(restored->property("image")), result);
+    }
+    void oppositeStereoAndResampled() {
+        auto value = options(tone("stereo", 48000, 2));
+        request(value);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
+        auto result = image();
+        QVERIFY(!result.isNull());
+        const int row = qRound((108.5 - 69) / 88. * 352);
+        QVERIFY(result.constScanLine(row)[48] > 190);
+        QCOMPARE(_session->property("info").toMap().value("sampleRate").toInt(), 48000);
+    }
+
+    void decodedFormats_data() {
+        QTest::addColumn<QString>("name");
+        QTest::newRow("flac") << "a440.flac";
+        QTest::newRow("vbr-mp3") << "a440-vbr.mp3";
+    }
+
+    void decodedFormats() {
+        QFETCH(QString, name);
+        const auto folder = qEnvironmentVariable("SPECTRUM_FORMAT_FIXTURES");
+        if (folder.isEmpty())
+            QSKIP("Set SPECTRUM_FORMAT_FIXTURES to the generated audio fixtures.");
+        const auto path = QDir(folder).filePath(name);
+        QVERIFY(QFileInfo::exists(path));
+        request(options(path));
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
+        const auto result = image();
+        QVERIFY2(!result.isNull(), qPrintable(_session->property("status").toString()));
+        const int row = qRound((108.5 - 69) / 88. * 352);
+        QVERIFY(result.constScanLine(row)[48] > 170);
+    }
+    void lowPianoPitch() {
+        auto value = options(tone("low-a0", 44100, 1, false, 27.5));
+        value["fftSize"] = 32768;
+        request(value);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
+        const auto result = image();
+        QVERIFY(!result.isNull());
+        int maximum = -1, row = -1;
+        for (int y = 0; y < result.height(); ++y)
+            if (result.constScanLine(y)[48] > maximum) {
+                maximum = result.constScanLine(y)[48];
+                row = y;
+            }
+        const double pitch = 108.5 - (row + .5) / 352. * 88.;
+        QVERIFY(qAbs(pitch - 21.) < .7);
+        QVERIFY(maximum > 190);
+    }
+
+    void harmonicLocations() {
+        request(options(tone("harmonics", 44100, 1, false, 110., true)));
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
+        const auto result = image();
+        QVERIFY(!result.isNull());
+        auto brightness = [&](double pitch) {
+            return result.constScanLine(qRound((108.5 - pitch) / 88. * 352))[48];
+        };
+        QVERIFY(brightness(45) > 190);
+        QVERIFY(brightness(57) > 170);
+        QVERIFY(brightness(64.02) > 150);
+        QVERIFY(brightness(53) < 80);
+    }
+
+    void lowPresetKeepsOnsetTime() {
+        auto value = options(tone("step", 44100, 1, false, 440., false, 1.));
+        value["from"] = 0.;
+        value["until"] = 2000.;
+        value["columns"] = 80;
+        value["fftSize"] = 32768;
+        request(value);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
+        const auto result = image();
+        QVERIFY(!result.isNull());
+        const auto row = result.constScanLine(qRound((108.5 - 69) / 88. * 352));
+        int maximum = 0;
+        for (int x = 0; x < 80; ++x)
+            maximum = qMax(maximum, int(row[x]));
+        int crossing = 0;
+        while (crossing < 80 && row[crossing] < maximum - 18)
+            ++crossing;
+        const double milliseconds = (crossing + .5) / 80. * 2000.;
+        QVERIFY2(qAbs(milliseconds - 1000.) < 50., qPrintable(QString::number(milliseconds)));
+    }
+
+    void silenceAndInvalidSource() {
+        auto value = options(tone("silence", 22050, 1, true));
+        request(value);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
+        auto result = image();
+        QVERIFY(!result.isNull());
+        for (int y = 0; y < result.height(); ++y)
+            for (int x = 0; x < result.width(); ++x)
+                QCOMPARE(result.constScanLine(y)[x], uchar(0));
+        request(options(_dir.filePath("missing.wav")));
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
+        QVERIFY(image().isNull());
+        QVERIFY(!_session->property("status").toString().contains("已更新"));
+    }
+    void rapidRequestsPublishLatest() {
+        auto value = options(tone("rapid"));
+        value["columns"] = 1024;
+        value["fftSize"] = 32768;
+        request(value);
+        value["columns"] = 64;
+        for (int i = 0; i < 30; ++i) {
+            value["from"] = i * 10.;
+            value["until"] = 1000 + i * 10.;
+            request(value);
+        }
+        QTRY_COMPARE_WITH_TIMEOUT(_session->property("info").toMap().value("from").toDouble(), 290., 10000);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
+        QVERIFY(!image().isNull());
+        QVERIFY(_session->property("cacheOptions").toMap().value("usedMemoryKiB").toInt() <= 8192);
+    }
+    void cancellationAndBounds() {
+        auto value = options(tone("cancel"));
+        value["columns"] = 1024;
+        value["fftSize"] = 32768;
+        request(value);
+        QVERIFY(QMetaObject::invokeMethod(_session, "cancel"));
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
+        value["until"] = 200000.;
+        request(value);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
+        QVERIFY(image().isNull());
+    }
+    void cleanupTestCase() {
+        delete _session;
+        _session = nullptr;
+    }
+};
+QTEST_GUILESS_MAIN(TestSpectrum)
+#include "tst_spectrum.moc"

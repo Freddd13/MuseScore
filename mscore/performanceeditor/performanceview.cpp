@@ -1,6 +1,9 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performanceview.h"
 #include "performanceeditor.h"
+#ifdef SCRIPT_INTERFACE
+#include "spectrumpane.h"
+#endif
 #include "libmscore/mscore.h"
 #include <QPainter>
 #include <QPaintEvent>
@@ -115,6 +118,9 @@ void PerformanceCanvas::paintEvent(QPaintEvent* event)
             _revision = _editor->_visualRevision;
             }
       QPainter painter(this); painter.setClipRegion(event->region()); painter.drawPixmap(0, 0, _background);
+#ifdef SCRIPT_INTERFACE
+      if(_surface==PerformanceSurface::Notes&&_editor->_spectrum)_editor->_spectrum->paintOverlay(painter,rect());
+#endif
       _editor->paintForeground(painter, _surface);
       if (qEnvironmentVariableIsSet("PERFORMANCE_PAINT_PROFILE")) qInfo("Performance paint %d: %.2f ms", int(_surface), paintTimer.nsecsElapsed() / 1e6);
       }

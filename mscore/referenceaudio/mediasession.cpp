@@ -47,18 +47,20 @@ void ReferenceMediaSession::stopWorker() {
  if(_audio){_audio->stop();delete _audio;_audio=nullptr;}
  _playJob.waitForFinished();delete _ring;_ring=nullptr;
 }
+void ReferenceMediaSession::cancelRead(){if(_loadCancel)*_loadCancel=true;if(_waveCancel)*_waveCancel=true;++_loadGeneration;++_waveGeneration;}
 void ReferenceMediaSession::open(const QString& url) {
  stopWorker();if(_loadCancel)*_loadCancel=true;if(_waveCancel)*_waveCancel=true;++_waveGeneration;_tiles.clear();
  _path=QUrl(url).isLocalFile()?QUrl(url).toLocalFile():url;
  _duration=0;_position=0;_wave.clear();_status=tr("Reading audio…");emit changed();emit waveformChanged();
- const int token=++_loadGeneration;const QString path=_path;
+ const int token=++_loadGeneration;const QString path=_path;const bool makeWave=_waveformEnabled;
  auto cancel=std::make_shared<std::atomic_bool>(false);_loadCancel=cancel;
  _loads.erase(std::remove_if(_loads.begin(),_loads.end(),[](const QFuture<void>& f){return f.isFinished();}),_loads.end());
- _loads.append(QtConcurrent::run([this,path,token,cancel]{
+ _loads.append(QtConcurrent::run([this,path,token,cancel,makeWave]{
   KumoAudio::Reader reader;QString error;
   if(!reader.open(path,&error,cancel.get())){QMetaObject::invokeMethod(this,[this,error,token]{if(token==_loadGeneration){_status=error;emit changed();}},Qt::QueuedConnection);return;}
   auto count=reader.frames();int rate=reader.rate(),channels=reader.channels();
   QMetaObject::invokeMethod(this,[this,count,rate,token]{if(token!=_loadGeneration)return;_duration=double(count)*1000/rate;_a=0;_b=_duration;_rate=rate;_status=tr("Ready");emit changed();emit fileReady(identity());},Qt::QueuedConnection);
+  if(!makeWave)return;
   QVector<double> peaks(4096,0);std::vector<float> block(8192*channels);qint64 position=0;
   while(position<count&&!*cancel) {
    auto n=reader.read(block.data(),8192);if(!n)break;

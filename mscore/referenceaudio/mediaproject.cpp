@@ -68,7 +68,7 @@ QVariantMap ReferenceMediaProject::setTracks(const QVariantList& values) {
       _tracks=values;emit tracksChanged();return {{"ok",true}};
       }
 QVariantMap ReferenceMediaProject::start(const QVariantMap& plan) {
-      stop();const auto clips=plan.value("clips").toList();
+      stop();setProperty("workflowPlaybackOwner",plan.value("owner"));const auto clips=plan.value("clips").toList();
       if(clips.isEmpty()||clips.size()>16)return {{"error",tr("请选择 1–16 条要播放的音频。")}};
       const int rate=_host.sampleRate?_host.sampleRate():48000;
       if(rate<8000||rate>192000)return {{"error",tr("声音设备的采样率不受支持。")}};

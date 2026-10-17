@@ -1,10 +1,14 @@
 # MuseScore Evolution 个人功能说明
 
-当前个人版本：**0.58.0** · Kumo branch / Freddd13。
+当前个人版本：**0.59.0** · Kumo branch / Freddd13。
 
 这份说明按你编曲时要完成的事情组织。每章先给一个可以照着操作的例子，再解释相关按钮。谱子的修改随 MSCZ 保存；`Ctrl+Z` 可以撤销刚完成的编辑。
 
 本轮操作和九项问题的处理结果见[本轮逐项说明](docs/REPAIR_053_057_DELIVERY.md)。
+
+## 0.59 的频谱扒谱
+
+打开演奏编辑器，点“扒谱”，即可对照原曲频谱听辨、试音和标注，再按当前声部、位置和时值输入乐谱。上下对照与叠加可以切换，标注随 MSCZ 保存。完整步骤见[频谱扒谱使用说明](docs/P2_SPECTRUM_059_GUIDE.md)。
 
 ## 0.58 的内置工具
 
@@ -592,3 +596,5 @@ Windows 安装需要同 SDK 的 QtWebSockets QML 模块和 `Qt5WebSockets.dll`�
 
 
 本批版本定位：`personal-v0.58.0`。
+
+本批版本定位：`personal-v0.59.0`。

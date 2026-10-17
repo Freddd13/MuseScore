@@ -15,6 +15,7 @@ class AudioRing;
 class ReferenceMediaSession:public QObject {
  Q_OBJECT
  Q_PROPERTY(bool available READ available CONSTANT)
+ Q_PROPERTY(bool waveformEnabled MEMBER _waveformEnabled)
  Q_PROPERTY(bool playing READ playing NOTIFY changed)
  Q_PROPERTY(QString path READ path NOTIFY changed)
  Q_PROPERTY(QString status READ status NOTIFY changed)
@@ -23,6 +24,7 @@ class ReferenceMediaSession:public QObject {
  Q_PROPERTY(double speed READ speed WRITE setSpeed NOTIFY changed)
  Q_PROPERTY(double volume READ volume WRITE setVolume NOTIFY changed)
  Q_PROPERTY(QVariantList waveform READ waveform NOTIFY waveformChanged)
+ bool _waveformEnabled=true;
  QString _path,_status;
  double _duration=0,_position=0,_speed=1,_volume=.8,_a=0,_b=0,_origin=0;
  bool _loop=false,_fade=true;
@@ -40,6 +42,7 @@ public:
  double duration()const{return _duration;}double position()const{return _position;}
  double speed()const{return _speed;}double volume()const{return _volume;}
  QVariantList waveform()const{return _wave;}
+ Q_INVOKABLE void cancelRead();
  Q_INVOKABLE void open(const QString&);Q_INVOKABLE void play();Q_INVOKABLE void pause();
  Q_INVOKABLE void seek(double);Q_INVOKABLE void setLoop(double,double,bool,bool fade=true);
  Q_INVOKABLE QVariantMap identity()const;

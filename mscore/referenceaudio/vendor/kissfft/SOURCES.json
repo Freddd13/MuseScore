@@ -1,0 +1,40 @@
+{
+  "name": "KISS FFT",
+  "version": "131.1.0",
+  "commit": "8f47a67f595a6641c566087bf5277034be64f24d",
+  "license": "BSD-3-Clause",
+  "files": {
+    "kiss_fft.c": {
+      "url": "https://raw.githubusercontent.com/mborgerding/kissfft/8f47a67f595a6641c566087bf5277034be64f24d/kiss_fft.c",
+      "sha256": "3e8af99313c7e94f952ac12db46d3d5c5dd4a9bf93e0c32d43efa5fe39724051"
+    },
+    "kiss_fft.h": {
+      "url": "https://raw.githubusercontent.com/mborgerding/kissfft/8f47a67f595a6641c566087bf5277034be64f24d/kiss_fft.h",
+      "sha256": "9d6c7ddf520932c0aad669c86c064a24e571e594681be9f1491c14c9c9c75693"
+    },
+    "kiss_fftr.c": {
+      "url": "https://raw.githubusercontent.com/mborgerding/kissfft/8f47a67f595a6641c566087bf5277034be64f24d/kiss_fftr.c",
+      "sha256": "128b651120725e8d55f6b9edf5d44b06dc022b260894eac078c6ff8aa7159561"
+    },
+    "kiss_fftr.h": {
+      "url": "https://raw.githubusercontent.com/mborgerding/kissfft/8f47a67f595a6641c566087bf5277034be64f24d/kiss_fftr.h",
+      "sha256": "a0f72c1bddc3126d7a51ad80e965b58f6af77e4419aa882a0b11951e783632a8"
+    },
+    "_kiss_fft_guts.h": {
+      "url": "https://raw.githubusercontent.com/mborgerding/kissfft/8f47a67f595a6641c566087bf5277034be64f24d/_kiss_fft_guts.h",
+      "sha256": "dd1731891d0fff0e297198847de39216c5c8b9677ea4fe53160d1f6c74218d40"
+    },
+    "kiss_fft_log.h": {
+      "url": "https://raw.githubusercontent.com/mborgerding/kissfft/8f47a67f595a6641c566087bf5277034be64f24d/kiss_fft_log.h",
+      "sha256": "48b089fccb815b535dcbee88bbcabac702b5f29408563d2cc1d8a311be089afc"
+    },
+    "COPYING": {
+      "url": "https://raw.githubusercontent.com/mborgerding/kissfft/8f47a67f595a6641c566087bf5277034be64f24d/COPYING",
+      "sha256": "a2840585f8411be8e6826a31ef15ae65c950bd74a2437a73b013398a934ad0c6"
+    },
+    "LICENSES/BSD-3-Clause": {
+      "url": "https://raw.githubusercontent.com/mborgerding/kissfft/8f47a67f595a6641c566087bf5277034be64f24d/LICENSES/BSD-3-Clause",
+      "sha256": "4d6bcab46f27d6d0c878e8305d4bdcfe040d52bf6656b9771f04c9fb9902c0ed"
+    }
+  }
+}

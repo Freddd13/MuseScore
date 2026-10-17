@@ -23,3 +23,7 @@ set(PERFORMANCEEDITOR_SRC
       ${CMAKE_CURRENT_LIST_DIR}/workflowlanes.h
       ${CMAKE_CURRENT_LIST_DIR}/workflowlanes.cpp
       )
+
+if(SCRIPT_INTERFACE)
+ list(APPEND PERFORMANCEEDITOR_SRC ${CMAKE_CURRENT_LIST_DIR}/spectrumpane.cpp ${CMAKE_CURRENT_LIST_DIR}/spectrumpane.h)
+endif()

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "referencefactory.h"
 #include "../referenceaudio/mediafactory.h"
+#include "../referenceaudio/spectrumfactory.h"
 #include "../referenceaudio/projectfactory.h"
 #include "referencebus.h"
 #include <QPointer>
@@ -25,13 +26,16 @@ class MissingMedia : public QObject {
 public:
  MissingMedia(QObject* p,QString error):QObject(p),_error(error){}
  bool available()const{return false;}
- QString status()const{return tr("Reference audio module unavailable: %1").arg(_error);}
+ QString status()const{return tr("原曲音频组件未就绪：%1").arg(_error);}
 };
 }
 QObject* createReferenceMedia(QObject* parent) {
  auto loader=module();
  auto factory=qobject_cast<KumoMediaFactory*>(loader->instance());
  return factory?factory->create(parent):new MissingMedia(parent,loader->errorString());
+}
+QObject* createReferenceSpectrum(QObject* parent){
+ auto loader=module();auto factory=qobject_cast<KumoSpectrumFactory*>(loader->instance());return factory?factory->createSpectrum(parent):new MissingMedia(parent,QObject::tr("请将原曲音频组件与程序一起更新。"));
 }
 QObject* referenceProject(){
  static QPointer<QObject> project;if(project)return project;

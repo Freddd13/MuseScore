@@ -2,4 +2,4 @@
 #pragma once
 #include <QObject>
 class QMenu;
-namespace Ms { QObject* createReferenceMedia(QObject* parent); QObject* referenceProject(); void addReferenceActions(QMenu*); }
+namespace Ms { QObject* createReferenceMedia(QObject* parent); QObject* createReferenceSpectrum(QObject* parent); QObject* referenceProject(); void addReferenceActions(QMenu*); }
