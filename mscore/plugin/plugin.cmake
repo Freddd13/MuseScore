@@ -75,6 +75,8 @@ list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/arrangementread
 
 list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/localsuggestions.cpp ${PROJECT_SOURCE_DIR}/mscore/workflow/localsuggestions.h)
 
+list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/performanceeditor/rhythmpane.cpp ${PROJECT_SOURCE_DIR}/mscore/performanceeditor/rhythmpane.h)
+
 set (PLUGIN_SRC
     ${PLUGIN_API_SRC}
     ${CMAKE_CURRENT_LIST_DIR}/mscorePlugins.cpp

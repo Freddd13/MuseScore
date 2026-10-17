@@ -17,6 +17,7 @@
 #include <QFutureWatcher>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <QSettings>
 #include <QDir>
 #include <QUrl>
 #include <QUuid>
@@ -218,7 +219,11 @@ void MidiCaptureSession::finish() {
                   }
             track.append(QByteArray::fromHex("00ff2f00"));QByteArray data("MThd");number(data,6,4);number(data,0,2);number(data,1,2);number(data,9600,2);
             data.append("MTrk");number(data,track.size(),4);data.append(track);
-            const QString folder=QStandardPaths::writableLocation(QStandardPaths::TempLocation)+"/musescore-expression";
+            QString defaultFolder=QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)+"/recordings";
+#ifdef Q_OS_WIN
+            if(QFileInfo("E:/").isDir())defaultFolder="E:/MuseScoreCache/recordings";
+#endif
+            const QString folder=QSettings().value("workflow/recordingDirectory",defaultFolder).toString();
             if(!QDir().mkpath(folder))return QString();const QString path=folder+"/recording-"+QUuid::createUuid().toString(QUuid::WithoutBraces)+".mid";
             QSaveFile file(path);if(!file.open(QIODevice::WriteOnly)||file.write(data)!=data.size()||!file.commit())return QString();return path;
             }));

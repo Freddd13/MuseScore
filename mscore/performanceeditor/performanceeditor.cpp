@@ -1,5 +1,6 @@
 #include "performanceeditor.h"
 #ifdef SCRIPT_INTERFACE
+#include "rhythmpane.h"
 #include "mscore/workflow/builtinpanels.h"
 #include "spectrumpane.h"
 #endif
@@ -241,6 +242,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
 #ifdef SCRIPT_INTERFACE
       installExpressionTools(this,_splitter,layout);
       installSpectrumPane(this,_splitter);
+      installRhythmPane(this,_splitter);
 #endif
       _status = new QLabel(this); _status->setWordWrap(true); layout->addWidget(_status);
       _refreshTimer.setSingleShot(true);

@@ -9542,11 +9542,13 @@ void MuseScore::scoreUnrolled(MasterScore * original)
 namespace Ms {
 void MuseScore::showPerformanceEditor(bool visible)
       {
+      const QSize windowBeforeEditor=size();
       if (!_performanceEditor) {
             _performanceDock = new QDockWidget(tr("演奏编辑器"), this);
             _performanceDock->setObjectName("performanceEditorDock");
             _performanceDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::TopDockWidgetArea);
             _performanceEditor = new PerformanceEditor(_performanceDock);
+            _performanceEditor->setProperty("windowBeforeEditor",windowBeforeEditor);
             _performanceDock->setWidget(_performanceEditor);
             connect(_performanceEditor, &PerformanceEditor::scoreBandChanged, this, [this](bool enabled) {
                   if (auto action = findChild<QAction*>("performance-score-band")) { QSignalBlocker blocker(action); action->setChecked(enabled); }
@@ -9561,6 +9563,8 @@ void MuseScore::showPerformanceEditor(bool visible)
                   });
             _performanceEditor->setView(cv);
             }
+      if(visible && _performanceEditor && (!_performanceDock || !_performanceDock->isVisible()))
+            _performanceEditor->setProperty("windowBeforeEditor",windowBeforeEditor);
       if (_performanceDock) {_performanceDock->setVisible(visible);if(visible)_performanceDock->raise();}
       }
 }
