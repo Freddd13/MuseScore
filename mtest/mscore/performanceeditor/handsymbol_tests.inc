@@ -6,7 +6,7 @@ void TestPerformanceEditor::handSymbolPlacementAndDefaults()
       auto add=[&](SymId id,Element* parent) {auto mark=new Symbol(score.get());mark->setSym(id);mark->applyHandPreset();mark->setParent(parent);mark->setTrack(parent->track());score->startCmd();score->undoAddElement(mark);score->endCmd();return mark;};
       auto right=add(SymId::keyboardPlayWithRH,chord->upNote()),left=add(SymId::keyboardPlayWithLH,chord);
       QVERIFY(right->pagePos().y()>chord->upNote()->pagePos().y());QVERIFY(left->gripsPositions()[2].y()<chord->upNote()->pagePos().y());
-      auto beforeGrip=left->gripsPositions()[2];score->startCmd();left->undoChangeProperty(Pid::HAND_BRACKET_V,-1.5);score->endCmd();QVERIFY(std::abs(left->gripsPositions()[2].y()-beforeGrip.y()-.3*score->spatium())<.001);
+      auto beforeGrip=left->gripsPositions()[2];score->startCmd();left->undoChangeProperty(Pid::HAND_BRACKET_V,-1.5);score->endCmd();QVERIFY(std::abs(left->gripsPositions()[2].y()-beforeGrip.y()-1.*score->spatium())<.001);
       auto original=right->pos();score->startCmd();right->undoChangeProperty(Pid::OFFSET,QPointF(1,2)*score->spatium());score->endCmd();const auto manualPosition=original+QPointF(1,2)*score->spatium();QCOMPARE(right->pos(),manualPosition);for(int i=0;i<3;++i)score->doLayout();QCOMPARE(right->pos(),manualPosition);
       auto file=_directory.path()+"/hand-anchor.mscx";QVERIFY(saveScore(score.get(),file));std::unique_ptr<MasterScore> restored(readCreatedScore(file));QVERIFY(restored);auto restoredChord=toChord(restored->firstMeasure()->first(SegmentType::ChordRest)->element(0));Symbol* restoredRight=nullptr;for(auto e:restoredChord->upNote()->el())if(e->isSymbol() && !toSymbol(e)->handLeft())restoredRight=toSymbol(e);QVERIFY(restoredRight);QVERIFY(QLineF(restoredRight->pos(),manualPosition).length()<.001);
       score->startCmd();right->undoChangeProperty(Pid::AUTOPLACE,false);score->endCmd();QCOMPARE(right->pos(),manualPosition);
@@ -31,9 +31,9 @@ void TestPerformanceEditor::handSymbolModelAndPersistence()
       QVERIFY(legacy.setProperty(Pid::HAND_BRACKET_MODE,true));legacy.layout();QVERIFY(handImage(&legacy)!=image);QCOMPARE(legacy.gripsCount(),3);
       for (auto id:{SymId::keyboardPlayWithRH,SymId::keyboardPlayWithLH,SymId::keyboardPlayWithRHEnd,SymId::keyboardPlayWithLHEnd}) {
             Symbol mark(score.get());mark.setSym(id);mark.applyHandPreset();mark.layout();QVERIFY(mark.handBracket());
-            QCOMPARE(mark.getProperty(Pid::HAND_BRACKET_H).toDouble(),mark.handEnd() ? -.75:.75);
+            QCOMPARE(mark.getProperty(Pid::HAND_BRACKET_H).toDouble(),mark.handEnd() ? -.6:.6);
             auto grips=mark.gripsPositions();const qreal unit=mark.spatium()*mark.mag();
-            QCOMPARE(grips[0].y()-mark.pagePos().y(),mark.handLeft() ? -1.8*unit:0.0);QCOMPARE(grips[1].y()-mark.pagePos().y(),mark.handLeft()?0.0:-1.8*unit);
+            QCOMPARE(grips[0].y()-mark.pagePos().y(),mark.handLeft() ? -2.5*unit:0.0);QCOMPARE(grips[1].y()-mark.pagePos().y(),mark.handLeft()?0.0:-2.5*unit);
             QVERIFY(mark.shape().contains(QPointF((grips[0].x()-mark.pagePos().x())/2,grips[0].y()-mark.pagePos().y())));
             }
       Symbol other(score.get());other.setSym(SymId::accidentalSharp);other.layout();auto ordinary=handImage(&other);other.setProperty(Pid::HAND_BRACKET_MODE,true);other.layout();QCOMPARE(handImage(&other),ordinary);QCOMPARE(other.gripsCount(),0);
@@ -86,6 +86,7 @@ void TestPerformanceEditor::handSymbolInspectorAndGrips()
       drag();QTest::mouseRelease(view,Qt::LeftButton,Qt::NoModifier,moved);QVERIFY(mark->getProperty(Pid::HAND_BRACKET_V)!=original);QCOMPARE(score->undoStack()->getCurIdx(),before+1);score->undoRedo(true,&ed);QCOMPARE(mark->getProperty(Pid::HAND_BRACKET_V),original);view->changeState(ViewState::NORMAL);select();
       panel=currentPanel();QVERIFY(panel);spin=panel->findChild<QDoubleSpinBox*>("handBracketH");auto vertical=panel->findChild<QDoubleSpinBox*>("handBracketV");score->setIsPlaying(true);spin->setValue(4);vertical->setValue(2.5);flip=panel->findChild<QPushButton*>("handBracketFlipH");QVERIFY(flip);QTest::mouseClick(flip,Qt::LeftButton);QTest::mouseClick(flip,Qt::LeftButton);QVERIFY(main->performanceEditor()->hasPending());QCOMPARE(mark->getProperty(Pid::HAND_BRACKET_H).toDouble(),3.5);score->setIsPlaying(false);QTRY_COMPARE(mark->getProperty(Pid::HAND_BRACKET_H).toDouble(),4.0);QCOMPARE(mark->getProperty(Pid::HAND_BRACKET_V).toDouble(),-2.5);
       auto text=panel->findChild<QCheckBox*>("handBracketText");QTest::mouseClick(text,Qt::LeftButton,Qt::NoModifier,QPoint(8,text->height()/2));QVERIFY(mark->getProperty(Pid::HAND_BRACKET_TEXT).toBool());
+      const SymId allHands[]={SymId::keyboardPlayWithLH,SymId::keyboardPlayWithLHEnd,SymId::keyboardPlayWithRH,SymId::keyboardPlayWithRHEnd};QVector<HandBracket::Style> savedStyles;for(auto id:allHands)savedStyles.append(HandBracket::defaults(id));
       auto savedStyle=HandBracket::defaults(mark->sym());auto saveDefault=panel->findChild<QPushButton*>("handBracketSaveDefault");auto useDefault=panel->findChild<QPushButton*>("handBracketUseDefault");QVERIFY(saveDefault&&useDefault);
       QTest::mouseClick(saveDefault,Qt::LeftButton);QCOMPARE(HandBracket::defaults(mark->sym()).horizontal,4.0);
       bool newDefaultFound=false;
@@ -106,11 +107,16 @@ void TestPerformanceEditor::handSymbolInspectorAndGrips()
       QVERIFY(newDefaultFound);QVERIFY(panel->findChild<QLabel*>("handBracketDefaultStatus")->text().startsWith(QString::fromUtf8("已保存")));
       QVERIFY(HandBracket::setDefaults(mark->sym(),{2,-1,.12,false}));loadHandBracketDefaults();QCOMPARE(HandBracket::defaults(mark->sym()).horizontal,4.0);
       score->startCmd();mark->undoChangeProperty(Pid::HAND_BRACKET_H,3.0);score->endCmd();select();panel=currentPanel();QVERIFY(panel);useDefault=panel->findChild<QPushButton*>("handBracketUseDefault");before=score->undoStack()->getCurIdx();QTest::mouseClick(useDefault,Qt::LeftButton);QTRY_COMPARE(mark->getProperty(Pid::HAND_BRACKET_H).toDouble(),4.0);QCOMPARE(score->undoStack()->getCurIdx(),before+1);
-      QSettings handSettings;handSettings.remove(QString("handBracket/%1").arg(Sym::id2name(mark->sym())));handSettings.sync();QVERIFY(HandBracket::setDefaults(mark->sym(),savedStyle));
+      QSettings handSettings;handSettings.remove(QString("handBracket/%1").arg(Sym::id2name(mark->sym())));handSettings.sync();QVERIFY(HandBracket::setDefaults(mark->sym(),savedStyle));for(int i=0;i<4;++i){handSettings.remove(QString("handBracket/%1").arg(Sym::id2name(allHands[i])));QVERIFY(HandBracket::setDefaults(allHands[i],savedStyles[i]));}handSettings.sync();
       auto right=new Symbol(score);right->setSym(SymId::keyboardPlayWithRH);right->applyHandPreset();right->setParent(toChord(score->firstMeasure()->findSegment(SegmentType::ChordRest,Fraction::fromTicks(480))->element(0)));right->setTrack(0);right->setProperty(Pid::HAND_BRACKET_TEXT,true);score->startCmd();score->undoAddElement(right);score->endCmd();
       view->setFocus();auto rightHit=view->matrix().map(right->canvasPos()+QPointF(0,-.5*right->spatium()*right->mag())).toPoint();
       QCOMPARE(view->elementNear(view->toLogical(rightHit)),static_cast<Element*>(right));
-      QTest::mouseClick(view,Qt::LeftButton,Qt::NoModifier,rightHit);QTest::mouseDClick(view,Qt::LeftButton,Qt::NoModifier,rightHit);QCOMPARE(view->getEditData().element,static_cast<Element*>(right));QCOMPARE(view->getEditData().grips,3);view->changeState(ViewState::NORMAL);select();panel=currentPanel();QVERIFY(panel);
+      QTest::mouseClick(view,Qt::LeftButton,Qt::NoModifier,rightHit);QTest::mouseDClick(view,Qt::LeftButton,Qt::NoModifier,rightHit);QCOMPARE(view->getEditData().element,static_cast<Element*>(right));QCOMPARE(view->getEditData().grips,4);view->updateGrips();
+      const auto textOriginal=right->getProperty(Pid::HAND_TEXT_OFFSET);const auto lineOriginal=right->offset();const int textUndo=score->undoStack()->getCurIdx();
+      auto textPoint=view->matrix().map(view->getEditData().grip[3].center()).toPoint(),textMoved=textPoint+QPoint(18,10);
+      QTest::mousePress(view,Qt::LeftButton,Qt::NoModifier,textPoint);QMouseEvent textMotion(QEvent::MouseMove,textMoved,textMoved,view->mapToGlobal(textMoved),Qt::NoButton,Qt::LeftButton,Qt::NoModifier);QApplication::sendEvent(view,&textMotion);QApplication::sendEvent(view,&textMotion);QTest::mouseRelease(view,Qt::LeftButton,Qt::NoModifier,textMoved);
+      QVERIFY(right->getProperty(Pid::HAND_TEXT_OFFSET)!=textOriginal);QCOMPARE(right->offset(),lineOriginal);QVERIFY(!right->getProperty(Pid::HAND_TEXT_AUTO).toBool());QCOMPARE(score->undoStack()->getCurIdx(),textUndo+1);score->undoRedo(true,&ed);QCOMPARE(right->getProperty(Pid::HAND_TEXT_OFFSET),textOriginal);QVERIFY(right->getProperty(Pid::HAND_TEXT_AUTO).toBool());
+      view->changeState(ViewState::NORMAL);select();panel=currentPanel();QVERIFY(panel);
       panel->grab().save("hand-symbol-inspector.png");view->startEdit(mark,Grip::START);QTest::qWait(50);view->grab().save("hand-symbol-edit.png");view->changeState(ViewState::NORMAL);
       QVERIFY(saveScore(score,"hand-symbol-validation.mscx"));QVERIFY(main->savePdf(score,"hand-symbol.pdf"));QFile svg("hand-symbol.svg");QVERIFY(svg.open(QIODevice::WriteOnly));QVERIFY(main->saveSvg(score,&svg));svg.close();
       }

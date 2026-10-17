@@ -36,6 +36,10 @@ class Symbol : public BSymbol {
       qreal _handH = 2, _handV = -1, _handWidth = .12;
       QPointF _handDragOriginal;
       QPointF _handDragOffset;
+      QPointF _handTextOffset,_handTextDragOriginal;
+      QString _handTextFont;
+      qreal _handTextSize=0;
+      bool _handTextAuto=true,_handTextDragAuto=true;
       QPointF _handBase;
       bool _handBaseValid=false,_handLegacyAnchor=false;
       bool _handGeometryEdited=false;
@@ -78,7 +82,7 @@ class Symbol : public BSymbol {
       bool handEnd() const;
       void applyHandPreset(); // only explicit creation/conversion, never read/clone
       Shape shape() const override;
-      int gripsCount() const override { return handBracket() ? 3 : 0; }
+      int gripsCount() const override { return handBracket() ? (_handText?4:3) : 0; }
       Grip initialEditModeGrip() const override { return handBracket() ? Grip::START : Grip::NO_GRIP; }
       Grip defaultGrip() const override { return initialEditModeGrip(); }
       std::vector<QPointF> gripsPositions(const EditData& = EditData()) const override;
@@ -123,4 +127,3 @@ class FSymbol final : public BSymbol {
 
 }     // namespace Ms
 #endif
-

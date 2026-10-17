@@ -8,6 +8,7 @@
 #include "segment.h"
 #include "beam.h"
 #include "chord.h"
+#include "note.h"
 #include "skyline.h"
 #include <QSet>
 
@@ -79,6 +80,8 @@ QVector<Route> routing(const QVector<FreeSlurNode>& nodes,double from,double unt
 }
 QVariant Slur::getProperty(Pid id) const
       {
+      if(id==Pid::FREE_SLUR_START_SIDE)return _freeStartSide;
+      if(id==Pid::FREE_SLUR_END_SIDE)return _freeEndSide;
       if(id==Pid::FREE_SLUR_MODE) return _freeMode;
       if(id==Pid::FREE_SLUR_AUTO) return _freeAuto;
       if(id==Pid::FREE_SLUR_NODES) return _freeData;
@@ -87,12 +90,14 @@ QVariant Slur::getProperty(Pid id) const
 QVariant Slur::propertyDefault(Pid id) const
       {
       if(id==Pid::FREE_SLUR_MODE || id==Pid::FREE_SLUR_AUTO) return false;
+      if(id==Pid::FREE_SLUR_START_SIDE||id==Pid::FREE_SLUR_END_SIDE)return 0;
       if(id==Pid::FREE_SLUR_NODES) return QString("[]");
       return SlurTie::propertyDefault(id);
       }
 bool Slur::setProperty(Pid id,const QVariant& value)
       {
-      if(id==Pid::FREE_SLUR_MODE) _freeMode=value.toBool();
+      if(id==Pid::FREE_SLUR_START_SIDE||id==Pid::FREE_SLUR_END_SIDE){int side=value.toInt();if(side<-1||side>1)return false;if(id==Pid::FREE_SLUR_START_SIDE)_freeStartSide=side;else _freeEndSide=side;}
+      else if(id==Pid::FREE_SLUR_MODE) _freeMode=value.toBool();
       else if(id==Pid::FREE_SLUR_AUTO) _freeAuto=value.toBool();
       else if(id==Pid::FREE_SLUR_NODES) {
             QVector<FreeSlurNode> nodes; if(!FreeSlur::decode(value.toString(),&nodes)) return false;
@@ -175,11 +180,31 @@ bool SlurSegment::computeFreeBezier(QPointF thickness)
       {
       _freeGrips.clear();_freeCurvePoints.clear();
       _freeCollisions=0; _freeLimited=false;
-      if(!slur()->freeMode() || (slur()->freeNodes().isEmpty() && !slur()->freeAuto()) || !system()) return false;
+      if(!slur()->freeMode() || (slur()->freeNodes().isEmpty() && !slur()->freeAuto() && !slur()->freeStartSide() && !slur()->freeEndSide()) || !system()) return false;
       const int first=qMax(slur()->tick().ticks(),system()->firstMeasure()->tick().ticks());
       const int last=qMin(slur()->tick2().ticks(),system()->lastMeasure()->endTick().ticks());
       if(last<=first) return false;
-      const auto p0=ups(Grip::START).pos(),p1=ups(Grip::BEZIER1).pos(),p2=ups(Grip::BEZIER2).pos(),p3=ups(Grip::END).pos();
+      auto p0=ups(Grip::START).pos(),p1=ups(Grip::BEZIER1).pos(),p2=ups(Grip::BEZIER2).pos(),p3=ups(Grip::END).pos();
+      const auto& savedNodes=slur()->freeNodes();
+      auto chordFor=[](Element* e)->Chord*{return !e?nullptr:e->isChord()?toChord(e):e->isNote()?toNote(e)->chord():nullptr;};
+      auto startChord=chordFor(slur()->startElement()),endChord=chordFor(slur()->endElement());
+      auto endpoint=[&](bool start,int side,QPointF old){
+            const auto grip=start?Grip::START:Grip::END;
+            if(!side){if(!ups(grip).off.isNull())return old;side=savedNodes.isEmpty()?0:start?savedNodes.front().before:savedNodes.back().after;}
+            if(!side)return old;
+            auto chord=start?startChord:endChord;if(!chord||chord->measure()->system()!=system())return old;
+            auto e=start?slur()->startElement():slur()->endElement();
+            auto note=e->isNote()?toNote(e):side<0?chord->upNote():chord->downNote();
+            const auto box=note->bbox().translated(note->pagePos()-pagePos());
+            return QPointF(box.center().x(),side<0?box.top()-.3*spatium():box.bottom()+.3*spatium())+ups(grip).off;
+            };
+      auto routedSide=[&](bool start){auto chord=start?startChord:endChord;if(!chord||chord->measure()->system()!=system())return 0;int side=start?slur()->freeStartSide():slur()->freeEndSide();if(!side&&ups(start?Grip::START:Grip::END).off.isNull()&&!savedNodes.isEmpty())side=start?savedNodes.front().before:savedNodes.back().after;return side;};
+      const int startSide=routedSide(true),endSide=routedSide(false);
+      const auto newStart=endpoint(true,startSide,p0),newEnd=endpoint(false,endSide,p3);
+      p1+=newStart-p0;p2+=newEnd-p3;p0=newStart;p3=newEnd;
+      const double reach=qBound(.5*spatium(),std::abs(p3.x()-p0.x())*.12,2.*spatium());
+      if(startSide&&ups(Grip::BEZIER1).off.isNull())p1.setY(p0.y()+startSide*reach);
+      if(endSide&&ups(Grip::BEZIER2).off.isNull())p2.setY(p3.y()+endSide*reach);
       const CubicBezier base(p0,p1,p2,p3); const double sp=spatium();
       QVector<CurvePoint> points {{0,p0,derivative(p0,p1,p2,p3,0)}};
       const auto& nodes=slur()->freeNodes();
@@ -197,6 +222,8 @@ bool SlurSegment::computeFreeBezier(QPointF thickness)
             QVector<QRectF> obstacles;QSet<Beam*> beams;
             const double padding=qMax(.2*sp,score()->styleP(Sid::slurMinDistance));
             auto ss=slur()->startSegment();auto es=slur()->endSegment();
+            const int firstStaff=qMax(0,qMin(staffIdx(),qMin(startChord?startChord->vStaffIdx():staffIdx(),endChord?endChord->vStaffIdx():staffIdx())));
+            const int lastStaff=qMin(score()->nstaves()-1,qMax(staffIdx(),qMax(startChord?startChord->vStaffIdx():staffIdx(),endChord?endChord->vStaffIdx():staffIdx())));
             // Shapes use the same local staff coordinates as native slur placement.
             for(auto segment=system()->firstMeasure()->first();segment;segment=segment->next1()) {
                   if(segment->measure()->system()!=system()) break;
@@ -204,14 +231,15 @@ bool SlurSegment::computeFreeBezier(QPointF thickness)
                   const double x=segment->x()+segment->measure()->x();
                   if(x+segment->width()<qMin(p0.x(),p3.x()))continue;
                   if(x>qMax(p0.x(),p3.x()))break;
-                  if(segment->segmentType()==SegmentType::ChordRest)for(int track=staffIdx()*VOICES;track<(staffIdx()+1)*VOICES;++track) {
+                  if(segment->segmentType()==SegmentType::ChordRest)for(int track=firstStaff*VOICES;track<(lastStaff+1)*VOICES;++track) {
                         auto element=segment->element(track);if(!element || !element->isChord())continue;
                         auto beam=toChord(element)->beam();if(!beam || beams.contains(beam) || beam->system()!=system())continue;
                         beams.insert(beam);appendBeamObstacles(beam,beam->pagePos()-pagePos(),qMin(p0.x(),p3.x())+.25*sp,qMax(p0.x(),p3.x())-.25*sp,padding,&obstacles);
                         }
                   if(obstacles.size()>2048)break;
                   if(segment==ss || segment==es)continue;
-                  const auto shape=segment->staffShape(staffIdx()).translated(segment->pos()+segment->measure()->pos()-pos());
+                  for(int targetStaff=firstStaff;targetStaff<=lastStaff;++targetStaff){
+                  const auto shape=segment->staffShape(targetStaff).translated(segment->pos()+segment->measure()->pos()-pos()+QPointF(0,system()->staffYpage(targetStaff)-system()->staffYpage(staffIdx())));
                   for(const auto& r:shape) {
                         if(r.width()<=0 || r.height()<=0)continue;
                         obstacles.append(QRectF(r).adjusted(-padding,-padding,padding,padding));
@@ -219,10 +247,12 @@ bool SlurSegment::computeFreeBezier(QPointF thickness)
                         }
                   if(obstacles.size()>2048)break;
                   }
+                  }
             // Native endpoint/control edits also constrain the automatic end tangents.
-            points.front().locked=!ups(Grip::START).off.isNull() || !ups(Grip::BEZIER1).off.isNull();
-            points.back().locked=!ups(Grip::END).off.isNull() || !ups(Grip::BEZIER2).off.isNull();
-            const auto result=FreeSlur::avoid(points,obstacles,slur()->up(),sp,routes,slur()->freeAuto()&&autoplace());
+            points.front().locked=startSide||!ups(Grip::START).off.isNull() || !ups(Grip::BEZIER1).off.isNull();
+            points.back().locked=endSide||!ups(Grip::END).off.isNull() || !ups(Grip::BEZIER2).off.isNull();
+            const bool preferredUp=startSide?startSide<0:endSide?endSide<0:slur()->up();
+            const auto result=FreeSlur::avoid(points,obstacles,preferredUp,sp,routes,slur()->freeAuto()&&autoplace());
             points=result.points;_freeCollisions=result.collisions;_freeLimited=result.limited;
             }
       for(int i=0;i<_freeGrips.size();++i) {
@@ -254,6 +284,13 @@ std::vector<QPointF> SlurSegment::gripsPositions(const EditData&) const
       {
       std::vector<QPointF> result; const QPointF origin=pagePos();
       for(int i=0;i<int(Grip::GRIPS);++i) result.push_back(_ups[i].pos()+origin);
+      if(_freeCurvePoints.size()>=2){
+            const auto& a=_freeCurvePoints.front();const auto& b=_freeCurvePoints[1];
+            const auto& z=_freeCurvePoints.back();const auto& y=_freeCurvePoints[_freeCurvePoints.size()-2];
+            result[int(Grip::START)]=origin+a.p;result[int(Grip::END)]=origin+z.p;
+            result[int(Grip::BEZIER1)]=origin+a.p+a.d*(b.t-a.t)/3;
+            result[int(Grip::BEZIER2)]=origin+z.p-z.d*(z.t-y.t)/3;
+            }
       for(const auto& n:_freeGrips) {result.push_back(n.point+origin);result.push_back(n.left+origin);result.push_back(n.right+origin);}
       return result;
       }
@@ -262,6 +299,7 @@ void Slur::reset()
       if (!_freeNodes.isEmpty()) undoChangeProperty(Pid::FREE_SLUR_NODES,QString("[]"));
       if (_freeMode) undoResetProperty(Pid::FREE_SLUR_MODE);
       if (_freeAuto) undoResetProperty(Pid::FREE_SLUR_AUTO);
+      undoResetProperty(Pid::FREE_SLUR_START_SIDE);undoResetProperty(Pid::FREE_SLUR_END_SIDE);
       SlurTie::reset();
       }
 QVector<QLineF> SlurSegment::gripAnchorLines(Grip grip) const
@@ -273,13 +311,13 @@ QVector<QLineF> SlurSegment::gripAnchorLines(Grip grip) const
       return {QLineF(n.point+origin,n.left+origin),QLineF(n.point+origin,n.right+origin)};
       }
 Element* SlurSegment::propertyDelegate(Pid id)
-      { return id==Pid::FREE_SLUR_MODE || id==Pid::FREE_SLUR_AUTO || id==Pid::FREE_SLUR_NODES ? slur() : SlurTieSegment::propertyDelegate(id); }
+      { return id==Pid::FREE_SLUR_MODE || id==Pid::FREE_SLUR_AUTO || id==Pid::FREE_SLUR_NODES || id==Pid::FREE_SLUR_START_SIDE || id==Pid::FREE_SLUR_END_SIDE ? slur() : SlurTieSegment::propertyDelegate(id); }
 QVariant SlurSegment::getProperty(Pid id) const
-      { return id==Pid::FREE_SLUR_MODE || id==Pid::FREE_SLUR_AUTO || id==Pid::FREE_SLUR_NODES ? slur()->getProperty(id) : SlurTieSegment::getProperty(id); }
+      { return id==Pid::FREE_SLUR_MODE || id==Pid::FREE_SLUR_AUTO || id==Pid::FREE_SLUR_NODES || id==Pid::FREE_SLUR_START_SIDE || id==Pid::FREE_SLUR_END_SIDE ? slur()->getProperty(id) : SlurTieSegment::getProperty(id); }
 QVariant SlurSegment::propertyDefault(Pid id) const
-      { return id==Pid::FREE_SLUR_MODE || id==Pid::FREE_SLUR_AUTO || id==Pid::FREE_SLUR_NODES ? slur()->propertyDefault(id) : SlurTieSegment::propertyDefault(id); }
+      { return id==Pid::FREE_SLUR_MODE || id==Pid::FREE_SLUR_AUTO || id==Pid::FREE_SLUR_NODES || id==Pid::FREE_SLUR_START_SIDE || id==Pid::FREE_SLUR_END_SIDE ? slur()->propertyDefault(id) : SlurTieSegment::propertyDefault(id); }
 bool SlurSegment::setProperty(Pid id,const QVariant& value)
-      { return id==Pid::FREE_SLUR_MODE || id==Pid::FREE_SLUR_AUTO || id==Pid::FREE_SLUR_NODES ? slur()->setProperty(id,value) : SlurTieSegment::setProperty(id,value); }
+      { return id==Pid::FREE_SLUR_MODE || id==Pid::FREE_SLUR_AUTO || id==Pid::FREE_SLUR_NODES || id==Pid::FREE_SLUR_START_SIDE || id==Pid::FREE_SLUR_END_SIDE ? slur()->setProperty(id,value) : SlurTieSegment::setProperty(id,value); }
 bool SlurSegment::displayedFreeNode(double position,FreeSlurNode* result) const
       {
       if(_freeCurvePoints.size()<2 || !system())return false;

@@ -82,6 +82,7 @@ class Slur final : public SlurTie {
       void slurPosChord(SlurPos*);
       bool _freeMode = false;
       bool _freeAuto = false;
+      int _freeStartSide=0,_freeEndSide=0;
       QVector<FreeSlurNode> _freeNodes;
       QString _freeData = "[]";
 
@@ -110,6 +111,8 @@ class Slur final : public SlurTie {
       void reset() override;
       bool freeMode() const { return _freeMode; }
       bool freeAuto() const { return _freeAuto; }
+      int freeStartSide()const{return _freeStartSide;}
+      int freeEndSide()const{return _freeEndSide;}
       const QVector<FreeSlurNode>& freeNodes() const { return _freeNodes; }
       QVariant getProperty(Pid) const override;
       QVariant propertyDefault(Pid) const override;

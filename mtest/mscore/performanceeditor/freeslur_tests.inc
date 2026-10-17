@@ -153,3 +153,33 @@ void TestPerformanceEditor::freeSlurAutomaticControls()
       QTRY_VERIFY(panelNow());QTRY_VERIFY(panelNow()->findChild<QComboBox*>("freeSlurNode"));QTRY_COMPARE(panelNow()->findChild<QComboBox*>("freeSlurNode")->count(),2);
       auto view=main->currentScoreView();view->setOffset(0,0);view->adjustCanvasPosition(slur->startCR(),false);QTest::qWait(40);QVERIFY(panelNow());panelNow()->grab().save("free-slur-auto-inspector.png");view->grab().save("free-slur-auto-score.png");QVERIFY(main->savePdf(score,"free-slur-auto.pdf"));QFile svg("free-slur-auto.svg");QVERIFY(svg.open(QIODevice::WriteOnly));QVERIFY(main->saveSvg(score,&svg));svg.close();QVERIFY(QFileInfo("free-slur-auto.pdf").size()>100);QCOMPARE(slur->getProperty(Pid::FREE_SLUR_NODES),old);
       }
+
+void TestPerformanceEditor::repair054EndpointSidesAndHandText(){
+ if(!Ms::mscore){QCoreApplication::setOrganizationName("PerformanceRegression");QCoreApplication::setApplicationName("Repair054");QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,_directory.path());dataPath=_directory.path();MScore::noGui=true;noSeq=true;converterMode=true;initMuseScoreResources();QStringList args;MuseScore::init(args);}
+
+ std::unique_ptr<MasterScore> score(readScore("mscore/performanceeditor/freeslur.mscx"));QVERIFY(score);score->doLayout();auto slur=addFreeSlur(score.get());
+ score->startCmd();slur->undoChangeProperty(Pid::FREE_SLUR_MODE,true);slur->undoChangeProperty(Pid::FREE_SLUR_START_SIDE,-1);slur->undoChangeProperty(Pid::FREE_SLUR_END_SIDE,1);score->endCmd();score->doLayout();
+ auto segment=slur->frontSegment();auto grips=segment->gripsPositions();auto a=toChord(slur->startElement())->upNote(),b=toChord(slur->endElement())->downNote();
+ QVERIFY(grips[int(Grip::START)].y()<a->pagePos().y()+a->bbox().top());QVERIFY(grips[int(Grip::END)].y()>b->pagePos().y()+b->bbox().bottom());
+ const auto before=freeSlurMidi(score.get());auto original=slur->getProperty(Pid::FREE_SLUR_START_SIDE);score->startCmd();slur->undoChangeProperty(Pid::FREE_SLUR_START_SIDE,1);score->endCmd();score->undoRedo(true,&ed);QCOMPARE(slur->getProperty(Pid::FREE_SLUR_START_SIDE),original);
+ auto mark=new Symbol(score.get());mark->setSym(SymId::keyboardPlayWithRHEnd);mark->applyHandPreset();mark->setParent(a);mark->setTrack(0);mark->setProperty(Pid::HAND_BRACKET_TEXT,true);
+ score->startCmd();score->undoAddElement(mark);mark->undoChangeProperty(Pid::HAND_TEXT_OFFSET,QPointF(1,2));mark->undoChangeProperty(Pid::HAND_TEXT_SIZE,11.);mark->undoChangeProperty(Pid::HAND_TEXT_AUTO,false);score->endCmd();score->doLayout();
+ QCOMPARE(mark->gripsCount(),4);QVERIFY(mark->gripsPositions()[0].x()>a->pagePos().x()+a->bbox().right());
+ const auto path=_directory.filePath("repair-054.mscx");QVERIFY(saveScore(score.get(),path));std::unique_ptr<MasterScore> restored(readCreatedScore(path));QVERIFY(restored);Slur* read=nullptr;for(auto entry:restored->spannerMap().map())if(entry.second->isSlur())read=toSlur(entry.second);QVERIFY(read);QCOMPARE(read->freeStartSide(),-1);QCOMPARE(read->freeEndSide(),1);
+ Symbol* saved=nullptr;auto first=toChord(restored->firstSegment(SegmentType::ChordRest)->element(0));for(auto e:first->upNote()->el())if(e->isSymbol())saved=toSymbol(e);QVERIFY(saved);QCOMPARE(saved->getProperty(Pid::HAND_TEXT_OFFSET).toPointF(),QPointF(1,2));QCOMPARE(saved->getProperty(Pid::HAND_TEXT_SIZE).toDouble(),11.);QVERIFY(!saved->getProperty(Pid::HAND_TEXT_AUTO).toBool());QCOMPARE(freeSlurMidi(restored.get()),before);
+ auto main=Ms::mscore;auto grand=main->readScore(QString(TESTROOT)+"/mtest/mscore/performanceeditor/repair054-crossstaff.mscx");QVERIFY(grand);main->setCurrentScoreView(main->appendScore(grand));main->resize(1250,850);main->show();
+ auto firstChord=toChord(grand->firstSegment(SegmentType::ChordRest)->element(4)),lastChord=toChord(grand->tick2segment(Fraction::fromTicks(1440),false,SegmentType::ChordRest)->element(0));
+ auto cross=new Slur(grand);cross->setTrack(4);cross->setTrack2(0);cross->setTick(firstChord->tick());cross->setTicks(lastChord->tick()-firstChord->tick());cross->setStartElement(firstChord);cross->setEndElement(lastChord);
+ cross->setProperty(Pid::FREE_SLUR_MODE,true);cross->setProperty(Pid::FREE_SLUR_AUTO,true);cross->setProperty(Pid::FREE_SLUR_START_SIDE,-1);cross->setProperty(Pid::FREE_SLUR_END_SIDE,1);
+ grand->startCmd();grand->undoAddElement(cross);grand->endCmd();grand->doLayout();QVERIFY(cross->frontSegment());auto crossGrips=cross->frontSegment()->gripsPositions();
+ QVERIFY(crossGrips[int(Grip::START)].y()<firstChord->upNote()->pagePos().y());QVERIFY(crossGrips[int(Grip::END)].y()>lastChord->downNote()->pagePos().y());
+ QTest::qWait(40);const auto artifacts=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");if(!artifacts.isEmpty()){main->currentScoreView()->grab().save(artifacts+"/slur-crossstaff-054.png");QVERIFY(main->savePdf(grand,artifacts+"/slur-crossstaff-054.pdf"));}
+
+ auto ritScore=main->readScore(QString(TESTROOT)+"/mtest/mscore/performanceeditor/freeslur.mscx");QVERIFY(ritScore);main->setCurrentScoreView(main->appendScore(ritScore));
+ auto breakLine=new LayoutBreak(ritScore);breakLine->setLayoutBreakType(LayoutBreak::Type::LINE);breakLine->setParent(ritScore->firstMeasure());ritScore->startCmd();ritScore->undoAddElement(breakLine);ritScore->endCmd();
+ auto rit=new TextLine(ritScore,true);rit->setTrack(0);rit->setTick(Fraction(0,1));rit->setTicks(ritScore->firstMeasure()->nextMeasure()->endTick());rit->setBeginText("rit.");rit->setProperty(Pid::RIT_MODE,true);rit->setProperty(Pid::RIT_PLAY,true);ritScore->startCmd();ritScore->undoAddElement(rit);ritScore->endCmd();ritScore->doLayout();
+ System* endSystem=nullptr;auto endPosition=rit->linePos(Grip::END,&endSystem);auto last=ritScore->firstMeasure()->nextMeasure();QCOMPARE(endSystem,last->system());QVERIFY(std::abs(endPosition.x()-last->x()-last->width())<.01);QCOMPARE(rit->spannerSegments().size(),size_t(2));
+ if(!artifacts.isEmpty()){main->currentScoreView()->grab().save(artifacts+"/rit-boundaries-054.png");}
+ ritScore->startCmd();rit->undoChangeProperty(Pid::SPANNER_TICKS,ritScore->firstMeasure()->endTick());ritScore->endCmd();ritScore->doLayout();endPosition=rit->linePos(Grip::END,&endSystem);QCOMPARE(endSystem,ritScore->firstMeasure()->system());QCOMPARE(rit->spannerSegments().size(),size_t(1));QVERIFY(std::isfinite(endPosition.x()));
+
+}

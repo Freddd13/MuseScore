@@ -384,7 +384,8 @@ QPointF TextLine::linePos(Grip grip, System** system) const
       {
       if (!ritEnabled()) return TextLineBase::linePos(grip, system);
       const Fraction point = grip == Grip::START ? tick() : tick2();
-      Measure* measure = score()->tick2measureMM(point);
+      const Fraction lookup=grip==Grip::END&&point>Fraction(0,1)?point-Fraction::eps():point;
+      Measure* measure = score()->tick2measureMM(lookup);
       if (!measure && score()->lastMeasure() && point == score()->lastMeasure()->endTick()) measure = score()->lastMeasure();
       if (!measure) { *system = nullptr; return {}; }
       const Fraction local = point - measure->tick();

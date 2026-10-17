@@ -21,6 +21,7 @@
 #include "staff.h"
 #include "system.h"
 #include "symbol.h"
+#include "text.h"
 #include "handbracket.h"
 #include "sym.h"
 #include "xml.h"
@@ -44,6 +45,7 @@ Symbol::Symbol(const Symbol& s)
       _scoreFont = s._scoreFont;
       _handMode = s._handMode;
       _handText = s._handText;
+      _handTextOffset=s._handTextOffset;_handTextFont=s._handTextFont;_handTextSize=s._handTextSize;_handTextAuto=s._handTextAuto;
       _handH = s._handH;
       _handV = s._handV;
       _handWidth = s._handWidth;
@@ -118,7 +120,10 @@ QPainterPath Symbol::handPath() const
 
 QFont Symbol::handFont() const
       {
-      QFont font("FreeSerif"); font.setItalic(true); font.setPixelSize(qMax(1,qRound(.9 * spatium() * mag())));
+      Text expression(score(),Tid::EXPRESSION);QFont font=expression.font();
+      if(!_handTextFont.isEmpty())font.setFamily(_handTextFont);
+      if(_handTextSize>0)font.setPointSizeF(_handTextSize*(expression.sizeIsSpatiumDependent()?spatium()/SPATIUM20:1.));
+      if(font.pointSizeF()>0)font.setPointSizeF(font.pointSizeF()*mag());
       return font;
       }
 
@@ -128,7 +133,7 @@ QPointF Symbol::handTextPosition() const
       const qreal width = QFontMetricsF(handFont(), MScore::paintDevice()).horizontalAdvance(handLeft() ? "l.h." : "r.h.");
       const qreal x=_handH>=0 ? -.3*unit-width : .3*unit;
       const qreal y=handLeft() ? -.2*unit : _handV*unit+.3*unit;
-      return QPointF(x,y);
+      return QPointF(x,y)+_handTextOffset*unit;
       }
 
 QRectF Symbol::handTextRect() const
@@ -144,7 +149,7 @@ Shape Symbol::shape() const
       Shape result;
       result.add(QRectF(-pad,qMin(qreal(0),y)-pad,2*pad,std::abs(y)+2*pad));
       result.add(QRectF(qMin(qreal(0),x)-pad,corner-pad,std::abs(x)+2*pad,2*pad));
-      if (_handText) result.add(handTextRect());
+      if (_handText && _handTextAuto) result.add(handTextRect());
       return result;
       }
 
@@ -152,15 +157,17 @@ std::vector<QPointF> Symbol::gripsPositions(const EditData&) const
       {
       if (!handBracket()) return {};
       const qreal unit = spatium() * mag();
-      return {pagePos()+QPointF(_handH*unit,handLeft() ? _handV*unit : 0),
+      std::vector<QPointF> result {pagePos()+QPointF(_handH*unit,handLeft() ? _handV*unit : 0),
             pagePos()+QPointF(0,handLeft() ? 0 : _handV*unit),
             pagePos()+QPointF(0,handLeft() ? _handV*unit : 0)};
+      if(_handText)result.push_back(pagePos()+handTextRect().center());return result;
       }
 
 void Symbol::startEditDrag(EditData& ed)
       {
       Element::startEditDrag(ed);
-      if (handBracket() && int(ed.curGrip)>=0 && int(ed.curGrip)<3) {
+      if (handBracket() && int(ed.curGrip)>=0 && int(ed.curGrip)<gripsCount()) {
+            if(int(ed.curGrip)==3){auto data=ed.getData(this);data->pushProperty(Pid::HAND_TEXT_OFFSET);data->pushProperty(Pid::HAND_TEXT_AUTO);_handTextDragOriginal=_handTextOffset;_handTextDragAuto=_handTextAuto;_handDragging=true;return;}
             auto data=ed.getData(this); data->pushProperty(Pid::HAND_BRACKET_H); data->pushProperty(Pid::HAND_BRACKET_V);
             _handDragOriginal=QPointF(_handH,_handV); _handDragOffset=offset(); _handDragging=true;
             }
@@ -168,11 +175,12 @@ void Symbol::startEditDrag(EditData& ed)
 
 void Symbol::editDrag(EditData& ed)
       {
-      if (!handBracket() || int(ed.curGrip)<0 || int(ed.curGrip)>=3) {BSymbol::editDrag(ed);return;}
+      if (!handBracket() || int(ed.curGrip)<0 || int(ed.curGrip)>=gripsCount()) {BSymbol::editDrag(ed);return;}
       if (!_handDragging) return; // cancelled preview stays cancelled until release
       const qreal unit=spatium()*mag();
       score()->addRefresh(canvasBoundingRect());
-      if (int(ed.curGrip)==2) setOffset(offset()+ed.delta);
+      if(int(ed.curGrip)==3){setProperty(Pid::HAND_TEXT_OFFSET,_handTextOffset+ed.delta/unit);setProperty(Pid::HAND_TEXT_AUTO,false);}
+      else if (int(ed.curGrip)==2) setOffset(offset()+ed.delta);
       else if (int(ed.curGrip)==0) {
             const double sign=_handH<0?-1:1;
             setProperty(Pid::HAND_BRACKET_H,sign*qBound(.05,sign*(_handH+ed.delta.x()/unit),40.0));
@@ -193,7 +201,8 @@ void Symbol::endEditDrag(EditData& ed)
 
 bool Symbol::edit(EditData& ed)
       {
-      if (handBracket() && int(ed.curGrip)>=0 && int(ed.curGrip)<3) {
+      if (handBracket() && int(ed.curGrip)>=0 && int(ed.curGrip)<gripsCount()) {
+            if(int(ed.curGrip)==3){if(ed.key==Qt::Key_Escape&&_handDragging){setProperty(Pid::HAND_TEXT_OFFSET,_handTextDragOriginal);setProperty(Pid::HAND_TEXT_AUTO,_handTextDragAuto);_handDragging=false;layout();return true;}if(ed.key==Qt::Key_Home){undoChangeProperty(Pid::HAND_TEXT_OFFSET,QPointF());undoChangeProperty(Pid::HAND_TEXT_AUTO,true);return true;}}
             if (ed.key==Qt::Key_Escape && _handDragging) {
                   score()->addRefresh(canvasBoundingRect());
                   setProperty(Pid::HAND_BRACKET_H,_handDragOriginal.x());
@@ -260,7 +269,7 @@ void Symbol::draw(QPainter* p) const
             p->save();p->setBrush(Qt::NoBrush);
             p->setPen(QPen(curColor(),_handWidth*spatium()*mag(),Qt::SolidLine,Qt::SquareCap,Qt::MiterJoin));
             p->drawPath(handPath());
-            if (_handText) {p->setPen(curColor());p->setFont(handFont());p->drawText(handTextPosition(),handLeft() ? "l.h." : "r.h.");}
+            if (_handText) {p->setPen(curColor());QFont textFont=handFont();textFont.setPointSizeF(textFont.pointSizeF()*MScore::pixelRatio);TextBase::drawTextWorkaround(p,textFont,handTextPosition(),handLeft() ? "l.h." : "r.h.");}
             p->restore();return;
             }
       if (!isNoteDot() || !staff()->isTabStaff(tick())) {
@@ -282,7 +291,7 @@ void Symbol::write(XmlWriter& xml) const
       xml.tag("name", Sym::id2name(_sym));
       if (_scoreFont)
             xml.tag("font", _scoreFont->name());
-      for (Pid id : {Pid::HAND_BRACKET_MODE,Pid::HAND_BRACKET_H,Pid::HAND_BRACKET_V,Pid::HAND_BRACKET_WIDTH,Pid::HAND_BRACKET_TEXT})
+      for (Pid id : {Pid::HAND_BRACKET_MODE,Pid::HAND_BRACKET_H,Pid::HAND_BRACKET_V,Pid::HAND_BRACKET_WIDTH,Pid::HAND_BRACKET_TEXT,Pid::HAND_TEXT_OFFSET,Pid::HAND_TEXT_FONT,Pid::HAND_TEXT_SIZE,Pid::HAND_TEXT_AUTO})
             writeProperty(xml,id);
       if(handBracket() && _handBaseValid && (!offset().isNull() || !autoplace() || _handGeometryEdited))xml.tag("handAnchor",_handBase);
       BSymbol::writeProperties(xml);
@@ -341,6 +350,10 @@ void Symbol::read(XmlReader& e)
             else if (tag == propertyName(Pid::HAND_BRACKET_V)) readProperty(e,Pid::HAND_BRACKET_V);
             else if (tag == propertyName(Pid::HAND_BRACKET_WIDTH)) readProperty(e,Pid::HAND_BRACKET_WIDTH);
             else if (tag == propertyName(Pid::HAND_BRACKET_TEXT)) readProperty(e,Pid::HAND_BRACKET_TEXT);
+            else if (tag == propertyName(Pid::HAND_TEXT_OFFSET)) readProperty(e,Pid::HAND_TEXT_OFFSET);
+            else if (tag == propertyName(Pid::HAND_TEXT_FONT)) readProperty(e,Pid::HAND_TEXT_FONT);
+            else if (tag == propertyName(Pid::HAND_TEXT_SIZE)) readProperty(e,Pid::HAND_TEXT_SIZE);
+            else if (tag == propertyName(Pid::HAND_TEXT_AUTO)) readProperty(e,Pid::HAND_TEXT_AUTO);
             else if (!BSymbol::readProperties(e))
                   e.unknown();
             }
@@ -360,6 +373,10 @@ QVariant Symbol::getProperty(Pid propertyId) const
             case Pid::HAND_BRACKET_V: return _handV;
             case Pid::HAND_BRACKET_WIDTH: return _handWidth;
             case Pid::HAND_BRACKET_TEXT: return _handText;
+            case Pid::HAND_TEXT_OFFSET:return _handTextOffset;
+            case Pid::HAND_TEXT_FONT:return _handTextFont;
+            case Pid::HAND_TEXT_SIZE:return _handTextSize;
+            case Pid::HAND_TEXT_AUTO:return _handTextAuto;
             case Pid::SYMBOL:
                   return QVariant::fromValue(_sym);
             default:
@@ -388,6 +405,10 @@ bool Symbol::setProperty(Pid id, const QVariant& value)
                         }
                   _handMode=value.toBool();break;
             case Pid::HAND_BRACKET_TEXT: _handText=value.toBool();break;
+            case Pid::HAND_TEXT_OFFSET: {auto p=value.toPointF();if(!std::isfinite(p.x())||!std::isfinite(p.y())||std::abs(p.x())>100||std::abs(p.y())>100)return false;_handTextOffset=p;break;}
+            case Pid::HAND_TEXT_FONT:_handTextFont=value.toString().left(128);break;
+            case Pid::HAND_TEXT_SIZE:if(!std::isfinite(number)||number<0||number>96)return false;_handTextSize=number;break;
+            case Pid::HAND_TEXT_AUTO:_handTextAuto=value.toBool();break;
             case Pid::HAND_BRACKET_H:
             case Pid::HAND_BRACKET_V:
                   if (!std::isfinite(number) || std::abs(number)>40) return false;
@@ -408,6 +429,10 @@ QVariant Symbol::propertyDefault(Pid id) const
       switch (id) {
             case Pid::HAND_BRACKET_MODE: return false;
             case Pid::HAND_BRACKET_TEXT: return false;
+            case Pid::HAND_TEXT_OFFSET:return QPointF();
+            case Pid::HAND_TEXT_FONT:return QString();
+            case Pid::HAND_TEXT_SIZE:return 0.;
+            case Pid::HAND_TEXT_AUTO:return true;
             case Pid::HAND_BRACKET_H: return handEnd() ? -2.0 : 2.0;
             case Pid::HAND_BRACKET_V: return -1.0;
             case Pid::HAND_BRACKET_WIDTH: return .12;

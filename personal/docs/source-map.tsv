@@ -287,3 +287,5 @@ MIDI音长试听	mscore/midicrop/gateaudition.cpp	GateAudition prepareGateAuditi
 MIDI音长绘制	mscore/midicrop/gateroll.inc	class GateRoll final	2	原新轮廓和松手点拖动	mtest/mscore/p1native/gate_comparison_tests.inc
 插件重载	mscore/plugin/pluginManager.cpp	void PluginManager::reloadPluginsClicked()	366	保存并恢复打开的插件面板	reloadActiveWorkflowPanels
 原曲结构	mscore/workflow/referenceworkflow.cpp	QString ScoreObserver::referenceStructureKey() const	22	关联所需的小节拍号信息	realPanelMouseActions
+自由圆滑线端点	libmscore/freeslur.cpp	SlurSegment::computeFreeBezier	175	独立端点与跨谱表障碍	repair054EndpointSidesAndHandText
+分手文字	libmscore/symbol.cpp	Symbol::handFont	100	表情文字样式与第四拖动点	repair054EndpointSidesAndHandText

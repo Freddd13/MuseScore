@@ -970,6 +970,7 @@ bool PaletteTree::read(XmlReader& e)
             else
                   e.unknown();
             }
+      deduplicatePlayableTempoSymbols(this);
       return true;
       }
 

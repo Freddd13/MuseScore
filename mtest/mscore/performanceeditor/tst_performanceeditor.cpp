@@ -909,6 +909,7 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "performance_controls_tests.inc"
 #endif
       void accentInspectorAndNativeDefault();
+      void repair054EndpointSidesAndHandText();
       void handSymbolModelAndPersistence();
       void handSymbolPlacementAndDefaults();
       void restoredTempoLayout();

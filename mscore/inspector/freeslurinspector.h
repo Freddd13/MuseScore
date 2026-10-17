@@ -18,6 +18,7 @@ class FreeSlurInspector : public QWidget {
       QVector<FreeSlurNode> _nodes;
       QComboBox* _choice;
       QComboBox* _span=nullptr;
+      QComboBox* _startSide=nullptr;QComboBox* _endSide=nullptr;
       QComboBox* _route=nullptr;
       QToolButton* _smoothSpan=nullptr;
       QDoubleSpinBox* _position;
@@ -75,6 +76,8 @@ class FreeSlurInspector : public QWidget {
             auto layout=new QGridLayout(this); mode=new QCheckBox(tr("自由曲线"),this); mode->setObjectName("freeSlurMode"); layout->addWidget(mode,0,0,1,3);
             _details=new QWidget(this); layout->addWidget(_details,3,0,1,3); auto grid=new QGridLayout(_details);
             _automatic=new QCheckBox(tr("自动避让音符"),this);_automatic->setObjectName("freeSlurAuto");layout->addWidget(_automatic,1,0,1,3);
+            auto endpoints=new QWidget(this);auto endpointGrid=new QGridLayout(endpoints);endpointGrid->setContentsMargins(0,0,0,0);layout->addWidget(endpoints,5,0,1,3);
+            for(int i=0;i<2;++i){auto box=new QComboBox(endpoints);box->addItems({tr("自动"),tr("音符上方"),tr("音符下方")});box->setObjectName(i?"freeSlurEndSide":"freeSlurStartSide");endpointGrid->addWidget(new QLabel(i?tr("终点位置"):tr("起点位置"),endpoints),i,0);endpointGrid->addWidget(box,i,1);if(i)_endSide=box;else _startSide=box;connect(box,QOverload<int>::of(&QComboBox::activated),this,[this,i](int value){if(_owner)mscore->performanceEditor()->queueProperty(_owner,i?Pid::FREE_SLUR_END_SIDE:Pid::FREE_SLUR_START_SIDE,value==1?-1:value==2?1:0);});}
             _result=new QLabel(this);_result->setWordWrap(true);layout->addWidget(_result,2,0,1,3);
             connect(_automatic,&QCheckBox::clicked,this,[this](bool value) {
                   if(_owner)mscore->performanceEditor()->queueProperty(_owner,Pid::FREE_SLUR_AUTO,value);
@@ -151,6 +154,7 @@ class FreeSlurInspector : public QWidget {
             auto element=_inspector->element(); if(!element->isSlurSegment()){hide();return;}
             auto owner=toSlurSegment(element)->slur();
             if(_owner!=owner || !mscore->performanceEditor()->hasPending()) {_owner=owner;_nodes=owner->freeNodes();}
+            for(int i=0;i<2;++i){auto box=i?_endSide:_startSide;QSignalBlocker block(box);const int side=i?owner->freeEndSide():owner->freeStartSide();box->setCurrentIndex(side<0?1:side>0?2:0);box->setEnabled(single&&owner->freeMode());}
             _details->setEnabled(single && owner->freeMode());_automatic->setEnabled(single && owner->freeMode());
             if(!mscore->performanceEditor()->hasPending()) {QSignalBlocker block(_automatic);_automatic->setChecked(owner->freeAuto());}
             int collisions=0;bool limited=false;for(auto s:owner->spannerSegments()) {auto segment=toSlurSegment(s);collisions+=segment->freeCollisions();limited|=segment->freeLimited();}

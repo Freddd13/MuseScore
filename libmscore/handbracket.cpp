@@ -22,7 +22,7 @@ int role(SymId id) {
       switch(id) {case SymId::keyboardPlayWithLH:return 0;case SymId::keyboardPlayWithLHEnd:return 1;
       case SymId::keyboardPlayWithRH:return 2;case SymId::keyboardPlayWithRHEnd:return 3;default:return -1;}
       }
-Style styles[4]={{.75,-1.8,.12,false},{-.75,-1.8,.12,false},{.75,-1.8,.12,false},{-.75,-1.8,.12,false}};
+Style styles[4]={{.6,-2.5,.12,false},{-.6,-2.5,.12,false},{.6,-2.5,.12,false},{-.6,-2.5,.12,false}};
 void chordRects(Chord* chord,const QPointF& origin,const QRectF& window,QVector<QRectF>* result) {
       auto add=[&](QRectF r){if(r.right()>=window.left()&&r.left()<=window.right())result->append(r);};
       for(auto note:chord->notes()) {
@@ -39,7 +39,7 @@ QVector<QRectF> inkRects(const Symbol* symbol) {
       const double h=symbol->getProperty(Pid::HAND_BRACKET_H).toDouble()*sp,v=symbol->getProperty(Pid::HAND_BRACKET_V).toDouble()*sp;
       const double pad=symbol->getProperty(Pid::HAND_BRACKET_WIDTH).toDouble()*sp/2,y=symbol->handLeft()?v:0.;
       QVector<QRectF> result{QRectF(-pad,qMin(0.,v)-pad,2*pad,std::abs(v)+2*pad),QRectF(qMin(0.,h)-pad,y-pad,std::abs(h)+2*pad,2*pad)};
-      if(symbol->getProperty(Pid::HAND_BRACKET_TEXT).toBool()){auto shape=symbol->shape();if(shape.size()>2)result.append(shape.back());}
+      if(symbol->getProperty(Pid::HAND_BRACKET_TEXT).toBool()&&symbol->getProperty(Pid::HAND_TEXT_AUTO).toBool()){auto shape=symbol->shape();if(shape.size()>2)result.append(shape.back());}
       return result;
       }
 void beamRects(Beam* beam,const QPointF& origin,const QRectF& window,QVector<QRectF>* result) {
@@ -76,10 +76,10 @@ QPointF position(const Symbol* symbol) {
       for(auto other:list){if(other==symbol)break;if(other->isSymbol()&&toSymbol(other)->handBracket()&&toSymbol(other)->handLeft()==symbol->handLeft())++ordinal;}
       auto baseAt=[&](double gap,int move){
             const double corner=nearCorner+(symbol->handLeft()?-1:1)*(ordinal+move)*grid;
-            const double x=h>=0?head.left()-h-gap*sp:head.right()-h+gap*sp;
+            const double x=symbol->handEnd()?head.right()+std::abs(h)+gap*sp:head.left()-std::abs(h)-gap*sp;
             return QPointF(x,corner-(symbol->handLeft()?v:0));
             };
-      const auto initial=baseAt(.28,0);if(!symbol->autoplace()||!system||!chord->segment())return initial;
+      const auto initial=baseAt(.15,0);if(!symbol->autoplace()||!system||!chord->segment())return initial;
       const double reach=qMax(8.,std::abs(h)/sp+6)*sp;
       const auto window=head.adjusted(-reach,-6*sp,reach,6*sp);
       QVector<QRectF> obstacles;QSet<Beam*> beams;
@@ -102,7 +102,7 @@ QPointF position(const Symbol* symbol) {
             }
       for(auto beam:beams)beamRects(beam,beam->pagePos()-parent->pagePos(),window,&obstacles);
       const auto ink=inkRects(symbol);QPointF best=initial;double bestCost=1e30;
-      for(int move:{0,1,2,3})for(double gap:{.28,.45,.7,1.,1.4}){
+      for(int move:{0,1,2,3})for(double gap:{.15,.25,.4,.6,.9}){
             const auto candidate=baseAt(gap,move);int hits=0;
             for(const auto& part:ink)for(const auto& obstacle:obstacles)if(part.translated(candidate).intersects(obstacle.adjusted(-.12*sp,-.12*sp,.12*sp,.12*sp)))++hits;
             const double cost=hits*1000.+move*.65+gap*.35;

@@ -12,6 +12,11 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QGridLayout>
+#include <QFontComboBox>
+#include <QDoubleSpinBox>
+#include <QCheckBox>
+#include <QSignalBlocker>
+#include "libmscore/text.h"
 namespace Ms {
 static QString styleKey(SymId id) {return QString("handBracket/%1/").arg(Sym::id2name(id));}
 static void refreshHandPaletteDefaults(SymId id) {
@@ -46,10 +51,12 @@ void addHandBracketDefaultControls(QWidget* host,QGridLayout* grid,Inspector* in
             if(inspector->el()->size()!=1 || !inspector->element()->isSymbol()){message->setText(QObject::tr("请只选中一个左右手标记。"));return;}
             if(mscore->performanceEditor()->hasPending()){message->setText(QObject::tr("请停播，等待当前修改保存后再保存默认形状。"));return;}
             auto symbol=toSymbol(inspector->element());HandBracket::Style style{symbol->getProperty(Pid::HAND_BRACKET_H).toDouble(),symbol->getProperty(Pid::HAND_BRACKET_V).toDouble(),symbol->getProperty(Pid::HAND_BRACKET_WIDTH).toDouble(),symbol->getProperty(Pid::HAND_BRACKET_TEXT).toBool()};
-            if(!HandBracket::setDefaults(symbol->sym(),style))return;
-            QSettings settings;const auto key=styleKey(symbol->sym());settings.setValue(key+"horizontal",style.horizontal);settings.setValue(key+"vertical",style.vertical);settings.setValue(key+"width",style.width);settings.setValue(key+"text",style.text);settings.sync();
-            if(settings.status()==QSettings::NoError)refreshHandPaletteDefaults(symbol->sym());
-            message->setText(settings.status()==QSettings::NoError ? QObject::tr("已保存。以后添加的同方向分手记号使用此形状。") : QObject::tr("设置无法写入，请检查设置文件是否可写。"));
+            QSettings settings;
+            for(auto id:{SymId::keyboardPlayWithLH,SymId::keyboardPlayWithLHEnd,SymId::keyboardPlayWithRH,SymId::keyboardPlayWithRHEnd}){
+                  auto mirrored=style;mirrored.horizontal=(id==SymId::keyboardPlayWithLHEnd||id==SymId::keyboardPlayWithRHEnd?-1:1)*std::abs(style.horizontal);
+                  if(!HandBracket::setDefaults(id,mirrored))return;const auto key=styleKey(id);settings.setValue(key+"horizontal",mirrored.horizontal);settings.setValue(key+"vertical",mirrored.vertical);settings.setValue(key+"width",mirrored.width);settings.setValue(key+"text",mirrored.text);refreshHandPaletteDefaults(id);
+                  }settings.sync();
+            message->setText(settings.status()==QSettings::NoError ? QObject::tr("已保存四种方向的默认长度，开始与结束互为镜像。") : QObject::tr("设置无法写入，请检查设置文件是否可写。"));
             });
       QObject::connect(use,&QPushButton::clicked,host,[inspector] {
             loadHandBracketDefaults();for(auto element:*inspector->el())if(element->isSymbol() && toSymbol(element)->handEligible()) {
@@ -77,4 +84,22 @@ void completeHandBracketPalette(PalettePanel* panel) {
             if(!found){auto symbol=new Symbol(gscore);symbol->setSym(entry.first);symbol->applyHandPreset();panel->append(symbol,QString::fromUtf8(entry.second),QString(),.55);}
             }
       }
+void addHandTextControls(QWidget* host,QGridLayout* grid,Inspector* inspector){
+ auto box=new QWidget(host);auto layout=new QGridLayout(box);layout->setContentsMargins(0,0,0,0);grid->addWidget(box,8,0,1,3);
+ auto face=new QFontComboBox(box);face->setObjectName("handTextFont");layout->addWidget(new QLabel(QObject::tr("手部文字字体"),box),0,0);layout->addWidget(face,0,1);
+ auto size=new QDoubleSpinBox(box);size->setObjectName("handTextSize");size->setRange(0,96);size->setSpecialValueText(QObject::tr("跟随表情文字"));size->setSuffix(" pt");size->setKeyboardTracking(false);layout->addWidget(new QLabel(QObject::tr("文字大小"),box),1,0);layout->addWidget(size,1,1);
+ auto automatic=new QCheckBox(QObject::tr("手部文字自动放置"),box);automatic->setObjectName("handTextAuto");layout->addWidget(automatic,2,0,1,2);
+ auto reset=new QPushButton(QObject::tr("跟随表情文字样式"),box);layout->addWidget(reset,3,0,1,2);
+ auto change=[inspector](Pid id,QVariant value){for(auto e:*inspector->el())if(e->isSymbol()&&toSymbol(e)->handEligible())mscore->performanceEditor()->queueProperty(e,id,value);};
+ QObject::connect(face,&QFontComboBox::currentFontChanged,box,[change](const QFont& f){change(Pid::HAND_TEXT_FONT,f.family());});
+ QObject::connect(size,QOverload<double>::of(&QDoubleSpinBox::valueChanged),box,[change](double v){change(Pid::HAND_TEXT_SIZE,v);});
+ QObject::connect(automatic,&QCheckBox::clicked,box,[change](bool v){change(Pid::HAND_TEXT_AUTO,v);});
+ QObject::connect(reset,&QPushButton::clicked,box,[change]{change(Pid::HAND_TEXT_FONT,QString());change(Pid::HAND_TEXT_SIZE,0.);});
+}
+void syncHandTextControls(QWidget* host,Symbol* symbol){
+ if(auto face=host->findChild<QFontComboBox*>("handTextFont")){QSignalBlocker block(face);QString family=symbol->getProperty(Pid::HAND_TEXT_FONT).toString();if(family.isEmpty()){Text expression(symbol->score(),Tid::EXPRESSION);family=expression.font().family();}face->setCurrentFont(QFont(family));}
+ if(auto size=host->findChild<QDoubleSpinBox*>("handTextSize")){QSignalBlocker block(size);size->setValue(symbol->getProperty(Pid::HAND_TEXT_SIZE).toDouble());}
+ if(auto automatic=host->findChild<QCheckBox*>("handTextAuto")){QSignalBlocker block(automatic);automatic->setChecked(symbol->getProperty(Pid::HAND_TEXT_AUTO).toBool());}
+}
+
 }

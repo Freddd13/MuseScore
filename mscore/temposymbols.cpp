@@ -25,7 +25,9 @@ void appendPlayableTempoSymbols(PalettePanel* panel)
       bool found[2]={false,false};
       for(int i=0;i<panel->ncells();) {
             auto cell=panel->cell(i);auto e=cell->element.get();if(!e){++i;continue;}
-            const bool oldRit=cell->tag=="kumo-rit",oldRestore=cell->tag=="kumo-a-tempo";
+            const QString plain=e->isTextBase()?toTextBase(e)->plainText().simplified().toLower():e->isTextLine()?toTextLine(e)->beginText().simplified().toLower():QString();
+            const bool factory=!cell->custom||cell->name==QObject::tr("渐慢 rit.（可播放）")||cell->name==QObject::tr("a tempo（恢复渐变前的速度）")||cell->name.startsWith("Kumo rit");
+            const bool oldRit=cell->tag=="kumo-rit"||(factory&&(plain=="rit."||plain=="ritardando")),oldRestore=cell->tag=="kumo-a-tempo"||(factory&&plain=="a tempo");
             int role=oldRit||(e->isTextLine()&&toTextLine(e)->ritPlay())?0:oldRestore||(e->isTempoText()&&toTempoText(e)->restoreMode()==1)?1:-1;
             if(role<0||(cell->custom&&!oldRit&&!oldRestore)){++i;continue;}
             if(found[role]){panel->takeCells(i,1);continue;}found[role]=true;
@@ -36,6 +38,16 @@ void appendPlayableTempoSymbols(PalettePanel* panel)
       if(!found[0])panel->append(makeRit(),QObject::tr("渐慢 rit.（可播放）"),QString(),1.);
       if(!found[1])panel->append(makeRestore(),QObject::tr("a tempo（恢复渐变前的速度）"),QString(),1.1);
       }
+
+void deduplicatePlayableTempoSymbols(PaletteTree* tree){
+ if(!tree)return;PalettePanel* preferred=nullptr;for(const auto& p:tree->palettes)if(p->type()==PalettePanel::Type::Tempo){preferred=p.get();break;}
+ if(!preferred)return;bool kept[2]={false,false};
+ auto clean=[&](PalettePanel* panel){for(int i=0;i<panel->ncells();){auto cell=panel->cell(i);auto e=cell->element.get();
+  const bool generated=cell->tag=="kumo-rit"||cell->tag=="kumo-a-tempo"||cell->name==QObject::tr("渐慢 rit.（可播放）")||cell->name==QObject::tr("a tempo（恢复渐变前的速度）");
+  if(!e||!isPlayableTempoSymbol(e)||(!generated&&cell->custom)){++i;continue;}
+  const int role=e->isTextLine()?0:1;if(kept[role])panel->takeCells(i,1);else{kept[role]=true;++i;}
+ }};clean(preferred);for(const auto& p:tree->palettes)if(p.get()!=preferred)clean(p.get());
+}
 
 bool isPlayableTempoSymbol(const Element* element)
       {

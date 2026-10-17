@@ -1487,6 +1487,7 @@ InspectorHandSymbol::InspectorHandSymbol(QWidget* parent)
             });
       auto hint=new QLabel(tr("双击记号后拖动两个端点调整长度，拖动拐点移动整条折线。水平／竖直反向改变朝向。拖动数字名称可调整长度，按住 Shift 细调，Esc 取消。"),host);hint->setWordWrap(true);grid->addWidget(hint,4,0,1,3);
       addHandBracketDefaultControls(host,grid,inspector);
+      addHandTextControls(host,grid,inspector);
             connect(_mode,&QCheckBox::clicked,this,[this](bool checked) {
             for(auto e:*inspector->el())if(e->isSymbol() && toSymbol(e)->handEligible()) {
                   auto symbol=toSymbol(e);auto editor=mscore->performanceEditor();
@@ -1503,6 +1504,7 @@ InspectorHandSymbol::InspectorHandSymbol(QWidget* parent)
 
 void InspectorHandSymbol::postInit()
       {
+      if(inspector->element()->isSymbol()&&!mscore->performanceEditor()->hasPending())syncHandTextControls(this,toSymbol(inspector->element()));
       bool all=true,enabled=true;
       for (auto e:*inspector->el()) {all &= e->isSymbol() && toSymbol(e)->handEligible(); enabled &= e->isSymbol() && toSymbol(e)->handBracket();}
       _mode->setEnabled(all);_details->setEnabled(all && enabled);
