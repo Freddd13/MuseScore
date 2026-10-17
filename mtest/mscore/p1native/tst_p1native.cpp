@@ -95,6 +95,11 @@ class TestP1Native:public QObject{
  Q_OBJECT
  QTemporaryDir settings;
 private slots:
+ void cleanupTestCase(){
+  QList<QPointer<QmlPlugin>> roots;for(auto w:QGuiApplication::allWindows())if(auto v=qobject_cast<QQuickView*>(w))if(auto p=qobject_cast<QmlPlugin*>(v->rootObject()))roots.append(p);
+  for(auto p:roots)if(p)p->disposePanelForReload();QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
+  delete Ms::mscore;Ms::mscore=nullptr;
+ }
  void initTestCase(){
   installTestCrashReport();
   QCoreApplication::setOrganizationName("KumoP1Regression");QCoreApplication::setApplicationName("P1");

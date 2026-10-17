@@ -58,7 +58,8 @@ void MuseScore::registerPlugin(PluginDescription* plugin)
             qDebug("Register Plugin <%s>", qPrintable(_pluginPath));
       f.close();
       QObject* obj = 0;
-      QQmlComponent component(getPluginEngine(), QUrl::fromLocalFile(_pluginPath));
+      QmlPluginEngine metadataEngine;
+      QQmlComponent component(&metadataEngine, QUrl::fromLocalFile(_pluginPath));
       obj = component.create();
       if (obj == 0) {
             qDebug("creating component <%s> failed", qPrintable(_pluginPath));
@@ -83,6 +84,7 @@ void MuseScore::registerPlugin(PluginDescription* plugin)
             }
 
       QmlPlugin* item = qobject_cast<QmlPlugin*>(obj);
+      if (!item) { delete obj; return; }
       QString menuPath = item->menuPath();
       plugin->menuPath = menuPath;
       plugins.append(_pluginPath);
@@ -454,7 +456,9 @@ void MuseScore::pluginTriggered(QString pp)
             }
 
       if (p->pluginType() == "dock" || p->pluginType() == "dialog") {
+            engine = new QmlPluginEngine(qApp);
             QQuickView* view = new QQuickView(engine, 0);
+            engine->setParent(view);
             view->setSource(QUrl::fromLocalFile(pp));
             if (QmlPlugin* viewPluginInstance = qobject_cast<QmlPlugin*>(view->rootObject())) {
                   // a new plugin instance was created by view, use it instead.
@@ -481,8 +485,9 @@ void MuseScore::pluginTriggered(QString pp)
                   dock->setWidget(w);
                   addDockWidget(area, dock);
                   const bool restored=arrangeWorkflowDock(this,dock,QFileInfo(pp).completeBaseName(),p->property("preferredPanelGroup").toString(),area);
-                  if(p->property("independentPanelSurfaces").toBool())p->setProperty("workflowPluginPath",pp);
+                  p->setProperty("workflowPluginPath",pp);
                   p->attachPanelDock(dock);
+                  connect(qApp,&QCoreApplication::aboutToQuit,p,[p]{p->disposePanelForReload();});
                   const bool workflowPanel=!p->property("preferredPanelGroup").toString().isEmpty();
                   const bool side=area==Qt::RightDockWidgetArea || area==Qt::LeftDockWidgetArea;
                   const Qt::Orientation orientation=workflowPanel ? (side?Qt::Horizontal:Qt::Vertical)
@@ -502,7 +507,7 @@ void MuseScore::pluginTriggered(QString pp)
                   }
             }
 
-      connect(engine, &QmlPluginEngine::endCmd, p, &QmlPlugin::endCmd);
+      connect(getPluginEngine(), &QmlPluginEngine::endCmd, p, &QmlPlugin::endCmd);
 
       p->setFilePath(pp.section('/', 0, -2));
 
@@ -521,11 +526,13 @@ void MuseScore::pluginTriggered(QString pp)
 ///   description has failed
 //---------------------------------------------------------
 
-bool collectPluginMetaInformation(PluginDescription* d)
+bool collectPluginMetaInformation(PluginDescription* d, QmlPluginEngine* metadataEngine)
       {
       qDebug("Collect meta for <%s>", qPrintable(d->path));
 
-      QQmlComponent component(mscore->getPluginEngine(), QUrl::fromLocalFile(d->path));
+      std::unique_ptr<QmlPluginEngine> owned;
+      if(!metadataEngine){owned.reset(new QmlPluginEngine);metadataEngine=owned.get();}
+      QQmlComponent component(metadataEngine, QUrl::fromLocalFile(d->path));
       QObject* obj = component.create();
       if (obj == 0) {
             qDebug("creating component <%s> failed", qPrintable(d->path));

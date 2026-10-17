@@ -17,6 +17,7 @@
 #include "shortcut.h"
 
 namespace Ms {
+class QmlPluginEngine;
 
 
 //---------------------------------------------------------
@@ -41,6 +42,7 @@ class PluginManager : public QDialog, public Ui::PluginManager {
 
       QMap<QString, Shortcut*> localShortcuts;
       bool shortcutsChanged;
+      bool _reloadWaiting=false;
       QList<PluginDescription> _pluginList;
 
       void readSettings();
@@ -72,8 +74,7 @@ class PluginManager : public QDialog, public Ui::PluginManager {
       PluginDescription* getPluginDescription(int idx) {return &_pluginList[idx];}
       };
 
-extern bool collectPluginMetaInformation(PluginDescription*);
+extern bool collectPluginMetaInformation(PluginDescription*, QmlPluginEngine* metadataEngine = nullptr);
 
 } // namespace Ms
 #endif
-

@@ -54,6 +54,12 @@ QmlPlugin::~QmlPlugin()
       release(_summaryDock,_summaryWindow);release(_detailDock,_detailWindow);
       }
 
+void QmlPlugin::disposePanelForReload()
+      {
+      auto dock=_panelDock.data();
+      if(dock){dock->close();_panelDock.clear();delete dock;}
+      }
+
 void QmlPlugin::attachPanelDock(QDockWidget* dock)
       {
       _panelDock = dock;

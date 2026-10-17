@@ -104,6 +104,7 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QString analysisRevision();
       Q_INVOKABLE QVariantMap workflowStatus();
       Q_INVOKABLE QVariantMap stopWorkflowPlayback();
+      Q_INVOKABLE QString referenceStructureKey() const;
       Q_INVOKABLE QVariantMap referencePlan(const QVariantMap&);
       Q_INVOKABLE QVariantMap startReferencePlayback(const QVariantMap&);
       Q_INVOKABLE QVariantMap stopReferencePlayback();

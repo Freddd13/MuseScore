@@ -116,6 +116,7 @@ MuseScore {
  property var owner:null
  property bool hasScore:false
  property string workspace:""
+ property string structureKey:""
  property string status:"打开本地原曲开始"
  property var bookmarks:[]
  property var associations:[]
@@ -129,7 +130,7 @@ MuseScore {
  property var config:({speed:1,volume:.8,workspace:"",alignment:0})
  property var restored:null
  property bool usable:media && media.available
- property bool compact:(!panelFloating&&typeof panelPlacement==="string" && panelPlacement==="top") || height<170
+ property bool compact:(!panelFloating&&typeof panelPlacement==="string" && panelPlacement==="top")
  property bool narrow:width<600
  property var sourceIdentity:null
  property var viewportPeaks:[]
@@ -198,6 +199,7 @@ MuseScore {
   var changed=!Project.sameScore(owner,curScore);
   if(changed&&associations.length){associations=associations.map(function(item){var next=Project.copy(item);next.stale=true;return next;});status="已切换乐谱，打开关联的“修改”可选用当前谱段。";}
   owner=curScore;observer.score=curScore;
+  if(changed)structureKey=typeof observer.referenceStructureKey==="function"?observer.referenceStructureKey():"";
   if(changed)storeTrack();
  }
  function updateAssociationScore(){
@@ -246,10 +248,12 @@ MuseScore {
  onScoreStateChanged: {
   if(audioProject&&audioProject.available&&audioProject.expressionPreview)return;
   bindScore();
-  if(state && !state.selectionChanged && state.startLayoutTick>=0 && associations.length) {
-   associations=associations.map(function(v){var n=Project.copy(v);if(state.startLayoutTick<n.end && state.endLayoutTick>n.start)n.stale=true;return n});
-   status="谱面已编辑 · 相关关联请核查";
+  var shape=observer&&typeof observer.referenceStructureKey==="function"?observer.referenceStructureKey():"";
+  if(structureKey&&shape&&structureKey!==shape&&associations.length){
+   associations=associations.map(function(v){var n=Project.copy(v);n.stale=true;return n});
+   status="小节或拍号已改变，请在关联行调整对应范围。";
   }
+  structureKey=shape;
  }
  Component.onDestruction:{storeTrack();if(audioProject&&audioProject.playing&&observer)observer.stopReferencePlayback();for(var i=0;i<sessions.length;++i)sessions[i].pause();if(usable)media.pause();persist()}
  onVisibleChanged:{if(!visible){spaceDown=false;spacePanned=false;if(usable&&pauseWhenHidden)media.pause();storeTrack();persist()}}

@@ -285,3 +285,5 @@ MIDI松手说明	mscore/midicrop/midicroppanel.cpp	QString reasonText(	32	原长
 MIDI松手范围	audio/exports/midigate.h	QPair<int,int> releaseBounds(	93	允许手动调整的导出范围	mtest/mscore/p1native/gate_comparison_tests.inc
 MIDI音长试听	mscore/midicrop/gateaudition.cpp	GateAudition prepareGateAudition(	11	导出出现位置与实际播放事件对应	mtest/mscore/performanceeditor/gate_playback_tests.inc
 MIDI音长绘制	mscore/midicrop/gateroll.inc	class GateRoll final	2	原新轮廓和松手点拖动	mtest/mscore/p1native/gate_comparison_tests.inc
+插件重载	mscore/plugin/pluginManager.cpp	void PluginManager::reloadPluginsClicked()	366	保存并恢复打开的插件面板	reloadActiveWorkflowPanels
+原曲结构	mscore/workflow/referenceworkflow.cpp	QString ScoreObserver::referenceStructureKey() const	22	关联所需的小节拍号信息	realPanelMouseActions

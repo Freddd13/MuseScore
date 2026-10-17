@@ -1,3 +1,5 @@
+#include <QCryptographicHash>
+#include <QDataStream>
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2.
 #include "mscore/plugin/api/scoreobserver.h"
 #include "referencefactory.h"
@@ -45,6 +47,13 @@ double audioAt(const QVariantMap& a,int tick){
  QVariantList points=a.value("anchors").toList();points.prepend(QVariantMap{{"tick",a.value("start")},{"ms",a.value("from")}});points.append(QVariantMap{{"tick",a.value("end")},{"ms",a.value("until")}});
  for(int i=1;i<points.size();++i){auto p=points[i-1].toMap(),q=points[i].toMap();if(tick<=q.value("tick").toInt())return p.value("ms").toDouble()+(tick-p.value("tick").toInt())*(q.value("ms").toDouble()-p.value("ms").toDouble())/(q.value("tick").toInt()-p.value("tick").toInt());}return a.value("until").toDouble();
 }
+}
+QString ScoreObserver::referenceStructureKey() const {
+ if(!_score)return {};
+ QByteArray bytes;QDataStream out(&bytes,QIODevice::WriteOnly);
+ for(auto measure=_score->firstMeasure();measure;measure=measure->nextMeasure())
+  out<<measure->tick().ticks()<<measure->ticks().ticks()<<measure->timesig().numerator()<<measure->timesig().denominator();
+ return QString::fromLatin1(QCryptographicHash::hash(bytes,QCryptographicHash::Sha256).toHex());
 }
 QVariantMap ScoreObserver::referencePlan(const QVariantMap& request){
  if(!_score||playing()||(seq&&!seq->backgroundRenderingIdle()))return {{"error",tr("请先停止乐谱播放，等待声音准备完成。")}};

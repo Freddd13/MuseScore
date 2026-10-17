@@ -16,6 +16,12 @@
 #include "musescore.h"
 #include "libmscore/xml.h"
 #include "preferences.h"
+#include "qmlplugin.h"
+#include <QQuickView>
+#include <QGuiApplication>
+#include <QTimer>
+#include <QJSValue>
+#include <QSignalBlocker>
 
 
 namespace Ms {
@@ -146,7 +152,7 @@ void PluginManager::writePluginList()
 
 #ifdef SCRIPT_INTERFACE
 static void updatePluginList(const QString& pluginPath,
-   QList<PluginDescription>& pluginList)
+   QList<PluginDescription>& pluginList, QmlPluginEngine* metadataEngine)
       {
       QDirIterator it(pluginPath, QDir::NoDot|QDir::NoDotDot|QDir::Dirs|QDir::Files,
          QDirIterator::Subdirectories);
@@ -168,7 +174,7 @@ static void updatePluginList(const QString& pluginPath,
                               p.path = path;
                               p.load = false;
                               p.shortcut.setKey(pluginShortcutActionName);
-                              if (collectPluginMetaInformation(&p))
+                              if (collectPluginMetaInformation(&p,metadataEngine))
                                     pluginList.append(p);
                               }
                         }
@@ -189,12 +195,12 @@ void PluginManager::updatePluginList(bool forceRefresh)
             pluginPathList.append(p);
       if (forceRefresh) {
             _pluginList.clear();
-            QmlPluginEngine* engine = mscore->getPluginEngine();
-            engine->clearComponentCache(); //TODO: Check this doesn't have unwanted side effects.
+            // Every running panel has its own engine. Metadata scans use a short-lived engine.
             }
 
+      QmlPluginEngine metadataEngine;
       for (const QString& _pluginPath : pluginPathList) {
-            Ms::updatePluginList(_pluginPath, _pluginList);
+            Ms::updatePluginList(_pluginPath, _pluginList, &metadataEngine);
             }
       //remove non existing files
       auto i = _pluginList.begin();
@@ -215,7 +221,11 @@ void PluginManager::updatePluginList(bool forceRefresh)
 
 void PluginManager::loadList(bool forceRefresh)
       {
-      QStringList saveLoaded; // If forcing a refresh, the load flags are lost. Keep a copy and reapply.
+      const QSignalBlocker block(pluginListWidget);
+      const auto previous=_pluginList;
+      QString selectedPath;
+      if(auto item=pluginListWidget->currentItem()){int i=item->data(Qt::UserRole).toInt();if(i>=0&&i<_pluginList.size())selectedPath=_pluginList[i].path;}
+      QStringList saveLoaded; // Keep enabled plugins and shortcuts during a rescan.
       int n = _pluginList.size();
       if (forceRefresh && n > 0) {
             for (int i = 0; i < n; i++) {
@@ -232,8 +242,9 @@ void PluginManager::loadList(bool forceRefresh)
       disconnect(pluginListWidget, nullptr, nullptr, nullptr);
       for (int i = 0; i < n; ++i) {
             PluginDescription& d = _pluginList[i];
+            if(forceRefresh)for(const auto& old:previous)if(old.path==d.path){d.shortcut=old.shortcut;break;}
             Shortcut* s = &d.shortcut;
-            localShortcuts[s->key()] = new Shortcut(*s);
+            if(!localShortcuts.contains(s->key()))localShortcuts[s->key()] = new Shortcut(*s);
             if (saveLoaded.contains(d.path)) d.load = true;
             QListWidgetItem* item = new QListWidgetItem(QFileInfo(d.path).completeBaseName(),  pluginListWidget);
             item->setFlags(item->flags() | Qt::ItemIsEnabled);
@@ -244,8 +255,9 @@ void PluginManager::loadList(bool forceRefresh)
       connect(pluginListWidget, SIGNAL(currentItemChanged(QListWidgetItem*,QListWidgetItem*)),
               SLOT(pluginListWidgetItemChanged(QListWidgetItem*,QListWidgetItem*)));
       if (n) {
-            pluginListWidget->setCurrentRow(0);
-            pluginListWidgetItemChanged(pluginListWidget->item(0), 0);
+            int selected=0;for(int i=0;i<n;++i)if(_pluginList[i].path==selectedPath)selected=i;
+            pluginListWidget->setCurrentRow(selected);
+            pluginListWidgetItemChanged(pluginListWidget->item(selected), 0);
             }
       }
 
@@ -355,11 +367,27 @@ void PluginManager::definePluginShortcutClicked()
 
 void PluginManager::reloadPluginsClicked()
       {
+      QList<QPointer<QmlPlugin>> panels;
+      bool waiting=QApplication::mouseButtons()!=Qt::NoButton;
+      for(auto window:QGuiApplication::allWindows())if(auto view=qobject_cast<QQuickView*>(window))
+            if(auto panel=qobject_cast<QmlPlugin*>(view->rootObject())){
+                  auto capture=panel->property("captureState").value<QJSValue>().toVariant().toMap();
+                  waiting=waiting||capture.value("recording").toBool()||capture.value("stopping").toBool()||capture.value("saving").toBool();
+                  if(!panel->property("workflowPluginPath").toString().isEmpty())panels.append(panel);
+                  }
+      if(waiting){
+            reloadPlugins->setEnabled(false);reloadPlugins->setToolTip(tr("录制或拖动结束后将重载插件。"));
+            if(!_reloadWaiting){_reloadWaiting=true;QTimer::singleShot(200,this,[this]{_reloadWaiting=false;reloadPluginsClicked();});}return;
+            }
+      reloadPlugins->setEnabled(false);
+      QStringList reopen;
+      for(auto panel:panels)if(panel){reopen.append(panel->property("workflowPluginPath").toString());panel->disposePanelForReload();}
+      QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
       loadList(true);
-      QMessageBox::information(0,
-            tr("MuseScore"),
-            tr("Plugins reloaded."),
-            QMessageBox::Ok, QMessageBox::NoButton);
+      for(auto& plugin:_pluginList)if(plugin.load)mscore->registerPlugin(&plugin);
+      for(const auto& path:reopen)mscore->pluginTriggered(path);
+      reloadPlugins->setEnabled(true);reloadPlugins->setToolTip(tr("重新读取插件，并恢复打开的面板。"));
+      QMessageBox::information(this,tr("MuseScore"),tr("插件已重载，打开的面板已恢复。"));
       }
 
 //---------------------------------------------------------
@@ -402,4 +430,3 @@ void PluginManager::readSettings()
       }
 
 }
-
