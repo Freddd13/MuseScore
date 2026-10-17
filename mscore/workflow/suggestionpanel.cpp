@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "arrangement.h"
+#include "localsuggestions.h"
 #include "paneldock.h"
 #include "workflowcontext.h"
 #include "mscore/musescore.h"
@@ -18,6 +19,14 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QUuid>
+#include <QComboBox>
+#include <QCheckBox>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
+#include <QDoubleSpinBox>
+#include <QSpinBox>
+#include <QSettings>
 
 namespace Ms {
 namespace {
@@ -30,6 +39,12 @@ class SuggestionPanel : public QWidget {
     QLabel *_status;
     QString _selected;
     QVariantList _items;
+    LocalSuggestionTask _local;
+    QVariantMap _localSettings;
+    QComboBox *_kind;
+    QComboBox *_hand;
+    QCheckBox *_lockFingers;
+    QCheckBox *_preserveMelody;
     Score *score() const { return mscore ? mscore->currentScore() : nullptr; }
     bool attach() {
         if (!score())
@@ -85,7 +100,8 @@ class SuggestionPanel : public QWidget {
             item->setData(0, Qt::UserRole, row);
         }
         for (auto button : findChildren<QPushButton *>())
-            button->setEnabled(!option.isEmpty() && !option.value("used").toBool());
+            if (button->objectName().startsWith("arrangement-"))
+                button->setEnabled(!option.isEmpty() && !option.value("used").toBool());
         _status->setText(option.value("used").toBool()
                              ? tr("已采用这版 · Ctrl+Z撤销 · Ctrl+S保存")
                              : tr("点一项变化可以定位；“查看差异”会在谱上叠加另一写法。"));
@@ -109,11 +125,114 @@ class SuggestionPanel : public QWidget {
             _status->setText(tr("已停止比较，可以继续编辑乐谱。"));
     }
 
+    void hideEvent(QHideEvent* event) override {_local.cancel();QWidget::hideEvent(event);}
+
   public:
-    explicit SuggestionPanel(QWidget *parent) : QWidget(parent), _observer(this) {
+    explicit SuggestionPanel(QWidget *parent) : QWidget(parent), _observer(this), _local(this) {
         setObjectName("arrangementSuggestionPanel");
         auto layout = new QVBoxLayout(this);
         layout->setContentsMargins(6, 6, 6, 6);
+        auto analysis = new QHBoxLayout;
+        _kind = new QComboBox;
+        _kind->setObjectName("localSuggestionKind");
+        _kind->addItem(tr("指法"), "fingering");
+        _kind->addItem(tr("换手"), "handoff");
+        _kind->addItem(tr("配音"), "voicing");
+        _kind->addItem(tr("对位"), "counterpoint");
+        analysis->addWidget(_kind, 1);
+        auto generate = new QPushButton(tr("分析选段"));
+        generate->setObjectName("localSuggestionStart");
+        analysis->addWidget(generate);
+        auto cancel = new QPushButton(tr("取消"));
+        analysis->addWidget(cancel);
+        auto settings = new QPushButton(tr("参数…"));
+        analysis->addWidget(settings);
+        layout->addLayout(analysis);
+        auto choices = new QHBoxLayout;
+        _hand = new QComboBox;
+        _hand->addItem(tr("按谱面分手"), "auto");
+        _hand->addItem(tr("选段用右手"), "right");
+        _hand->addItem(tr("选段用左手"), "left");
+        choices->addWidget(_hand);
+        _lockFingers = new QCheckBox(tr("保留指法"));
+        _lockFingers->setChecked(true);
+        choices->addWidget(_lockFingers);
+        _preserveMelody = new QCheckBox(tr("保留旋律"));
+        _preserveMelody->setChecked(true);
+        choices->addWidget(_preserveMelody);
+        layout->addLayout(choices);
+        _localSettings = QSettings().value("arrangementSuggestions/parameters").toMap();
+        connect(generate, &QPushButton::clicked, this, [this] {
+            auto settings = _localSettings;
+            settings["hand"] = _hand->currentData();
+            settings["lockFingers"] = _lockFingers->isChecked();
+            settings["preserveTracks"] = _preserveMelody->isChecked() ? QVariantList{0} : QVariantList{};
+            _local.start(score(), _kind->currentData().toString(), settings);
+        });
+        connect(cancel, &QPushButton::clicked, this, [this] {
+            _local.cancel();
+            _status->setText(tr("已取消，可以重新选段。"));
+        });
+        connect(&_local, &LocalSuggestionTask::progress, this,
+                [this](const QString &text) { _status->setText(text); });
+        connect(settings, &QPushButton::clicked, this, [this] {
+            QDialog dialog(this);
+            dialog.setWindowTitle(tr("编配建议参数"));
+            auto form = new QFormLayout(&dialog);
+            QMap<QString, QSpinBox *> spans;
+            QMap<QString, QDoubleSpinBox *> costs;
+            auto defaults = _observer.loadConfiguration("ArrangementAssistant");
+            for (auto side : QStringList{"left", "right"})
+                for (auto name : QStringList{"comfort", "maximum", "white"}) {
+                    auto box = new QSpinBox;
+                    box->setRange(1, 36);
+                    auto values = _localSettings.value(side, defaults[side]).toMap();
+                    box->setValue(values.value(name, name == "comfort"   ? 14
+                                                     : name == "maximum" ? 15
+                                                                         : 16)
+                                      .toInt());
+                    spans[side + "/" + name] = box;
+                    form->addRow((side == "left" ? tr("左手") : tr("右手")) + " · " +
+                                     (name == "comfort"   ? tr("舒适跨度")
+                                      : name == "maximum" ? tr("最大跨度")
+                                                          : tr("两端白键上限")) +
+                                     tr("（半音）"),
+                                 box);
+                }
+            auto style = new QComboBox;
+            style->addItems({tr("调性钢琴／流行"), tr("严格对位"), tr("爵士")});
+            style->setCurrentIndex(_localSettings.value("style", defaults.value("style", 0)).toInt());
+            form->addRow(tr("风格"), style);
+            const QStringList names{"stretch", "move", "blackThumb", "crossing", "repeat"},
+                labels{tr("和弦伸展"), tr("移动手位"), tr("黑键拇指"), tr("穿指／跨指"), tr("同音换指")};
+            const QList<double> initial{1, 1, .6, 1.2, .35};
+            for (int i = 0; i < names.size(); ++i) {
+                auto box = new QDoubleSpinBox;
+                box->setRange(0, 10);
+                box->setSingleStep(.1);
+                box->setValue(_localSettings["weights"].toMap().value(names[i], initial[i]).toDouble());
+                costs[names[i]] = box;
+                form->addRow(labels[i] + tr("的重视程度"), box);
+            }
+            auto buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+            form->addRow(buttons);
+            connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+            connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+            if (dialog.exec() != QDialog::Accepted)
+                return;
+            for (auto side : QStringList{"left", "right"}) {
+                QVariantMap values;
+                for (auto name : QStringList{"comfort", "maximum", "white"})
+                    values[name] = spans[side + "/" + name]->value();
+                _localSettings[side] = values;
+            }
+            QVariantMap values;
+            for (auto name : names)
+                values[name] = costs[name]->value();
+            _localSettings["weights"] = values;
+            _localSettings["style"] = style->currentIndex();
+            QSettings().setValue("arrangementSuggestions/parameters", _localSettings);
+        });
         _scope = new QLabel;
         _scope->setWordWrap(true);
         layout->addWidget(_scope);
@@ -166,7 +285,10 @@ class SuggestionPanel : public QWidget {
                                         {"endTrack", row["track"].toInt() + 1}},
                                        false);
         });
-        connect(workflowContext(), &WorkflowContext::activeScoreChanged, this, [this] { refresh(); });
+        connect(workflowContext(), &WorkflowContext::activeScoreChanged, this, [this] {
+            _local.cancel();
+            refresh();
+        });
         refresh();
     }
     void refresh() {

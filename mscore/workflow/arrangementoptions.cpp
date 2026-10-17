@@ -12,6 +12,7 @@
 #include "libmscore/repeatlist.h"
 #include "libmscore/input.h"
 #include "libmscore/measure.h"
+#include "libmscore/part.h"
 #include "libmscore/note.h"
 #include "libmscore/notevelocity.h"
 #include "libmscore/pitchspelling.h"
@@ -239,8 +240,18 @@ bool mutate(Score *score, const Option &option, QString *problem) {
                 return false;
             }
             if (option.brief.value("preserveHarmony", true).toBool() && pitch % 12 != n->pitch() % 12) {
-                *problem = QObject::tr("这版改变了和声音，请在本次要求中确认新的和声后再提交。");
-                return false;
+                bool supported = false;
+                const auto part = n->staff()->part();
+                for (int track = part->startTrack(); track < part->endTrack(); ++track) {
+                    auto e = n->chord()->segment()->element(track);
+                    if (e && e->isChord())
+                        for (auto tone : toChord(e)->notes())
+                            supported |= tone->pitch() % 12 == pitch % 12;
+                }
+                if (!supported) {
+                    *problem = QObject::tr("这版加入了当前起音组以外的和声音，请确认本次和声后提交。");
+                    return false;
+                }
             }
             if (n->tieBack() || n->tieFor()) {
                 *problem = QObject::tr("这个音连着延音线。请把整条延音包含在同一段声部写法中。");
@@ -261,6 +272,15 @@ bool mutate(Score *score, const Option &option, QString *problem) {
         }
         seen.insert(n);
         edits.append({n, row});
+    }
+    for(const auto& edit:edits)if(edit.data.contains("pitch")) {
+        const int pitch=edit.data["pitch"].toInt();
+        for(auto other:edit.note->chord()->notes())if(other!=edit.note) {
+            int otherPitch=other->pitch();for(const auto& changed:edits)if(changed.note==other)otherPitch=changed.data.value("pitch",otherPitch).toInt();
+            if(pitch==otherPitch && edit.note->pitch()!=other->pitch()) {
+                *problem=QObject::tr("改写后同一和弦中出现重复音，请合并该音或调整音区。");return false;
+            }
+        }
     }
     // Each replacement describes a complete continuous voice within this scope.
     // Native note entry supplies gaps, rests, ties and linked-staff propagation.
@@ -423,6 +443,11 @@ bool mutate(Score *score, const Option &option, QString *problem) {
             score->undoAddElement(text);
         }
         if (row.contains("hand")) {
+            const auto oldMarks = n->el();
+            for (auto e : oldMarks)
+                if (e->isSymbol() && toSymbol(e)->handEligible() &&
+                    toSymbol(e)->handEnd() == row.value("handEnd").toBool())
+                    score->undoRemoveElement(e);
             auto symbol = new Symbol(score);
             symbol->setSym(row["hand"] == "left"
                                ? (row.value("handEnd").toBool() ? SymId::keyboardPlayWithLHEnd

@@ -148,7 +148,7 @@ function handFor(s,n,tick) {
     if(left && right)return {hand:"auto",source:"分手符号冲突，待确认"};
     if(left || right)return {hand:left?"left":"right",source:"分手符号"};
     if(uncertain)return {hand:"auto",source:"分手标记之间有多个同时音，请确认所指声部"};
-    return {hand:role && role.hand!=="auto"?role.hand:Math.floor(n.track/4)>Math.floor(s.data.scope.firstTrack/4)?"left":"right",source:role && role.hand!=="auto"?"用户指定":"自动推断"};
+    return {hand:role && role.hand!=="auto"?role.hand:Math.floor(n.track/4)>Math.floor(s.data.scope.firstTrack/4)?"left":"right",source:"自动推断"};
 }
 function chordAt(s,tick) {
     var lists=[s.config.chords,s.imported];

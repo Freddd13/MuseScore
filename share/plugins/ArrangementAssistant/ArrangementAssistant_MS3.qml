@@ -112,7 +112,7 @@ MuseScore {
         if(!current||current.tick!==tick)root.currentIssueIndex=index
         positionProblemHint();problemHint.show();problemHint.raise()
     }
-    function persist() {if(observer)observer.saveConfiguration("ArrangementAssistant",config)}
+    function persist() {if(observer){observer.saveConfiguration("ArrangementAssistant",config);if(typeof observer.publishPianoSettings==="function")observer.publishPianoSettings(config)}}
     function syncSurfaces() {
         if(observer && typeof observer.auxiliarySurfaceVisible==="boolean") {
             observer.auxiliarySurfaceVisible=dualDetailActive || dualSummaryActive || floatingDetails.visible
@@ -290,7 +290,7 @@ MuseScore {
         rememberScore();cancel();refresh.stop();owner=curScore;ownerId=id
         var saved=scoreCache[id]
         if(saved) {
-            scope=saved.scope;config=saved.config;issues=saved.issues;roles=saved.roles;imported=saved.imported
+            scope=saved.scope;config=saved.config;if(observer && typeof observer.publishPianoSettings==="function")observer.publishPianoSettings(config);issues=saved.issues;roles=saved.roles;imported=saved.imported
             counts=saved.counts;analyzed=saved.analyzed;requested=saved.requested;cachedData=saved.cachedData
             contentRevision=saved.contentRevision;revision=observer.analysisRevision()
             stale=saved.stale || (typeof observer.analysisContentRevision==="function" && contentRevision!==observer.analysisContentRevision())

@@ -158,8 +158,9 @@ QVariantMap ScoreObserver::arrangementState(const QVariantMap &request) {
             {"information", workflowData("arrangement")},
             {"reference", workflowData("reference")},
             {"manualHarmony", workflowData("harmony")},
+            {"pianoSettings", _score->property("kumoPianoSettings")},
             {"harmonyAnalysis", harmony},
-            {"coverage", QVariantMap{{"notation", "complete"},
+            {"coverage", QVariantMap{{"notation", "notesRestsAndListedRelations"},
                                      {"audioFeatures", "notRequested"},
                                      {"performance", "availableOnRequest"}}}};
 }
@@ -172,7 +173,8 @@ QVariantMap ScoreObserver::arrangementRange(const QVariantMap &request) {
     auto scope = scopeFor(_score, tick(), request);
     if (scope.isEmpty())
         return {{"error", tr("请选择有效的乐谱范围。")}};
-    if(playing())return {{"error",tr("请暂停乐谱播放后读取完整声部。已有任务可以继续查看。")}};
+    if (playing())
+        return {{"error", tr("请暂停乐谱播放后读取完整声部。已有任务可以继续查看。")}};
     const auto id = analysisContentRevision();
     if (seq && !seq->backgroundRenderingIdle())
         return {{"error", tr("正在准备声音，稍后即可读取演奏数值。")}};
@@ -249,6 +251,21 @@ QVariantMap ScoreObserver::arrangementRange(const QVariantMap &request) {
             }
         }
     }
+    if (from == start && start > 0)
+        for (int track = first; track < last; ++track) {
+            auto cr = _score->findCR(Fraction::fromTicks(start - 1), track);
+            if (!cr || !cr->isChord() || cr->tick().ticks() >= start || cr->endTick().ticks() <= start)
+                continue;
+            auto context = analysisRange(cr->tick().ticks(), start, track, track + 1, cr->tick().ticks(), 1);
+            for (auto value : context.value("notes").toList()) {
+                auto row = value.toMap();
+                auto n = resolve(row);
+                if (!n)
+                    continue;
+                row["contextOnly"] = true;
+                complete(row, n);
+            }
+        }
     page["notes"] = notes;
     auto rests = page.value("rests").toList();
     for (auto &value : rests) {
@@ -307,6 +324,15 @@ QVariantMap ScoreObserver::arrangementRange(const QVariantMap &request) {
     page["scope"] = scope;
     page["milliseconds"] = double(work.nsecsElapsed()) / 1000000.;
     return page;
+}
+void ScoreObserver::publishPianoSettings(const QVariantMap &settings) {
+    if (!_score || QJsonDocument::fromVariant(settings).toJson(QJsonDocument::Compact).size() > 1024 * 1024)
+        return;
+    QVariantMap values;
+    for (const auto &name : QStringList{"roles", "handOverrides", "left", "right", "minimumHoldMs", "style"})
+        if (settings.contains(name))
+            values[name] = settings[name];
+    _score->QObject::setProperty("kumoPianoSettings", values);
 }
 void ScoreObserver::publishHarmonyAnalysis(const QVariantMap &result) {
     if (!_score || result.value("snapshotId").toString() != analysisContentRevision())

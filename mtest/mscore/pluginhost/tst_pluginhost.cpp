@@ -25,6 +25,7 @@
 #include <QPushButton>
 #include <QTreeWidget>
 #include "mscore/workflow/arrangement.h"
+#include "mscore/workflow/localsuggestions.h"
 #include <QComboBox>
 #include <cmath>
 #include "mscore/performanceeditor/performanceeditor.h"
@@ -286,6 +287,31 @@ class TestPluginHost : public QObject {
             QFile file(done);QVERIFY2(file.open(QIODevice::ReadOnly),"MCP client did not finish");auto report=QJsonDocument::fromJson(file.readAll()).toVariant().toMap();QCOMPARE(report.value("status").toString(),QString("passed"));showSuggestionPanel(false);
             root.reset();
 
+      }
+
+      void traditionalSuggestionsUseNativeWorker(){
+            auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));main->resize(1280,960);main->show();score->deselectAll();
+            showSuggestionPanel(true);auto panel=main->findChild<QWidget*>("arrangementSuggestionPanel");QVERIFY(panel);auto task=panel->findChild<LocalSuggestionTask*>();QVERIFY(task);
+            const int before=score->undoStack()->getCurIdx();QSignalSpy completed(task,&LocalSuggestionTask::completed);QSignalSpy progress(task,&LocalSuggestionTask::progress);
+            panel->findChild<QComboBox*>("localSuggestionKind")->setCurrentIndex(0);QTest::mouseClick(panel->findChild<QPushButton*>("localSuggestionStart"),Qt::LeftButton);QTRY_VERIFY_WITH_TIMEOUT(!task->running(),15000);
+            QVERIFY2(completed.size()==1,qPrintable(progress.isEmpty()?QString("No progress"):progress.last()[0].toString()));
+            auto result=completed.front()[0].toMap();QVERIFY(!result["options"].toList().isEmpty());QCOMPARE(score->undoStack()->getCurIdx(),before);
+            auto apply=panel->findChild<QPushButton*>("arrangement-apply");QVERIFY(apply&&apply->isEnabled());
+            QVERIFY(panel->findChild<QPushButton*>("localSuggestionStart")->isEnabled());
+            QTest::mouseClick(panel->findChild<QPushButton*>("arrangement-preview"),Qt::LeftButton);
+            main->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("traditional-suggestions-061.png"));
+            QTest::mouseClick(apply,Qt::LeftButton);QTRY_COMPARE(score->undoStack()->getCurIdx(),before+1);int fingers=0;
+            for(auto segment=score->firstSegment(SegmentType::ChordRest);segment;segment=segment->next1(SegmentType::ChordRest))for(int track=0;track<score->ntracks();++track){auto e=segment->element(track);if(e&&e->isChord())for(auto n:toChord(e)->notes())for(auto mark:n->el())fingers+=mark->isFingering();}
+            QVERIFY(fingers>0);EditData data;score->undoRedo(true,&data);QCOMPARE(score->undoStack()->getCurIdx(),before);showSuggestionPanel(false);
+            completed.clear();task->start(score,"fingering",{});task->cancel();QTest::qWait(70);QCOMPARE(completed.size(),0);
+      }
+      void arrangementReadIncludesHeldEntryNotes(){
+            auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));
+            PluginAPI::Score wrapped(score);PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);
+            auto state=observer.arrangementState({{"scope",QVariantMap{{"start",480},{"end",960},{"firstTrack",0},{"endTrack",8}}}});
+            auto page=observer.arrangementRange({{"snapshotId",state["snapshotId"]},{"scope",state["scope"]},{"fromTick",480}});QVERIFY(!page.contains("error"));
+            bool held=false;for(auto value:page["notes"].toList()){auto n=value.toMap();if(n["contextOnly"].toBool()){held=true;QVERIFY(n["tick"].toInt()<480);QVERIFY(n["logicalEnd"].toInt()>480);}}
+            QVERIFY(held);
       }
 
       void arrangementAiWorkflow(){

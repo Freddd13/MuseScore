@@ -73,6 +73,8 @@ list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/builtinpanels.c
 
 list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/arrangementreader.cpp ${PROJECT_SOURCE_DIR}/mscore/workflow/arrangementoptions.cpp ${PROJECT_SOURCE_DIR}/mscore/workflow/suggestionpanel.cpp ${PROJECT_SOURCE_DIR}/mscore/workflow/arrangement.h)
 
+list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/localsuggestions.cpp ${PROJECT_SOURCE_DIR}/mscore/workflow/localsuggestions.h)
+
 set (PLUGIN_SRC
     ${PLUGIN_API_SRC}
     ${CMAKE_CURRENT_LIST_DIR}/mscorePlugins.cpp

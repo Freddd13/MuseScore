@@ -107,6 +107,7 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QVariantMap arrangementRange(const QVariantMap& request);
       Q_INVOKABLE QVariantMap arrangementRequest(const QString& action,const QVariantMap& request);
       Q_INVOKABLE void publishHarmonyAnalysis(const QVariantMap& result);
+      Q_INVOKABLE void publishPianoSettings(const QVariantMap& settings);
       Q_INVOKABLE QVariantMap workflowStatus();
       Q_INVOKABLE QVariantMap stopWorkflowPlayback();
       Q_INVOKABLE QString referenceStructureKey() const;
