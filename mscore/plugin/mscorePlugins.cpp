@@ -528,6 +528,7 @@ void MuseScore::pluginTriggered(QString pp)
 
 bool collectPluginMetaInformation(PluginDescription* d, QmlPluginEngine* metadataEngine)
       {
+      if(d->path.endsWith(".view.qml"))return false;
       qDebug("Collect meta for <%s>", qPrintable(d->path));
 
       std::unique_ptr<QmlPluginEngine> owned;

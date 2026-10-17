@@ -421,6 +421,7 @@ private slots:
   QFile g(copy);QVERIFY(g.open(QIODevice::ReadOnly));QCOMPARE(g.readAll(),data);
   QSignalSpy done(&o,&PluginAPI::ScoreObserver::performanceMidiReady);o.readPerformanceMidi(source);QTRY_COMPARE(done.count(),1);QVERIFY(!done[0][1].toMap().contains("error"));
  }
+ void nativeReferenceDocumentAndMenu();
  void referenceClockAndPlan();
  void editorCorrespondenceSelection();
  void multiTrackSaveRestore();
@@ -442,6 +443,7 @@ private slots:
  void regionalAtomicFileSaveAndReopen();
 };
 #include "reference_tests.inc"
+#include "reference_056_tests.inc"
 #include "regional_tests.inc"
 #include "regional_comparison_tests.inc"
 #include "gate_comparison_tests.inc"

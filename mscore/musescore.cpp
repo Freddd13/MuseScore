@@ -128,6 +128,7 @@
 #include "libmscore/inputnotation.h"
 #include "inputnotationmenu.h"
 #include "workflow/referencefactory.h"
+#include "workflow/referencepanel.h"
 #include "workflow/regionalpanel.h"
 #include "libmscore/inputnotation.h"
 #include "libmscore/scorediff.h"
@@ -2006,6 +2007,10 @@ MuseScore::MuseScore()
       Workspace::addActionAndString(bandAction, "performance-score-band"); menuView->addAction(bandAction);
       connect(bandAction, &QAction::toggled, this, [this](bool enabled) { performanceEditor()->setScoreBandEnabled(enabled); });
       populateAlternativeOperations();
+#ifdef SCRIPT_INTERFACE
+      addReferencePanelAction(menuView);
+#endif
+
 
       a = getAction("toggle-scorecmp-tool");
       a->setCheckable(true);
@@ -9541,6 +9546,8 @@ void MuseScore::showPerformanceEditor(bool visible)
                   if (auto action = findChild<QAction*>("performance-score-band")) { QSignalBlocker blocker(action); action->setChecked(enabled); }
                   });
             addDockWidget(Qt::BottomDockWidgetArea, _performanceDock);
+            _performanceDock->setProperty("kumoPanelGroup","bottomTools");
+            for(auto dock:findChildren<QDockWidget*>())if(dock!=_performanceDock&&!dock->isFloating()&&dockWidgetArea(dock)==Qt::BottomDockWidgetArea&&dock->property("kumoPanelGroup").toString()=="bottomTools"){tabifyDockWidget(dock,_performanceDock);break;}
             connect(_performanceDock, &QDockWidget::visibilityChanged, this, [this](bool shown) {
                   if (auto action = findChild<QAction*>("performance-editor")) {
                         QSignalBlocker blocker(action); action->setChecked(shown);
@@ -9548,6 +9555,6 @@ void MuseScore::showPerformanceEditor(bool visible)
                   });
             _performanceEditor->setView(cv);
             }
-      if (_performanceDock) _performanceDock->setVisible(visible);
+      if (_performanceDock) {_performanceDock->setVisible(visible);if(visible)_performanceDock->raise();}
       }
 }

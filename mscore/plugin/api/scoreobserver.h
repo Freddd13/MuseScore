@@ -105,6 +105,7 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QVariantMap workflowStatus();
       Q_INVOKABLE QVariantMap stopWorkflowPlayback();
       Q_INVOKABLE QString referenceStructureKey() const;
+      Q_INVOKABLE QVariantMap referenceFileLocation(const QString& original,const QString& relative=QString()) const;
       Q_INVOKABLE QVariantMap workflowData(const QString& section) const;
       Q_INVOKABLE QVariantMap setWorkflowData(const QString& section,const QVariantMap& value);
       Q_INVOKABLE void workflowUndo(bool redo=false);

@@ -3366,6 +3366,8 @@ Shortcut Shortcut::_sc[] = {
          QT_TRANSLATE_NOOP("action","Estimate tempo without changing the score"),
          Icons::countin_ICON
          },
+      {MsWidget::MAIN_WINDOW,STATE_DISABLED | STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY | STATE_EDIT,
+       "reference-player",QT_TRANSLATE_NOOP("action","原曲参考"),QT_TRANSLATE_NOOP("action","原曲参考"),QT_TRANSLATE_NOOP("action","打开或隐藏原曲参考播放器"),Icons::play_ICON},
         {
            MsWidget::MAIN_WINDOW,
            STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,

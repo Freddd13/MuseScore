@@ -4,6 +4,9 @@
 #include "mscore/shortcut.h"
 #include "libmscore/undo.h"
 #include <QJsonDocument>
+#include <QDir>
+#include <QFileInfo>
+#include <QUrl>
 namespace Ms {namespace PluginAPI {
 static bool documentSection(const QString& section){return section=="harmony"||section=="reference";}
 QVariantMap ScoreObserver::workflowData(const QString& section) const {
@@ -25,4 +28,11 @@ QVariantMap ScoreObserver::setWorkflowData(const QString& section,const QVariant
 void ScoreObserver::workflowUndo(bool redo){
  if(mscore&&_score&&mscore->currentScore()&&mscore->currentScore()->masterScore()==_score->masterScore())mscore->cmd(getAction(redo?"redo":"undo"));
 }
+QVariantMap ScoreObserver::referenceFileLocation(const QString& original,const QString& relative) const{
+ const auto path=QUrl(original).isLocalFile()?QUrl(original).toLocalFile():original;
+ const auto base=_score?QFileInfo(_score->masterScore()->fileInfo()->absoluteFilePath()).absoluteDir():QDir();
+ QString resolved=path;if(!relative.isEmpty()&&QFileInfo::exists(base.filePath(relative)))resolved=QDir::cleanPath(base.filePath(relative));
+ QFileInfo info(resolved);return {{"path",info.absoluteFilePath()},{"relative",base.relativeFilePath(info.absoluteFilePath())},{"original",path},{"exists",info.exists()&&info.isFile()}};
+}
+
 }}
