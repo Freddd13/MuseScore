@@ -1,4 +1,7 @@
 #include "performanceeditor.h"
+#ifdef SCRIPT_INTERFACE
+#include "mscore/workflow/builtinpanels.h"
+#endif
 #include <QJsonDocument>
 #include "markvelocity.h"
 #include "performanceselection.h"
@@ -234,6 +237,9 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       auto restoreAreas=areaMenu->addAction(tr("恢复区域高度"));connect(restoreAreas,&QAction::triggered,this,[this]{_splitter->setSizes({150,130,180});});
       noteArea->setVisible(QSettings().value("performanceEditor/area/performanceNotesArea",true).toBool());parameterArea->setVisible(QSettings().value("performanceEditor/area/performanceParametersArea",true).toBool());
       QTimer::singleShot(0,this,[workflowButton]{workflowButton->setChecked(QSettings().value("performanceEditor/area/performanceWorkflowPanel",false).toBool());});
+#ifdef SCRIPT_INTERFACE
+      installExpressionTools(this,_splitter,layout);
+#endif
       _status = new QLabel(this); _status->setWordWrap(true); layout->addWidget(_status);
       _refreshTimer.setSingleShot(true);
       connect(&_refreshTimer, &QTimer::timeout, this, &PerformanceEditor::refresh);

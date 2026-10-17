@@ -16,6 +16,13 @@
 #include "mscore/mssplashscreen.h"
 #include "mscore/musescoredialogs.h"
 #include "personalbranding.h"
+#include "mscore/workflow/builtinpanels.h"
+#include "mscore/performanceeditor/performanceeditor.h"
+#include <QTabBar>
+#include <QFileDialog>
+#include <QLineEdit>
+#include <QQuickItem>
+#include "libmscore/notevelocity.h"
 #include "mtest/testutils.h"
 #include "mscore/musescore.h"
 #include "mscore/scoreview.h"
@@ -53,7 +60,7 @@ class TestPluginHost : public QObject {
       Q_OBJECT
       QTemporaryDir _settings;
    private slots:
-      void cleanup(){releaseHostPanels();}
+      void cleanup(){releaseHostPanels();if(Ms::mscore)Ms::mscore->showPerformanceEditor(false);}
       void initTestCase()
             {
             QVERIFY(_settings.isValid());
@@ -163,6 +170,55 @@ class TestPluginHost : public QObject {
                   }
             releaseHostPanels();
             }
+      void builtinToolEntryPoints()
+            {
+            auto main=Ms::mscore;
+            auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");
+            QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));main->resize(1280,900);main->show();
+            auto harmony=getAction("harmony-assistant");auto expression=getAction("performance-expression");
+            QVERIFY(harmony);QVERIFY(expression);
+            showHarmonyPanel();QTest::qWait(120);
+            auto dock=main->findChild<QDockWidget*>("kumoPanel/HarmonyAssistant_MS3");QVERIFY(dock);
+            auto original=dock;
+            showHarmonyPanel(false);QVERIFY(!dock->isVisible());showHarmonyPanel();QCOMPARE(main->findChild<QDockWidget*>(dock->objectName()),original);
+            expression->trigger();QTest::qWait(120);
+            auto editor=main->performanceEditor();auto tabs=editor->findChild<QTabBar*>("workflowExpressionTabs");QVERIFY(tabs);QCOMPARE(tabs->currentIndex(),1);
+            auto page=editor->findChild<QWidget*>("embeddedExpressionPage");QVERIFY(page);QVERIFY(page->isVisible());QVERIFY(page->property("loaded").toBool());
+            auto root=qobject_cast<QmlPlugin*>(page->property("root").value<QObject*>());QVERIFY(root);QVERIFY(root->property("embeddedWorkflow").toBool());
+            auto loaded=root;tabs->setCurrentIndex(0);QVERIFY(!page->isVisible());showExpressionPanel();QCOMPARE(page->property("root").value<QObject*>(),static_cast<QObject*>(loaded));QVERIFY(page->isVisible());
+            // Use the real import button and file picker, then adopt through the page.
+            QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
+            root->window()->requestActivate();QTest::qWait(100);
+            QVERIFY(root->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("builtin-import-before.png")));
+            auto importButton=root->findChild<QQuickItem*>("embeddedExpressionImport");QVERIFY(importButton);QSignalSpy clicked(importButton,SIGNAL(clicked()));
+            const QByteArray track=QByteArray::fromHex("00ff510307a120009034640090376483608034000080370000903b6400903e64009045648360803b0000803e000080450000ff2f00");
+            QByteArray midi=QByteArray::fromHex("4d546864000000060000000101e0");midi.append("MTrk");for(int i=3;i>=0;--i)midi.append(char(track.size()>>(i*8)));midi.append(track);
+            const auto midiPath=_settings.filePath("native-expression.mid");QFile midiFile(midiPath);QVERIFY(midiFile.open(QIODevice::WriteOnly));QCOMPARE(midiFile.write(midi),qint64(midi.size()));midiFile.close();
+            auto click=[root](const char* name){auto item=root->findChild<QQuickItem*>(name);if(!item||!root->window())return false;QTest::mouseClick(root->window(),Qt::LeftButton,Qt::NoModifier,item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint());return true;};
+            QTimer chooseMidi;bool picked=false;int pickerTries=0;QPointer<QFileDialog> picker;
+            chooseMidi.setInterval(100);connect(&chooseMidi,&QTimer::timeout,this,[&]{
+                  ++pickerTries;
+                  auto dialog=qobject_cast<QFileDialog*>(QApplication::activeModalWidget());
+                  if(!dialog){if(picker){picked=true;chooseMidi.stop();}return;}
+                  if(!picker){picker=dialog;dialog->setDirectory(QFileInfo(midiPath).absolutePath());dialog->selectFile(QFileInfo(midiPath).fileName());return;}
+                  if(auto edit=dialog->findChild<QLineEdit*>("fileNameEdit")){edit->setFocus();edit->setText(midiPath);}
+                  QMetaObject::invokeMethod(dialog,"accept",Qt::DirectConnection);
+                  if(!dialog->isVisible()){picked=true;chooseMidi.stop();}else if(pickerTries>50){dialog->reject();chooseMidi.stop();}
+                  });chooseMidi.start();
+            QVERIFY(click("embeddedExpressionImport"));QTRY_VERIFY_WITH_TIMEOUT(clicked.count()>0,1500);QTRY_VERIFY_WITH_TIMEOUT(picked,6000);chooseMidi.stop();
+            auto candidate=[root](){auto value=root->property("candidate");return value.canConvert<QJSValue>()?value.value<QJSValue>().toVariant().toMap():value.toMap();};
+            QTRY_VERIFY2_WITH_TIMEOUT(!candidate().value("velocity").toList().isEmpty(),qPrintable(root->property("status").toString()),10000);
+            QTest::qWait(80);QVERIFY(root->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("builtin-expression-ready-058.png")));
+            auto chord=score->findCR(Fraction::fromTicks(480),0);QVERIFY(chord&&chord->isChord());auto first=toChord(chord)->notes().front();
+            const auto previousType=first->veloType();const int previousRaw=first->veloOffset();const int beforeUndo=score->undoStack()->getCurIdx();
+            QVERIFY(click("expressionApplyVelocity"));QTRY_COMPARE(score->undoStack()->getCurIdx(),beforeUndo+1);
+            QCOMPARE(first->veloType(),Note::ValueType::USER_VAL);QCOMPARE(NoteVelocity::effective(NoteVelocity::referenceBase(first),first->veloType(),first->veloOffset()),100);
+            EditData undo;score->undoRedo(true,&undo);QCOMPARE(first->veloType(),previousType);QCOMPARE(first->veloOffset(),previousRaw);
+            QVERIFY(editor->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("builtin-expression-058.png")));
+            QVERIFY(main->currentScoreView()->height()>80);
+            QVERIFY(root->window());QTest::qWait(80);QVERIFY(root->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("builtin-expression-controls-058.png")));
+            tabs->setCurrentIndex(0);main->showPerformanceEditor(false);
+            }
       void nativeWorkflowDocumentAndTypography(){
             auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));
             PluginAPI::Score wrapped(score);PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);
@@ -211,7 +267,7 @@ class TestPluginHost : public QObject {
                   if(root && root->menuPath()=="Plugins.Harmony Assistant") {panel=root;panelView=view;break;}
                   }
             for(auto candidate:main->findChildren<QDockWidget*>())
-                  if(candidate->windowTitle()=="Harmony Assistant") {dock=candidate;break;}
+                  if(candidate->windowTitle()==QString::fromUtf8("和弦助手")) {dock=candidate;break;}
             QVERIFY(dock); QVERIFY(panel);
             QVERIFY(QMetaObject::invokeMethod(panel,"refreshSelection"));
             auto observer=panel->findChild<PluginAPI::ScoreObserver*>();
@@ -337,7 +393,7 @@ class TestPluginHost : public QObject {
             // This fixture deliberately skips main()'s workspace/audio initialization.
             // Exercise plugin destruction; do not invoke unrelated workspace-save code.
             for(auto candidate:main->findChildren<QDockWidget*>())
-                  if(candidate->windowTitle()=="Harmony Assistant") candidate->close();
+                  if(candidate->windowTitle()==QString::fromUtf8("和弦助手")) candidate->close();
             QTest::qWait(50);
             releaseHostPanels();main->hide();
             }

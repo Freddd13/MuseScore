@@ -91,6 +91,10 @@
 #include "crashreport.inc"
 static void initP1Resources(){Q_INIT_RESOURCE(musescorefonts_Petaluma);}
 using namespace Ms;
+static void floatWorkflowPanel(QmlPlugin* root){
+ if(root->property("embeddedWorkflow").toBool()){if(auto dock=mscore->findChild<QDockWidget*>("performanceEditorDock")){dock->setFloating(true);dock->resize(1060,760);dock->show();}}
+ else{root->setPanelFloating(true);root->window()->resize(520,800);}
+}
 class TestP1Native:public QObject{
  Q_OBJECT
  QTemporaryDir settings;
@@ -282,7 +286,7 @@ private slots:
    QString path=QString(TESTROOT)+"/share/plugins/"+name+"/"+name+"_MS3.qml";PluginDescription description;description.path=path;QVERIFY2(collectPluginMetaInformation(&description),qPrintable(path));mscore->registerPlugin(&description);mscore->pluginTriggered(path);QTest::qWait(120);
    QmlPlugin* root=nullptr;
    for(auto w:QGuiApplication::allWindows()){auto view=qobject_cast<QQuickView*>(w);auto panel=view?qobject_cast<QmlPlugin*>(view->rootObject()):nullptr;if(panel&&panel->property("menuPath").toString().contains(name=="ReferencePlayer"?"Reference Player":name=="PerformanceExpression"?"Performance Expression":"Arrangement Variants"))root=panel;}
-   QVERIFY(root);QVERIFY(root->property("observer").value<QObject*>());root->setPanelFloating(true);QTest::qWait(30);QVERIFY(root->panelFloating());root->setPanelFloating(false);QTest::qWait(30);
+   QVERIFY(root);QVERIFY(root->property("observer").value<QObject*>());if(root->property("embeddedWorkflow").toBool()){auto dock=mscore->findChild<QDockWidget*>("performanceEditorDock");QVERIFY(dock);dock->setFloating(true);QTest::qWait(30);QVERIFY(dock->isFloating());dock->setFloating(false);}else{root->setPanelFloating(true);QTest::qWait(30);QVERIFY(root->panelFloating());root->setPanelFloating(false);}QTest::qWait(30);
    if(name=="ReferencePlayer")QVERIFY(root->property("media").value<QObject*>()->property("available").toBool());
    else if(name=="PerformanceExpression")QVERIFY(root->property("workerSource").toString().size()>1000);
    else {
@@ -308,8 +312,8 @@ private slots:
    const QString path=QString(TESTROOT)+"/share/plugins/"+folder+"/"+folder+"_MS3.qml";PluginDescription d;d.path=path;if(!collectPluginMetaInformation(&d))return nullptr;mscore->registerPlugin(&d);mscore->pluginTriggered(path);QTest::qWait(100);
    for(auto w:QGuiApplication::allWindows()){auto view=qobject_cast<QQuickView*>(w);auto root=view?qobject_cast<QmlPlugin*>(view->rootObject()):nullptr;if(root&&root->property("menuPath").toString().endsWith(title))return root;}return nullptr;
   };
-  auto click=[](QmlPlugin* root,const char* name){QTest::qWait(60);auto item=root->findChild<QQuickItem*>(name);if(!item){std::function<QQuickItem*(QQuickItem*)> find=[&](QQuickItem* parent)->QQuickItem*{if(parent->objectName()==name)return parent;for(auto child:parent->childItems())if(auto result=find(child))return result;return nullptr;};item=find(root);}for(int wait=0;item && !item->isEnabled() && wait<80;++wait)QTest::qWait(25);if(!item||!item->isVisible()||!item->isEnabled())return false;auto where=item->mapToScene(QPointF(item->width()/2,item->height()/2));qInfo()<<name<<where<<root->window()->size()<<root->size();if(!QRectF(QPointF(),root->window()->size()).contains(where))return false;QTest::mouseClick(root->window(),Qt::LeftButton,Qt::NoModifier,where.toPoint());return true;};
-  auto expression=open("PerformanceExpression","Performance Expression");QVERIFY(expression);expression->setPanelFloating(true);expression->window()->resize(520,800);expression->focusPanel();QTest::qWait(100);
+  auto click=[](QmlPlugin* root,const char* name){QTest::qWait(60);if(root->property("embeddedWorkflow").toBool()&&(QString(name)=="expressionLocate"||QString(name)=="expressionConfirm"||QString(name)=="expressionOpenEditor")){QMetaObject::invokeMethod(root,"showMoreActions");QTest::qWait(60);}auto item=root->findChild<QQuickItem*>(name);if(!item){std::function<QQuickItem*(QQuickItem*)> find=[&](QQuickItem* parent)->QQuickItem*{if(parent->objectName()==name)return parent;for(auto child:parent->childItems())if(auto result=find(child))return result;return nullptr;};item=find(root);}for(int wait=0;item && !item->isEnabled() && wait<80;++wait)QTest::qWait(25);if(!item||!item->isVisible()||!item->isEnabled())return false;auto where=item->mapToScene(QPointF(item->width()/2,item->height()/2));qInfo()<<name<<where<<root->window()->size()<<root->size();if(!QRectF(QPointF(),item->window()->size()).contains(where))return false;QTest::mouseClick(item->window(),Qt::LeftButton,Qt::NoModifier,where.toPoint());return true;};
+  auto expression=open("PerformanceExpression","Performance Expression");QVERIFY(expression);floatWorkflowPanel(expression);expression->focusPanel();QTest::qWait(100);
   auto observer=qobject_cast<PluginAPI::ScoreObserver*>(expression->property("observer").value<QObject*>());QVERIFY(observer);
   auto info=observer->workflowInfo(),scope=observer->analysisScope(false);auto page=observer->performanceRange(scope["start"].toInt(),scope["end"].toInt(),0,score->ntracks(),0,32,observer->analysisRevision());auto notes=page["notes"].toList();QVERIFY(notes.size()>1);auto n=notes[1].toMap();
   QVariantList performance;for(int i=0;i<notes.size();++i){auto note=notes[i].toMap();performance.append(QVariantMap{{"id",QString("m%1").arg(i)},{"pitch",note["pitch"]},{"seconds",note["scoreSeconds"]},{"velocity",72}});}
@@ -371,8 +375,8 @@ private slots:
   const QString path=QString(TESTROOT)+"/share/plugins/PerformanceExpression/PerformanceExpression_MS3.qml";
   PluginDescription description;description.path=path;QVERIFY(collectPluginMetaInformation(&description));mscore->registerPlugin(&description);mscore->pluginTriggered(path);QTest::qWait(100);
   QmlPlugin* root=nullptr;for(auto window:QGuiApplication::allWindows()){auto view=qobject_cast<QQuickView*>(window);auto item=view?qobject_cast<QmlPlugin*>(view->rootObject()):nullptr;if(item&&item->property("menuPath").toString().endsWith("Performance Expression")&&item->isVisible())root=item;}
-  QVERIFY(root);root->setPanelFloating(true);root->window()->resize(520,800);root->focusPanel();
-  auto click=[root](const char* name){auto item=root->findChild<QQuickItem*>(name);if(!item||!item->isEnabled()||!item->isVisible())return false;auto p=item->mapToScene(QPointF(item->width()/2,item->height()/2));QTest::mouseClick(root->window(),Qt::LeftButton,Qt::NoModifier,p.toPoint());return true;};
+  QVERIFY(root);floatWorkflowPanel(root);root->focusPanel();
+  auto click=[root](const char* name){if(root->property("embeddedWorkflow").toBool()&&(QString(name)=="expressionLocate"||QString(name)=="expressionConfirm"||QString(name)=="expressionOpenEditor")){QMetaObject::invokeMethod(root,"showMoreActions");QTest::qWait(60);}auto item=root->findChild<QQuickItem*>(name);if(!item||!item->isEnabled()||!item->isVisible())return false;auto p=item->mapToScene(QPointF(item->width()/2,item->height()/2));QTest::mouseClick(item->window(),Qt::LeftButton,Qt::NoModifier,p.toPoint());return true;};
   QVERIFY(click("expressionRecord"));QTRY_VERIFY(!root->property("busy").toBool());
   QVERIFY2(root->property("status").toString().contains("输入"),qPrintable(root->property("status").toString()));
   auto notes=root->property("notes").value<QJSValue>().toVariant().toList();QVERIFY(notes.size()>1);

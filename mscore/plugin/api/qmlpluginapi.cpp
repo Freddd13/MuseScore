@@ -23,6 +23,12 @@
 #include "scoreobserver.h"
 #include "mscore/workflow/referencefactory.h"
 #include "mscore/workflow/referencepanel.h"
+#include "mscore/workflow/builtinpanels.h"
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QSettings>
+#include <QDir>
+#include <QUrl>
 #include "mscore/workflow/workflowcontext.h"
 #include "mscore/workflow/midicapture.h"
 #include "selection.h"
@@ -269,6 +275,16 @@ void PluginAPI::log2(const QString& txt, const QString& txt2)
 //---------------------------------------------------------
 
 void PluginAPI::openReferencePanel(){Ms::showReferencePanel(true);}
+void PluginAPI::openHarmonyPanel(){Ms::showHarmonyPanel(true);}
+void PluginAPI::openExpressionPanel(){Ms::showExpressionPanel();}
+QString PluginAPI::choosePerformanceMidi(){
+ QSettings settings;
+ const auto path=QFileDialog::getOpenFileName(mscore,tr("导入演奏 MIDI"),settings.value("performanceExpression/lastMidiDirectory",QDir::homePath()).toString(),tr("MIDI (*.mid *.midi)"));
+ if(path.isEmpty())return {};
+ settings.setValue("performanceExpression/lastMidiDirectory",QFileInfo(path).absolutePath());
+ return QUrl::fromLocalFile(path).toString(QUrl::FullyEncoded);
+}
+
 QObject* PluginAPI::newReferenceMedia() { auto media=Ms::createReferenceMedia(this);media->setProperty("kumoReferenceOwned",true);return media; }
 void PluginAPI::releaseReferenceMedia(QObject* media) { if(media&&media->parent()==this&&media->property("kumoReferenceOwned").toBool())media->deleteLater(); }
 QObject* PluginAPI::newReferenceProject() { return Ms::referenceProject(); }

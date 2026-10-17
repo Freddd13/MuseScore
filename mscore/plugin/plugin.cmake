@@ -69,6 +69,8 @@ list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/workflowdocumen
 
 list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/referencepanel.cpp ${PROJECT_SOURCE_DIR}/mscore/workflow/referencepanel.h)
 
+list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/builtinpanels.cpp ${PROJECT_SOURCE_DIR}/mscore/workflow/builtinpanels.h)
+
 set (PLUGIN_SRC
     ${PLUGIN_API_SRC}
     ${CMAKE_CURRENT_LIST_DIR}/mscorePlugins.cpp

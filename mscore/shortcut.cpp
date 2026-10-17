@@ -3367,6 +3367,10 @@ Shortcut Shortcut::_sc[] = {
          Icons::countin_ICON
          },
       {MsWidget::MAIN_WINDOW,STATE_DISABLED | STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY | STATE_EDIT,
+       "harmony-assistant",QT_TRANSLATE_NOOP("action","和弦助手"),QT_TRANSLATE_NOOP("action","和弦助手"),QT_TRANSLATE_NOOP("action","打开或隐藏和弦助手"),Icons::play_ICON},
+      {MsWidget::MAIN_WINDOW,STATE_DISABLED | STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY | STATE_EDIT,
+       "performance-expression",QT_TRANSLATE_NOOP("action","演奏表达"),QT_TRANSLATE_NOOP("action","演奏表达"),QT_TRANSLATE_NOOP("action","在演奏编辑器中打开演奏表达"),Icons::play_ICON},
+      {MsWidget::MAIN_WINDOW,STATE_DISABLED | STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY | STATE_EDIT,
        "reference-player",QT_TRANSLATE_NOOP("action","原曲参考"),QT_TRANSLATE_NOOP("action","原曲参考"),QT_TRANSLATE_NOOP("action","打开或隐藏原曲参考播放器"),Icons::play_ICON},
         {
            MsWidget::MAIN_WINDOW,

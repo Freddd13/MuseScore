@@ -253,6 +253,9 @@ class PluginAPI : public Ms::QmlPlugin {
       Q_INVOKABLE Ms::PluginAPI::MsProcess* newQProcess();
       Q_INVOKABLE QObject* newScoreObserver();
       Q_INVOKABLE void openReferencePanel();
+      Q_INVOKABLE void openHarmonyPanel();
+      Q_INVOKABLE void openExpressionPanel();
+      Q_INVOKABLE QString choosePerformanceMidi();
       Q_INVOKABLE QObject* newReferenceMedia();
       Q_INVOKABLE QObject* newReferenceProject();
       Q_INVOKABLE QObject* newWorkflowContext();

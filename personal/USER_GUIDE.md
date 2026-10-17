@@ -1,10 +1,14 @@
 # MuseScore Evolution 个人功能说明
 
-当前个人版本：**0.57.0** · Kumo branch / Freddd13。
+当前个人版本：**0.58.0** · Kumo branch / Freddd13。
 
 这份说明按你编曲时要完成的事情组织。每章先给一个可以照着操作的例子，再解释相关按钮。谱子的修改随 MSCZ 保存；`Ctrl+Z` 可以撤销刚完成的编辑。
 
 本轮操作和九项问题的处理结果见[本轮逐项说明](docs/REPAIR_053_057_DELIVERY.md)。
+
+## 0.58 的内置工具
+
+从“视图 → 和弦助手”打开和弦工具；从“视图 → 演奏表达”进入编辑器内的导入、录制、比较和采用操作。原插件菜单入口打开同一个工具。完整步骤和界面见[内置工具使用说明](docs/P2_BUILTIN_058_GUIDE.md)。
 
 ## 0.53 的操作修复
 
@@ -35,10 +39,10 @@
 | 输入时自动整理节奏写法 | 工具 → 自动规范输入时值 |
 | 点击测量速度 | 节拍器旁的敲击测速图标 |
 | 尝试同一段的不同写法 | 工具 → 分段试写方案 |
-| 查看和弦、级数和构成音 | 插件 → Harmony Assistant |
+| 查看和弦、级数和构成音 | 视图 → 和弦助手 |
 | 查看编配提示 | 插件 → Arrangement Check |
-| 听原曲、慢放、循环 | 插件 → Reference Player |
-| 把演奏 MIDI 的力度用于谱子 | 插件 → Performance Expression |
+| 听原曲、慢放、循环 | 视图 → 原曲参考 |
+| 把演奏 MIDI 的力度用于谱子 | 视图 → 演奏表达 |
 | 用完整谱副本比较方案 | 插件 → Arrangement Variants |
 | 导出适合瀑布流视频的 MIDI | 文件 → 导出 → MIDI → 人性化裁剪 |
 
@@ -585,3 +589,6 @@ Windows 安装需要同 SDK 的 QtWebSockets QML 模块和 `Qt5WebSockets.dll`�
 外部材料和模型通过适配器进入共同的本地上下文服务，保留来源、部分覆盖与对应关系；模型结果不会自行获得改谱权限。既有和声助手人工区间/结果交换可作为后续对接起点，当前尚未自动接入。
 
 完整修订见 [可选信息、实时取谱与外部交互契约](../../../mcp-musescore/docs/AI_CONTEXT_INTEGRATION.md)。提交定位：`Freddd13/mcp-musescore` / `codex/musescore-evolution` / `01fdca2`，本次只读核查软件 `4c04ca711` / personal 0.22.0。只改设计与用户说明，无新增菜单/可调用工具，不改软件版本或安装；**无需重装/重配 MCP、skill、QML 插件**。
+
+
+本批版本定位：`personal-v0.58.0`。

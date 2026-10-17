@@ -129,6 +129,7 @@
 #include "inputnotationmenu.h"
 #include "workflow/referencefactory.h"
 #include "workflow/referencepanel.h"
+#include "workflow/builtinpanels.h"
 #include "workflow/regionalpanel.h"
 #include "libmscore/inputnotation.h"
 #include "libmscore/scorediff.h"
@@ -2009,6 +2010,7 @@ MuseScore::MuseScore()
       populateAlternativeOperations();
 #ifdef SCRIPT_INTERFACE
       addReferencePanelAction(menuView);
+      addBuiltinPanelActions(menuView);
 #endif
 
 
@@ -6881,6 +6883,8 @@ void MuseScore::cmd(QAction* a)
       QString cmdn(a->data().toString());
 #ifdef SCRIPT_INTERFACE
       if(cmdn=="regional-variants"){showRegionalVariantPanel();return;}
+      if(cmdn=="harmony-assistant"){showHarmonyPanel(a->isChecked());return;}
+      if(cmdn=="performance-expression"){showExpressionPanel();return;}
 #endif
 
       if (MScore::debugMode)
