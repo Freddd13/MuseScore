@@ -163,7 +163,7 @@ class TestP0Native : public QObject {
             connect(&timer,&QTimer::timeout,&panel,[&] {
                   auto dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());if(!dialog)return;if(++tries>150){dialog->reject();return;}auto table=dialog->findChild<QTableView*>();auto roll=dialog->findChild<QAbstractScrollArea*>("midiCropRoll");if(!table || !roll || table->model()->rowCount()==0)return;
                   int rootRow=-1;for(int i=0;i<table->model()->rowCount();++i)if(table->model()->data(table->model()->index(i,0)).toString()=="C2")rootRow=i;if(rootRow<0)return;
-                  const double row=qMin(10.,double(roll->viewport()->height()-55)/49.);QPoint hit(20,qRound(48*row+22+row/2));QTest::mouseClick(roll->viewport(),Qt::LeftButton,Qt::NoModifier,hit);QCOMPARE(table->currentIndex().row(),rootRow);clicked=true;timer.stop();dialog->grab().save("midi-hand-release.png");dialog->accept();QVERIFY(table->model()->data(table->model()->index(rootRow,5)).toString().contains(QString::fromUtf8("提前松手")));
+                  table->selectRow(rootRow);const auto hit=roll->property("selectedNewOffHandle").toPoint()-QPoint(3,0);table->setCurrentIndex(QModelIndex());timer.stop();QVERIFY(roll->viewport()->rect().contains(hit));QTest::mouseClick(roll->viewport(),Qt::LeftButton,Qt::NoModifier,hit);QCOMPARE(table->currentIndex().row(),rootRow);clicked=true;timer.stop();dialog->grab().save("midi-hand-release.png");dialog->accept();QVERIFY(table->model()->data(table->model()->index(rootRow,5)).toString().contains(QString::fromUtf8("提前松手")));
                   });
             timer.start();QTest::mouseClick(compare,Qt::LeftButton);timer.stop();QVERIFY(clicked);
 

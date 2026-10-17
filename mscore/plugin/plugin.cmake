@@ -8,6 +8,8 @@ set (PLUGIN_API_SRC
     ${PROJECT_SOURCE_DIR}/mscore/workflow/regionalpanel.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/regionalpanel.h
     ${PROJECT_SOURCE_DIR}/mscore/workflow/regionalcontrols.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/regionalcomparison.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/regionalcomparison.h
     ${PROJECT_SOURCE_DIR}/mscore/workflow/regionalcontrols.h
     ${PROJECT_SOURCE_DIR}/mscore/workflow/midicapture.h
     ${PROJECT_SOURCE_DIR}/mscore/workflow/midicapture.cpp

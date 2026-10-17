@@ -357,6 +357,7 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                                 tag.pitch = (!exportRPNs && event.portamento()) ? event.note()->pitch() : event.pitch();
                                                 tag.channel = channel; tag.staff = staffIdx; tag.voice = staffIdx*VOICES+note->voice();
                                                 tag.sourceTick = note->chord()->tick().ticks();
+                                                tag.sourceUtick = i->first;
                                                 tag.sourceMeasure = note->chord()->measure()->no()+1;
                                                 int highest = note->ppitch();
                                                 auto onset = note->chord()->segment();

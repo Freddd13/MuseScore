@@ -12,6 +12,9 @@
 #include "referencebus.h"
 #include "referencefactory.h"
 #include "regionalpanel.h"
+#include "regionalcomparison.h"
+#include <QWheelEvent>
+#include <cmath>
 #include <QApplication>
 #include <QHash>
 #include <QMenu>
@@ -32,25 +35,17 @@ class Controls : public QObject {
             auto score = _view ? _view->score() : nullptr;
             if (!score || !score->isMaster())
                   return;
-            mscore->setCurrentScoreView(_view);
-            auto media = referenceProject();
-            if (media->property("playing").toBool())
-                  QMetaObject::invokeMethod(media, "stop");
-            if (seq && seq->isPlaying())
-                  seq->stopWait();
-            setReferenceClock({});
-            setReferenceEndTick(-1);
-            if (seq && !seq->backgroundRenderingIdle()) {
-                  QToolTip::showText(QCursor::pos(), tr("声音准备结束后即可切换。"), _view);
-                  return;
-            }
-            const auto result = RegionalVariants::select(score, group, variant);
-            if (result.contains("error"))
-                  QToolTip::showText(QCursor::pos(), result.value("error").toString(), _view);
-            else {
-                  mscore->endCmd();
-                  _view->update();
-            }
+            const auto result=switchRegionalWriting(_view,group,variant);
+            if(result.contains("error"))QToolTip::showText(QCursor::pos(),result.value("error").toString(),_view);
+            else if(result.contains("playbackError"))QToolTip::showText(QCursor::pos(),result.value("playbackError").toString(),_view);
+      }
+      bool eventFilter(QObject* object,QEvent* event)override{
+            if(event->type()!=QEvent::Wheel)return QObject::eventFilter(object,event);auto wheel=static_cast<QWheelEvent*>(event);if(wheel->modifiers()!=Qt::ControlModifier)return false;
+            auto score=_view?_view->score():nullptr;if(!score)return false;const auto key=object->property("regionalGroup").toString();
+            for(auto value:RegionalVariants::state(score).value("groups").toList()){auto g=value.toMap();if(g.value("id").toString()!=key)continue;auto variants=g.value("variants").toList();if(variants.size()<2)break;
+                  int index=0;for(int i=0;i<variants.size();++i)if(variants[i].toMap().value("id")==g.value("active"))index=i;
+                  const int delta=wheel->angleDelta().y()+object->property("regionalWheelDelta").toInt();object->setProperty("regionalWheelDelta",delta%120);if(std::abs(delta)<120){wheel->accept();return true;}index=(index-delta/120)%variants.size();if(index<0)index+=variants.size();choose(key,variants[index].toMap().value("id").toString());wheel->accept();return true;}
+            return false;
       }
       void menu(QMenu *menu, const QString &id) {
             menu->clear();
@@ -119,6 +114,7 @@ class Controls : public QObject {
                         if (!button) {
                               button = new QToolButton(_view);
                               button->setObjectName("regionalScoreSwitch/" + key);
+                              button->setProperty("regionalGroup",key);button->installEventFilter(this);
                               button->setAutoRaise(false);
                               button->setPopupMode(QToolButton::InstantPopup);
                               button->setMaximumWidth(180);
@@ -138,7 +134,7 @@ class Controls : public QObject {
                             tr("声部%1 · %2").arg(voices.join(","), name), Qt::ElideRight, 145));
                         button->setToolTip(
                             tr("%1 · "
-                               "谱表%2\n点击切换写法；当前修改会保存。可在方案面板的“更多”里隐藏这些按钮。")
+                               "谱表%2\n点击或Ctrl+滚轮切换写法；当前修改会保存。可在方案面板的“更多”里隐藏这些按钮。")
                                 .arg(group.value("name").toString())
                                 .arg(staff + 1));
                         button->adjustSize();

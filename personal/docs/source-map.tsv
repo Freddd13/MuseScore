@@ -182,9 +182,9 @@ hand-bracket-hit	mscore/scoreview.cpp	QList<Element*> ScoreView::elementsNear	55
 和声宿主主题	share/plugins/HarmonyAssistant/UiTheme.qml	QtObject {	3	明暗系统调色板与统一紧凑控件	mtest/mscore/pluginhost
 Tap 估算	mscore/taptempo/tapestimate.h	class TapEstimate	9	值数据速度估算	mtest/mscore/p0native
 Tap 入口	mscore/taptempo/taptempo.cpp	QWidget* TapTempo::createButton	75	菜单共享动作与固定宽度工具栏	mtest/mscore/p0native
-MIDI 裁剪	audio/exports/midigate.h	class MidiGateProcessor	53	值副本释放保护与可复现微随机	mtest/mscore/p0native
+MIDI 裁剪	audio/exports/midigate.h	class MidiGateProcessor	54	值副本释放保护与可复现微随机	mtest/mscore/p0native
 MIDI 最终事件	audio/exports/midigatefile.cpp	MidiGateData midiGateSnapshot	9	正常导出事件配对及踏板控制保护	mtest/mscore/p0native
-MIDI 对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare	234	可取消后台计算及可见范围卷帘	mtest/mscore/p0native
+MIDI 对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare	188	可取消后台计算及可见范围卷帘	mtest/mscore/p0native
 编配完整分页	mscore/plugin/api/arrangementsnapshot.cpp	QVariantMap ScoreObserver::analysisRange	68	版本保护的完整复调值数据	mtest/mscore/p0native
 只读 JS 任务	mscore/plugin/api/readonlyanalysisjob.cpp	void ReadOnlyAnalysisJob::start	22	独立可取消 JS 引擎	mtest/mscore/p0native
 编配插件	share/plugins/ArrangementAssistant/Rules.js	function defaults()	6	音乐规则与可校正角色	mtest/mscore/p0native
@@ -204,8 +204,8 @@ Tap 工作区迁移	mscore/workspace.cpp	if (uiVersion < 4)	1113	一次性添加
 工作流	mscore/workflow/workflowexpression.cpp	ScoreObserver::copyWorkflowScore	104	隔离副本／受保护写入	mtest/mscore/p1native
 工作流	mscore/workflow/tapwrite.cpp	showTapWriteDialog	20	隔离副本／受保护写入	mtest/mscore/p1native
 工作流	mscore/workflow/workflowvariants.cpp	ScoreObserver::workflowFingerprint	15	只读范围与值数据	mtest/mscore/p1native
-MIDI导出	audio/exports/midigate.h	QVector<MidiGateNote> process	106	范围／声部／旋律保护的导出副本	mtest/mscore/p1native
-MIDI导出	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::voiceSelection	225	范围／声部／旋律保护的导出副本	mtest/mscore/p1native
+MIDI导出	audio/exports/midigate.h	QVector<MidiGateNote> process	114	范围／声部／旋律保护的导出副本	mtest/mscore/p1native
+MIDI导出	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::voiceSelection	179	范围／声部／旋律保护的导出副本	mtest/mscore/p1native
 工作流	mscore/workflow/scoreworkflow.cpp	ScoreObserver::workflowStatus	67	只读范围与值数据	mtest/mscore/p1native
 使用修复	mscore/workflow/paneldock.cpp	bool arrangeWorkflowDock	40	面板标签组和位置保存	mtest/mscore/p1native
 使用修复	mscore/workflow/scoreworkflow.cpp	ScoreObserver::stopWorkflowPlayback	59	停止本次试听	mtest/mscore/p1native
@@ -230,8 +230,8 @@ MIDI导出	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::voiceSelection	225	�
 琴键与松手	libmscore/pianohands.h	inline bool releaseForHand(	57	有界保留音区搜索与少松键选择	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 分手范围	libmscore/handbracketanalysis.cpp	QHash<const Note*,int> assignments(	50	导出准备时读取分手语义和范围	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 编配检查	mscore/plugin/api/pianohandanalysis.cpp	QVariantMap PianoHandAnalysis::analyse(	9	后台数字数据、各钢琴独立保持与转场	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
-MIDI松手	audio/exports/midigate.h	QVector<MidiGateNote> process(	106	受保护事件副本、占手释放与成组随机	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
-MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	234	真实秒数、选音、说明和前后占用	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
+MIDI松手	audio/exports/midigate.h	QVector<MidiGateNote> process(	114	受保护事件副本、占手释放与成组随机	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
+MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	188	真实秒数、选音、说明和前后占用	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 和弦上下文	share/plugins/HarmonyAssistant/Timeline.js	function evaluate(	96	新低音、残音、级进与相邻解释	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 和弦上下文	share/plugins/HarmonyAssistant/Harmony.js	function detectWeighted(	110	加权模板候选和歧义保留	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 联合音频输出	mscore/workflow/referencebus.cpp	void mixReferenceAudio(	50	准备好的音频和临时时间对应	mtest/mscore/p1native;../../muse3_plugins/Repairs/tests/tst_referenceproject.cpp
@@ -240,9 +240,9 @@ MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	234	�
 联合播放	mscore/workflow/referenceworkflow.cpp	QVariantMap ScoreObserver::referencePlan(	49	三种时间对应、反复出现和进入前文	mtest/mscore/p1native;../../muse3_plugins/Repairs/tests/tst_referenceproject.cpp
 编辑器对应	mscore/performanceeditor/workflowlanes.cpp	void WorkflowLanes::paintEvent(	69	可见音轨、对应与数值对比	mtest/mscore/p1native;../../muse3_plugins/Repairs/tests/tst_referenceproject.cpp
 共同项目	mscore/workflow/workflowcontext.h	class WorkflowContext	8	乐谱归属、结果更新和操作反馈	mtest/mscore/p1native;../../muse3_plugins/Repairs/tests/tst_referenceproject.cpp
-分段方案	libmscore/regionalvariants.cpp	QVariantMap select(	614	压缩写法、声部范围、原生撤销和连线保护	mtest/mscore/p1native/regional_tests.inc
-方案保存	libmscore/regionalvariants.cpp	bool save(	691	普通主方案入口和本分支当前组合恢复	mtest/mscore/p1native/regional_tests.inc
-方案面板	mscore/workflow/regionalpanel.cpp	void showRegionalVariantPanel(	640	菜单、停靠、复制切换、旧文件和普通版导出	mtest/mscore/p1native/regional_tests.inc
+分段方案	libmscore/regionalvariants.cpp	QVariantMap select(	615	压缩写法、声部范围、原生撤销和连线保护	mtest/mscore/p1native/regional_tests.inc
+方案保存	libmscore/regionalvariants.cpp	bool save(	692	普通主方案入口和本分支当前组合恢复	mtest/mscore/p1native/regional_tests.inc
+方案面板	mscore/workflow/regionalpanel.cpp	void showRegionalVariantPanel(	683	菜单、停靠、复制切换、旧文件和普通版导出	mtest/mscore/p1native/regional_tests.inc
 演奏快捷调整	mscore/events.cpp	ScoreView::wheelEvent	157	最近音力度入口	mscore/performanceeditor
 和弦独立摘要	mscore/plugin/qmlplugin.cpp	void QmlPlugin::showSummaryPanel(	194	顶部摘要与右侧面板独立显示	mtest/mscore/performanceeditor;mtest/mscore/p1native
 参考播放空格	mscore/plugin/qmlplugin.cpp	bool QmlPlugin::eventFilter(	127	只在参考面板获得焦点时处理空格，文字输入沿用原行为	mtest/mscore/p1native
@@ -253,10 +253,10 @@ MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	234	�
 Windows录制输入	audiodrivers/pm.cpp	void PortMidiDriver::read(	183	保留PortMidi时间的录制入口	mtest/mscore/p1native
 连续手位判断	libmscore/pianohands.h	inline Plan planWithContext(	149	保持音、候选分手和后两组音的比较	mtest/mscore/p0native
 当前问题谱面提示	mscore/plugin/api/scoreobserver.cpp	void ScoreObserver::applyPreview(	421	独立提示层与其它和弦避让	mtest/mscore/p0native
-MIDI松手说明	mscore/midicrop/midicroppanel.cpp	QString reasonText(	21	原长度、新长度、下一组音和按键占用	mtest/mscore/p0native
+MIDI松手说明	mscore/midicrop/midicroppanel.cpp	QString reasonText(	32	原长度、新长度、下一组音和按键占用	mtest/mscore/p0native
 和弦连续解释	share/plugins/HarmonyAssistant/Timeline.js	function scorePath(	156	候选解释、分批回查与区间输出	../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs
 方案连线	libmscore/regionalconnections.cpp	QVariantList capture(	111	按逻辑端点保存与恢复延音线和圆滑线	mtest/mscore/p1native
-谱面方案按钮	mscore/workflow/regionalcontrols.cpp	void updateRegionalControls(	199	可隐藏的写法切换、定位面板和视口更新	mtest/mscore/p1native
+谱面方案按钮	mscore/workflow/regionalcontrols.cpp	void updateRegionalControls(	195	可隐藏的写法切换、定位面板和视口更新	mtest/mscore/p1native
 打开演奏对比	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::showEditorComparison(	146	展开对应轨、分配空间并切换到当前结果	mtest/mscore/p1native
 对应轨筛选	mscore/performanceeditor/workflowlanes.cpp	bool WorkflowLanes::matchEnabled(	52	共用谱表声部筛选、直接应用和数值提示	mtest/mscore/p1native
 最近音滚轮	mscore/performanceeditor/performancewheel.cpp	bool PerformanceEditor::nearestWheelShortcut(	129	输入状态、横向滚轮和可选快捷键	mtest/mscore/performanceeditor/editor_usability_tests.inc
@@ -278,3 +278,10 @@ MIDI松手说明	mscore/midicrop/midicroppanel.cpp	QString reasonText(	21	原长
 圆滑线绕行	libmscore/freesluravoidance.cpp	AvoidanceResult avoid(	180	方向约束与形状复用	mtest/mscore/performanceeditor/notation_051_tests.inc
 分手折线位置	libmscore/handbracket.cpp	QPointF position(	63	谱间位置与音头符杠碰撞	mtest/mscore/performanceeditor/notation_051_tests.inc
 速度符号升级	mscore/temposymbols.cpp	void appendPlayableTempoSymbols	15	升级旧格子并保留自制符号	mtest/mscore/performanceeditor/notation_051_tests.inc
+写法组合切换	libmscore/regionalvarianttools.inc	QVariantMap selectMany(	2	整组选择和一次撤销	mtest/mscore/p1native/regional_comparison_tests.inc
+写法对比副本	libmscore/regionalvarianttools.inc	MasterScore* comparison(	37	另一写法的只读排版材料	mtest/mscore/p1native/regional_comparison_tests.inc
+写法差异显示	mscore/workflow/regionalcomparison.cpp	class DifferenceLayer final	38	按当前谱面位置显示变化	mtest/mscore/p1native/regional_comparison_tests.inc
+写法同段试听	mscore/workflow/regionalcomparison.cpp	QVariantMap switchRegionalWriting(	105	切换写法及同处播放	mtest/mscore/performanceeditor/gate_playback_tests.inc
+MIDI松手范围	audio/exports/midigate.h	QPair<int,int> releaseBounds(	93	允许手动调整的导出范围	mtest/mscore/p1native/gate_comparison_tests.inc
+MIDI音长试听	mscore/midicrop/gateaudition.cpp	GateAudition prepareGateAudition(	11	导出出现位置与实际播放事件对应	mtest/mscore/performanceeditor/gate_playback_tests.inc
+MIDI音长绘制	mscore/midicrop/gateroll.inc	class GateRoll final	2	原新轮廓和松手点拖动	mtest/mscore/p1native/gate_comparison_tests.inc

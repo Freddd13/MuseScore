@@ -18,6 +18,11 @@
 #include "referencebus.h"
 #include "referencefactory.h"
 #include "regionalcontrols.h"
+#include "regionalcomparison.h"
+#include "playbackpreview.h"
+#include "libmscore/undo.h"
+#include <QCheckBox>
+#include <QComboBox>
 #include <QBuffer>
 #include <QCryptographicHash>
 #include <QDialog>
@@ -51,6 +56,46 @@ class RegionalPanel : public QWidget {
       QLabel *_scope;
       QHBoxLayout *_choices;
       QTimer _refresh;
+      QCheckBox *_compare,*_listen;
+      QComboBox *_compareWith,*_combinations;
+      QTreeWidget *_differences;
+      QLabel* _differenceStatus=nullptr;
+      std::unique_ptr<MasterScore> _other;
+      ScoreContentState _comparedState;
+      QString _comparedGroup,_comparedVariant;
+      QPointer<ScoreView> _compareView;
+      bool _refreshing=false;
+      void clearDifference(){if(_compareView)showRegionalDifference(_compareView,nullptr,{});_other.reset();_comparedGroup.clear();_comparedVariant.clear();}
+      void compare(){
+            if(_refreshing)return;
+            _compareWith->setVisible(_compare->isChecked());_differences->setVisible(_compare->isChecked());_differenceStatus->setVisible(_compare->isChecked());
+            if(!_compare->isChecked()||!score()||!isVisible()){clearDifference();return;}
+            const auto target=_compareWith->currentData().toString();auto view=mscore->currentScoreView();
+            if(target.isEmpty()||!view||view->score()!=score()){clearDifference();_differenceStatus->setText(view&&view->score()!=score()?tr("请打开总谱查看这组写法的差异。"):tr("增加另一种写法后，在这里选择要对比的写法。"));return;}
+            if(seq&&seq->isPlaying())return;
+            if(_other&&_compareView==view&&_comparedState==score()->state()&&_comparedGroup==group()&&_comparedVariant==target)return;
+            clearDifference();QString problem;_other.reset(RegionalVariants::comparison(score(),group(),target,&problem));
+            if(!_other){_differenceStatus->setText(problem);return;}
+            _comparedState=score()->state();_comparedGroup=group();_comparedVariant=target;_compareView=view;
+            const auto rows=RegionalVariants::differences(score(),_other.get(),group());_differences->clear();
+            for(auto value:rows){const auto row=value.toMap();auto item=new QTreeWidgetItem(_differences,{tr("第%1小节 · 声部%2").arg(row.value("measure").toInt()).arg(row.value("track").toInt()%4+1),row.value("types").toStringList().join("、")});item->setData(0,Qt::UserRole,row);}
+            showRegionalDifference(view,_other.get(),rows);_differenceStatus->setText(rows.isEmpty()?tr("两种写法的音符、节奏、力度和附着标记相同。"):tr("%1处变化。谱面淡色显示另一写法，边框标出当前写法中变化的位置；点列表可定位。").arg(rows.size()));
+            }
+      void comparisonChoices(){
+            _refreshing=true;const auto previous=_compareWith->currentData();const auto g=selectedGroup();
+            _compareWith->clear();for(auto value:g.value("variants").toList()){auto v=value.toMap();if(v.value("id")!=g.value("active"))_compareWith->addItem(v.value("name").toString(),v.value("id"));}
+            const int i=_compareWith->findData(previous);if(i>=0)_compareWith->setCurrentIndex(i);
+            const auto combination=_combinations->currentData();_combinations->clear();_combinations->addItem(tr("选择组合…"),QString());
+            for(auto value:RegionalVariants::state(score()).value("combinations").toList()){auto item=value.toMap();_combinations->addItem(item.value("name").toString(),item.value("id"));}
+            int current=0;const auto groups=RegionalVariants::state(score()).value("groups").toList();
+            for(int c=1;c<_combinations->count();++c)for(auto value:RegionalVariants::state(score()).value("combinations").toList()){auto item=value.toMap();if(item.value("id")!=_combinations->itemData(c))continue;const auto choices=item.value("choices").toMap();bool matches=choices.size()==groups.size();for(auto v:groups){auto group=v.toMap();matches&=choices.value(group.value("id").toString())==group.value("active");}if(matches&&(current==0||item.value("id")==combination))current=c;}
+            _combinations->setCurrentIndex(current);_refreshing=false;compare();
+            }
+      void saveCombination(){
+            if(!idle())return;bool ok=false;const auto name=QInputDialog::getText(this,tr("保存组合"),tr("组合名称（同名保存会更新选择）"),QLineEdit::Normal,_combinations->currentIndex()>0?_combinations->currentText():tr("组合%1").arg(_combinations->count()),&ok);
+            if(!ok)return;const auto result=RegionalVariants::storeCombination(score(),name);report(result,tr("已保存各组当前写法。Ctrl+S保存到这份乐谱。"));if(result.value("ok").toBool()){comparisonChoices();_combinations->setCurrentIndex(_combinations->findData(result.value("id")));}
+            }
+
       QPointer<MasterScore> _master;
       QVariantMap _last;
       PluginAPI::ScoreObserver *_observer;
@@ -89,6 +134,7 @@ class RegionalPanel : public QWidget {
             }
       }
       bool idle() {
+            stopPlaybackPreview(true);
             if (!score()) {
                   _status->setText(tr("请先打开乐谱。"));
                   return false;
@@ -158,12 +204,12 @@ class RegionalPanel : public QWidget {
                   });
             }
             _choices->addStretch();
+            if(_compareWith)comparisonChoices();
       }
       void refresh() {
             auto master = score();
             auto data = RegionalVariants::state(master);
-            if (master == _master && data == _last)
-                  return;
+            if (master == _master && data == _last){compare();return;}
             QString selectedGroupId = group(), selectedVariantId = variant();
             _master = master;
             _last = data;
@@ -326,14 +372,9 @@ class RegionalPanel : public QWidget {
                   selectTree(groupId, variantId);
       }
       void switchTo() {
-            if (!idle())
-                  return;
-            if (variant().isEmpty()) {
-                  _status->setText(tr("请选中组内的一种写法。"));
-                  return;
-            }
-            report(RegionalVariants::select(score(), group(), variant()),
-                   tr("已切换这一段的写法；其它段和声部继续使用原选择。"));
+            if(variant().isEmpty()){_status->setText(tr("请选中组内的一种写法。"));return;}
+            const auto result=switchRegionalWriting(mscore->currentScoreView(),group(),variant());
+            report(result,result.contains("playbackError")?tr("写法已切换。%1").arg(result.value("playbackError").toString()):regionalAuditionEnabled()?tr("正在从同一片段起点试听。"):tr("已切换写法，可以继续编辑。"));
       }
       void mainChoice() {
             if (!idle())
@@ -378,16 +419,8 @@ class RegionalPanel : public QWidget {
       void showMain() {
             if (!idle())
                   return;
-            auto groups = RegionalVariants::state(score()).value("groups").toList();
-            for (auto value : groups) {
-                  auto g = value.toMap();
-                  auto result =
-                      RegionalVariants::select(score(), g.value("id").toString(), g.value("main").toString());
-                  if (result.contains("error")) {
-                        report(result, {});
-                        return;
-                  }
-            }
+            QVariantMap choices;for(auto value:RegionalVariants::state(score()).value("groups").toList()){auto g=value.toMap();choices[g.value("id").toString()]=g.value("main");}
+            const auto result=RegionalVariants::selectMany(score(),choices);if(result.contains("error")){report(result,{});return;}
             _status->setText(tr("已显示主方案组合。打印和常规导出使用当前屏幕所示组合。"));
             refresh();
       }
@@ -538,7 +571,7 @@ class RegionalPanel : public QWidget {
             _refresh.start();
       }
       void hideEvent(QHideEvent *) override {
-            _refresh.stop();
+            _refresh.stop();clearDifference();
       }
 
     public:
@@ -551,7 +584,7 @@ class RegionalPanel : public QWidget {
                         break;
                   }
       }
-      explicit RegionalPanel(QWidget *parent) : QWidget(parent) {
+      explicit RegionalPanel(QWidget *parent) : QWidget(parent),_compare(nullptr),_listen(nullptr),_compareWith(nullptr),_combinations(nullptr),_differences(nullptr) {
             setObjectName("regionalVariantPanel");
             auto layout = new QVBoxLayout(this);
             auto help = new QLabel(
@@ -618,6 +651,16 @@ class RegionalPanel : public QWidget {
             connect(_tree, &QTreeWidget::itemDoubleClicked, this,
                     [this](QTreeWidgetItem *, int) { switchTo(); });
             connect(_tree, &QTreeWidget::currentItemChanged, this, [this] { choices(); });
+            _compare=new QCheckBox(tr("显示差异"),this);_compare->setObjectName("regionalCompare");
+            _compareWith=new QComboBox(this);_compareWith->setObjectName("regionalCompareWith");_compareWith->hide();
+            auto comparisonRow=new QHBoxLayout;comparisonRow->addWidget(_compare);comparisonRow->addWidget(_compareWith,1);layout->addLayout(comparisonRow);
+            _differenceStatus=new QLabel(this);_differenceStatus->setWordWrap(true);_differenceStatus->hide();layout->addWidget(_differenceStatus);
+            _differences=new QTreeWidget(this);_differences->setObjectName("regionalDifferences");_differences->setHeaderLabels({tr("位置"),tr("变化")});_differences->setMaximumHeight(160);_differences->hide();layout->addWidget(_differences);
+            connect(_compare,&QCheckBox::toggled,this,[this]{comparisonChoices();});connect(_compareWith,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this]{compare();});
+            connect(_differences,&QTreeWidget::itemClicked,this,[this](QTreeWidgetItem* item,int){const auto row=item->data(0,Qt::UserRole).toMap();PluginAPI::Score wrapped(score());_observer->setScore(&wrapped);_observer->navigateWorkflow({{"start",row.value("tick")},{"end",row.value("tick").toInt()+1},{"firstTrack",row.value("track")}},false);});
+            auto combinationRow=new QHBoxLayout;_combinations=new QComboBox(this);_combinations->setObjectName("regionalCombinations");combinationRow->addWidget(_combinations,1);button(combinationRow,tr("保存组合…"),"regionalSaveCombination",[this]{saveCombination();});layout->addLayout(combinationRow);
+            connect(_combinations,QOverload<int>::of(&QComboBox::activated),this,[this](int i){if(i<=0||!idle())return;report(RegionalVariants::selectCombination(score(),_combinations->itemData(i).toString()),tr("已切换整组选择；Ctrl+Z可一起恢复。"));if(regionalAuditionEnabled())audition();});
+            _listen=new QCheckBox(tr("试听比较：切换后从同处听"),this);_listen->setObjectName("regionalAuditionCompare");_listen->setChecked(regionalAuditionEnabled());layout->addWidget(_listen);connect(_listen,&QCheckBox::toggled,this,[](bool value){setRegionalAuditionEnabled(value);});
             auto transport = new QHBoxLayout;
             layout->addLayout(transport);
             button(transport, tr("切换所选写法"), "regionalSwitch", [this] { switchTo(); });

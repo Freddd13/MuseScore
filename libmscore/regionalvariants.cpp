@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2.
 #include "regionalvariants.h"
 #include "audio.h"
+#include "articulation.h"
 #include "beam.h"
 #include "chord.h"
 #include "imageStore.h"
@@ -991,6 +992,15 @@ bool restore(MasterScore *score, const QByteArray &bytes, QString *problem) {
                   return false;
             }
       }
+      const auto combinations=data.value("combinations").toList();QSet<QString> combinationIds;
+      if(combinations.size()>64){*problem=QObject::tr("组合数量超过64个。");return false;}
+      for(auto value:combinations){const auto combination=value.toMap();const auto key=combination.value("id").toString();const auto choices=combination.value("choices").toMap();
+            if(key.isEmpty()||combinationIds.contains(key)||choices.isEmpty()){*problem=QObject::tr("组合名称或写法记录不完整。");return false;}
+            combinationIds.insert(key);
+            for(auto i=choices.begin();i!=choices.end();++i){const int group=groupIndex(groups,i.key());
+                  if(group<0||variantIndex(groups[group].toMap().value("variants").toList(),i.value().toString())<0){*problem=QObject::tr("组合中的写法已经改变，请恢复先前保存的文件。");return false;}
+                  }
+            }
       auto assets = data.value("assets").toMap();
       for (auto it = assets.begin(); it != assets.end(); ++it) {
             if (!it.key().startsWith("Pictures/") || it.key().contains("..") || it.key().contains('\\')) {
@@ -1027,5 +1037,6 @@ bool restore(MasterScore *score, const QByteArray &bytes, QString *problem) {
       score->undoStack()->clearAfterLoad();
       return true;
 }
+#include "regionalvarianttools.inc"
 } // namespace RegionalVariants
 } // namespace Ms

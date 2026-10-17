@@ -3,6 +3,10 @@
 #include <QJsonDocument>
 #include "mscore/plugin/api/score.h"
 #include "mscore/workflow/playbackpreview.h"
+#include "mscore/midicrop/gateaudition.h"
+#include "mscore/workflow/regionalcomparison.h"
+#include "libmscore/regionalvariants.h"
+#include "audio/exports/exportmidi.h"
 #include "mscore/workflow/workflowcontext.h"
 #include "mscore/workflow/referencefactory.h"
 #include "mscore/workflow/referencebus.h"
@@ -813,9 +817,12 @@ class TestPerformanceEditor : public QObject, public MTest {
             }
 #ifdef Q_MOC_RUN
       void expressionPlaybackKeepsScoreAndBeat();
+      void gatePlaybackKeepsScoreAndBeat();
+      void regionalPlaybackSwitchesSamePhrase();
       void expressionParameterDragAndApply();
 #else
 #include "expression_playback_tests.inc"
+#include "gate_playback_tests.inc"
 #include "expression_compare_tests.inc"
 #endif
       void arpeggioRealSequencerPreRoll()

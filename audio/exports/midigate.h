@@ -19,6 +19,7 @@ struct MidiGateOptions {
       quint32 seed = 13013;
       QSet<int> staves; // empty = all recognized piano staves
       QSet<QString> excluded;
+      QMap<QString,int> releaseOverrides; // Exact exported occurrence, this export only.
       int scoreStart=-1,scoreEnd=-1; // physical score ticks; unrolled MIDI time stays untouched
       QSet<int> tracks,protectedTracks; // explicit staff+voice; empty selection = all
       QSet<int> voices,protectedVoices; // local voice numbers 0..3
@@ -31,7 +32,7 @@ struct MidiGateNote {
       QString id, partName;
       int track = 0, offOrdinal = -1, staff = -1, voice = -1;
       int port = 0, channel = 0, pitch = 60, on = 0, off = 0, newOff = 0;
-      int sourceTick=-1,sourceMeasure=-1;
+      int sourceTick=-1,sourceMeasure=-1,sourceUtick=-1;
       int partId=-1,hand=-1,handHint=-1,finger=0;
       bool melody=false,handInferred=false;
       bool piano = false, known = false, manual = false, ambiguous = false;
@@ -89,6 +90,13 @@ class MidiGateProcessor {
             return int(qCeil(i->tick+(time-i->seconds)/i->secondsPerTick));
             }
    public:
+      QPair<int,int> releaseBounds(const MidiGateNote& note,const QVector<MidiGatePedal>& pedals,const MidiGateOptions& option) const {
+            if(!preserved(note,option).isEmpty())return {-1,-1};
+            const int minimum=tickAt(seconds(note.on)+qBound(1.,option.minimumMs,5000.)/1000.);
+            for(const auto& pedal:pedals)if(pedal.port==note.port&&pedal.channel==note.channel&&pedal.supported&&note.off<=pedal.up&&note.off>pedal.down){
+                  const int first=qMax(qMax(note.on+1,minimum),pedal.down+1);if(first<note.off)return {first,note.off};}
+            return {-1,-1};
+            }
       int tickForMilliseconds(double milliseconds) const {return tickAt(milliseconds/1000.);}
       double durationMs(int from,int until) const { return (seconds(until)-seconds(from))*1000.; }
       void setClock(const MidiGateData& input) {
@@ -227,6 +235,14 @@ class MidiGateProcessor {
                   if(!p->supported) {preserve("unsupported-pedal");continue;}
                   if(!(p->down<candidate && candidate<n.off && n.off<=p->up)) {preserve("pedal-boundary");continue;}
                   n.newOff=candidate;n.reason="pedal-release";
+                  }
+            for(auto& note:result){
+                  const auto override=option.releaseOverrides.constFind(note.id);if(override==option.releaseOverrides.cend())continue;
+                  const int at=override.value();
+                  if(at==note.off){if(note.reason=="hand-release")note.handWarning=QString::fromUtf8("继续按住这个旧音会影响下一组音，可再拖动尾端安排松手");note.newOff=note.off;note.reason="manual-original";note.beforeKeys=note.afterKeys=note.beforeSpan=note.afterSpan=-1;continue;}
+                  if(preserved(note,option).isEmpty()&&at>note.on&&at<note.off&&durationMs(note.on,at)>=qBound(1.,option.minimumMs,5000.)&&releaseWindow(note,at)){
+                        if(note.reason=="hand-release"&&at>note.newOff)note.handWarning=QString::fromUtf8("松手晚于自动建议，可试听并检查下一组音的手位");note.newOff=at;note.reason="manual-release";note.beforeKeys=note.afterKeys=note.beforeSpan=note.afterSpan=-1;
+                        }
                   }
             return result;
             }

@@ -773,7 +773,7 @@ void Seq::processMessages()
                         // PianoTools here returns the playback pitches by-value
                         // to ensure no discrepancy while erasing items from
                         // the _pressedPlaybackPitches container
-                        for (int pressedPitch : piano->pressedPlaybackPitches())
+                        if (piano) for (int pressedPitch : piano->pressedPlaybackPitches())
                               piano->releasePlaybackPitch(pressedPitch);
                         }
                         break;

@@ -27,6 +27,9 @@
 #include "libmscore/velocitybackup.h"
 #include "libmscore/xml.h"
 #include "mscore/midicrop/midicroppanel.h"
+#include "mscore/midicrop/gateaudition.h"
+#include "mscore/preferences.h"
+#include <QScopedValueRollback>
 #include "mscore/musescore.h"
 #include "mscore/palette.h"
 #include "mscore/palette/palettetree.h"
@@ -47,6 +50,8 @@
 #include "mscore/workflow/paneldock.h"
 #include "mscore/workflow/referencebus.h"
 #include "mscore/workflow/regionalcontrols.h"
+#include "mscore/workflow/regionalcomparison.h"
+#include <QWheelEvent>
 #include "mscore/workflow/regionalpanel.h"
 #include "mscore/workflow/workflowcontext.h"
 #include "mtest/testutils.h"
@@ -419,6 +424,10 @@ private slots:
  void regionalGlissandoRequiresBothEnds();
  void regionalScoreSwitchMouseAndRestore();
  void regionalSwitchUndoAndSharedSettings();
+ void regionalCombinationAndDifferences();
+ void gateManualReleaseAndAudition();
+ void gateEditorMouseComparison();
+ void regionalComparisonMouseAndWheel();
  void regionalSaveMainAndRestoreCurrent();
  void regionalIndependentVoicesExpandImportAndExport();
  void regionalRejectForeignVoiceAndKeepFile();
@@ -429,5 +438,7 @@ private slots:
 };
 #include "reference_tests.inc"
 #include "regional_tests.inc"
+#include "regional_comparison_tests.inc"
+#include "gate_comparison_tests.inc"
 QTEST_MAIN(TestP1Native)
 #include "tst_p1native.moc"

@@ -35,7 +35,7 @@ MidiGateData midiGateSnapshot(const MidiFile& file,const QVector<MidiGateSource>
                         MidiGateNote n;n.track=trackIndex;n.port=track.outPort();n.channel=e.channel();n.pitch=e.pitch();n.on=tick;
                         n.id=sourceKey(trackIndex,tick,e.channel(),e.pitch())+":"+QString::number(ordinal);
                         const auto list=tags.value(sourceKey(trackIndex,tick,e.channel(),e.pitch()));
-                        if(list.size()==1) {const auto& s=list.first();n.known=true;n.sourceTick=s.sourceTick;n.sourceMeasure=s.sourceMeasure;n.melody=s.melody;n.partId=s.partId;n.hand=s.hand;n.handHint=s.handHint;n.finger=s.finger;n.staff=s.staff;n.voice=s.voice;n.partName=s.partName;n.piano=s.piano;n.manual=s.manual;}
+                        if(list.size()==1) {const auto& s=list.first();n.known=true;n.sourceTick=s.sourceTick;n.sourceUtick=s.sourceUtick;n.sourceMeasure=s.sourceMeasure;n.melody=s.melody;n.partId=s.partId;n.hand=s.hand;n.handHint=s.handHint;n.finger=s.finger;n.staff=s.staff;n.voice=s.voice;n.partName=s.partName;n.piano=s.piano;n.manual=s.manual;}
                         pending[key].append(data.notes.size());data.notes.append(n);
                         }
                   else if(e.type()==ME_NOTEOFF || (e.type()==ME_NOTEON && e.velo()==0)) {

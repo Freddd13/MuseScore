@@ -213,6 +213,7 @@ add_library(mscoreapp STATIC
       taptempo/taptempo.h taptempo/taptempo.cpp taptempo/tapmark.h taptempo/tapmark.cpp
       midicrop/midicroppanel.h midicrop/midicroppanel.cpp
       inputnotationmenu.h inputnotationmenu.cpp temposymbols.h temposymbols.cpp handbracketsettings.h handbracketsettings.cpp
+      midicrop/gateaudition.h midicrop/gateaudition.cpp
       abstractdialog.h accessibletoolbutton.h albummanager.h
       analyse.h articulationprop.h
       bendcanvas.h breaksdialog.h

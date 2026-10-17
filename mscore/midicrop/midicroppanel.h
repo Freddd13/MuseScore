@@ -4,6 +4,7 @@
 #include <QMap>
 #include <functional>
 #include "audio/exports/midigate.h"
+#include "libmscore/score.h"
 class QCheckBox;
 namespace Ms {
 class Score;
@@ -15,6 +16,8 @@ class MidiCropPanel : public QWidget {
       int _fromMeasure=0,_untilMeasure=0;
       std::function<QList<Score*>()> _scores;
       QMap<Score*,QSet<QString>> _exclusions;
+      QMap<Score*,QMap<QString,int>> _releaseOverrides;
+      QMap<Score*,ScoreContentState> _releaseStates;
       QMap<Score*,QSet<int>> _staves;
       QMap<Score*,QSet<int>> _tracks,_protectedTracks;
       void settings();
@@ -24,7 +27,7 @@ class MidiCropPanel : public QWidget {
       MidiCropPanel(QWidget*,std::function<QList<Score*>()>);
       bool enabled() const;
       bool includeOriginal() const;
-      void clearSessions() { _exclusions.clear(); _staves.clear(); _tracks.clear(); _protectedTracks.clear(); }
+      void clearSessions() { _exclusions.clear(); _releaseOverrides.clear(); _releaseStates.clear(); _staves.clear(); _tracks.clear(); _protectedTracks.clear(); }
       void savePreferences() const;
       MidiExportOptions options(Score*) const;
       bool write(Score*,const QString&,const QString& original);
