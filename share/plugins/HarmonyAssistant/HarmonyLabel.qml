@@ -17,6 +17,7 @@ Item {
         var stamp=revision
         return observer && typeof observer.harmonyLabel==="function" ? observer.harmonyLabel(chord,degree,{pixels:pixels,degreeRatio:degreeRatio,gap:gap,order:order,font:chordFont,degreeFont:degreeFont,color:String(color)}) : null
     }
+    baselineOffset:rendered&&rendered.baseline?rendered.baseline:implicitHeight
     implicitWidth:rendered&&rendered.width?rendered.width:fallback.implicitWidth
     implicitHeight:rendered&&rendered.height?rendered.height:fallback.implicitHeight
     Image {anchors.fill:parent;source:label.rendered&&label.rendered.source?label.rendered.source:"";fillMode:Image.PreserveAspectFit;horizontalAlignment:Image.AlignLeft;smooth:true;cache:true;asynchronous:false}

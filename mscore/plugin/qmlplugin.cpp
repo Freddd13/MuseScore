@@ -98,6 +98,7 @@ void QmlPlugin::focusPanel()
       if (!_panelDock) return;
       _panelDock->show();_panelDock->raise();_panelDock->activateWindow();
       if (_panelDock->widget()) _panelDock->widget()->setFocus(Qt::OtherFocusReason);
+      if(window()){window()->requestActivate();forceActiveFocus(Qt::OtherFocusReason);}
       }
 void QmlPlugin::hidePanel() { if(_panelDock)_panelDock->hide(); }
 void QmlPlugin::resizePanel(int width,int height) { if(_panelDock&&_panelDock->isFloating())_panelDock->resize(qBound(200,width,1600),qBound(100,height,1200)); }

@@ -1,3 +1,5 @@
+#include "mscore/workflow/harmonytypography.h"
+#include <QScopedValueRollback>
 //=============================================================================
 //  MuseScore
 //  Music Composition & Notation
@@ -436,7 +438,7 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
       QHash<const System*,QMap<int,QVector<int>>> groups;
       // Private style/chord list: parsing unknown symbols must not modify the user's score.
       std::unique_ptr<Ms::MasterScore> scratch;
-      QHash<QString,NotePreviewEntry> rendered;
+      QHash<QString,NotePreviewEntry> rendered;QHash<QString,qreal> renderedBaselines;
       int hidden=0;QVariantList unplaced;QString fontFallback;
       QVector<QRectF> otherMarkers;bool haveOtherMarkers=false;
       for (const auto& descriptor : descriptors) {
@@ -528,6 +530,7 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
             entry.chordColor=readColor("chordColor",entry.chordColor);
             entry.highlightColor=readColor("highlightColor",entry.highlightColor);
             entry.highlightBackground=readColor("highlightBackground",entry.highlightBackground);
+            qreal chordBaseline=-1;
             if (!entry.chord.isEmpty()) {
                   const QString renderKey=entry.chord+"\t"+family+"\t"+QString::number(scale,'g',12)+"\t"
                         +entry.chordColor.name()+entry.highlightColor.name();
@@ -535,7 +538,7 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
                         if (!scratch) {
                               scratch=std::make_unique<Ms::MasterScore>(_score->style());
                               // Scores without written Harmony may not yet have loaded their symbol list.
-                              scratch->style().checkChordList();
+                              scratch->style().checkChordList();alignTemporaryHarmonyBass(*scratch);
                               }
                         Harmony harmony(scratch.get());
                         if (!value.value("chordFont").toString().isEmpty()) harmony.setProperty(Pid::FONT_FACE,family);
@@ -543,9 +546,9 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
                         const bool symbolic=QString("ABCDEFGabcdefg").contains(entry.chord.front());
                         if(symbolic){harmony.setHarmony(entry.chord);harmony.calculateBoundingRect();}
                         const auto nativeBox=harmony.bbox();
-                        NotePreviewEntry glyphs;glyphs.renderedChordSize=nativeBox.size();glyphs.renderedChordKey=renderKey;
+                        NotePreviewEntry glyphs;glyphs.renderedChordSize=nativeBox.size();renderedBaselines[renderKey]=-nativeBox.top();glyphs.renderedChordKey=renderKey;
                         auto record=[&](const QColor& color,QPicture& picture) {
-                              harmony.setColor(color);QPainter painter(&picture);painter.translate(-nativeBox.topLeft());
+                              harmony.setColor(color);QPainter painter(&picture);QScopedValueRollback<qreal> fontDevice(MScore::pixelRatio,DPI/qreal(picture.logicalDpiX()));painter.translate(-nativeBox.topLeft());
                               static_cast<const Element&>(harmony).draw(&painter);painter.end();
                               };
                         if(symbolic&&!nativeBox.isEmpty()){record(entry.chordColor,glyphs.chordPicture);record(entry.highlightColor,glyphs.activeChordPicture);}
@@ -556,9 +559,13 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
                         }
                   const auto& glyphs=rendered[renderKey];entry.chordPicture=glyphs.chordPicture;
                   entry.activeChordPicture=glyphs.activeChordPicture;entry.renderedChordSize=glyphs.renderedChordSize;
-                  entry.renderedChordKey=glyphs.renderedChordKey;
+                  entry.renderedChordKey=glyphs.renderedChordKey;chordBaseline=renderedBaselines.value(renderKey,-1);
                   }
-            entry.chordBox=QRectF(QPointF(),layoutPreviewChord(entry,qBound(0,value.value("chordOrder").toInt(),3)));
+            if(!entry.chord.isEmpty()&&entry.renderedChordSize.isEmpty())entry.chordFont.setPixelSize(qMax(5,qRound(_score->styleD(Sid::chordSymbolAFontSize)*scale*DPI/PPI)));
+            QFont unitDegree(entry.degreeFont);unitDegree.setPixelSize(100);
+            const qreal capital=QFontMetricsF(entry.chordFont,MScore::paintDevice()).capHeight();
+            if(!value.value("keepDegreeSize").toBool())entry.degreeFont.setPixelSize(qMax(5,qRound(100*capital/qMax(1.,QFontMetricsF(unitDegree).capHeight()))));
+            entry.chordBox=QRectF(QPointF(),layoutPreviewChord(entry,qBound(0,value.value("chordOrder").toInt(),3),chordBaseline));
             groups[system][entry.annotationTrack].append(markers.size());markers.append(entry);positions.append(position);
             }
       // Prefer one row per system/part; lift colliding markers while keeping their tick x.
@@ -592,7 +599,7 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
                               if (!box.isEmpty())obstacles.append(box);
                               }
                         auto placed=entry.avoidScoreContent?findPreviewChordBox(preferred,pageBounds,obstacles,gap):stackVisiblePreviewChord(preferred,pageBounds,chordBoxes[page],gap);
-                        if(placed.isEmpty()&&entry.onTop)placed=stackVisiblePreviewChord(preferred,pageBounds,chordBoxes[page],gap);
+                        if(placed.isEmpty())placed=stackVisiblePreviewChord(preferred,pageBounds,chordBoxes[page],gap);
                         if(!placed.isEmpty())placed.translate(entry.manualOffset);
                         entry.chordBox=placed.isEmpty() ? QRectF() : placed.translated(-positions[index]);
                         if (placed.isEmpty()) {

@@ -27,9 +27,10 @@ void appendPlayableTempoSymbols(PalettePanel* panel)
             auto cell=panel->cell(i);auto e=cell->element.get();if(!e){++i;continue;}
             const QString plain=e->isTextBase()?toTextBase(e)->plainText().simplified().toLower():e->isTextLine()?toTextLine(e)->beginText().simplified().toLower():QString();
             const bool factory=!cell->custom||cell->name==QObject::tr("渐慢 rit.（可播放）")||cell->name==QObject::tr("a tempo（恢复渐变前的速度）")||cell->name.startsWith("Kumo rit");
-            const bool oldRit=cell->tag=="kumo-rit"||(factory&&(plain=="rit."||plain=="ritardando")),oldRestore=cell->tag=="kumo-a-tempo"||(factory&&plain=="a tempo");
+            const bool oldRit=cell->tag=="kumo-rit"||(factory&&(plain=="rit."||plain=="ritardando")&&(!e->isTextLine()||!toTextLine(e)->ritPlay()));
+            const bool oldRestore=cell->tag=="kumo-a-tempo"||(factory&&plain=="a tempo"&&(!e->isTempoText()||toTempoText(e)->restoreMode()!=1));
             int role=oldRit||(e->isTextLine()&&toTextLine(e)->ritPlay())?0:oldRestore||(e->isTempoText()&&toTempoText(e)->restoreMode()==1)?1:-1;
-            if(role<0||(cell->custom&&!oldRit&&!oldRestore)){++i;continue;}
+            if(role<0||(cell->custom&&!factory&&!oldRit&&!oldRestore)){++i;continue;}
             if(found[role]){panel->takeCells(i,1);continue;}found[role]=true;
             if(oldRit||oldRestore){cell->element.reset(role==0?static_cast<Element*>(makeRit()):static_cast<Element*>(makeRestore()));cell->custom=false;e=cell->element.get();}
             cell->tag.clear();cell->name=role==0?QObject::tr("渐慢 rit.（可播放）"):QObject::tr("a tempo（恢复渐变前的速度）");

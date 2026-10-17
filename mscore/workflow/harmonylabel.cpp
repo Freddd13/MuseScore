@@ -1,12 +1,14 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2.
 #include "mscore/plugin/api/scoreobserver.h"
 #include "libmscore/harmony.h"
+#include "harmonytypography.h"
 #include <QBuffer>
 #include <QCache>
 #include <QFontMetricsF>
 #include <QImage>
 #include <QJsonDocument>
 #include <QPainter>
+#include <QScopedValueRollback>
 #include <QtMath>
 
 namespace Ms { namespace PluginAPI {
@@ -24,6 +26,8 @@ QVariantMap ScoreObserver::harmonyLabel(const QString& chordText,const QString& 
       const int order=qBound(0,options.value("order",0).toInt(),3);
       const QColor ink(options.value("color","#343a3f").toString());
       MasterScore scratch(_score->style());scratch.style().checkChordList();
+      // This display uses the same baseline for root, slash and bass. The score style stays unchanged.
+      alignTemporaryHarmonyBass(scratch);
       Harmony harmony(&scratch);
       const QString font=options.value("font").toString();
       if(!font.isEmpty())harmony.setProperty(Pid::FONT_FACE,font);
@@ -46,17 +50,20 @@ QVariantMap ScoreObserver::harmonyLabel(const QString& chordText,const QString& 
       const QSizeF a=chordBox.size()*scale,b=degree.isEmpty()?QSizeF():QSizeF(metrics.horizontalAdvance(degree),degreeBox.height());
       const bool vertical=order>=2,reverse=order==1||order==3;
       const qreal spacing=a.isEmpty()||b.isEmpty()?0:gap;
-      const QSizeF combined=vertical?QSizeF(qMax(a.width(),b.width()),a.height()+b.height()+spacing):QSizeF(a.width()+b.width()+spacing,qMax(a.height(),b.height()));
+      const qreal ascent=qMax(-chordBox.top()*scale,-degreeBox.top()),descent=qMax(chordBox.bottom()*scale,degreeBox.bottom());
+      const QSizeF combined=vertical?QSizeF(qMax(a.width(),b.width()),a.height()+b.height()+spacing):QSizeF(a.width()+b.width()+spacing,ascent+descent);
       const QSize size(qMax(1,qCeil(combined.width()+4)),qMax(1,qCeil(combined.height()+4)));
       QImage image(size*2,QImage::Format_ARGB32_Premultiplied);image.fill(Qt::transparent);
+      QScopedValueRollback<qreal> fontDevice(MScore::pixelRatio,DPI/qreal(image.logicalDpiX()));
       QPainter painter(&image);painter.scale(2,2);painter.setRenderHint(QPainter::Antialiasing);painter.setRenderHint(QPainter::TextAntialiasing);
       QPointF chordAt(2,2),degreeAt(2,2);
       if(vertical){chordAt+=QPointF((combined.width()-a.width())/2,reverse?b.height()+spacing:0);degreeAt+=QPointF((combined.width()-b.width())/2,reverse?0:a.height()+spacing);}
       else {chordAt+=QPointF(reverse?b.width()+spacing:0,(combined.height()-a.height())/2);degreeAt+=QPointF(reverse?0:a.width()+spacing,(combined.height()-b.height())/2);}
+      if(!vertical){chordAt.setY(2+ascent+chordBox.top()*scale);degreeAt.setY(2+ascent+degreeBox.top());}
       if(!chord.isEmpty()){painter.save();painter.translate(chordAt);painter.scale(scale,scale);painter.translate(-chordBox.topLeft());if(plain){painter.setPen(ink);painter.setFont(reference);painter.drawText(QPointF(),chord);}else{harmony.setColor(ink);static_cast<const Element&>(harmony).draw(&painter);}painter.restore();}
       if(!degree.isEmpty()){painter.setPen(ink);painter.setFont(degreeFont);painter.drawText(degreeAt-QPointF(0,degreeBox.top()),degree);}
       painter.end();QByteArray png;QBuffer buffer(&png);buffer.open(QIODevice::WriteOnly);image.save(&buffer,"PNG");
-      QVariantMap result{{"source","data:image/png;base64,"+QString::fromLatin1(png.toBase64())},{"width",size.width()},{"height",size.height()},{"font",reference.family()},{"degreeFont",degreeFamily}};
+      QVariantMap result{{"source","data:image/png;base64,"+QString::fromLatin1(png.toBase64())},{"width",size.width()},{"height",size.height()},{"baseline",2+ascent},{"ascent",ascent},{"descent",descent},{"font",reference.family()},{"degreeFont",degreeFamily}};
       cache.insert(key,new QVariantMap(result));return result;
       }
 }}

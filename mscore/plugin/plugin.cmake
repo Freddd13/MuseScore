@@ -65,6 +65,8 @@ set (PLUGIN_API_SRC
     ${CMAKE_CURRENT_LIST_DIR}/api/util.h
     )
 
+list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/workflowdocument.cpp)
+
 set (PLUGIN_SRC
     ${PLUGIN_API_SRC}
     ${CMAKE_CURRENT_LIST_DIR}/mscorePlugins.cpp

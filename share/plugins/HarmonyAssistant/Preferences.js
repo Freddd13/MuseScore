@@ -49,7 +49,7 @@ function clean(source) {
     for(i=0;i<12;++i) if(source.noteLabels && typeof source.noteLabels[i]==="string" && source.noteLabels[i].length<=24) out.noteLabels[i]=source.noteLabels[i];
     var summaryLimits={summaryPixels:[12,32],summaryDegreeRatio:[60,140],summaryGap:[0,20],summaryOrder:[0,3]};
     for(var field in summaryLimits)if(typeof source[field]==="number" && isFinite(source[field]))out[field]=Math.round(Math.max(summaryLimits[field][0],Math.min(summaryLimits[field][1],source[field])));
-    if(Array.isArray(source.collapsedSections))out.collapsedSections=source.collapsedSections.filter(function(key,index,all){return ["tones","key","display","appearance","range","exchange"].indexOf(key)>=0 && all.indexOf(key)===index;});
+    if(Array.isArray(source.collapsedSections))out.collapsedSections=source.collapsedSections.filter(function(key,index,all){return ["tones","pitches","key","display","appearance","range","exchange"].indexOf(key)>=0 && all.indexOf(key)===index;});
     return out;
 }
 function preset(config, name) {

@@ -147,6 +147,8 @@ MuseScore {
     property color muted: theme.muted
     property var qualityNames: Harmony.defs.map(function(d) { return d.name })
 
+    property bool nativeCorrectionWrite:false
+    property string nativeCorrectionsJSON:""
     property var manualPositions:[]
     property var positionIndex:AnnotationEdits.index(manualPositions)
     property bool scoreRangeEditing:false
@@ -164,7 +166,7 @@ MuseScore {
     function moveAnnotation(tick,part,x,y){
         editUndo=editUndo.concat([editSnapshot()]).slice(-100);editRedo=[]
         manualPositions=AnnotationEdits.moved(manualPositions,tick,part,x,y)
-        saveCorrections();applyScorePreview();syncScoreRangeEditor()
+        saveCorrections(true);applyScorePreview();syncScoreRangeEditor()
     }
     function resizeSummary(force){
         if(!started || !(ribbon||dualSummaryActive) || typeof root.fitPanelHeight!=="function")return
@@ -201,21 +203,38 @@ MuseScore {
             manualNeedsReview=true;noticeText="谱面已变更；人工范围暂未应用，请复核后确认。";return
         }
         loadedFingerprint=analysisFingerprint
+        if(observer&&typeof observer.workflowData==="function"){
+            var embedded=observer.workflowData("harmony");nativeCorrectionsJSON=JSON.stringify(embedded)
+            if(embedded.schema===2){manualOverrides=Timeline.validEdits(embedded.overrides||[]);manualPositions=AnnotationEdits.positions(embedded.positions||[]);return}
+        }
         var saved=observer.loadConfiguration("HarmonyAssistant-regions-"+analysisFingerprint)
         if(saved.schema===1 && saved.fingerprint===analysisFingerprint) {
             try{manualOverrides=Timeline.validEdits(saved.overrides);manualPositions=AnnotationEdits.positions(saved.positions)}catch(error){noticeText="人工范围未读取："+error}
         }
     }
-    function saveCorrections() {
+    function syncNativeCorrections(){
+        if(nativeCorrectionWrite||!observer||typeof observer.workflowData!=="function")return
+        var saved=observer.workflowData("harmony"),json=JSON.stringify(saved)
+        if(!nativeCorrectionsJSON.length||json===nativeCorrectionsJSON)return
+        nativeCorrectionsJSON=json;manualOverrides=Timeline.validEdits(saved.overrides||[]);manualPositions=AnnotationEdits.positions(saved.positions||[]);manualNeedsReview=false
+        rebuildRegions();applyScorePreview();syncScoreRangeEditor()
+    }
+    function saveCorrections(inScore) {
         if(!advancedNative || !loadedFingerprint.length || manualNeedsReview)return
+        if(inScore&&typeof observer.setWorkflowData==="function"){
+            var data={schema:2,fingerprint:loadedFingerprint,overrides:manualOverrides,positions:manualPositions}
+            nativeCorrectionWrite=true;var result=observer.setWorkflowData("harmony",data);nativeCorrectionWrite=false
+            if(result.error){noticeText=result.error;return}nativeCorrectionsJSON=JSON.stringify(observer.workflowData("harmony"))
+        }
         if(!observer.saveConfiguration("HarmonyAssistant-regions-"+loadedFingerprint,{schema:1,fingerprint:loadedFingerprint,overrides:manualOverrides,positions:manualPositions}))noticeText="人工范围保存失败。"
     }
     function editRange(command,start,end,rootIndex,qualityIndex,bassIndex) {
         if(analysisDirty){noticeText="正在更新和声区间，请稍候。";return}
         if(command==="select"){openAnnotation(start,focusedPart);return}
         if(command==="position" && ownedRegion){moveAnnotation(ownedRegion.start,ownedRegion.part,0,0);return}
-        if(command==="review"){loadedFingerprint=analysisFingerprint;manualNeedsReview=false;rebuildRegions();saveCorrections();applyScorePreview();return}
+        if(command==="review"){loadedFingerprint=analysisFingerprint;manualNeedsReview=false;rebuildRegions();saveCorrections(true);applyScorePreview();return}
         var next=Timeline.clone(manualOverrides),region=ownedRegion
+        if((command==="undo"||command==="redo")&&typeof observer.workflowUndo==="function"){observer.workflowUndo(command==="redo");syncNativeCorrections();return}
         if(command==="undo" || command==="redo") {
             var source=command==="undo"?editUndo:editRedo,target=command==="undo"?editRedo:editUndo
             if(!source.length)return
@@ -250,6 +269,8 @@ MuseScore {
                         if(bassIndex>0) {
                             info.bass=Harmony.rootPcs[bassIndex-1]
                             info.chord=info.chord.split("/")[0]+(info.bass!==info.root?"/"+Harmony.rootNames[bassIndex-1]:"")
+                            info.degree=Harmony.roman(Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,info.root,info.definition,configuration.degreeMode,info.bass)
+                            info.inversion=Harmony.inversion(Harmony.labelFor(info.bass,info.root,info.definition))
                         }
                         for(var field in info)edit[field]=info[field]
                     }
@@ -261,7 +282,7 @@ MuseScore {
             if(command==="range" && region && start!==region.start){var prior=positionIndex[region.part+":"+region.start];if(prior){manualPositions=AnnotationEdits.moved(manualPositions,region.start,region.part,0,0);manualPositions=AnnotationEdits.moved(manualPositions,start,region.part,prior.x,prior.y)}}
         }
         manualOverrides=Timeline.validEdits(next);loadedFingerprint=analysisFingerprint
-        rebuildRegions();saveCorrections();analyze();applyScorePreview()
+        rebuildRegions();saveCorrections(true);analyze();applyScorePreview()
     }
     function openAnnotation(tick,track) {
         if(!curScore)return
@@ -527,7 +548,7 @@ MuseScore {
                     var context=observer.contextSnapshot(0,firstTrack,endTrack,pedalContext.checked,windowTicks(),false),fingerprint=context.fingerprint
                     if(imported.fingerprint!==fingerprint)throw Error("分析与当前乐谱 / 乐器范围不一致，未应用")
                     overrides.concat(regions).forEach(function(r){if((context.scoreEnd && r.end>context.scoreEnd) || r.part<firstTrack || r.part>=endTrack || partForTrack(r.part)!==r.part)throw Error("分析区间超出乐谱 / 乐器范围")})
-                    manualOverrides=overrides;manualPositions=AnnotationEdits.positions(imported.positions);loadedFingerprint=fingerprint;manualNeedsReview=false;editUndo=[];editRedo=[];saveCorrections()
+                    manualOverrides=overrides;manualPositions=AnnotationEdits.positions(imported.positions);loadedFingerprint=fingerprint;manualNeedsReview=false;editUndo=[];editRedo=[];saveCorrections(true)
                     importedRegions=regions;importedRegions.forEach(function(r){r.source="imported"})
                     importedRecords=importedRegions.length?[]:imported.frames; analysisDirty=true; scheduleAnalysis(); requestRefresh(false)
                     noticeText="已导入 "+imported.frames.length+" 个分析切片。"
@@ -628,7 +649,7 @@ MuseScore {
         undoPause = false
         timeline = []
         cancelRegionJob();analysisTimer.stop()
-        manualOverrides=[];manualPositions=[];scoreRangeEditing=false;editUndo=[];editRedo=[];analysisRegions=[];automaticRegions=[];regionBuilder=null;loadedFingerprint="";manualNeedsReview=false;annotationTick=-1
+        manualOverrides=[];manualPositions=[];scoreRangeEditing=false;editUndo=[];editRedo=[];analysisRegions=[];automaticRegions=[];regionBuilder=null;loadedFingerprint="";nativeCorrectionsJSON="";manualNeedsReview=false;annotationTick=-1
         unplacedMarkers=[];unplacedIndex=({});placementNotice=""
         importedRecords = []
         importedRegions = []
@@ -684,7 +705,7 @@ MuseScore {
         setScope()
         if (oldFirst !== firstTrack || oldEnd !== endTrack) {
             cancelRegionJob();analysisTimer.stop()
-            saveCorrections();manualOverrides=[];manualPositions=[];scoreRangeEditing=false;editUndo=[];editRedo=[];loadedFingerprint="";manualNeedsReview=false
+            saveCorrections();manualOverrides=[];manualPositions=[];scoreRangeEditing=false;editUndo=[];editRedo=[];loadedFingerprint="";nativeCorrectionsJSON="";manualNeedsReview=false
             analysisRegions=[];automaticRegions=[];regionBuilder=null;cacheDirty=true;analysisDirty=true;importedRecords=[];importedRegions=[];annotationTick=-1
             unplacedMarkers=[];unplacedIndex=({});placementNotice=""
             if(advancedNative)observer.setScorePreview([])
@@ -1050,6 +1071,7 @@ MuseScore {
     }
     onScoreStateChanged: {
         if (!started || internalChange) return
+        syncNativeCorrections()
         if (state.undoRedo && !observer) {
             // Never change the score from an undo/redo callback. Keep the inspector read-only.
             undoPause = true
@@ -1232,13 +1254,10 @@ Flickable {
                 PanelCard {
                     id:summaryCard; objectName:"harmonySummary"
                     width: root.expanded ? (panel.width-10)/2 : panel.width
-                    minimumBodyHeight:settingsExpanded ? 190 : 156
+                    fixedBodyHeight:settingsExpanded ? 230 : 200
                     StableLabel {text:positionText; color:muted; font.pixelSize:11}
-                    HarmonyLabel {width:Math.min(parent.width,implicitWidth);height:implicitHeight;observer:root.observer;chord:root.chordText;color:root.chordInk;pixels:24;chordFont:["","Edwin","Arial"][configuration.chordFont];revision:root.analysisFingerprint}
-                    RowLayout {
-                        width: parent.width
-                        UiLabel {text:"级数"; color:muted; font.pixelSize:12}
-                        HarmonyLabel {Layout.preferredWidth:implicitWidth;Layout.preferredHeight:implicitHeight;observer:root.observer;degree:root.degreeText;color:root.chordInk;pixels:24;degreeFont:configuration.degreeFont;revision:root.analysisFingerprint}
+                    Item {width:parent.width;height:44
+                        HarmonyLabel {anchors.left:parent.left;anchors.verticalCenter:parent.verticalCenter;width:Math.min(parent.width,implicitWidth);height:Math.min(44,implicitHeight);observer:root.observer;chord:root.chordText;degree:root.degreeText;color:root.chordInk;pixels:24;gap:8;chordFont:["","Edwin","Arial"][configuration.chordFont];degreeFont:configuration.degreeFont;revision:root.analysisFingerprint}
                     }
                     StableLabel {reservedLines:2; text:matchText+(configuration.chromaticAccent && chromaticChord?" · 含调外音":""); color:muted; font.pixelSize:12}
                     StableLabel {reservedLines:2; text:alternativesText; color:muted; font.pixelSize:11}
@@ -1292,12 +1311,13 @@ Flickable {
                     }
                 }
                 PanelCard {
+                    heading:"实际音高";collapsed:configuration.collapsedSections.indexOf("pitches")>=0;onToggleRequested:root.toggleSection("pitches")
                     objectName:"harmonyKeyboard"
                     width:root.expanded ? (panel.width-10)/2 : panel.width
                     visible:keyboardExpanded
                     RowLayout {
                         width:parent.width
-                        UiLabel {text:"实际音高"; Layout.fillWidth:true; color:ink; font.bold:true; font.pixelSize:13}
+                        UiLabel {text:"键盘范围"; Layout.fillWidth:true; color:ink; font.bold:true; font.pixelSize:13}
                         UiLabel {text:pianoOctaves+" 个八度"; color:muted; font.pixelSize:11}
                     }
                     Flickable {

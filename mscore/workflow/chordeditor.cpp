@@ -34,7 +34,7 @@ class ChordEditor final : public QWidget {
       QPointF handles[2];
       bool valid() const {return observer&&source&&source==view->score()&&source->masterScore()->state()==state&&!observer->playing()&&!source->printing()&&!view->fotoMode();}
       QPointF pointFor(int tick) const {
-            auto measure=source->tick2measure(Fraction::fromTicks(qMin(tick,source->lastMeasure()->endTick().ticks()-1)));if(!measure||!measure->system())return {};
+            auto measure=source->tick2measure(Fraction::fromTicks(qMin(tick==end?qMax(0,tick-1):tick,source->lastMeasure()->endTick().ticks()-1)));if(!measure||!measure->system())return {};
             auto system=measure->system();const qreal sp=source->spatium();
             auto anchor=view->matrix().map(QPointF(chordTickX(measure,tick),system->canvasPos().y()+system->staffYpage(track/VOICES)-system->pagePos().y()-sp*2.5));
             auto marker=view->notePreviewMarkerBox(observer,start,track);

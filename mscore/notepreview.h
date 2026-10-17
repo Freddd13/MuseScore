@@ -75,7 +75,7 @@ inline QFont notePreviewFont(qreal spatium, bool chord)
       }
 
 // Rectangles are relative to the fixed annotation box, independent of its anchor note.
-inline QSizeF layoutPreviewChord(NotePreviewEntry& entry, int order)
+inline QSizeF layoutPreviewChord(NotePreviewEntry& entry, int order,qreal chordBaseline=-1)
       {
       const qreal padding = entry.spatium * .25, gap = entry.spatium * .55;
       auto size = [](const QString& text, const QFont& font) {
@@ -90,8 +90,9 @@ inline QSizeF layoutPreviewChord(NotePreviewEntry& entry, int order)
             return single + QSizeF(2*padding,2*padding);
             }
       const bool vertical = order >= 2, reversed = order == 1 || order == 3;
+      const qreal aBase=entry.renderedChordSize.isEmpty()?QFontMetricsF(entry.chordFont).ascent():(chordBaseline>=0?chordBaseline:QFontMetricsF(entry.chordFont).ascent()),bBase=QFontMetricsF(entry.degreeFont).ascent(),ascent=qMax(aBase,bBase),descent=qMax(a.height()-aBase,b.height()-bBase);
       const QSizeF combined(vertical ? qMax(a.width(),b.width()) : a.width()+b.width()+gap,
-                            vertical ? a.height()+b.height()+gap*.5 : qMax(a.height(),b.height()));
+                            vertical ? a.height()+b.height()+gap*.5 : ascent+descent);
       if (vertical) {
             entry.primaryBox = QRectF(padding+(combined.width()-a.width())/2,
                   padding+(reversed ? b.height()+gap*.5 : 0),a.width(),a.height());
@@ -100,9 +101,9 @@ inline QSizeF layoutPreviewChord(NotePreviewEntry& entry, int order)
             }
       else {
             entry.primaryBox = QRectF(padding+(reversed ? b.width()+gap : 0),
-                  padding+(combined.height()-a.height())/2,a.width(),a.height());
+                  padding+ascent-aBase,a.width(),a.height());
             entry.secondaryBox = QRectF(padding+(reversed ? 0 : a.width()+gap),
-                  padding+(combined.height()-b.height())/2,b.width(),b.height());
+                  padding+ascent-bBase,b.width(),b.height());
             }
       return combined + QSizeF(2*padding,2*padding);
       }

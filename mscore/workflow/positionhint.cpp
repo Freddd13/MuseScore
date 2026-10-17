@@ -51,9 +51,9 @@ class PositionHint final : public QWidget {
                   }
             if (first.isEmpty()) return;
             const auto size = painter.fontMetrics().size(Qt::TextSingleLine, _text) + QSize(16,10);
-            const QPoint top(qBound(3, qRound(first.left()), qMax(3,width()-size.width()-3)),
-                             qBound(3, qRound(first.top())-size.height()-4, qMax(3,height()-size.height()-3)));
-            const QRect label(top,size);
+            const QVector<QPointF> candidates{{first.left(),first.top()-size.height()-8},{first.right()+8,first.top()},{first.left(),first.bottom()+8},{first.left()-size.width()-8,first.top()},{3.,3.},{qreal(width()-size.width()-3),3.}};
+            QRect label;double best=1e30;
+            for(auto at:candidates){QRect candidate(QPoint(qBound(3,qRound(at.x()),qMax(3,width()-size.width()-3)),qBound(3,qRound(at.y()),qMax(3,height()-size.height()-3))),size);double cost=QLineF(candidate.center(),first.center()).length();for(const auto& box:_boxes){const auto overlap=QRectF(candidate).intersected(_view->matrix().mapRect(box).adjusted(-4,-6,4,6));cost+=overlap.width()*overlap.height()*1000;}if(cost<best){best=cost;label=candidate;}}
             painter.setBrush(color); painter.setPen(Qt::NoPen); painter.drawRoundedRect(label,4,4);
             painter.setPen(palette().color(QPalette::HighlightedText)); painter.drawText(label,Qt::AlignCenter,_text);
             }
@@ -127,7 +127,13 @@ QVariantMap ScoreObserver::scoreLocation(int tick,int track) const
       const auto local=view->matrix().mapRect(element->canvasBoundingRect()).toAlignedRect();
       const QRect global(view->mapToGlobal(local.topLeft()),local.size());
       auto screen=QGuiApplication::screenAt(global.center());const auto area=screen?screen->availableGeometry():QRect();
-      return {{"x",global.x()},{"y",global.y()},{"width",global.width()},{"height",global.height()},
+      auto measure=element->findMeasure();auto measureBounds=measure->canvasBoundingRect();
+      if(auto system=measure->system()){auto first=system->staff(0),last=system->staff(_score->nstaves()-1);measureBounds.setTop(system->canvasPos().y()+first->bbox().top());measureBounds.setBottom(system->canvasPos().y()+last->bbox().bottom());}
+      const auto localMeasure=view->matrix().mapRect(measureBounds).toAlignedRect();
+      const QRect measureBox(view->mapToGlobal(localMeasure.topLeft()),localMeasure.size());
+      const QRect viewport(view->mapToGlobal(QPoint()),view->size());
+      return {{"measureX",measureBox.x()},{"measureY",measureBox.y()},{"measureWidth",measureBox.width()},{"measureHeight",measureBox.height()},
+              {"viewX",viewport.x()},{"viewY",viewport.y()},{"viewWidth",viewport.width()},{"viewHeight",viewport.height()},{"x",global.x()},{"y",global.y()},{"width",global.width()},{"height",global.height()},
               {"screenX",area.x()},{"screenY",area.y()},{"screenWidth",area.width()},{"screenHeight",area.height()}};
       }
 }
