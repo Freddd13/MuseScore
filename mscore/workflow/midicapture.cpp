@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2.
 #include "midicapture.h"
+#include "featuregate.h"
 #include "mscore/musescore.h"
 #include "mscore/seq.h"
 #include "mscore/scoreview.h"
@@ -62,6 +63,7 @@ QVariantMap MidiCaptureSession::state() const {
       }
 QVariantMap MidiCaptureSession::start(const QVariantMap& options) { return begin(options,true); }
 QVariantMap MidiCaptureSession::begin(const QVariantMap& options, bool requireDevice) {
+      if (!personalFeaturesEnabled()) return {{"error",tr("个人扩展功能已关闭。")}};
       if (_recording||_stopping||_saving) return {{"error",tr("本次录制正在进行，请先停止。")}};
       if (activeCapture && activeCapture!=this) return {{"error",tr("另一个演奏表达窗口正在录制，请先在那个窗口停止。")}};
       if (requireDevice && (!seq || !seq->isRunning() || !seq->driver())) return {{"error",tr("MIDI 输入设备尚未就绪。请在编辑 → 偏好设置 → 输入／输出中选择键盘和声音设备。")}};

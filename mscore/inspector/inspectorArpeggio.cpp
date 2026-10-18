@@ -29,6 +29,8 @@ InspectorArpeggio::InspectorArpeggio(QWidget* parent)
       {
       g.setupUi(addWidget());
 
+      auto personalGrid = qobject_cast<QGridLayout*>(g.panel->layout());
+      const int firstPersonalRow = personalGrid->rowCount();
       auto mode = new QComboBox(g.panel);
       mode->setObjectName("arpeggioTimingMode");
       mode->addItems({tr("原伸缩比"), tr("首音落正拍"), tr("末音落正拍")});
@@ -56,6 +58,7 @@ InspectorArpeggio::InspectorArpeggio(QWidget* parent)
       _actualTiming = new QLabel(g.panel);
       _actualTiming->setWordWrap(true);
       grid->addWidget(_actualTiming, grid->rowCount(), 0, 1, 3);
+      hidePersonalInspectorRows(personalGrid, firstPersonalRow);
       const std::vector<InspectorPanel> ppList = {
             { g.title, g.panel }
             };

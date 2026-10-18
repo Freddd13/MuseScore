@@ -22,6 +22,9 @@
 #include "palettetree.h"
 #include "preferences.h"
 #include "scoreaccessibility.h"
+#include "mscore/workflow/featuregate.h"
+#include "mscore/temposymbols.h"
+#include "libmscore/symbol.h"
 
 #include "libmscore/beam.h"
 #include "libmscore/chordrest.h"
@@ -29,6 +32,16 @@
 #include "libmscore/select.h"
 
 namespace Ms {
+namespace {
+bool hiddenPersonalCell(const PaletteCell* cell)
+      {
+      if (personalFeaturesEnabled() || !cell || !cell->element) return false;
+      const auto element = cell->element.get();
+      return isPlayableTempoSymbol(element) || (element->isSymbol() && toSymbol(element)->handBracket())
+            || cell->tag == "kumo-rit" || cell->tag == "kumo-a-tempo";
+      }
+}
+
 //---------------------------------------------------------
 //   PaletteTreeModel::PaletteTreeModel
 //---------------------------------------------------------
@@ -279,6 +292,7 @@ QVariant PaletteTreeModel::data(const QModelIndex& index, int role) const
             }
 
       if (PaletteCellConstPtr cell = findCell(index)) {
+            if (role == VisibleRole && hiddenPersonalCell(cell.get())) return false;
             switch (role) {
                   case Qt::DisplayRole:
                         return QVariant(); // Don't show element names in
@@ -505,6 +519,7 @@ QHash<int, QByteArray> PaletteTreeModel::roleNames() const
 
 Qt::ItemFlags PaletteTreeModel::flags(const QModelIndex& index) const
       {
+      if (hiddenPersonalCell(findCell(index).get())) return Qt::NoItemFlags;
       return QAbstractItemModel::flags(index) | Qt::ItemIsDragEnabled;
       }
 
@@ -922,6 +937,7 @@ void PaletteCellFilter::addChainedFilter(PaletteCellFilter* newFilter)
 
 bool PaletteCellFilter::accept(const PaletteCell& cell) const
       {
+      if (hiddenPersonalCell(&cell)) return false;
       const PaletteCellFilter* f = this;
       while (f) {
             if (!f->acceptCell(cell))
@@ -1039,6 +1055,7 @@ bool PaletteCellFilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIn
       const QAbstractItemModel* model = sourceModel();
       const QModelIndex rowIndex = model->index(sourceRow, 0, sourceParent);
       const int rowCount = model->rowCount(rowIndex);
+      if (hiddenPersonalCell(model->data(rowIndex, PaletteTreeModel::PaletteCellRole).value<const PaletteCell*>())) return false;
 
       if (rowCount == 0) {
             if (QSortFilterProxyModel::filterAcceptsRow(sourceRow, sourceParent))

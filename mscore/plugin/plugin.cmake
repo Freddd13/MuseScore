@@ -108,3 +108,18 @@ if(WIN32)
         install(FILES "${KUMO_QT_PREFIX}/bin/Qt5WebSockets.dll" DESTINATION bin)
     endif()
 endif()
+
+list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/aiconnection.cpp ${PROJECT_SOURCE_DIR}/mscore/workflow/aiconnection.h)
+list(APPEND PLUGIN_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/aiconnection.cpp ${PROJECT_SOURCE_DIR}/mscore/workflow/aiconnection.h)
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/share/workflow/ DESTINATION ${Mscore_SHARE_NAME}${Mscore_INSTALL_NAME}workflow)
+
+install(CODE "
+if(NOT EXISTS \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/kumo.ini\")
+  file(INSTALL DESTINATION \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin\" TYPE FILE FILES \"${PROJECT_SOURCE_DIR}/personal/kumo.ini\")
+endif()
+")
+
+set(KUMO_MCP_PACKAGE_DIR "" CACHE PATH "Directory containing the self-contained MuseScoreMCP executable")
+if(EXISTS "${KUMO_MCP_PACKAGE_DIR}/MuseScoreMCP.exe")
+  install(DIRECTORY "${KUMO_MCP_PACKAGE_DIR}/" DESTINATION bin/tools/mcp)
+endif()

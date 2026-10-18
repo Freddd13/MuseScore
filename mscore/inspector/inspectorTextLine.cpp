@@ -41,6 +41,7 @@ InspectorTextLine::InspectorTextLine(QWidget* parent)
 
       populatePlacement(ttl.placement);
       auto grid = qobject_cast<QGridLayout*>(ttl.panel->layout());
+      const int firstPersonalRow = grid->rowCount();
       auto configured = new QCheckBox(tr("渐变速度线"), ttl.panel); configured->setObjectName("ritMode");
       grid->addWidget(configured, grid->rowCount(), 0, 1, 3); il.push_back({Pid::RIT_MODE, 0, configured, nullptr});
       auto play = new QCheckBox(tr("播放渐变速度（系统文字线）"), ttl.panel); play->setObjectName("ritPlay");
@@ -64,6 +65,7 @@ InspectorTextLine::InspectorTextLine(QWidget* parent)
       auto tap = new QPushButton(tr("用 Tap 设置起速／终速…"), ttl.panel); tap->setObjectName("ritTapMark");
       grid->addWidget(tap, grid->rowCount(), 0, 1, 3);
       connect(tap, &QPushButton::clicked, this, [this] { showTapMarkDialog(inspector->element()); });
+      hidePersonalInspectorRows(grid, firstPersonalRow);
       mapSignals(il, ppList);
       }
 void InspectorTextLine::postInit()

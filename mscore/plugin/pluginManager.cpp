@@ -1,3 +1,4 @@
+#include "mscore/workflow/featuregate.h"
 //=============================================================================
 //  MuseScore
 //  Music Composition & Notation
@@ -162,6 +163,7 @@ static void updatePluginList(const QString& pluginPath,
             QString path(fi.absoluteFilePath());
             if (fi.isFile()) {
                   if (path.endsWith(".qml")) {
+                        if (retiredPersonalPlugin(path) || (!personalFeaturesEnabled() && personalPlugin(path))) continue;
                         bool alreadyInList = false;
                         foreach (const PluginDescription& p, pluginList) {
                               if (p.path == path) {
@@ -194,7 +196,12 @@ void PluginManager::updatePluginList(bool forceRefresh)
       if (!p.isEmpty())
             pluginPathList.append(p);
       if (forceRefresh) {
+            QList<PluginDescription> hidden;
+            if (!personalFeaturesEnabled())
+                  for (const auto& plugin : _pluginList)
+                        if (personalPlugin(plugin.path) && !retiredPersonalPlugin(plugin.path)) hidden.append(plugin);
             _pluginList.clear();
+            _pluginList = hidden;
             // Every running panel has its own engine. Metadata scans use a short-lived engine.
             }
 
@@ -207,7 +214,7 @@ void PluginManager::updatePluginList(bool forceRefresh)
       while (i != _pluginList.end()) {
             PluginDescription d = *i;
             QFileInfo fi(d.path);
-            if (!fi.exists())
+            if (!fi.exists() || retiredPersonalPlugin(d.path))
                   i = _pluginList.erase(i);
             else
                   ++i;
@@ -246,6 +253,7 @@ void PluginManager::loadList(bool forceRefresh)
             Shortcut* s = &d.shortcut;
             if(!localShortcuts.contains(s->key()))localShortcuts[s->key()] = new Shortcut(*s);
             if (saveLoaded.contains(d.path)) d.load = true;
+            if (!personalFeaturesEnabled() && personalPlugin(d.path)) continue;
             QListWidgetItem* item = new QListWidgetItem(QFileInfo(d.path).completeBaseName(),  pluginListWidget);
             item->setFlags(item->flags() | Qt::ItemIsEnabled);
             item->setCheckState(d.load ? Qt::Checked : Qt::Unchecked);
@@ -254,8 +262,12 @@ void PluginManager::loadList(bool forceRefresh)
       connect(pluginListWidget, SIGNAL(itemChanged(QListWidgetItem*)), SLOT(pluginLoadToggled(QListWidgetItem*)));
       connect(pluginListWidget, SIGNAL(currentItemChanged(QListWidgetItem*,QListWidgetItem*)),
               SLOT(pluginListWidgetItemChanged(QListWidgetItem*,QListWidgetItem*)));
-      if (n) {
-            int selected=0;for(int i=0;i<n;++i)if(_pluginList[i].path==selectedPath)selected=i;
+      if (pluginListWidget->count()) {
+            int selected=0;
+            for(int row=0;row<pluginListWidget->count();++row) {
+                  int index=pluginListWidget->item(row)->data(Qt::UserRole).toInt();
+                  if(_pluginList[index].path==selectedPath)selected=row;
+                  }
             pluginListWidget->setCurrentRow(selected);
             pluginListWidgetItemChanged(pluginListWidget->item(selected), 0);
             }

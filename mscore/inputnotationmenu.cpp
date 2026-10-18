@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "inputnotationmenu.h"
+#include "workflow/featuregate.h"
 #include "inputrhythmpreference.h"
 #include "musescore.h"
 #include "preferences.h"
@@ -12,6 +13,7 @@
 namespace Ms {
 void addInputNotationMenu(QMenu* menu)
       {
+      if (!personalFeaturesEnabled()) return;
       auto add = [&](const QString& label, const char* name, const char* preference, void(*setter)(bool)) {
             QObject* owner=mscore ? static_cast<QObject*>(mscore) : menu->parent();
             if(!owner)owner=menu;

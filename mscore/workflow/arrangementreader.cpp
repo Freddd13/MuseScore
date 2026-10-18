@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "arrangement.h"
+#include "featuregate.h"
 #include "mscore/plugin/api/scoreobserver.h"
 #include "libmscore/chord.h"
 #include "libmscore/measure.h"
@@ -131,6 +132,7 @@ void ScoreObserver::prepareLocalBridge() {
 }
 
 QVariantMap ScoreObserver::arrangementState(const QVariantMap &request) {
+    if (!personalFeaturesEnabled()) return {{"error", tr("个人扩展功能已关闭。")}};
     if (!_score || !_score->lastMeasure())
         return {{"error", tr("打开乐谱后选择要编配的一段。")}};
     auto scope = scopeFor(_score, tick(), request);
@@ -166,6 +168,7 @@ QVariantMap ScoreObserver::arrangementState(const QVariantMap &request) {
 }
 
 QVariantMap ScoreObserver::arrangementRange(const QVariantMap &request) {
+    if (!personalFeaturesEnabled()) return {{"error", tr("个人扩展功能已关闭。")}};
     QElapsedTimer work;
     work.start();
     if (!_score || request.value("snapshotId").toString() != analysisContentRevision())
@@ -342,6 +345,7 @@ void ScoreObserver::publishHarmonyAnalysis(const QVariantMap &result) {
     _score->QObject::setProperty("kumoSharedHarmony", result);
 }
 QVariantMap ScoreObserver::arrangementRequest(const QString &action, const QVariantMap &request) {
+    if (!personalFeaturesEnabled()) return {{"error", tr("个人扩展功能已关闭。")}};
     if (action == "arrangementState")
         return arrangementState(request);
     if (action == "arrangementRange")

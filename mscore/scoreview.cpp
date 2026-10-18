@@ -29,6 +29,7 @@
 #endif
 #include "taptempo/tapmark.h"
 #include "performanceeditor/performanceeditor.h"
+#include "workflow/featuregate.h"
 #include "seq.h"
 #include "splitstaff.h"
 #include "textcursor.h"
@@ -330,8 +331,8 @@ void ScoreView::objectPopup(const QPoint& pos, Element* obj)
       a->setEnabled(obj->isEditable());
 
       createElementPropertyMenu(obj, popup);
-      if (obj->isTempoText() || (obj->isTextLine() && static_cast<TextLine*>(obj)->ritEnabled())
-          || (obj->isTextLineSegment() && static_cast<TextLine*>(obj->propertyDelegate(Pid::RIT_PLAY))->ritEnabled()))
+      if (personalFeaturesEnabled() && (obj->isTempoText() || (obj->isTextLine() && static_cast<TextLine*>(obj)->ritEnabled())
+          || (obj->isTextLineSegment() && static_cast<TextLine*>(obj->propertyDelegate(Pid::RIT_PLAY))->ritEnabled())))
             popup->addAction(tr("用 Tap 设置速度…"))->setData("tap-mark");
 
       popup->addSeparator();

@@ -23,6 +23,11 @@ subdirs(templates wallpaper locale styles sound manual
 install (DIRECTORY
       plugins
       DESTINATION ${Mscore_SHARE_NAME}${Mscore_INSTALL_NAME}
+      PATTERN "HarmonyAssistant.view.qml" EXCLUDE
+      PATTERN "PerformanceExpression.view.qml" EXCLUDE
+      PATTERN "ReferencePlayer.view.qml" EXCLUDE
       PATTERN ".*" EXCLUDE
+      PATTERN "HarmonyAssistant_MS3.qml" EXCLUDE
+      PATTERN "PerformanceExpression_MS3.qml" EXCLUDE
+      PATTERN "ReferencePlayer_MS3.qml" EXCLUDE
       )
-

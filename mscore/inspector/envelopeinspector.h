@@ -48,7 +48,7 @@ inline void syncEnvelopeInspector(QWidget* host, Inspector* inspector)
       auto panel=host->findChild<QWidget*>("playbackEnvelopePanel"); if (!panel) return;
       auto owner=envelopeInspectorOwner(inspector->element());
       const bool eligible=owner->isTremolo() || owner->isTrill() || (owner->isArticulation() && toArticulation(owner)->hasTrillEnvelope());
-      panel->setVisible(eligible); if (!eligible) return;
+      panel->setVisible(personalFeaturesEnabled() && eligible); if (!personalFeaturesEnabled() || !eligible) return;
       const int value=owner->getProperty(Pid::ENVELOPE_MODE).toInt();
       auto mode=panel->findChild<QComboBox*>("envelopeMode"); QSignalBlocker blocker(mode); mode->setCurrentIndex(value);
       const bool playable=owner->isTremolo() ? !toTremolo(owner)->isBuzzRoll() : owner->getProperty(Pid::PLAY).toBool();

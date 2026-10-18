@@ -1,3 +1,4 @@
+#include "workflow/featuregate.h"
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2.
 #include "handbracketsettings.h"
 #include "libmscore/handbracket.h"
@@ -66,6 +67,7 @@ void addHandBracketDefaultControls(QWidget* host,QGridLayout* grid,Inspector* in
             });
       }
 void completeHandBracketPalette(PalettePanel* panel) {
+      if (!personalFeaturesEnabled()) return;
       if(!panel || panel->type()!=PalettePanel::Type::Fingering || !gscore)return;loadHandBracketDefaults();
       const std::pair<SymId,const char*> entries[]={{SymId::keyboardPlayWithLH,"左手弹（可伸缩）"},{SymId::keyboardPlayWithRH,"右手弹（可伸缩）"},{SymId::keyboardPlayWithLHEnd,"左手结束（可伸缩）"},{SymId::keyboardPlayWithRHEnd,"右手结束（可伸缩）"}};
       for(const auto& entry:entries) {

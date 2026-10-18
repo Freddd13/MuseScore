@@ -12,6 +12,8 @@
 
 #include "musescore.h"
 #include "workflow/workflowcontext.h"
+#include "workflow/featuregate.h"
+#include "workflow/aiconnection.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -513,9 +515,9 @@ void updateExternalValuesFromPreferences() {
       MScore::playbackSpeedIncrement = preferences.getInt(PREF_APP_PLAYBACK_SPEEDINCREMENT);
       MScore::warnPitchRange = preferences.getBool(PREF_SCORE_NOTE_WARNPITCHRANGE);
       MScore::disableMouseEntry = preferences.getBool(PREF_SCORE_NOTE_INPUT_DISABLE_MOUSE_INPUT);
-      InputRhythm::setEnabled(preferences.getBool(PREF_SCORE_NOTE_INPUT_AUTO_RHYTHM));
-      InputNotation::setTiedBeams(preferences.getBool(PREF_SCORE_TIED_BEAMS));
-      InputNotation::setCoherentStems(preferences.getBool(PREF_SCORE_COHERENT_TIE_STEMS));
+      InputRhythm::setEnabled(personalFeaturesEnabled() && preferences.getBool(PREF_SCORE_NOTE_INPUT_AUTO_RHYTHM));
+      InputNotation::setTiedBeams(personalFeaturesEnabled() && preferences.getBool(PREF_SCORE_TIED_BEAMS));
+      InputNotation::setCoherentStems(personalFeaturesEnabled() && preferences.getBool(PREF_SCORE_COHERENT_TIE_STEMS));
       if (mscore) {
             if (auto action = mscore->findChild<QAction*>("auto-rhythmic-input"))
                   action->setChecked(InputRhythm::enabled());
@@ -1175,7 +1177,7 @@ void MuseScore::populatePlaybackControls()
                         _playButton = new AccessibleToolButton(transportTools, getAction("play"));
                         transportTools->addWidget(_playButton);
                         }
-                  else if (QString(s) == "tap-tempo") {
+                  else if (QString(s) == "tap-tempo" && personalFeaturesEnabled()) {
                         transportTools->addWidget(TapTempo::instance(this)->createButton(transportTools, getAction("tap-tempo")));
                         }
                   else if (QString(s) == "independent-metronome") {
@@ -1999,15 +2001,16 @@ MuseScore::MuseScore()
       performanceAction->setIcon(QIcon(":/data/icons/performance-editor.svg"));
       performanceAction->setToolTip(tr("演奏编辑器：力度、速度与踏板；面板内可开启音旁手柄和谱行参数带。"));
       performanceAction->setCheckable(true);
+      markPersonalAction(performanceAction);
       Workspace::addActionAndString(performanceAction, "performance-editor");
       menuView->addAction(performanceAction);
       connect(performanceAction, &QAction::toggled, this, &MuseScore::showPerformanceEditor);
       auto bandAction = new QAction(tr("谱行参数带（独立显示）"), this);
-      bandAction->setObjectName("performance-score-band"); bandAction->setCheckable(true);
+      bandAction->setObjectName("performance-score-band"); bandAction->setCheckable(true); markPersonalAction(bandAction);
       bandAction->setIcon(QIcon(":/data/icons/performance-score-band.svg"));
       bandAction->setToolTip(tr("在谱面独立显示参数带；演奏编辑器关闭时仍可选音、调力度和查看播放线。"));
       Workspace::addActionAndString(bandAction, "performance-score-band"); menuView->addAction(bandAction);
-      connect(bandAction, &QAction::toggled, this, [this](bool enabled) { performanceEditor()->setScoreBandEnabled(enabled); });
+      connect(bandAction, &QAction::toggled, this, [this](bool enabled) { if (personalFeaturesEnabled()) performanceEditor()->setScoreBandEnabled(enabled); });
       populateAlternativeOperations();
 #ifdef SCRIPT_INTERFACE
       addReferencePanelAction(menuView);
@@ -2252,6 +2255,7 @@ MuseScore::MuseScore()
       menuTools = mb->addMenu("");
       menuTools->setObjectName("Tools");
 
+      markPersonalAction(getAction("tap-tempo"));
       menuTools->addAction(getAction("tap-tempo"));
       addReferenceActions(menuTools);
 #ifdef SCRIPT_INTERFACE
@@ -2288,10 +2292,12 @@ MuseScore::MuseScore()
       QAction* autoRhythm = new QAction(tr("Automatically Group Input Rhythms"), this);
       menuTools->addAction(autoRhythm);
       autoRhythm->setObjectName("auto-rhythmic-input");
+      markPersonalAction(autoRhythm);
       Workspace::addActionAndString(autoRhythm, "auto-rhythmic-input");
       autoRhythm->setCheckable(true);
       autoRhythm->setChecked(preferences.getBool(PREF_SCORE_NOTE_INPUT_AUTO_RHYTHM));
       connect(autoRhythm, &QAction::toggled, this, [](bool enabled) {
+            if (!personalFeaturesEnabled()) return;
             preferences.setPreference(PREF_SCORE_NOTE_INPUT_AUTO_RHYTHM, enabled);
             InputRhythm::setEnabled(enabled);
             });
@@ -2416,6 +2422,17 @@ MuseScore::MuseScore()
       aboutAction->setMenuRole(QAction::AboutRole);
       connect(aboutAction, SIGNAL(triggered()), this, SLOT(about()));
       menuHelp->addAction(aboutAction);
+      auto personalHelp = new QAction(tr("个人功能说明"), this);
+      personalHelp->setObjectName("kumo-user-guide");
+      connect(personalHelp, &QAction::triggered, this, [] {
+#ifdef SCRIPT_INTERFACE
+            showPersonalGuide();
+#else
+            QDesktopServices::openUrl(QUrl::fromLocalFile(mscoreGlobalShare + "personal/USER_GUIDE.md"));
+#endif
+            });
+      menuHelp->addAction(personalHelp);
+      Workspace::addActionAndString(personalHelp, "kumo-user-guide");
       Workspace::addActionAndString(aboutAction, "about");
 
       aboutQtAction = new QAction("", 0);
@@ -2815,6 +2832,17 @@ void MuseScore::updateMenus()
       connect(openRecent,     SIGNAL(triggered(QAction*)), SLOT(selectScore(QAction*)));
       connect(menuWorkspaces, SIGNAL(aboutToShow()),       SLOT(showWorkspaceMenu()));
 
+#ifdef SCRIPT_INTERFACE
+      for (const char* name : {"harmony-assistant", "performance-expression", "reference-player", "arrangement-suggestions"}) {
+            auto action = getAction(name); markPersonalAction(action);
+            if (!menuView->actions().contains(action)) menuView->addAction(action);
+            }
+#endif
+      if (auto action = findChild<QAction*>("kumo-ai-connection"))
+            if (!menuView->actions().contains(action)) menuView->addAction(action);
+      if (auto action = findChild<QAction*>("kumo-user-guide"))
+            if (!menuHelp->actions().contains(action)) menuHelp->addAction(action);
+      applyPersonalFeatureVisibility(this);
       setMenuTitles();
 #ifdef SCRIPT_INTERFACE
       addPluginMenuEntries();
@@ -2937,6 +2965,10 @@ void MuseScore::aboutQt()
 void MuseScore::aboutMusicXML()
       {
       AboutMusicXMLBoxDialog ab;
+      auto featureLabel = new QLabel(personalFeatureStatus(), &ab);
+      featureLabel->setWordWrap(true);
+      featureLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+      if (ab.layout()) ab.layout()->addWidget(featureLabel);
       ab.show();
       ab.exec();
       }
@@ -6882,6 +6914,7 @@ void MuseScore::cmd(QAction* a)
       MScore::setError(MS_NO_ERROR);
 
       QString cmdn(a->data().toString());
+      if (!personalFeaturesEnabled() && personalAction(cmdn)) return;
 #ifdef SCRIPT_INTERFACE
       if(cmdn=="regional-variants"){showRegionalVariantPanel();return;}
       if(cmdn=="arrangement-suggestions"){showSuggestionPanel(a->isChecked());return;}
@@ -9542,6 +9575,7 @@ void MuseScore::scoreUnrolled(MasterScore * original)
 namespace Ms {
 void MuseScore::showPerformanceEditor(bool visible)
       {
+      if (visible && !personalFeaturesEnabled()) return;
       const QSize windowBeforeEditor=size();
       if (!_performanceEditor) {
             _performanceDock = new QDockWidget(tr("演奏编辑器"), this);

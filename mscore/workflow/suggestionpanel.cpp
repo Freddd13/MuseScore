@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "arrangement.h"
+#include "featuregate.h"
 #include "localsuggestions.h"
 #include "paneldock.h"
 #include "workflowcontext.h"
@@ -319,6 +320,7 @@ void notifyArrangementSuggestions(Score *) {
         panel->refresh();
 }
 void showSuggestionPanel(bool visible) {
+    if (!personalFeaturesEnabled()) return;
     if (!mscore)
         return;
     if (!dock && visible) {
@@ -328,6 +330,7 @@ void showSuggestionPanel(bool visible) {
         dock->setMinimumWidth(280);
         arrangeWorkflowDock(mscore, dock, "ArrangementSuggestions", "rightTools", Qt::RightDockWidgetArea);
         auto action = getAction("arrangement-suggestions");
+    markPersonalAction(action);
         QObject::connect(dock, &QDockWidget::visibilityChanged, action, [action](bool on) {
             QSignalBlocker block(action);
             action->setChecked(on);
@@ -343,6 +346,7 @@ void showSuggestionPanel(bool visible) {
 }
 void addSuggestionPanelAction(QMenu *menu) {
     auto action = getAction("arrangement-suggestions");
+    markPersonalAction(action);
     action->setCheckable(true);
     menu->addAction(action);
 }

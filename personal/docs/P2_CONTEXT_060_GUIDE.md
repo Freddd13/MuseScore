@@ -8,7 +8,7 @@
 
 ## 从哪里打开
 
-在 MuseScore 的插件管理器启用本项目的 **MuseScore API Server**，然后从“插件”菜单运行它。连接使用本机端口 8765。更新后请使用 MCP 仓库中的 `musescore-mcp-websocket.qml`，重新打开这个插件和 Codex 的 MuseScore 连接。
+从“视图 → AI 连接”点“配置 Codex”，再检查连接。完整操作与旧版配置方法见[AI 连接说明](WORKSPACE_063_GUIDE.md)。
 
 “视图 → 编配建议”打开右侧面板。收到新写法后，这个面板也会自动打开，和检视器等工具并列。
 

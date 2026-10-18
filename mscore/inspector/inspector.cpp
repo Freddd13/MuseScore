@@ -352,7 +352,7 @@ void Inspector::update(Score* s)
                               ie = new InspectorBeam(this);
                               break;
                         case ElementType::SYMBOL:
-                              ie = toSymbol(element())->handEligible() ? static_cast<InspectorBase*>(new InspectorHandSymbol(this)) : new InspectorElementBase(this);
+                              ie = personalFeaturesEnabled() && toSymbol(element())->handEligible() ? static_cast<InspectorBase*>(new InspectorHandSymbol(this)) : new InspectorElementBase(this);
                               break;
                         case ElementType::IMAGE:
                               ie = new InspectorImage(this);
@@ -771,6 +771,7 @@ InspectorArticulation::InspectorArticulation(QWidget* parent)
             ar.title->setText(el->isOrnament() ? tr("Ornament") : tr("Articulation"));
 
       auto velocityPanel = new QWidget(ar.panel);
+      velocityPanel->setVisible(personalFeaturesEnabled());
       ar.panel->layout()->addWidget(velocityPanel);
       auto velocityLayout = new QGridLayout(velocityPanel);
       _velocityMode = new QCheckBox(tr("自定义力度倍率"), velocityPanel);
@@ -1310,6 +1311,8 @@ InspectorTempoText::InspectorTempoText(QWidget* parent)
    : InspectorTextBase(parent)
       {
       tt.setupUi(addWidget());
+      auto personalGrid = qobject_cast<QGridLayout*>(tt.panel->layout());
+      const int firstPersonalRow = personalGrid->rowCount();
       auto tap = new QPushButton(tr("用 Tap 设置速度…"), tt.panel); tap->setObjectName("tempoTapMark");
       auto tapGrid = qobject_cast<QGridLayout*>(tt.panel->layout());
       tapGrid->addWidget(tap, tapGrid->rowCount(), 0, 1, 3);
@@ -1319,6 +1322,7 @@ InspectorTempoText::InspectorTempoText(QWidget* parent)
       _restoreMode->addItems({tr("普通速度"), tr("a tempo：恢复上次渐变前"), tr("Tempo primo：恢复曲首"), tr("恢复到指定 BPM")});
       int row = grid->rowCount(); grid->addWidget(new QLabel(tr("速度语义"), tt.panel), row, 0); grid->addWidget(_restoreMode, row, 1, 1, 2);
       _restoreStatus = new QLabel(tt.panel); _restoreStatus->setWordWrap(true); grid->addWidget(_restoreStatus, grid->rowCount(), 0, 1, 3);
+      hidePersonalInspectorRows(personalGrid, firstPersonalRow);
       const std::vector<InspectorItem> il = {
             { Pid::TEMPO_RESTORE_MODE, 0, _restoreMode, nullptr },
             { Pid::TEMPO,             0, tt.tempo,       tt.resetTempo       },
@@ -1537,7 +1541,7 @@ InspectorSlurTie::InspectorSlurTie(QWidget* parent)
             { Pid::LINE_TYPE,       0, s.lineType,      s.resetLineType      },
             { Pid::SLUR_DIRECTION,  0, s.slurDirection, s.resetSlurDirection }
             };
-      if (sameTypes && el->isSlurSegment()) {
+      if (personalFeaturesEnabled() && sameTypes && el->isSlurSegment()) {
             _freeCurve=new FreeSlurInspector(s.panel,inspector);
             iiList.push_back({Pid::FREE_SLUR_MODE,0,_freeCurve->mode,nullptr});
             }

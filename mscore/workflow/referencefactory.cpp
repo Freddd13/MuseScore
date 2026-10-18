@@ -4,6 +4,7 @@
 #include "../referenceaudio/spectrumfactory.h"
 #include "../referenceaudio/projectfactory.h"
 #include "referencebus.h"
+#include "featuregate.h"
 #include <QPointer>
 #include <QCoreApplication>
 #include <QPluginLoader>
@@ -30,20 +31,23 @@ public:
 };
 }
 QObject* createReferenceMedia(QObject* parent) {
+ if(!personalFeaturesEnabled())return new MissingMedia(parent,QObject::tr("个人扩展功能已关闭。"));
  auto loader=module();
  auto factory=qobject_cast<KumoMediaFactory*>(loader->instance());
  return factory?factory->create(parent):new MissingMedia(parent,loader->errorString());
 }
 QObject* createReferenceSpectrum(QObject* parent){
+ if(!personalFeaturesEnabled())return new MissingMedia(parent,QObject::tr("个人扩展功能已关闭。"));
  auto loader=module();auto factory=qobject_cast<KumoSpectrumFactory*>(loader->instance());return factory?factory->createSpectrum(parent):new MissingMedia(parent,QObject::tr("请将原曲音频组件与程序一起更新。"));
 }
 QObject* referenceProject(){
  static QPointer<QObject> project;if(project)return project;
+ if(!personalFeaturesEnabled()){project=new MissingMedia(qApp,QObject::tr("个人扩展功能已关闭。"));return project;}
  auto factory=qobject_cast<KumoMediaProjectFactory*>(module()->instance());
  project=factory?factory->createProject(qApp,referenceAudioHost()):new MissingMedia(qApp,module()->errorString());return project;
 }
 void addReferenceActions(QMenu* menu){
- for(auto item:QList<QPair<QString,QString>>{{"reference-audio-play","toggleIndependent"},{"reference-joint-play","requestJoint"}}){auto action=getAction(item.first.toLatin1().constData());menu->addAction(action);QObject::connect(action,&QAction::triggered,qApp,[item]{auto project=referenceProject();if(project->property("available").toBool())QMetaObject::invokeMethod(project,item.second.toLatin1().constData());});}
+ for(auto item:QList<QPair<QString,QString>>{{"reference-audio-play","toggleIndependent"},{"reference-joint-play","requestJoint"}}){auto action=getAction(item.first.toLatin1().constData());markPersonalAction(action);menu->addAction(action);QObject::connect(action,&QAction::triggered,qApp,[item]{auto project=referenceProject();if(project->property("available").toBool())QMetaObject::invokeMethod(project,item.second.toLatin1().constData());});}
 }
 }
 #include "referencefactory.moc"

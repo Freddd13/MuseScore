@@ -216,7 +216,7 @@ void InspectorNote::postInit()
       auto chord = toNote(element)->chord();
       bool isGrace = chord->isGrace();
       auto main = isGrace ? toChord(chord->parent()) : chord;
-      _gracePanel->setVisible(isGrace || !main->graceNotes().isEmpty());
+      _gracePanel->setVisible(personalFeaturesEnabled() && (isGrace || !main->graceNotes().isEmpty()));
       auto appearance = _gracePanel->findChild<QComboBox*>("graceAppearance");
       appearance->setEnabled(isGrace);
       if (auto model = qobject_cast<QStandardItemModel*>(appearance->model())) model->item(0)->setEnabled(!isGrace);

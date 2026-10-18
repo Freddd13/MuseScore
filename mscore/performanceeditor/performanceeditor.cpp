@@ -1,4 +1,5 @@
 #include "performanceeditor.h"
+#include "../workflow/featuregate.h"
 #ifdef SCRIPT_INTERFACE
 #include "rhythmpane.h"
 #include "mscore/workflow/builtinpanels.h"
@@ -792,11 +793,12 @@ void PerformanceEditor::fit(bool selection)
 
 bool PerformanceEditor::overlayAllowed() const
       {
+      if (!personalFeaturesEnabled()) return false;
       return surfacesActive() && _view && _score && !_score->printing() && !_view->fotoMode()
             && !_view->editMode() && (!_view->noteEntryMode() || _closestWheelActive || _wheelIndex >= 0 || _wheelFeedbackTimer.isActive());
       }
 bool PerformanceEditor::surfacesActive() const
-      { return isVisible() || ((_band->isChecked()||_peekHeld||_showValues||_closestWheelActive||(_wheelIndex>=0&&_wheelSurface==_view)||(_wheelFeedbackTimer.isActive()&&_wheelFeedbackSurface==_view)) && _view && _view->isVisible()); }
+      { return personalFeaturesEnabled() && (isVisible() || ((_band->isChecked()||_peekHeld||_showValues||_closestWheelActive||(_wheelIndex>=0&&_wheelSurface==_view)||(_wheelFeedbackTimer.isActive()&&_wheelFeedbackSurface==_view)) && _view && _view->isVisible())); }
 bool PerformanceEditor::scoreBandEnabled() const
       { return _band->isChecked(); }
 void PerformanceEditor::setScoreBandEnabled(bool enabled)
@@ -1095,6 +1097,7 @@ void PerformanceEditor::cancelGesture()
 
 bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       {
+      if (!personalFeaturesEnabled()) return false;
 #ifdef SCRIPT_INTERFACE
       if(object==_noteCanvas && _spectrum && _spectrum->overlayEvent(event))return true;
 #endif

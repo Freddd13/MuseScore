@@ -1,3 +1,4 @@
+#include "mscore/workflow/featuregate.h"
 //=============================================================================
 //  MuseScore
 //  Linux Music Score Editor
@@ -34,6 +35,7 @@ namespace Ms {
 void MuseScore::registerPlugin(PluginDescription* plugin)
       {
       QString _pluginPath = plugin->path;
+      if (retiredPersonalPlugin(_pluginPath) || (!personalFeaturesEnabled() && personalPlugin(_pluginPath))) return;
       QFileInfo np(_pluginPath);
       if (np.suffix() != "qml")
             return;
@@ -381,6 +383,7 @@ QString MuseScore::pluginPathFromIdx(int idx)      {
 
 QmlPlugin* pluginFromPath(QmlPluginEngine* engine, QString pluginPath)
       {
+      if (!personalFeaturesEnabled() && personalPlugin(pluginPath)) return nullptr;
       QQmlComponent component(engine);
       component.loadUrl(QUrl::fromLocalFile(pluginPath));
       QObject* obj = component.create();

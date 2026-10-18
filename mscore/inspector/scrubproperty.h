@@ -9,7 +9,19 @@
 #include <QGridLayout>
 #include <QToolButton>
 #include "inspectorBase.h"
+#include "../workflow/featuregate.h"
 namespace Ms {
+// Call after adding a contiguous group of personal controls to an existing grid.
+inline void hidePersonalInspectorRows(QGridLayout* grid, int firstRow)
+      {
+      if (personalFeaturesEnabled()) return;
+      for (int index = 0; index < grid->count(); ++index) {
+            int row, column, rows, columns;
+            grid->getItemPosition(index, &row, &column, &rows, &columns);
+            if (row >= firstRow) if (auto widget = grid->itemAt(index)->widget()) widget->hide();
+            }
+      }
+
 class ScrubPropertyLabel : public QLabel {
       QPointer<QDoubleSpinBox> _spin;
       QPoint _origin;

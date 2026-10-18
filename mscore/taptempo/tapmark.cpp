@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "tapmark.h"
+#include "../workflow/featuregate.h"
 #include "taptempo.h"
 #include "mscore/musescore.h"
 #include "mscore/scoreview.h"
@@ -220,7 +221,7 @@ class TapMarkDialog : public QDialog {
 }
 void showTapMarkDialog(Element* target)
       {
-      if (!target || !target->score()) return;
+      if (!personalFeaturesEnabled() || !target || !target->score()) return;
       if (target->isTextLineSegment()) target = static_cast<TextLine*>(target->propertyDelegate(Pid::RIT_PLAY));
       if (!target || (!target->isTempoText() && (!target->isTextLine() || !static_cast<TextLine*>(target)->ritEnabled()))) return;
       if (auto existing = mscore->findChild<QDialog*>("tapMarkDialog",Qt::FindDirectChildrenOnly)) { existing->setObjectName("closingTapMarkDialog"); existing->close(); }

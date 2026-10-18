@@ -17,6 +17,8 @@
 #include "mscore/musescoredialogs.h"
 #include "personalbranding.h"
 #include "mscore/workflow/builtinpanels.h"
+#include "mscore/workflow/featuregate.h"
+#include "mscore/workflow/aiconnection.h"
 #include "mscore/workflow/referencefactory.h"
 #include "mscore/workflow/workflowcontext.h"
 #include <QDataStream>
@@ -86,7 +88,64 @@ class TestPluginHost : public QObject {
       Q_OBJECT
       QTemporaryDir _settings;
    private slots:
-      void cleanup(){releaseHostPanels();if(Ms::mscore)Ms::mscore->showPerformanceEditor(false);}
+      void featureDisabledStartup() {
+            if (qEnvironmentVariable("P2_FEATURE_GATE_OFF").isEmpty()) QSKIP("Run with P2_FEATURE_GATE_OFF=1");
+            QVERIFY(!personalFeaturesEnabled());
+            auto main=Ms::mscore;
+            for (auto action:main->findChildren<QAction*>())
+                  if (personalAction(action->objectName()) || action->property("kumoExperimental").toBool())
+                        QVERIFY2(!action->isVisible() && !action->isEnabled(),qUtf8Printable(action->objectName()));
+            QVERIFY(!InputRhythm::enabled());
+            QVERIFY(getAction("toggle-piano")->isVisible());
+            auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);
+            main->setCurrentScoreView(main->appendScore(score));main->show();
+            score->setMetaTag("kumo.reference","saved audio associations");
+            QFileInfo info(_settings.filePath("extension-off.mscz"));QVERIFY(score->saveCompressedFile(info,false,false));
+            std::unique_ptr<MasterScore> restored(main->readScore(info.absoluteFilePath()));QVERIFY(restored);
+            QCOMPARE(restored->metaTag("kumo.reference"),QString("saved audio associations"));
+            main->showPerformanceEditor(true);QVERIFY(!main->findChild<QDockWidget*>("performanceEditorDock"));
+            showAIConnection();QVERIFY(!main->findChild<QDialog*>("kumoAIConnection"));
+            QVERIFY(main->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("extension-off-063.png")));
+      }
+      void featureConfigurationAndHiddenActions() {
+            QTemporaryDir folder; QVERIFY(folder.isValid());
+            auto create=[&](const QString& name,const QByteArray& content){QFile f(folder.filePath(name));if(!f.open(QIODevice::WriteOnly))return QString();f.write(content);return f.fileName();};
+            const auto off=create("off.ini","[features]\nenable_exp_feature=false\n");
+            const auto on=create("on.ini","[features]\nenable_exp_feature=true\n");
+            const auto invalid=create("invalid.ini","[features]\nenable_exp_feature=yes\n");
+            qApp->setProperty("kumoFeatureConfiguration",off);
+            QVERIFY(!personalFeaturesEnabled());
+            QMainWindow local;auto action=new QAction(&local);action->setObjectName("performance-editor");
+            applyPersonalFeatureVisibility(&local);QVERIFY(!action->isEnabled());QVERIFY(!action->isVisible());
+            const auto before=Ms::mscore->findChildren<QDialog*>("kumoAIConnection").size();
+            showAIConnection();QCOMPARE(Ms::mscore->findChildren<QDialog*>("kumoAIConnection").size(),before);
+            auto media=createReferenceMedia(&local);QVERIFY(!media->property("available").toBool());
+            qApp->setProperty("kumoFeatureConfiguration",on);QVERIFY(personalFeaturesEnabled());
+            qApp->setProperty("kumoFeatureConfiguration",invalid);QVERIFY(!personalFeaturesEnabled());
+            qApp->setProperty("kumoFeatureConfiguration",folder.filePath("missing.ini"));QVERIFY(!personalFeaturesEnabled());
+            qApp->setProperty("kumoFeatureConfiguration",QVariant());QVERIFY(personalFeaturesEnabled());
+      }
+      void pluginSettingsSurviveExtensionSwitch() {
+            QTemporaryDir folder;QFile file(folder.filePath("off.ini"));QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write("[features]\nenable_exp_feature=false\n");file.close();
+            PluginManager manager(Ms::mscore);manager.init();
+            auto find=[&]()->PluginDescription* {
+                  for(int i=0;i<manager.pluginCount();++i) {
+                        auto plugin=manager.getPluginDescription(i);
+                        if(QFileInfo(plugin->path).fileName()=="ArrangementAssistant_MS3.qml")return plugin;
+                        }
+                  return nullptr;
+                  };
+            auto plugin=find();QVERIFY(plugin);plugin->load=true;plugin->shortcut.setKeys({QKeySequence("Ctrl+Alt+F12")});
+            qApp->setProperty("kumoFeatureConfiguration",file.fileName());
+            manager.updatePluginList(true);plugin=find();QVERIFY(plugin);QVERIFY(plugin->load);
+            QCOMPARE(plugin->shortcut.keys(),QList<QKeySequence>{QKeySequence("Ctrl+Alt+F12")});
+            manager.init();
+            for(int i=0;i<manager.pluginListWidget->count();++i)
+                  QVERIFY(manager.pluginListWidget->item(i)->text()!="ArrangementAssistant_MS3");
+            qApp->setProperty("kumoFeatureConfiguration",QVariant());manager.init();plugin=find();QVERIFY(plugin);QVERIFY(plugin->load);
+      }
+      void cleanup(){qApp->setProperty("kumoFeatureConfiguration",QVariant());releaseHostPanels();if(Ms::mscore)Ms::mscore->showPerformanceEditor(false);}
       void initTestCase()
             {
             QVERIFY(_settings.isValid());
@@ -276,6 +335,32 @@ class TestPluginHost : public QObject {
       static int gutterForTest(){return 76;}
 
 
+      void nativeAiConnectionAndTransport() {
+            const auto done=qEnvironmentVariable("P2_NATIVE_AI_DONE");
+            if(done.isEmpty())QSKIP("Run P2/test_native_ai.py for packaged MCP and native connection");
+            const auto state=qEnvironmentVariable("MCP_MUSESCORE_STATE_DIR");QVERIFY(!state.isEmpty());
+            auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");
+            QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));
+            initializeBuiltinAI();
+            QTRY_VERIFY_WITH_TIMEOUT(!QDir(state).entryList({"instance-*.json"},QDir::Files).isEmpty(),10000);
+            showAIConnection();auto box=main->findChild<QDialog*>("kumoAIConnection");QVERIFY(box&&box->isVisible());
+            auto status=box->findChild<QLabel*>("aiConnectionStatus");QVERIFY(status);
+            auto configure=box->findChild<QPushButton*>("aiConfigureCodex");QVERIFY(configure);
+            QTest::mouseClick(configure,Qt::LeftButton);
+            const auto config=QDir(qEnvironmentVariable("CODEX_HOME")).filePath("config.toml");
+            QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(config),20000);
+            auto check=box->findChild<QPushButton*>("aiCheckConnection");QVERIFY(check);
+            QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(QString::fromUtf8("已配置")),20000);
+            QTest::mouseClick(check,Qt::LeftButton);
+            QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(QString::fromUtf8("连接成功")),20000);
+            QDir output(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path()));
+            QVERIFY(box->grab().save(output.filePath("ai-connection-063.png")));
+            showPersonalGuide("docs/WORKSPACE_063_GUIDE.md");QTest::qWait(150);
+            for(auto candidate:main->findChildren<QDialog*>())if(candidate->windowTitle()==QString::fromUtf8("个人功能说明")){QVERIFY(candidate->grab().save(output.filePath("ai-guide-063.png")));candidate->hide();}
+            QFile ready(done+".ready");QVERIFY(ready.open(QIODevice::WriteOnly));ready.write("ready");ready.close();
+            QElapsedTimer clock;clock.start();while(!QFile::exists(done)&&clock.elapsed()<60000)QTest::qWait(50);
+            QVERIFY2(QFile::exists(done),"packaged MCP did not complete");box->hide();shutdownBuiltinAI();
+      }
       void arrangementMcpTransport(){
             const auto bridge=qEnvironmentVariable("P2_CONTEXT_BRIDGE");const auto done=qEnvironmentVariable("P2_CONTEXT_DONE");
             if(bridge.isEmpty()||done.isEmpty())QSKIP("Run P2/test_context_host.py for the real MCP connection");

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "midicroppanel.h"
+#include "mscore/workflow/featuregate.h"
 #include "gateaudition.h"
 #include "libmscore/playbacktiming.h"
 #include "libmscore/repeatlist.h"
@@ -98,6 +99,7 @@ class GateModel : public QAbstractTableModel {
 }
 MidiCropPanel::MidiCropPanel(QWidget* parent,std::function<QList<Score*>()> scores):QWidget(parent),_scores(std::move(scores)) {
       auto layout=new QVBoxLayout(this);layout->setContentsMargins(0,6,0,0);
+      setVisible(personalFeaturesEnabled());
       _enabled=new QCheckBox(tr("人性化裁剪：保守踏板模式"),this);
       _enabled->setChecked(preferences.getBool("export/midi/cropEnabled"));layout->addWidget(_enabled);
       auto buttons=new QHBoxLayout;
@@ -117,8 +119,8 @@ MidiCropPanel::MidiCropPanel(QWidget* parent,std::function<QList<Score*>()> scor
       connect(config,&QPushButton::clicked,this,&MidiCropPanel::settings);
       connect(preview,&QPushButton::clicked,this,&MidiCropPanel::compare);
       }
-bool MidiCropPanel::enabled() const {return _enabled->isChecked();}
-bool MidiCropPanel::includeOriginal() const {return _original->isChecked();}
+bool MidiCropPanel::enabled() const {return personalFeaturesEnabled() && _enabled->isChecked();}
+bool MidiCropPanel::includeOriginal() const {return personalFeaturesEnabled() && _original->isChecked();}
 MidiExportOptions MidiCropPanel::options(Score* score) const {
       MidiExportOptions result;result.crop=enabled();result.gate=_gate;
       if(_fromMeasure>0){result.gate.scoreStart=INT_MAX;result.gate.scoreEnd=INT_MAX;int bar=1;for(auto m=score->firstMeasure();m;m=m->nextMeasure(),++bar){if(bar==_fromMeasure)result.gate.scoreStart=m->tick().ticks();if(bar==_untilMeasure)result.gate.scoreEnd=m->endTick().ticks();}if(_untilMeasure<_fromMeasure||_untilMeasure>score->nmeasures())result.gate.scoreStart=result.gate.scoreEnd=INT_MAX;}
@@ -126,6 +128,7 @@ MidiExportOptions MidiCropPanel::options(Score* score) const {
       result.gate.excluded=_exclusions.value(score);if(_releaseStates.value(score)==score->masterScore()->state())result.gate.releaseOverrides=_releaseOverrides.value(score);result.gate.staves=_staves.value(score);return result;
       }
 void MidiCropPanel::savePreferences() const {
+      if (!personalFeaturesEnabled()) return;
       QSettings handSettings;handSettings.setValue("export/midi/releaseLeadMs",_gate.releaseLeadMs);
       for(int side=0;side<2;++side) {const auto key=QString("export/midi/hand%1/").arg(side);handSettings.setValue(key+"comfort",_gate.hands[side].comfort);handSettings.setValue(key+"maximum",_gate.hands[side].maximum);handSettings.setValue(key+"white",_gate.hands[side].white);}handSettings.sync();
       preferences.setPreference("export/midi/cropFromMeasure",_fromMeasure);preferences.setPreference("export/midi/cropUntilMeasure",_untilMeasure);preferences.setPreference("export/midi/cropProtectMelody",_gate.protectMelody);

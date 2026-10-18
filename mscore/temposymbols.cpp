@@ -1,3 +1,4 @@
+#include "workflow/featuregate.h"
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "temposymbols.h"
 #include "palette/palettetree.h"
@@ -14,6 +15,7 @@ namespace Ms {
 static QString lineFontFace(Score* score) { TempoText text(score); return text.getProperty(Pid::FONT_FACE).toString(); }
 void appendPlayableTempoSymbols(PalettePanel* panel)
       {
+      if (!personalFeaturesEnabled()) return;
       if(!panel||panel->type()!=PalettePanel::Type::Tempo||!gscore)return;
       auto makeRit=[](){
             auto line=new TextLine(gscore,true);line->setLen(4*gscore->spatium());TempoText prototype(gscore);

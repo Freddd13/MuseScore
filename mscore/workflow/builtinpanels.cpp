@@ -2,6 +2,8 @@
 #include "builtinpanels.h"
 #include "arrangement.h"
 #include "paneldock.h"
+#include "featuregate.h"
+#include "aiconnection.h"
 #include "mscore/musescore.h"
 #include "mscore/shortcut.h"
 #include "mscore/performanceeditor/performanceeditor.h"
@@ -29,7 +31,7 @@ QPointer<QmlPlugin> harmonyRoot;
 QQuickView* loadView(const QString& name,bool embedded,QWidget* owner){
  auto engine=new QmlPluginEngine;auto view=new QQuickView(engine,nullptr);engine->setParent(view);
  view->rootContext()->setContextProperty("workflowEmbedded",embedded);
- const QString file=mscoreGlobalShare+"plugins/"+name+"/"+name+".view.qml";
+ const QString file=builtinPanelPath(name);
  view->setResizeMode(QQuickView::SizeRootObjectToView);view->setSource(QUrl::fromLocalFile(file));
  auto root=qobject_cast<QmlPlugin*>(view->rootObject());
  if(!root){if(mscore)mscore->showMessage(QObject::tr("界面读取失败：%1").arg(file),8000);delete view;return nullptr;}
@@ -44,7 +46,7 @@ QQuickView* loadView(const QString& name,bool embedded,QWidget* owner){
 }
 }
 void showHarmonyPanel(bool visible){
- if(!mscore)return;
+ if(!mscore || !personalFeaturesEnabled())return;
  if(harmonyDock&&harmonyRoot){harmonyDock->setVisible(visible);if(visible)harmonyRoot->focusPanel();return;}
  if(!visible)return;
  const QSize previousWindow=mscore->size();
@@ -99,7 +101,7 @@ void installExpressionTools(QWidget* editor,QSplitter* splitter,QVBoxLayout* lay
  });
 }
 void showExpressionPanel(){
- if(!mscore)return;const QSize before=mscore->size();mscore->showPerformanceEditor(true);
+ if(!mscore || !personalFeaturesEnabled())return;const QSize before=mscore->size();mscore->showPerformanceEditor(true);
  if(auto tabs=mscore->performanceEditor()->findChild<QTabBar*>("workflowExpressionTabs")){
   auto host=mscore->performanceEditor()->findChild<QWidget*>("embeddedExpressionPage");if(host&&!host->property("loaded").toBool()&&tabs->currentIndex()==1)tabs->setCurrentIndex(0);tabs->setCurrentIndex(1);
  }
@@ -107,8 +109,9 @@ void showExpressionPanel(){
  if(auto dock=qobject_cast<QDockWidget*>(mscore->performanceEditor()->parentWidget()))if(!dock->isFloating())mscore->resizeDocks({dock},{qBound(260,before.height()/2,540)},Qt::Vertical);
 }
 void addBuiltinPanelActions(QMenu* menu){
+ addAIConnectionAction(menu);
  addSuggestionPanelAction(menu);
- auto harmony=getAction("harmony-assistant");harmony->setCheckable(true);menu->addAction(harmony);
- auto expression=getAction("performance-expression");menu->addAction(expression);
+ auto harmony=getAction("harmony-assistant");harmony->setCheckable(true);markPersonalAction(harmony);menu->addAction(harmony);
+ auto expression=getAction("performance-expression");markPersonalAction(expression);menu->addAction(expression);
 }
 }

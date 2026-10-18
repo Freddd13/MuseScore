@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2.
 #include "regionalpanel.h"
+#include "featuregate.h"
 #include "libmscore/chord.h"
 #include "libmscore/measure.h"
 #include "libmscore/note.h"
@@ -678,9 +679,11 @@ class RegionalPanel : public QWidget {
 QPointer<QDockWidget> dock;
 } // namespace
 void addRegionalVariantAction(QMenu *menu) {
+      markPersonalAction(getAction("regional-variants"));
       menu->addAction(getAction("regional-variants"));
 }
 void showRegionalVariantPanel(const QString &group) {
+      if (!personalFeaturesEnabled()) return;
       if (!dock) {
             dock = new QDockWidget(QObject::tr("分段试写方案"), mscore);
             dock->setObjectName("regionalVariantsDock");

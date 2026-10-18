@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2.
 #include "regionalcontrols.h"
+#include "featuregate.h"
 #include "libmscore/measure.h"
 #include "libmscore/page.h"
 #include "libmscore/regionalvariants.h"
@@ -184,7 +185,7 @@ class Controls : public QObject {
 };
 } // namespace
 bool regionalControlsVisible() {
-      return QSettings().value("regionalVariants/scoreButtons", true).toBool();
+      return personalFeaturesEnabled() && QSettings().value("regionalVariants/scoreButtons", true).toBool();
 }
 void setRegionalControlsVisible(bool value) {
       QSettings().setValue("regionalVariants/scoreButtons", value);
