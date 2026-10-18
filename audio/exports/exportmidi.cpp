@@ -1,3 +1,4 @@
+#include <QJsonDocument>
 #include "libmscore/playbacktiming.h"
 //=============================================================================
 //  MuseScore
@@ -282,6 +283,18 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                         char port    = part->masterScore()->midiPort(ch->channel());
                         char channel = part->masterScore()->midiChannel(ch->channel());
 
+                        int exportedProgram=ch->program(),exportedBank=ch->bank();
+                        const bool vst=ch->synti()=="KumoVST";
+                        if(vst) {
+                              const auto group=cs->masterScore()->synthesizerState().group("KumoVST");
+                              for(const auto& value:group)if(value.id==0) {
+                                    const auto config=QJsonDocument::fromJson(value.data.toUtf8()).toVariant().toMap();
+                                    for(const auto& v:config["slots"].toList())if(v.toMap()["id"].toInt()==ch->bank()) {
+                                          const auto original=v.toMap()["originalPatch"].toMap();
+                                          exportedProgram=original["program"].toInt();exportedBank=original["bank"].toInt();
+                                          }
+                                    }
+                              }
                         if (staff->isTop()) {
                               track.insert(0, MidiEvent(ME_CONTROLLER, channel, CTRL_RESET_ALL_CTRL, 0));
                               // We need this to get the correct pitch of bends
@@ -303,8 +316,8 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                     track.insert(0, MidiEvent(ME_CONTROLLER, channel, CTRL_HRPN, 127));
                               }
 
-                              if (ch->program() != -1)
-                                    track.insert(0, MidiEvent(ME_CONTROLLER, channel, CTRL_PROGRAM, ch->program()));
+                              if (exportedProgram != -1)
+                                    track.insert(0, MidiEvent(ME_CONTROLLER, channel, CTRL_PROGRAM, exportedProgram));
                               track.insert(0, MidiEvent(ME_CONTROLLER, channel, CTRL_VOLUME, ch->volume()));
                               track.insert(0, MidiEvent(ME_CONTROLLER, channel, CTRL_PANPOT, ch->pan()));
                               track.insert(0, MidiEvent(ME_CONTROLLER, channel, CTRL_REVERB_SEND, ch->reverb()));
@@ -385,7 +398,7 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                     }
                               else if (event.type() == ME_CONTROLLER) {
                                     track.insert(pauseMap.addPauseTicks(i->first), MidiEvent(ME_CONTROLLER, channel,
-                                          event.controller(), event.value()));
+                                          event.controller(), vst && event.controller()==CTRL_HBANK ? ((exportedBank>>7)&127) : vst && event.controller()==CTRL_LBANK ? (exportedBank&127) : vst && event.controller()==CTRL_PROGRAM ? exportedProgram : event.value()));
                                     }
                               else if(event.type() == ME_PITCHBEND) {
                                     track.insert(pauseMap.addPauseTicks(i->first), MidiEvent(ME_PITCHBEND, channel,

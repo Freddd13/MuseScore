@@ -65,7 +65,7 @@ bool personalAction(const QString &key) {
       "reference-joint-play",   "arrangement-suggestions",
       "regional-variants",      "kumo-ai-connection",
       "kumo-spectrum",          "kumo-rhythm",
-      "kumo-roll-writing",
+      "kumo-roll-writing", "kumo-vst",
       "kumo-system-lock-menu", "kumo-system-lock-current", "kumo-system-lock-selected",
       "kumo-system-lock-unlock", "kumo-system-lock-all",
       "kumo-workspace",         "tap-tempo",

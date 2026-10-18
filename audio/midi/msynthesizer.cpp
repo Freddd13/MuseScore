@@ -263,7 +263,7 @@ void MasterSynthesizer::setSampleRate(float val)
       _sampleRate = val;
       for (Synthesizer* s : _synthesizer) {
             s->init(_sampleRate);
-            connect(s->gui(), SIGNAL(sfChanged()), SLOT(sfChanged()));
+            if (s->gui()) connect(s->gui(), SIGNAL(sfChanged()), SLOT(sfChanged()), Qt::UniqueConnection);
             }
       for (Effect* e : _effectList[0])
             e->init(_sampleRate);
@@ -287,12 +287,13 @@ void MasterSynthesizer::process(unsigned n, float* p)
             return;
             }
       // avoid overflow
-      if (n > MAX_BUFFERSIZE / 2)
-            return;
+      if (n > MAX_BUFFERSIZE / 2) { lock1 = false; return; }
       for (Synthesizer* s : _synthesizer) {
             if (s->active())
                   s->process(n, p, effect1Buffer, effect2Buffer);
             }
+
+      for (Synthesizer* s : _synthesizer) s->mixMaster(n, p);
 
       if (_effect[0] && _effect[1]) {
             memset(effect1Buffer, 0, n * sizeof(float) * 2);
@@ -306,6 +307,7 @@ void MasterSynthesizer::process(unsigned n, float* p)
             else
                   _effect[1]->process(n, effect1Buffer, p);
             }
+      for (Synthesizer* s : _synthesizer) s->processMaster(n, p);
       float g = _gain * _boost;
       for (unsigned i = 0; i < n * 2; ++i)
             *p++ *= g;
@@ -342,6 +344,11 @@ int MasterSynthesizer::indexOfEffect(int ab)
 bool MasterSynthesizer::setState(const SynthesizerState& ss)
       {
       bool result = true;
+      _unavailableState.clear();
+      for (auto s : _synthesizer) {
+            bool found=false; for (const auto& g : ss) if (g.name()==s->name()) {found=true;break;}
+            if (!found) s->clearState();
+            }
       for (const SynthesizerGroup& g : ss) {
             if (g.name() == "master") {
                   for (const IdValue& v : g) {
@@ -383,7 +390,7 @@ bool MasterSynthesizer::setState(const SynthesizerState& ss)
                         else if (effect(1) && effect(1)->name() == g.name())
                               effect(1)->setState(g);
                         else
-                              qDebug("MasterSynthesizer::setState: unknown <%s>", qPrintable(g.name()));
+                              _unavailableState.push_back(g);
                         }
                   }
             }
@@ -407,7 +414,8 @@ SynthesizerState MasterSynthesizer::state() const
       g.push_back(IdValue(5, QString("%1").arg(ccToUseIndex())));
       ss.push_back(g);
       for (Synthesizer* s : _synthesizer)
-            ss.push_back(s->state());
+            if (s->hasStateToStore()) ss.push_back(s->state());
+      ss.insert(ss.end(), _unavailableState.begin(), _unavailableState.end());
       if (_effect[0])
             ss.push_back(_effect[0]->state());
       if (_effect[1])
@@ -434,6 +442,13 @@ bool MasterSynthesizer::storeState()
       state().write(xml, true);
       return true;
       }
+
+void MasterSynthesizer::setPlaybackContext(qint64 sample,double quarter,double tempo,bool playing,int numerator,int denominator)
+      { for (auto s : _synthesizer) s->setPlaybackContext(sample,quarter,tempo,playing,numerator,denominator); }
+int MasterSynthesizer::processingLatency() const
+      { int result=0;for (auto s : _synthesizer) result=std::max(result,s->processingLatency());return result; }
+qint64 MasterSynthesizer::processingTail() const
+      { qint64 result=0;for (auto s : _synthesizer) result=std::max(result,s->processingTail());return result; }
 
 //---------------------------------------------------------
 //   setGain

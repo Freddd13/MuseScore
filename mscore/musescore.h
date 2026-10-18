@@ -997,7 +997,7 @@ extern MuseScore* mscore;
 extern QStringList recentScores;
 extern QString dataPath;
 extern MasterSynthesizer* synti;
-MasterSynthesizer* synthesizerFactory();
+MasterSynthesizer* synthesizerFactory(bool offline = false);
 Driver* driverFactory(Seq*, QString driver);
 
 extern QAction* getAction(const char*);

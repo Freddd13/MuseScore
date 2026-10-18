@@ -57,6 +57,7 @@ class MasterSynthesizer : public QObject {
       Effect* _effect[MAX_EFFECTS]  { nullptr, nullptr };
 
       float _sampleRate;
+      SynthesizerState _unavailableState;
 
       float effect1Buffer[MAX_BUFFERSIZE];
       float effect2Buffer[MAX_BUFFERSIZE];
@@ -83,6 +84,9 @@ class MasterSynthesizer : public QObject {
 
       void process(unsigned, float*);
       void play(const NPlayEvent&, unsigned);
+      void setPlaybackContext(qint64, double, double, bool, int numerator=4, int denominator=4);
+      int processingLatency() const;
+      qint64 processingTail() const;
 
       void setMasterTuning(double val);
       double masterTuning() const      { return _masterTuning; }

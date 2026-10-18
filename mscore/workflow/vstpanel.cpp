@@ -1,0 +1,1100 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+#include "vstpanel.h"
+#ifdef KUMO_VST_HOST
+#include "audio/midi/midipatch.h"
+#include "audio/midi/msynthesizer.h"
+#include "audio/vst/vstsynth.h"
+#include "featuregate.h"
+#include "libmscore/instrument.h"
+#include "libmscore/part.h"
+#include "libmscore/score.h"
+#include "libmscore/undo.h"
+#include "mscore/musescore.h"
+#include "mscore/seq.h"
+#include "mscore/workspace.h"
+#include "workspaceviews.h"
+#include <QJsonDocument>
+#include <QProcess>
+#include <QSaveFile>
+#include <QUuid>
+#include <QtWidgets>
+
+namespace Ms {
+namespace {
+VstSynth *backend() {
+  return synti ? static_cast<VstSynth *>(synti->synthesizer("KumoVST"))
+               : nullptr;
+}
+SynthesizerState withConfiguration(SynthesizerState state,
+                                   const QVariantMap &value) {
+  for (auto it = state.begin(); it != state.end();)
+    if (it->name() == "KumoVST")
+      it = state.erase(it);
+    else
+      ++it;
+  if (!value.isEmpty()) {
+    SynthesizerGroup group;
+    group.setName("KumoVST");
+    group.push_back(
+        IdValue(0, QString::fromUtf8(QJsonDocument::fromVariant(value).toJson(
+                       QJsonDocument::Compact))));
+    state.push_back(group);
+  }
+  state.setIsDefault(false);
+  return state;
+}
+class ChangeVstState final : public UndoCommand {
+  Score *score;
+  SynthesizerState value;
+  void flip(EditData *) override {
+    const auto old = score->synthesizerState();
+    score->setSynthesizerState(value);
+    value = old;
+    if (mscore && mscore->currentScore() &&
+        mscore->currentScore()->masterScore() == score) {
+      if (seq) {
+        seq->stopWait();
+        seq->waitForStoppedRendering();
+      }
+      if (auto engine = backend()) {
+        engine->setState(score->synthesizerState().group("KumoVST"));
+        if (!score->synthesizerState().group("KumoVST").empty() &&
+            engine->problems().isEmpty())
+          score->setSynthesizerState(withConfiguration(
+              score->synthesizerState(), engine->configuration()));
+      }
+      routeVstChannels(synti, score);
+      if (seq) {
+        seq->initInstruments();
+        seq->invalidatePlaybackEvents();
+      }
+    }
+    score->setPlaylistDirty();
+  }
+
+public:
+  ChangeVstState(Score *target, const SynthesizerState &next)
+      : score(target), value(next) {}
+  UNDO_NAME("ChangeVstState")
+};
+QString identity(const QVariantMap &d) {
+  return d["path"].toString() + "|" + d["uid"].toString();
+}
+class Panel final : public QDockWidget {
+  QComboBox *parts, *catalog, *effectTarget;
+  QListWidget *chain;
+  QStackedWidget *chainArea;
+  QLabel *state, *current, *chainHint;
+  QPushButton *scan, *choose, *removeSource, *restoreSource, *openSource,
+      *addEffect, *removeEffect, *up, *down, *openEffect, *loadPreset,
+      *savePreset;
+  QCheckBox *isolate;
+  QProcess scanner;
+  QTimer watch;
+  QVariantList known;
+  QVariantMap removed;
+  QPointer<Score> score;
+  QList<Channel *> channels;
+  bool updating = false, savePending = false;
+  quint64 lastRevision = 0;
+  QString lastProblems;
+  Channel *selected() const {
+    const int i = parts->currentIndex();
+    return i >= 0 && i < channels.size() ? channels[i] : nullptr;
+  }
+  int selectedSlot() const {
+    auto c = selected();
+    return c && c->synti() == "KumoVST" ? c->bank() : 0;
+  }
+  int targetSlot() const {
+    return effectTarget->currentIndex() == 1 ? 0 : selectedSlot();
+  }
+  QVariantMap configuration() {
+    return backend() ? backend()->configuration() : QVariantMap();
+  }
+  QVariantMap unit(int slot, int effect) {
+    auto c = backend() ? backend()->configuration(false) : QVariantMap();
+    if (!slot) {
+      auto list = c["masterEffects"].toList();
+      return effect >= 0 && effect < list.size() ? list[effect].toMap()
+                                                 : QVariantMap();
+    }
+    for (const auto &v : c["slots"].toList()) {
+      auto s = v.toMap();
+      if (s["id"].toInt() != slot)
+        continue;
+      if (effect < 0)
+        return s["source"].toMap();
+      auto list = s["effects"].toList();
+      return effect < list.size() ? list[effect].toMap() : QVariantMap();
+    }
+    return {};
+  }
+  void editUnit(int slot, int effect,
+                const std::function<void(QVariantMap &)> &edit) {
+    if (!score)
+      return;
+    auto value = configuration();
+    if (!slot) {
+      auto list = value["masterEffects"].toList();
+      if (effect < 0 || effect >= list.size())
+        return;
+      auto u = list[effect].toMap();
+      edit(u);
+      list[effect] = u;
+      value["masterEffects"] = list;
+    } else {
+      auto instances = value["slots"].toList();
+      for (int i = 0; i < instances.size(); ++i) {
+        auto s = instances[i].toMap();
+        if (s["id"].toInt() != slot)
+          continue;
+        if (effect < 0) {
+          auto u = s["source"].toMap();
+          edit(u);
+          s["source"] = u;
+        } else {
+          auto list = s["effects"].toList();
+          if (effect >= list.size())
+            return;
+          auto u = list[effect].toMap();
+          edit(u);
+          list[effect] = u;
+          s["effects"] = list;
+        }
+        instances[i] = s;
+      }
+      value["slots"] = instances;
+    }
+    report(applyVstConfiguration(score, value));
+    refresh();
+  }
+  void report(const QVariantMap &result) {
+    state->setText(
+        result.contains("error")
+            ? result["error"].toString()
+            : result.value("message", tr("已更新；随乐谱保存，Ctrl+Z 撤销。"))
+                  .toString());
+  }
+  void saveCatalog() {
+    QSettings().setValue(
+        "kumo/vst/catalog",
+        QJsonDocument::fromVariant(known).toJson(QJsonDocument::Compact));
+    populateCatalog();
+  }
+  void populateCatalog() {
+    const auto key = catalog->currentData().toString();
+    QSignalBlocker b(catalog);
+    catalog->clear();
+    for (const auto &v : known) {
+      auto d = v.toMap();
+      catalog->addItem(d["name"].toString() + " · " + d["format"].toString(),
+                       identity(d));
+      catalog->setItemData(catalog->count() - 1, d, Qt::UserRole + 1);
+    }
+    const int i = catalog->findData(key);
+    if (i >= 0)
+      catalog->setCurrentIndex(i);
+  }
+  QVariantMap picked() const {
+    return catalog->currentData(Qt::UserRole + 1).toMap();
+  }
+  void scanFile() {
+    const auto path = QFileDialog::getOpenFileName(
+        this, tr("添加 VST 音源或效果器"),
+        QSettings()
+            .value("kumo/vst/lastFolder",
+                   QStringLiteral("C:/Program Files/Common Files/VST3"))
+            .toString(),
+        tr("VST 插件 (*.vst3 *.dll)"));
+    if (path.isEmpty())
+      return;
+    QSettings().setValue("kumo/vst/lastFolder", QFileInfo(path).absolutePath());
+    scan->setEnabled(false);
+    state->setText(tr("正在扫描 %1…").arg(QFileInfo(path).fileName()));
+    scanner.setProperty("path", path);
+    scanner.start(QCoreApplication::applicationDirPath() +
+                      "/MuseScoreVstHost.exe",
+                  {"--scan", path});
+    QTimer::singleShot(60000, this, [this] {
+      if (scanner.state() != QProcess::NotRunning) {
+        scanner.kill();
+        state->setText(
+            tr("扫描耗时超过一分钟，已停止。可从插件提供的管理程序检查安装。"));
+      }
+    });
+  }
+  void showParameters(VstHost::Plugin *plugin) {
+    auto dialog = new QDialog(this, Qt::Tool);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(tr("插件参数"));
+    auto layout = new QVBoxLayout(dialog);
+    auto filter = new QLineEdit(dialog);
+    filter->setPlaceholderText(tr("查找参数"));
+    layout->addWidget(filter);
+    auto table = new QTreeWidget(dialog);
+    table->setHeaderLabels({tr("参数"), tr("当前值")});
+    layout->addWidget(table);
+    auto slider = new QSlider(Qt::Horizontal, dialog);
+    slider->setRange(0, 10000);
+    layout->addWidget(slider);
+    for (const auto &v : plugin->parameters()) {
+      auto p = v.toMap();
+      auto item =
+          new QTreeWidgetItem(table, {p["name"].toString(),
+                                      p.value("text", p["value"]).toString()});
+      item->setData(0, Qt::UserRole, p);
+    }
+    connect(filter, &QLineEdit::textChanged, dialog,
+            [table](const QString &text) {
+              for (int i = 0; i < table->topLevelItemCount(); ++i)
+                table->topLevelItem(i)->setHidden(
+                    !table->topLevelItem(i)->text(0).contains(
+                        text, Qt::CaseInsensitive));
+            });
+    connect(table, &QTreeWidget::currentItemChanged, dialog,
+            [slider](QTreeWidgetItem *item, QTreeWidgetItem *) {
+              if (!item)
+                return;
+              auto p = item->data(0, Qt::UserRole).toMap();
+              QSignalBlocker b(slider);
+              slider->setValue(qRound(p["value"].toDouble() * 10000));
+              slider->setEnabled(!p["readOnly"].toBool());
+            });
+    connect(slider, &QSlider::valueChanged, dialog,
+            [this, plugin, table](int value) {
+              if (auto item = table->currentItem()) {
+                auto p = item->data(0, Qt::UserRole).toMap();
+                p["value"] = value / 10000.;
+                plugin->setParameter(p["id"].toUInt(), value / 10000.);
+                item->setData(0, Qt::UserRole, p);
+                item->setText(1, QString::number(value / 10000., 'f', 4));
+                savePending = true;
+              }
+            });
+    dialog->resize(440, 500);
+    dialog->show();
+    // Graph replacement closes these parameter widgets before their plug-in is
+    // released.
+    dialog->setObjectName("kumoVstParameters");
+  }
+  void editor(int slot, int effect) {
+    if (!backend())
+      return;
+    auto plugin = backend()->rack().plugin(slot, effect);
+    if (!plugin) {
+      state->setText(tr("请先选择并载入音源。"));
+      return;
+    }
+    QString error;
+    if (plugin->openEditor(this, &error))
+      state->setText(tr("插件窗口已打开；修改的预设随乐谱保存。"));
+    else {
+      if (plugin->parameters().isEmpty()) {
+        state->setText(error);
+        return;
+      }
+      showParameters(plugin);
+      state->setText(tr("已打开插件参数。"));
+    }
+  }
+  void changeChain(const std::function<void(QVariantList &)> &edit) {
+    const int id = targetSlot();
+    if (!id && effectTarget->currentIndex() != 1)
+      return;
+    auto c = configuration();
+    if (!id) {
+      auto list = c["masterEffects"].toList();
+      edit(list);
+      c["masterEffects"] = list;
+    } else {
+      auto list = c["slots"].toList();
+      for (int i = 0; i < list.size(); ++i) {
+        auto s = list[i].toMap();
+        if (s["id"].toInt() == id) {
+          auto effects = s["effects"].toList();
+          edit(effects);
+          s["effects"] = effects;
+          list[i] = s;
+        }
+      }
+      c["slots"] = list;
+    }
+    for (auto w : findChildren<QDialog *>("kumoVstParameters"))
+      w->close();
+    report(applyVstConfiguration(score, c));
+    refresh();
+  }
+  void refresh() {
+    if (updating)
+      return;
+    updating = true;
+    auto c = selected();
+    const int id = selectedSlot();
+    auto engine = backend();
+    current->setText(
+        c ? (c->synti() == "KumoVST"
+                 ? tr("当前：%1")
+                       .arg(synti->getPatchInfo(c->synti(), c->bank(),
+                                                c->program())
+                                ? synti
+                                      ->getPatchInfo(c->synti(), c->bank(),
+                                                     c->program())
+                                      ->name
+                                : tr("音源文件待重新定位"))
+                 : tr("当前：SF2／%1").arg(c->synti()))
+          : tr("打开乐谱后选择乐器。"));
+    choose->setEnabled(c && catalog->count() &&
+                       picked()["instrument"].toBool());
+    const bool loaded = id && engine && engine->rack().plugin(id);
+    openSource->setEnabled(loaded);
+    const bool external =
+        unit(id, -1)["plugin"].toMap()["format"].toString() != "SF2";
+    loadPreset->setEnabled(loaded && external);
+    savePreset->setEnabled(loaded && external);
+    removeSource->setEnabled(id);
+    restoreSource->setEnabled(!removed.isEmpty());
+    const int row = chain->currentRow();
+    QSignalBlocker block(chain);
+    chain->clear();
+    const auto list =
+        engine ? engine->rack().effects(targetSlot()) : QVariantList();
+    for (const auto &v : list) {
+      auto e = v.toMap();
+      auto item =
+          new QListWidgetItem(e["plugin"].toMap()["name"].toString(), chain);
+      item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+      item->setCheckState(e["bypass"].toBool() ? Qt::Unchecked : Qt::Checked);
+      item->setToolTip(
+          tr("勾选启用，取消勾选旁通；效果按从上到下的顺序处理。"));
+    }
+    chainArea->setCurrentWidget(chain->count()
+                                    ? static_cast<QWidget *>(chain)
+                                    : static_cast<QWidget *>(chainHint));
+    if (row >= 0 && row < chain->count())
+      chain->setCurrentRow(row);
+    addEffect->setEnabled(score && catalog->count() &&
+                          !picked()["instrument"].toBool() &&
+                          (id || effectTarget->currentIndex() == 1 ||
+                           (c && c->synti() == "Fluid")));
+    removeEffect->setEnabled(chain->currentRow() >= 0);
+    openEffect->setEnabled(chain->currentRow() >= 0);
+    up->setEnabled(chain->currentRow() > 0);
+    down->setEnabled(chain->currentRow() >= 0 &&
+                     chain->currentRow() < chain->count() - 1);
+    if (engine && !engine->problems().isEmpty())
+      state->setText(engine->problems().join('\n'));
+    updating = false;
+  }
+  void persistEdits() {
+    if (!score || !backend())
+      return;
+    if (backend()->rack().takeChanges())
+      savePending = true;
+    if (!savePending || (seq && seq->isPlaying()))
+      return;
+    savePending = false;
+    report(applyVstConfiguration(score, configuration()));
+  }
+
+public:
+  explicit Panel(QWidget *parent) : QDockWidget(tr("音源与效果"), parent) {
+    setObjectName("kumoVstPanel");
+    setAllowedAreas(Qt::AllDockWidgetAreas);
+    auto body = new QWidget(this);
+    auto scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(body);
+    setWidget(scroll);
+    auto layout = new QVBoxLayout(body);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(6);
+    auto row = new QHBoxLayout;
+    row->addWidget(new QLabel(tr("乐器"), body));
+    parts = new QComboBox(body);
+    parts->setObjectName("kumoVstParts");
+    parts->setSizeAdjustPolicy(
+        QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    row->addWidget(parts, 1);
+    layout->addLayout(row);
+    current = new QLabel(body);
+    current->setWordWrap(true);
+    current->setFixedHeight(fontMetrics().lineSpacing() * 2);
+    layout->addWidget(current);
+    catalog = new QComboBox(body);
+    catalog->setObjectName("kumoVstCatalog");
+    catalog->setSizeAdjustPolicy(
+        QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    layout->addWidget(catalog);
+    row = new QHBoxLayout;
+    scan = new QPushButton(tr("添加插件…"), body);
+    scan->setObjectName("kumoVstScan");
+    row->addWidget(scan);
+    auto forget = new QPushButton(tr("移出列表"), body);
+    row->addWidget(forget);
+    row->addStretch();
+    layout->addLayout(row);
+    isolate = new QCheckBox(tr("独立进程运行"), body);
+    isolate->setToolTip(tr("将这个插件放在单独进程，额外增加约两个 256 "
+                           "样本块的播放延迟。直接运行适合低延迟弹奏。"));
+    layout->addWidget(isolate);
+    row = new QHBoxLayout;
+    choose = new QPushButton(tr("用作此乐器音源"), body);
+    choose->setObjectName("kumoVstChoose");
+    openSource = new QPushButton(tr("打开音源"), body);
+    row->addWidget(choose);
+    row->addWidget(openSource);
+    layout->addLayout(row);
+    row = new QHBoxLayout;
+    removeSource = new QPushButton(tr("恢复原音源"), body);
+    removeSource->setObjectName("kumoVstRemoveSource");
+    restoreSource = new QPushButton(tr("恢复刚才音源"), body);
+    restoreSource->setObjectName("kumoVstRestoreSource");
+    row->addWidget(removeSource);
+    row->addWidget(restoreSource);
+    layout->addLayout(row);
+    auto presets = new QHBoxLayout;
+    auto import = new QPushButton(tr("载入预设…"), body);
+    auto save = new QPushButton(tr("保存预设…"), body);
+    loadPreset = import;
+    savePreset = save;
+    presets->addWidget(import);
+    presets->addWidget(save);
+    layout->addLayout(presets);
+    auto line = new QFrame(body);
+    line->setFrameShape(QFrame::HLine);
+    layout->addWidget(line);
+    effectTarget = new QComboBox(body);
+    effectTarget->addItems({tr("此乐器效果"), tr("主输出效果")});
+    layout->addWidget(effectTarget);
+    chainArea = new QStackedWidget(body);
+    chainArea->setMinimumHeight(100);
+    chain = new QListWidget(chainArea);
+    chainHint = new QLabel(tr("从上方列表选择效果器\n再点“加效果”"), chainArea);
+    chainHint->setWordWrap(true);
+    chainHint->setAlignment(Qt::AlignCenter);
+    auto hintPalette = chainHint->palette();
+    auto hintInk = hintPalette.color(QPalette::WindowText);
+    hintInk.setAlpha(170);
+    hintPalette.setColor(QPalette::WindowText, hintInk);
+    chainHint->setPalette(hintPalette);
+    chainArea->addWidget(chain);
+    chainArea->addWidget(chainHint);
+    layout->addWidget(chainArea, 1);
+    row = new QHBoxLayout;
+    addEffect = new QPushButton(tr("加效果"), body);
+    addEffect->setObjectName("kumoVstAddEffect");
+    openEffect = new QPushButton(tr("打开"), body);
+    removeEffect = new QPushButton(tr("删除"), body);
+    up = new QPushButton(tr("上移"), body);
+    down = new QPushButton(tr("下移"), body);
+    for (auto b : {addEffect, openEffect, removeEffect})
+      row->addWidget(b);
+    layout->addLayout(row);
+    row = new QHBoxLayout;
+    row->addWidget(up);
+    row->addWidget(down);
+    layout->addLayout(row);
+    state = new QLabel(tr("添加已安装的 VST3 或 x64 VST2 文件，再选择音源。"),
+                       body);
+    state->setWordWrap(true);
+    state->setMinimumHeight(fontMetrics().lineSpacing() * 3);
+    state->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(state);
+    known = QJsonDocument::fromJson(
+                QSettings().value("kumo/vst/catalog").toByteArray())
+                .toVariant()
+                .toList();
+    populateCatalog();
+    connect(scan, &QPushButton::clicked, this, [this] { scanFile(); });
+    connect(
+        &scanner, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+        this, [this](int code, QProcess::ExitStatus exit) {
+          scan->setEnabled(true);
+          auto result = QJsonDocument::fromJson(scanner.readAllStandardOutput())
+                            .toVariant()
+                            .toMap();
+          if (exit != QProcess::NormalExit || code ||
+              !result["error"].toString().isEmpty()) {
+            state->setText(result["error"].toString().isEmpty()
+                               ? tr("插件扫描未完成，请检查插件安装和授权。")
+                               : result["error"].toString());
+            return;
+          }
+          if (result["plugins"].toList().isEmpty()) {
+            state->setText(tr("这份文件没有列出可用插件，请选择 x64 VST2 或 "
+                              "VST3 插件文件。"));
+            return;
+          }
+          for (const auto &v : result["plugins"].toList()) {
+            auto d = v.toMap();
+            bool found = false;
+            for (const auto &k : known)
+              if (identity(k.toMap()) == identity(d))
+                found = true;
+            if (!found)
+              known.append(d);
+          }
+          saveCatalog();
+          state->setText(tr("扫描完成，选择列表中的插件即可使用。"));
+          refresh();
+        });
+    connect(&scanner, &QProcess::errorOccurred, this,
+            [this](QProcess::ProcessError) {
+              scan->setEnabled(true);
+              state->setText(
+                  tr("扫描工具无法启动：%1").arg(scanner.errorString()));
+            });
+    connect(forget, &QPushButton::clicked, this, [this] {
+      int i = catalog->currentIndex();
+      if (i >= 0) {
+        known.removeAt(i);
+        saveCatalog();
+        refresh();
+      }
+    });
+    connect(parts, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this] { refresh(); });
+    connect(catalog, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this] { refresh(); });
+    connect(effectTarget, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this] { refresh(); });
+    connect(choose, &QPushButton::clicked, this, [this] {
+      if (!score || !selected())
+        return;
+      state->setText(tr("正在载入 %1…").arg(picked()["name"].toString()));
+      QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+      report(assignVstInstrument(score, selected(), picked(),
+                                 isolate->isChecked()));
+      refresh();
+    });
+    connect(openSource, &QPushButton::clicked, this,
+            [this] { editor(selectedSlot(), -1); });
+    connect(removeSource, &QPushButton::clicked, this, [this] {
+      auto c = selected();
+      if (!c || !selectedSlot())
+        return;
+      const auto config = configuration();
+      QVariantMap original;
+      for (const auto &s : config["slots"].toList())
+        if (s.toMap()["id"].toInt() == c->bank())
+          original = s.toMap()["originalPatch"].toMap();
+      removed = {
+          {"config", config}, {"bank", c->bank()}, {"channel", c->channel()}};
+      MidiPatch patch;
+      patch.synti = original.value("synti", "Fluid").toString();
+      patch.bank = original["bank"].toInt();
+      patch.prog = original["program"].toInt();
+      patch.drum = false;
+      patch.sfid = 0;
+      if (seq)
+        seq->stopWait();
+      auto next = config;
+      auto instances = next["slots"].toList();
+      bool shared = false;
+      for (const auto &mm : score->masterScore()->midiMapping())
+        if (mm.articulation() != c && mm.articulation()->synti() == "KumoVST" &&
+            mm.articulation()->bank() == c->bank())
+          shared = true;
+      if (!shared)
+        for (int i = instances.size() - 1; i >= 0; --i)
+          if (instances[i].toMap()["id"].toInt() == c->bank())
+            instances.removeAt(i);
+      next["slots"] = instances;
+      if (instances.isEmpty() && next["masterEffects"].toList().isEmpty())
+        next.clear();
+      score->startCmd();
+      score->undo(new ChangeVstState(
+          score->masterScore(),
+          withConfiguration(score->masterScore()->synthesizerState(), next)));
+      score->undo(new ChangePatch(score, c, &patch));
+      score->undo(new SetUserBankController(
+          c, original["userBankController"].toBool()));
+      score->setInstrumentsChanged(true);
+      score->endCmd();
+      if (seq)
+        seq->initInstruments();
+      routeVstChannels(synti, score);
+      state->setText(tr("已恢复原音源，Ctrl+Z 可切回。"));
+      refresh();
+    });
+    connect(restoreSource, &QPushButton::clicked, this, [this] {
+      auto c = selected();
+      if (!c || c->channel() != removed["channel"].toInt())
+        return;
+      MidiPatch p;
+      p.synti = "KumoVST";
+      p.bank = removed["bank"].toInt();
+      p.prog = 0;
+      p.drum = false;
+      p.sfid = 0;
+      if (seq)
+        seq->stopWait();
+      auto next = configuration();
+      auto instances = next["slots"].toList();
+      QVariantMap saved;
+      for (const auto &item : removed["config"].toMap()["slots"].toList())
+        if (item.toMap()["id"].toInt() == p.bank)
+          saved = item.toMap();
+      for (const auto &item : instances)
+        if (item.toMap()["id"].toInt() == p.bank) {
+          int id = p.bank;
+          for (const auto &v : instances)
+            id = qMax(id, v.toMap()["id"].toInt() + 1);
+          p.bank = id;
+          break;
+        }
+      if (saved.isEmpty())
+        return;
+      saved["id"] = p.bank;
+      instances.append(saved);
+      next["slots"] = instances;
+      next["schema"] = 1;
+      score->startCmd();
+      score->undo(new ChangeVstState(
+          score->masterScore(),
+          withConfiguration(score->masterScore()->synthesizerState(), next)));
+      score->undo(new ChangePatch(score, c, &p));
+      score->undo(new SetUserBankController(c, true));
+      score->setInstrumentsChanged(true);
+      score->endCmd();
+      if (seq)
+        seq->initInstruments();
+      removed.clear();
+      routeVstChannels(synti, score);
+      refresh();
+    });
+    connect(import, &QPushButton::clicked, this, [this] {
+      if (!backend() || !selectedSlot())
+        return;
+      const auto path = QFileDialog::getOpenFileName(
+          this, tr("载入插件预设"), {},
+          tr("插件预设 (*.json *.ariax *.fxp *.fxb)"));
+      if (path.isEmpty())
+        return;
+      if (seq)
+        seq->stopWait();
+      auto engine = backend();
+      auto p = engine->rack().plugin(selectedSlot(), -1);
+      QString error;
+      engine->rack().suspend();
+      const bool ok = p && p->importPreset(path, &error);
+      engine->rack().resume();
+      if (ok) {
+        savePending = true;
+        persistEdits();
+        state->setText(tr("预设已载入；随乐谱保存。"));
+      } else
+        state->setText(error);
+    });
+    connect(save, &QPushButton::clicked, this, [this] {
+      if (!backend() || !selectedSlot())
+        return;
+      const auto path = QFileDialog::getSaveFileName(
+          this, tr("保存插件预设"), {}, tr("本分支 VST 预设 (*.json)"));
+      if (path.isEmpty())
+        return;
+      if (seq)
+        seq->stopWait();
+      auto engine = backend();
+      QString error;
+      engine->rack().suspend();
+      auto p = engine->rack().plugin(selectedSlot(), -1);
+      const auto bytes = p ? p->state(&error) : QByteArray();
+      engine->rack().resume();
+      QSaveFile f(path);
+      if (error.isEmpty() && f.open(QIODevice::WriteOnly) &&
+          f.write(bytes) == bytes.size() && f.commit())
+        state->setText(tr("已保存预设：%1").arg(QFileInfo(path).fileName()));
+      else
+        state->setText(error.isEmpty() ? f.errorString() : error);
+    });
+    connect(addEffect, &QPushButton::clicked, this, [this] {
+      auto d = picked();
+      if (d.isEmpty())
+        return;
+      if (d["instrument"].toBool()) {
+        state->setText(tr("请选择效果器；钢琴音源放在上方的音源位置。"));
+        return;
+      }
+      if (effectTarget->currentIndex() == 0 && !selectedSlot() && selected() &&
+          selected()->synti() == "Fluid") {
+        auto fluid = synti->synthesizer("Fluid");
+        QStringList paths;
+        for (const auto &font : fluid->soundFontsInfo())
+          paths.append(font.fileName);
+        if (paths.isEmpty()) {
+          state->setText(tr("请先在合成器中载入 SF2 音色库。"));
+          return;
+        }
+        const QVariantMap source{
+            {"path", paths.join('\n')},
+            {"format", "SF2"},
+            {"uid", QString::number(selected()->bank()) + ":" +
+                        QString::number(selected()->program())},
+            {"name", tr("SF2 · ") + parts->currentText()},
+            {"vendor", "MuseScore"},
+            {"instrument", true}};
+        auto result = assignVstInstrument(
+            score, selected(), source, false,
+            QVariantMap{{"key", QUuid::createUuid().toString(QUuid::Id128)},
+                        {"plugin", d},
+                        {"isolated", isolate->isChecked()}});
+        report(result);
+        refresh();
+        return;
+      }
+      changeChain([&](QVariantList &list) {
+        list.append(
+            QVariantMap{{"key", QUuid::createUuid().toString(QUuid::Id128)},
+                        {"plugin", d},
+                        {"isolated", isolate->isChecked()}});
+      });
+    });
+    connect(openEffect, &QPushButton::clicked, this,
+            [this] { editor(targetSlot(), chain->currentRow()); });
+    connect(removeEffect, &QPushButton::clicked, this, [this] {
+      const int i = chain->currentRow();
+      changeChain([i](QVariantList &list) {
+        if (i >= 0 && i < list.size())
+          list.removeAt(i);
+      });
+    });
+    connect(up, &QPushButton::clicked, this, [this] {
+      const int i = chain->currentRow();
+      changeChain([i](QVariantList &list) {
+        if (i > 0 && i < list.size())
+          list.swapItemsAt(i, i - 1);
+      });
+      chain->setCurrentRow(i - 1);
+    });
+    connect(down, &QPushButton::clicked, this, [this] {
+      const int i = chain->currentRow();
+      changeChain([i](QVariantList &list) {
+        if (i >= 0 && i + 1 < list.size())
+          list.swapItemsAt(i, i + 1);
+      });
+      chain->setCurrentRow(i + 1);
+    });
+    connect(chain, &QListWidget::currentRowChanged, this, [this] {
+      if (!updating) {
+        const int i = chain->currentRow();
+        removeEffect->setEnabled(i >= 0);
+        openEffect->setEnabled(i >= 0);
+        up->setEnabled(i > 0);
+        down->setEnabled(i >= 0 && i + 1 < chain->count());
+      }
+    });
+    connect(chain, &QListWidget::itemChanged, this,
+            [this](QListWidgetItem *item) {
+              if (updating)
+                return;
+              const int i = chain->row(item);
+              const bool bypass = item->checkState() != Qt::Checked;
+              editUnit(targetSlot(), i,
+                       [bypass](QVariantMap &u) { u["bypass"] = bypass; });
+            });
+    connect(&watch, &QTimer::timeout, this, [this] {
+      auto current = mscore && mscore->currentScore()
+                         ? mscore->currentScore()->masterScore()
+                         : nullptr;
+      if (current != score) {
+        score = current;
+        channels.clear();
+        QSignalBlocker block(parts);
+        parts->clear();
+        if (score)
+          for (const auto &mm : score->masterScore()->midiMapping()) {
+            auto c = const_cast<Channel *>(mm.articulation());
+            if (!c || channels.contains(c))
+              continue;
+            channels.append(c);
+            parts->addItem(mm.part()->partName() + " · " + c->name());
+          }
+        removed.clear();
+        savePending = false;
+        for (auto w : findChildren<QDialog *>("kumoVstParameters"))
+          w->close();
+        refresh();
+      }
+      persistEdits();
+      if (backend() && (backend()->revision() != lastRevision ||
+                        backend()->problems().join("\n") != lastProblems)) {
+        lastProblems = backend()->problems().join("\n");
+        lastRevision = backend()->revision();
+        refresh();
+      }
+    });
+    watch.start(500);
+    connect(qApp, &QCoreApplication::aboutToQuit, this, [this] {
+      if (scanner.state() != QProcess::NotRunning) {
+        scanner.kill();
+        scanner.waitForFinished(2000);
+      }
+      persistEdits();
+    });
+    resize(420, 600);
+  }
+  void select(Channel *c) {
+    auto current = mscore && mscore->currentScore()
+                       ? mscore->currentScore()->masterScore()
+                       : nullptr;
+    if (current != score) {
+      score = current;
+      channels.clear();
+      QSignalBlocker block(parts);
+      parts->clear();
+      if (score)
+        for (const auto &mm : score->masterScore()->midiMapping()) {
+          auto item = const_cast<Channel *>(mm.articulation());
+          if (!item || channels.contains(item))
+            continue;
+          channels.append(item);
+          parts->addItem(mm.part()->partName() + " · " + item->name());
+        }
+      removed.clear();
+      savePending = false;
+    }
+    if (c) {
+      const int i = channels.indexOf(c);
+      if (i >= 0)
+        parts->setCurrentIndex(i);
+    }
+    refresh();
+    show();
+    raise();
+  }
+};
+QPointer<Panel> panel;
+} // namespace
+void routeVstChannels(MasterSynthesizer *master, Score *score) {
+  auto engine = master ? static_cast<VstSynth *>(master->synthesizer("KumoVST"))
+                       : nullptr;
+  if (!engine)
+    return;
+  QVector<int> banks(256, 0);
+  if (score)
+    for (const auto &m : score->masterScore()->midiMapping()) {
+      auto c = m.articulation();
+      if (c && c->synti() == "KumoVST" && c->channel() < banks.size())
+        banks[c->channel()] = c->bank();
+    }
+  engine->setRouting(banks);
+}
+void restoreVstForScore(Score *score) {
+  if (auto engine = backend()) {
+    if (score)
+      engine->setState(
+          score->masterScore()->synthesizerState().group("KumoVST"));
+    else
+      engine->clearState();
+    routeVstChannels(synti, score);
+  }
+}
+QVariantMap applyVstConfiguration(Score *score, const QVariantMap &value) {
+  if (!personalFeaturesEnabled() || !backend())
+    return {{"error", QObject::tr("请开启个人扩展功能后使用音源与效果。")}};
+  if (!score)
+    return {{"error", QObject::tr("请先打开乐谱。")}};
+  for (auto widget : QApplication::topLevelWidgets())
+    if (widget->objectName() == "kumoVstParameters")
+      widget->close();
+  score = score->masterScore();
+  if (seq) {
+    seq->stopWait();
+    seq->waitForStoppedRendering();
+  }
+  auto state = score->synthesizerState();
+  if (state.isDefault())
+    state = synti->state();
+  auto next = withConfiguration(state, value);
+  score->startCmd();
+  score->undo(new ChangeVstState(score, next));
+  score->setInstrumentsChanged(true);
+  score->endCmd();
+  auto problems = backend()->problems();
+  return problems.isEmpty()
+             ? QVariantMap{{"message", QObject::tr("已更新音源与效果；Ctrl+Z "
+                                                   "撤销，保存乐谱后保留。")}}
+             : QVariantMap{{"message", problems.join('\n')}};
+}
+QVariantMap assignVstInstrument(Score *score, Channel *channel,
+                                const QVariantMap &descriptor, bool isolated,
+                                const QVariantMap &initialEffect,
+                                const QVariantMap &copiedInstance) {
+  if (!score || !channel || !backend() || !personalFeaturesEnabled())
+    return {{"error", QObject::tr("请先打开乐谱并选择乐器。")}};
+  if (!descriptor["instrument"].toBool())
+    return {
+        {"error", QObject::tr("请选择乐器音源；效果器可添加在下方效果链。")}};
+  for (auto widget : QApplication::topLevelWidgets())
+    if (widget->objectName() == "kumoVstParameters")
+      widget->close();
+  if (seq) {
+    seq->stopWait();
+    seq->waitForStoppedRendering();
+  }
+  score = score->masterScore();
+  auto config = backend()->configuration();
+  auto instances = config["slots"].toList();
+  int id = 1;
+  for (const auto &v : instances)
+    id = qMax(id, v.toMap()["id"].toInt() + 1);
+  if (id > 16383)
+    return {{"error", QObject::tr("这个乐谱中的音源实例数量已达到上限。")}};
+  QVariantMap original{{"synti", channel->synti()},
+                       {"bank", channel->bank()},
+                       {"program", channel->program()},
+                       {"userBankController", channel->userBankController()}};
+  QVariantList effects;
+  if (channel->synti() == "KumoVST")
+    for (const auto &v : instances)
+      if (v.toMap()["id"].toInt() == channel->bank()) {
+        original = v.toMap()["originalPatch"].toMap();
+        effects = v.toMap()["effects"].toList();
+      }
+  if (!copiedInstance.isEmpty())
+    effects = copiedInstance["effects"].toList();
+  if (!initialEffect.isEmpty())
+    effects.append(initialEffect);
+  if (channel->synti() == "KumoVST") {
+    bool shared = false;
+    for (const auto &m : score->masterScore()->midiMapping())
+      if (m.articulation() != channel &&
+          m.articulation()->synti() == "KumoVST" &&
+          m.articulation()->bank() == channel->bank())
+        shared = true;
+    if (!shared)
+      for (int i = instances.size() - 1; i >= 0; --i)
+        if (instances[i].toMap()["id"].toInt() == channel->bank())
+          instances.removeAt(i);
+  }
+  instances.append(QVariantMap{
+      {"id", id},
+      {"label", descriptor["name"]},
+      {"originalPatch", original},
+      {"effects", effects},
+      {"source", copiedInstance.isEmpty() ? QVariantMap{{"plugin", descriptor},
+                                                        {"isolated", isolated}}
+                                          : copiedInstance["source"].toMap()}});
+  config["slots"] = instances;
+  config["schema"] = 1;
+  auto state = score->synthesizerState();
+  if (state.isDefault())
+    state = synti->state();
+  MidiPatch patch;
+  patch.synti = "KumoVST";
+  patch.bank = id;
+  patch.prog = 0;
+  patch.drum = false;
+  patch.sfid = 0;
+  patch.name = descriptor["name"].toString();
+  score->startCmd();
+  score->undo(new ChangeVstState(score, withConfiguration(state, config)));
+  score->undo(new ChangePatch(score, channel, &patch));
+  score->undo(new SetUserBankController(channel, true));
+  score->setInstrumentsChanged(true);
+  score->endCmd();
+  routeVstChannels(synti, score);
+  if (seq)
+    seq->initInstruments();
+  return {{"message",
+           backend()->problems().isEmpty()
+               ? QObject::tr("已采用 %1；打开音源可选择预设，保存乐谱后保留。")
+                     .arg(patch.name)
+               : backend()->problems().join('\n')}};
+}
+QVariantMap copyVstInstrument(Score *score, Channel *channel, int bank) {
+  if (!backend())
+    return {{"error", QObject::tr("请先打开音源与效果。")}};
+  for (const auto &v : backend()->configuration()["slots"].toList()) {
+    auto slot = v.toMap();
+    if (slot["id"].toInt() != bank)
+      continue;
+    auto source = slot["source"].toMap();
+    return assignVstInstrument(score, channel, source["plugin"].toMap(),
+                               source["isolated"].toBool(), {}, slot);
+  }
+  return {{"error", QObject::tr("请重新选择这份音源。")}};
+}
+void saveVstEdits(Score *score) {
+  if (!score || !mscore || !mscore->currentScore() ||
+      mscore->currentScore()->masterScore() != score->masterScore() ||
+      !personalFeaturesEnabled() || !backend())
+    return;
+  const auto value = backend()->configuration();
+  if (value.isEmpty())
+    return;
+  const auto bytes = QString::fromUtf8(
+      QJsonDocument::fromVariant(value).toJson(QJsonDocument::Compact));
+  const auto group = score->masterScore()->synthesizerState().group("KumoVST");
+  if (group.empty() || group.front().data != bytes)
+    applyVstConfiguration(score, value);
+}
+void showVstPanel(Channel *channel) {
+  if (!personalFeaturesEnabled() || !mscore)
+    return;
+  if (!panel) {
+    panel = new Panel(mscore);
+    const bool restored = mscore->restoreDockWidget(panel);
+    if (!restored)
+      mscore->addDockWidget(Qt::RightDockWidgetArea, panel);
+    for (auto dock : mscore->findChildren<QDockWidget *>())
+      if (!restored && dock != panel && dock->isVisible() &&
+          !dock->isFloating() &&
+          mscore->dockWidgetArea(dock) == Qt::RightDockWidgetArea) {
+        mscore->tabifyDockWidget(dock, panel);
+        break;
+      }
+    auto action = mscore->findChild<QAction *>("kumo-vst");
+    if (action)
+      QObject::connect(panel, &QDockWidget::visibilityChanged, action,
+                       [action](bool shown) {
+                         QSignalBlocker b(action);
+                         action->setChecked(shown);
+                       });
+  }
+  panel->select(channel);
+}
+void addVstPanelAction(QMenu *menu) {
+  if (!menu || !mscore)
+    return;
+  auto action = mscore->findChild<QAction *>("kumo-vst");
+  if (!action) {
+    action = new QAction(QObject::tr("音源与效果（VST）"), mscore);
+    action->setObjectName("kumo-vst");
+    action->setCheckable(true);
+    action->setIcon(personalToolIcon("mixer"));
+    markPersonalAction(action);
+    Workspace::addActionAndString(action, "kumo-vst");
+    QObject::connect(action, &QAction::triggered, mscore, [action](bool shown) {
+      if (shown)
+        showVstPanel();
+      else if (panel)
+        panel->hide();
+      QSignalBlocker b(action);
+      action->setChecked(panel && panel->isVisible());
+    });
+  }
+  if (!menu->actions().contains(action))
+    menu->addAction(action);
+}
+} // namespace Ms
+#else
+namespace Ms {
+void addVstPanelAction(QMenu *) {}
+void showVstPanel(Channel *) {}
+void restoreVstForScore(Score *) {}
+void saveVstEdits(Score *) {}
+QVariantMap copyVstInstrument(Score *, Channel *, int) { return {}; }
+void routeVstChannels(MasterSynthesizer *, Score *) {}
+QVariantMap applyVstConfiguration(Score *, const QVariantMap &) {
+  return {{"error", QStringLiteral("此平台尚未提供 VST。")}};
+}
+QVariantMap assignVstInstrument(Score *, Channel *, const QVariantMap &, bool,
+                                const QVariantMap &, const QVariantMap &) {
+  return {{"error", QStringLiteral("此平台尚未提供 VST。")}};
+}
+} // namespace Ms
+#endif

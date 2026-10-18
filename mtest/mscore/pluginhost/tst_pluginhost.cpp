@@ -19,6 +19,12 @@
 #include "personalbranding.h"
 #include "mscore/workflow/builtinpanels.h"
 #include "mscore/workflow/systemlocks.h"
+#include "mscore/workflow/vstpanel.h"
+#include "audio/midi/msynthesizer.h"
+#include "mscore/synthcontrol.h"
+#ifdef KUMO_VST_HOST
+#include "audio/vst/vstsynth.h"
+#endif
 #include "mscore/debuglog.h"
 #include "mscore/pianoroll/pianoroll.h"
 #include "libmscore/layoutbreak.h"
@@ -476,9 +482,12 @@ class TestPluginHost : public QObject {
             area->resize(520,720);QTest::qWait(100);QVERIFY(bar->width()<=area->width());QVERIFY(bar->grab().save(output.filePath("roll-writing-narrow-067.png")));canvas->setFocus();QTest::keyClick(canvas,Qt::Key_Escape);QTRY_VERIFY(!toggle->isChecked());QVERIFY(!rollWritingAction()->isChecked());editor->findChild<QAction*>("editorArea/restore/performanceNotesArea")->trigger();
       }
 #ifdef Q_MOC_RUN
+      void vstNativeSelectionUndoAndSave();
+      void vstDisabledRetainsStateAndUsesSF2();
       void systemLocksUndoAndFile();
       void upstreamLiveTranslationAndPreferences();
 #else
+      #include "vst_tests.inc"
       #include "system_lock_tests.inc"
 #endif
       void rollLocalScopeCost(){

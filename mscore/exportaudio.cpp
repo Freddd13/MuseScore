@@ -35,6 +35,9 @@
 #include "libmscore/part.h"
 #include "libmscore/mscore.h"
 #include "audio/midi/msynthesizer.h"
+#include "workflow/vstpanel.h"
+#include "libmscore/repeatlist.h"
+#include "libmscore/tempo.h"
 #include "musescore.h"
 #include "preferences.h"
 
@@ -74,13 +77,14 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
                   }
             }
 
-      MasterSynthesizer* synth = synthesizerFactory();
+      MasterSynthesizer* synth = synthesizerFactory(true);
       synth->init();
       int sampleRate = preferences.getInt(PREF_EXPORT_AUDIO_SAMPLERATE);
       synth->setSampleRate(sampleRate);
 
       const SynthesizerState state = useCurrentSynthesizerState ? mscore->synthesizerState() : score->synthesizerState();
       const bool setStateOk = synth->setState(state);
+      routeVstChannels(synth,score);
 
       if (!setStateOk || !synth->hasSoundFontsLoaded())
             synth->init(); // re-initialize master synthesizer with default settings
@@ -112,8 +116,15 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
       double gain = 1.0;
       EventMap::const_iterator endPos = events.cend();
       --endPos;
-      const int et = (PlaybackTiming::time(score, endPos->first) + preRoll + 1) * MScore::sampleRate;
-      const int maxEndTime = (PlaybackTiming::time(score, endPos->first) + preRoll + 3) * MScore::sampleRate;
+      const int vstLatency=synth->processingLatency();
+      const int et = (PlaybackTiming::time(score, endPos->first) + preRoll + 1) * MScore::sampleRate+vstLatency;
+      const int maxEndTime = (PlaybackTiming::time(score, endPos->first) + preRoll + 3) * MScore::sampleRate+vstLatency+int(qMin<qint64>(30*MScore::sampleRate,qMax<qint64>(0,synth->processingTail())));
+      auto updateClock=[&](int frame) {
+            const int u=score->utime2utick(qMax(0.,double(frame)/MScore::sampleRate-preRoll));
+            const int t=score->repeatList().utick2tick(u);
+            const auto signature=score->sigmap()->timesig(Fraction::fromTicks(t)).nominal();
+            synth->setPlaybackContext(frame,double(u)/DIVISION,score->tempomap()->tempo(t)*score->tempomap()->relTempo()*60,true,signature.numerator(),signature.denominator());
+            };
 
       bool cancelled = false;
       int passes = preferences.getBool(PREF_EXPORT_AUDIO_NORMALIZE) ? 2 : 1;
@@ -166,6 +177,7 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
                               break;
                         int n = f - playTime;
                         if (n) {
+                              updateClock(playTime);
                               synth->process(n, p);
                               p += 2 * n;
                               }
@@ -182,6 +194,7 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
                               }
                         }
                   if (frames) {
+                        updateClock(playTime);
                         synth->process(frames, p);
                         playTime += frames;
                         }
@@ -197,8 +210,10 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
                               peak = qMax(peak, qAbs(buffer[i]));
                               }
                         }
-                  if (pass == (passes - 1))
-                        device->write(reinterpret_cast<const char*>(buffer), 2 * FRAMES * sizeof(float));
+                  if (pass == (passes - 1)) {
+                        const int start=qBound(0,vstLatency-(endTime-int(FRAMES)),int(FRAMES));
+                        if(start<int(FRAMES))device->write(reinterpret_cast<const char*>(buffer+start*2),2*(FRAMES-start)*sizeof(float));
+                        }
                   playTime = endTime;
                   if (updateProgress) {
                         // normalize to [0, 1] range
@@ -336,11 +351,12 @@ bool MuseScore::saveAudio(Score* score, const QString& name)
       if(events.size() == 0)
             return false;
 
-      MasterSynthesizer* synth = synthesizerFactory();
+      MasterSynthesizer* synth = synthesizerFactory(true);
       synth->init();
       int sampleRate = preferences.getInt(PREF_EXPORT_AUDIO_SAMPLERATE);
       synth->setSampleRate(sampleRate);
       bool r = synth->setState(score->synthesizerState());
+      routeVstChannels(synth,score);
       if (!r)
             synth->init();
 

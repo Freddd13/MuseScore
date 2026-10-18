@@ -22,6 +22,7 @@
 #include "globals.h"
 #include "instrdialog.h"
 #include "musescore.h"
+#include "workflow/vstpanel.h"
 #include "performanceeditor/performanceeditor.h"
 #include "newwizard.h"
 #include "palette.h"
@@ -518,6 +519,7 @@ bool MuseScore::saveFile()
 bool MuseScore::saveFile(MasterScore* score)
       {
       PerformanceEditor::flushForScore(score);
+      saveVstEdits(score);
       if (score == 0)
             return false;
       if (score->created()) {
@@ -984,8 +986,11 @@ MasterScore* MuseScore::getNewFile()
       if (!copyright.isEmpty())
             score->setMetaTag("copyright", copyright);
 
-      if (synti)
-            score->setSynthesizerState(synti->state());
+      if (synti) {
+            auto state=synti->state();
+            for(auto it=state.begin();it!=state.end();)if(it->name()=="KumoVST")it=state.erase(it);else ++it;
+            score->setSynthesizerState(state);
+            }
 
       // Call this even if synti doesn't exist - we need to rebuild either way
       score->rebuildAndUpdateExpressive(MuseScore::synthesizer("Fluid"));
@@ -1902,6 +1907,7 @@ void MuseScore::printFile()
 bool MuseScore::saveAs(Score* cs_, bool saveCopy, const QString& path, const QString& ext, SaveReplacePolicy* replacePolicy)
       {
       PerformanceEditor::flushForScore(cs_);
+      saveVstEdits(cs_);
       bool rv = false;
       QString suffix = "." + ext;
       QString fn(path);
@@ -2312,8 +2318,11 @@ Score::FileError readScore(MasterScore* score, QString name, bool ignoreVersionE
       score->setImportedFilePath(name);
 
       // Set the default synthesizer state before we read
-      if (synti)
-            score->setSynthesizerState(synti->state());
+      if (synti) {
+            auto state=synti->state();
+            for(auto it=state.begin();it!=state.end();)if(it->name()=="KumoVST")it=state.erase(it);else ++it;
+            score->setSynthesizerState(state);
+            }
 
       auto read = [](MasterScore* score, const QString& name, bool ignoreVersionError, bool imported = false)->Score::FileError {
             Score::FileError rv = score->loadMsc(name, ignoreVersionError);

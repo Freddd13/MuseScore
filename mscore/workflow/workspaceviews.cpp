@@ -264,6 +264,8 @@ QIcon personalToolIcon(const QString &key) {
     p.setPen(QPen(accent, 1.5));
     p.drawRoundedRect(QRectF(11, 13, 9, 8), 1, 1);
     p.drawArc(QRectF(13, 8, 5, 9), 0, 180 * 16);
+  } else if (key=="kumo-vst") {
+    for(int x:{6,12,18}){p.drawLine(x,4,x,20);p.fillRect(QRectF(x-2,x==12?6:13,4,4),x==12?accent:ink);}
   } else if (key == "harmony-assistant") {
     for (int y : {8, 12, 16}) {
       p.setBrush(ink);

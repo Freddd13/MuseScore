@@ -30,6 +30,8 @@
 #include "libmscore/undo.h"
 #include "synthcontrol.h"
 #include "audio/midi/msynthesizer.h"
+#include "mscore/workflow/vstpanel.h"
+#include "mscore/workflow/featuregate.h"
 #include "preferences.h"
 
 namespace Ms {
@@ -44,6 +46,14 @@ MixerDetails::MixerDetails(QWidget *parent) :
       mutePerVoiceHolder(nullptr)
       {
       setupUi(this);
+#ifdef KUMO_VST_HOST
+      if (personalFeaturesEnabled()) {
+            vstButton=new QPushButton(tr("音源与效果…"),this);
+            vstButton->setToolTip(tr("为当前乐器选择 VST 音源，或设置串联效果。"));
+            gridLayout_4->addWidget(vstButton,1,0,1,2);
+            connect(vstButton,&QPushButton::clicked,this,[this]{showVstPanel(_mti?_mti->focusedChan():nullptr);});
+            }
+#endif
 
       connect(partNameLineEdit,    SIGNAL(editingFinished()),              SLOT(partNameChanged()));
       connect(trackColorLabel,     SIGNAL(colorChanged(QColor)),           SLOT(trackColorChanged(QColor)));
@@ -81,6 +91,7 @@ void MixerDetails::setTrack(MixerTrackItemPtr track)
 
 void MixerDetails::updateFromTrack()
       {
+      if(vstButton)vstButton->setEnabled(bool(_mti));
       if (mutePerVoiceHolder) {
             mutePerVoiceHolder->deleteLater();
             mutePerVoiceHolder = nullptr;
@@ -497,12 +508,18 @@ void MixerDetails::patchChanged(int n)
       Part* part = _mti->midiMap()->part();
       Channel* channel = _mti->midiMap()->articulation();
       Score* score = part->score();
+      if(score && p->synti=="KumoVST" && (channel->synti()!=p->synti||channel->bank()!=p->bank)) {
+            const auto result=copyVstInstrument(score,channel,p->bank);
+            if(result.contains("error"))mscore->showMessage(result["error"].toString(),6000);
+            return;
+            }
       if (score) {
             score->startCmd();
             score->undo(new ChangePatch(score, channel, p));
             score->undo(new SetUserBankController(channel, true));
             score->setLayoutAll();
             score->endCmd();
+            routeVstChannels(synti,score);
             }
       }
 

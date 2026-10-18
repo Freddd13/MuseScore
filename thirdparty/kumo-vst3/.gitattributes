@@ -1,0 +1,2 @@
+# Preserve the upstream bytes, including whitespace, for checksum verification.
+* -text -whitespace

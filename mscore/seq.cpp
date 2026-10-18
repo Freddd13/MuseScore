@@ -36,6 +36,7 @@
 #include "synthcontrol.h"
 
 #include "audio/midi/msynthesizer.h"
+#include "workflow/vstpanel.h"
 
 #ifdef HAS_AUDIOFILE
 #include "audiofile/audiofile.h"
@@ -288,6 +289,7 @@ void Seq::setScoreView(ScoreView* v)
 
       playlistChanged = true;
       _synti->reset();
+      restoreVstForScore(cs);
       if (cs) {
             initInstruments();
             connect(cs, SIGNAL(playlistChanged()), this, SLOT(setPlaylistChanged()));
@@ -1195,7 +1197,16 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
       float* p = buffer;
 
       processMessages();
-      ReferenceAudioPeriod referencePeriod(buffer,framesPerPeriod,playFrame,state==Transport::PLAY && !inCountIn);
+      if (cs) {
+            const int utick=getCurTick();
+            const int tick=cs->repeatList().utick2tick(qMax(0,utick));
+            const auto signature=cs->sigmap()->timesig(Fraction::fromTicks(tick)).nominal();
+            _synti->setPlaybackContext(playFrame,double(utick)/DIVISION,
+                  cs->tempomap()->tempo(tick)*cs->tempomap()->relTempo()*60,
+                  state==Transport::PLAY&&!inCountIn,signature.numerator(),signature.denominator());
+            }
+      else _synti->setPlaybackContext(0,0,120,false);
+      ReferenceAudioPeriod referencePeriod(buffer,framesPerPeriod,playFrame-_synti->processingLatency(),state==Transport::PLAY && !inCountIn);
 
       updateIndependentMetronomeFollowState();
 

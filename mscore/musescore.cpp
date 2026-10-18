@@ -97,6 +97,10 @@
 #include "audio/midi/event.h"
 #include "audio/midi/fluid/fluid.h"
 #include "audio/midi/msynthesizer.h"
+#include "workflow/vstpanel.h"
+#ifdef KUMO_VST_HOST
+#include "audio/vst/vstsynth.h"
+#endif
 #include "audio/midi/synthesizer.h"
 #include "audio/midi/synthesizergui.h"
 
@@ -756,7 +760,7 @@ void MuseScore::populateAlternativeOperations()
             }
       const auto oldTools=tools->actions();tools->clear();
       for(auto action:oldTools)if(action->parent()==tools)delete action;
-      for (const char* name : {"performance-editor", "performance-score-band", "harmony-assistant", "reference-player", "performance-expression", "kumo-spectrum", "arrangement-suggestions"}) {
+      for (const char* name : {"performance-editor", "performance-score-band", "harmony-assistant", "reference-player", "performance-expression", "kumo-spectrum", "arrangement-suggestions", "kumo-vst"}) {
             auto action = findChild<QAction*>(name);
 #ifdef SCRIPT_INTERFACE
             if (!action && QStringList{"harmony-assistant", "reference-player", "performance-expression", "arrangement-suggestions"}.contains(name)) action = getAction(name);
@@ -2040,6 +2044,7 @@ MuseScore::MuseScore()
       addReferencePanelAction(menuView);
       addBuiltinPanelActions(menuView);
 #endif
+      addVstPanelAction(menuView);
       addWorkspaceViews(menuView);
       populateAlternativeOperations();
 
@@ -2891,6 +2896,7 @@ void MuseScore::updateMenus()
 #ifdef SCRIPT_INTERFACE
       if (!menuView->actions().contains(rollWritingAction())) menuView->addAction(rollWritingAction());
 #endif
+      addVstPanelAction(menuView);
       addWorkspaceViews(menuView);
       applyPersonalFeatureVisibility(this);
       setMenuTitles();
@@ -4666,12 +4672,17 @@ static void mscoreMessageHandler(QtMsgType type, const QMessageLogContext &conte
 //    create and initialize the master synthesizer
 //---------------------------------------------------------
 
-MasterSynthesizer* synthesizerFactory()
+MasterSynthesizer* synthesizerFactory(bool offline)
       {
       MasterSynthesizer* ms = new MasterSynthesizer();
 
       FluidS::Fluid* fluid = new FluidS::Fluid();
       ms->registerSynthesizer(fluid);
+#ifdef KUMO_VST_HOST
+      ms->registerSynthesizer(new VstSynth(offline,fluid,personalFeaturesEnabled()));
+#else
+      Q_UNUSED(offline);
+#endif
 
 #ifdef AEOLUS
       ms->registerSynthesizer(::createAeolus());
@@ -8275,12 +8286,13 @@ bool MuseScore::saveMp3(Score* score, QIODevice* device, bool& wasCanceled)
 
       int bufferSize   = exporter.getOutBufferSize();
       uchar* bufferOut = new uchar[bufferSize];
-      MasterSynthesizer* synth = synthesizerFactory();
+      MasterSynthesizer* synth = synthesizerFactory(true);
       synth->init();
       synth->setSampleRate(sampleRate);
 
       const SynthesizerState state = useCurrentSynthesizerState ? mscore->synthesizerState() : score->synthesizerState();
       const bool setStateOk = synth->setState(state);
+      routeVstChannels(synth,score);
 
       if (!setStateOk || !synth->hasSoundFontsLoaded()) {
             synth->init(); // re-initialize master synthesizer with default settings

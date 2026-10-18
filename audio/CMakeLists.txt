@@ -50,3 +50,11 @@ target_link_libraries (${MODULE}
 if (BUILD_PCH)
     target_use_pch(${MODULE})
 endif (BUILD_PCH)
+
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+ add_subdirectory(vst)
+ add_dependencies(audio MuseScoreVstHost)
+ target_sources(audio PRIVATE vst/vstsynth.cpp vst/vstsynth.h vst/fluidsource.cpp vst/fluidsource.h)
+ target_link_libraries(audio kumo_vst)
+ target_compile_definitions(audio PUBLIC KUMO_VST_HOST)
+endif()
