@@ -5,7 +5,8 @@
 - 外部乐谱字体可在元数据中声明专用波浪滑音字形；未声明或字形无效时保持原有颤音波形，内置字体行为保持。
 - 声明后，原生Glissando按实际波形计算绘制与外框；不足一个完整字形时仅压缩水平方向，保持高度并适配两端。颤音、直滑音及音乐内容不变。
 - 独立检出完成 Release 主程序构建、完整安装与7项原生测试；缺少完整安装数据的裸运行错误已定位为工作区文件缺失。自制钢琴同谱对照仅声明后的波浪滑音变化，Control、直线、颤音及其它SVG元素保持；mf、8/8va与踏板尺寸保持，用户谱只读。实际打印与更多缩放未验收。
-- 路径为 libmscore/sym.*、glissando.cpp 与独立 mtest/mscore/fontengraving；说明见 docs/font-engraving.md。基线3ec4a2db7，提交主题 `Support opt-in external font wavy glissando glyphs`；提交定位 personal-v0.71.0，与0.70功能整合另记。
+- 路径为 libmscore/sym.*、glissando.cpp 与独立 mtest/mscore/fontengraving；说明见 docs/font-engraving.md。基线3ec4a2db7，功能提交4a4ef1a5e，整合提交3ff1a61d5保留0.70的d24539071；提交主题 `Support opt-in external font wavy glissando glyphs`，发布定位 personal-v0.71.0。
+- 整合0.70后重新构建、完整安装并重跑7项原生用例及字体/用户谱尺寸验证，均保持通过；隔离宿主SHA256 be8c3894c01256fbe039085981dbd5ccd26da8e0a7b80f051e81b15be2878d8b。没有替换用户正在使用的安装程序。
 
 ## 0.70.0 — 2026-10-19
 

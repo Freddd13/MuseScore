@@ -1,6 +1,6 @@
 # MuseScore Evolution 个人功能说明
 
-当前个人版本：**0.70.0** · Kumo branch / Freddd13。提交定位：`personal-v0.70.0`。
+当前个人版本：**0.71.0** · Kumo branch / Freddd13。提交定位：`personal-v0.71.0`。
 
 先按下面的任务找到入口。每章有完整操作例子、按钮说明、保存和撤销方法。“帮助 → 个人功能说明”可以在软件里直接阅读。
 

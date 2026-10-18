@@ -15,3 +15,5 @@
 字体工程的同一 Study 轮廓用0.480无声明与0.490有声明对照，Control逐像素一致；Study中仅波浪滑音路径改变，直线、颤音和其它SVG元素保持。自制钢琴谱包含跨谱表、密集音与跨行段。实际谱面尺寸复查 mf、8、8va、Ped.及星号均与0.480相同；用户原MSCZ只读。纸面打印和更多宿主缩放仍单独验收。
 
 源码：`libmscore/sym.*`、`libmscore/glissando.cpp`；独立测试入口 `mtest/mscore/fontengraving/`，用例 `mtest/libmscore/spanners/private_font_glissando_tests.inc`。构建目标 `tst_fontengraving` 位于嵌套 mtest 工程，链接完整应用测试工具。版本定位 `personal-v0.71.0`，基线 `3ec4a2db7`，提交主题 `Support opt-in external font wavy glissando glyphs`。
+
+功能提交`4a4ef1a5e`，整合`3ff1a61d5`包含0.70的`d24539071`。整合后重新Release构建、完整安装、7项原生测试及同谱导出均通过。最终隔离宿主SHA256 `be8c3894c01256fbe039085981dbd5ccd26da8e0a7b80f051e81b15be2878d8b`。字体项目中的最终证据为`dist/native-gliss-133/`、`native-size-134/`、`native-size-audit-135/`，用户谱副本仍9页。原安装程序保持。
