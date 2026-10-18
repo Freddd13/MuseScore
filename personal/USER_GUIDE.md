@@ -636,3 +636,10 @@ Windows 安装需要同 SDK 的 QtWebSockets QML 模块和 `Qt5WebSockets.dll`�
 两张可直接看的对照图和设计记录见 [EX修订](../../../mcp-musescore/fonts/kumo-engrave/EX_REDRAW.md)。无需先安装/打印才给反馈。需要试用时，取 `fonts/kumo-engrave/dist/v03/kumo-engrave-0.3.0-prototypes.zip`，将 `ex/Kumo Piano EX` 文件夹复制到私有Score Fonts目录，重启，在独立副本 **格式→样式→乐谱** 选该音乐字体，Text继续选内置 **Leland Text**，先关闭推荐样式/自动优化。MCP和skill无需重装。
 
 全音符advance从373改为438单位，其余字宽与普通头接杆点保持；字形改变可能影响局部避让。未同时改梁、干长、间距和页面参数，未改原谱/全局字体或本体代码。纸面、更多共享头/二度及组合符号仍待专项，本轮尚未获得新的审美认可。原生验证固定personal 0.21；配套改名EX Text仍不作默认搭配。源码提交 `Freddd13/mcp-musescore@23eae84d7bff188f1077a9fa987ec10e80fd06b1`，独立字体版本0.3.0，不改变个人软件版本。
+
+
+## 字体候选评审与实际官谱小样（2026-10-18）
+
+用户也否定了Kumo Piano EX 0.3；此前0.2/0.3均不再推荐作为完成品。字体线改以用户给出的Animenz PDF实际字形作参照，已只读渲染Sincerely中的7类符号，制作本机轮廓可行性小样Kumo PDF Study，并用personal 0.21/内置Leland Text原生输出自制fixture；它不是原版完整字体或新发布包。
+
+对照图和限制见 [PDF字形研究](../../../mcp-musescore/fonts/kumo-engrave/PDF_REFERENCE_STUDY.md)。用户可以直接看图，不必安装。小样的轮廓数据、参考图与OTF只留本机忽略目录；不加入现有公开字体包。未改本体、当前乐谱、原PDF/MSCZ或全局字体配置。原始曲线/字距、更多符号和全部锚点尚未恢复；尚未获得本轮审美认可。研究工具与记录提交 `Freddd13/mcp-musescore@a8d56c4b70d13cf2975048a6fd9d79c50da432cb`。
