@@ -606,3 +606,15 @@ sf、八度线和音符括号仍用软件原有操作；速度近似等号与swi
 本轮repair_current宿主SHA59e245e0导入测试谱时退出码3221226356；旧0.440字体及空私有字体目录也复现，尚未定位原因，未将当前宿主记作通过。故本包当前兼容证据以固定宿主为准。失败证据与显示路径发现已同步净书任务，本轮只追加用户说明，未改本体代码或用户设置。
 
 源码 `Freddd13/mcp-musescore@02cee88`；[安装说明](../../../mcp-musescore/fonts/kumo-engrave/README.md)、[来源与验证边界](../../../mcp-musescore/fonts/kumo-engrave/OBSERVED_SYMBOLS.md)。
+
+## 官谱字体研究0.460：32分下符尾、尖音保持与曲线改善（2026-10-19）
+
+本机小样推进到112个处理码位。按官谱实际对象组合补齐32分下符尾/内部下符尾，以及上下marcato-tenuto（尖音＋保持音）。正常32分下音符现在直接使用新字形，不需要输入历史U+F706备选来手拼；组合奏法从原有奏法记号操作。另35个旧字形换为通过原图核对的曲线/直线，5个错映射拒绝并保留原轮廓。
+
+本机包 `mcp-musescore/fonts/kumo-engrave/dist/kumo-score-study-0.460-local.zip`。退出Evolution，成对更换Score Fonts路径下Kumo Score Study和Kumo Score Study Text两个完整文件夹，重启；在独立谱子副本的 **格式→样式→乐谱** 同时选两个家族，保持其它参数。无需重装MCP、skill或Windows字体。未改部分继续完整保留Leland，音乐502字、Text266字。
+
+39项原页来源/派生对最终OTF比较通过，未缩放尺寸差≤2像素；86个字形含三次曲线。固定0.21宿主SHA7581cb76完成常用/扩展/新角色、五种brace跨度、波线、112字图录和十组力度，已查看原生上下奏法和用户谱9页联系表。Control/Study均9页，用户原件及除两项字体外的XML/归档附件保持。当前repair_current仍为上轮失败SHA59e245e0，未重复同一失败测试、未宣称通过。
+
+全目录仍146份PDF；A064的7,299路径全部纳入复核计数，补回128个可见对象，864组24张联系表已浏览；10项弧线情境的孤立渲染异常单列。全目录角色和剩余映射仍未结案，不将数量当作全目标完成证明。本轮仅追加用户说明，不改本体代码或用户设置。
+
+源码 `Freddd13/mcp-musescore@9487cef`；[安装说明](../../../mcp-musescore/fonts/kumo-engrave/README.md)、[来源与验证边界](../../../mcp-musescore/fonts/kumo-engrave/CURVE_REFINEMENT.md)。
