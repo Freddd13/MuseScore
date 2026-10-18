@@ -240,8 +240,8 @@ MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	191	�
 编辑器对应	mscore/performanceeditor/workflowlanes.cpp	void WorkflowLanes::paintEvent(	69	可见音轨、对应与数值对比	mtest/mscore/p1native;../../muse3_plugins/Repairs/tests/tst_referenceproject.cpp
 共同项目	mscore/workflow/workflowcontext.h	class WorkflowContext	8	乐谱归属、结果更新和操作反馈	mtest/mscore/p1native;../../muse3_plugins/Repairs/tests/tst_referenceproject.cpp
 分段方案	libmscore/regionalvariants.cpp	QVariantMap select(	616	压缩写法、声部范围、原生撤销和连线保护	mtest/mscore/p1native/regional_tests.inc
-方案保存	libmscore/regionalvariants.cpp	bool save(	693	普通主方案入口和本分支当前组合恢复	mtest/mscore/p1native/regional_tests.inc
-方案面板	mscore/workflow/regionalpanel.cpp	void showRegionalVariantPanel(	685	菜单、停靠、复制切换、旧文件和普通版导出	mtest/mscore/p1native/regional_tests.inc
+方案保存	libmscore/regionalvariants.cpp	bool save(	789	普通主方案入口和本分支当前组合恢复	mtest/mscore/p1native/regional_tests.inc
+方案面板	mscore/workflow/regionalpanel.cpp	void showRegionalVariantPanel(	793	菜单、停靠、复制切换、旧文件和普通版导出	mtest/mscore/p1native/regional_tests.inc
 演奏快捷调整	mscore/events.cpp	ScoreView::wheelEvent	157	最近音力度入口	mscore/performanceeditor
 和弦独立摘要	mscore/plugin/qmlplugin.cpp	void QmlPlugin::showSummaryPanel(	201	顶部摘要与右侧面板独立显示	mtest/mscore/performanceeditor;mtest/mscore/p1native
 参考播放空格	mscore/plugin/qmlplugin.cpp	bool QmlPlugin::eventFilter(	134	只在参考面板获得焦点时处理空格，文字输入沿用原行为	mtest/mscore/p1native
@@ -254,7 +254,7 @@ Windows录制输入	audiodrivers/pm.cpp	void PortMidiDriver::read(	183	保留Por
 MIDI松手说明	mscore/midicrop/midicroppanel.cpp	QString reasonText(	33	原长度、新长度、下一组音和按键占用	mtest/mscore/p0native
 和弦连续解释	share/plugins/HarmonyAssistant/Timeline.js	function scorePath(	156	候选解释、分批回查与区间输出	../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs
 方案连线	libmscore/regionalconnections.cpp	QVariantList capture(	111	按逻辑端点保存与恢复延音线和圆滑线	mtest/mscore/p1native
-谱面方案按钮	mscore/workflow/regionalcontrols.cpp	void updateRegionalControls(	196	可隐藏的写法切换、定位面板和视口更新	mtest/mscore/p1native
+谱面方案按钮	mscore/workflow/regionalcontrols.cpp	void updateRegionalControls(	263	可隐藏的写法切换、定位面板和视口更新	mtest/mscore/p1native
 打开演奏对比	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::showEditorComparison(	150	展开对应轨、分配空间并切换到当前结果	mtest/mscore/p1native
 对应轨筛选	mscore/performanceeditor/workflowlanes.cpp	bool WorkflowLanes::matchEnabled(	52	共用谱表声部筛选、直接应用和数值提示	mtest/mscore/p1native
 最近音滚轮	mscore/performanceeditor/performancewheel.cpp	bool PerformanceEditor::nearestWheelShortcut(	129	输入状态、横向滚轮和可选快捷键	mtest/mscore/performanceeditor/editor_usability_tests.inc
@@ -335,3 +335,6 @@ VST3 适配	audio/vst/vst3plugin.cpp	class Vst3Plugin	57	音频、MIDI、参数�
 VST2 适配	audio/vst/vst2plugin.cpp	class Vst2Plugin	21	x64 ABI、CC、预设、CFX 和插件界面	mtest/mscore/pluginhost/vst_tests.inc
 VST 独立进程	audio/vst/proxy.cpp	class Proxy	15	固定缓冲、独立扫描、进程退出和离线处理	../../muse3_plugins/P2/tests/vst/checks.cpp
 SF2 单乐器效果	audio/vst/fluidsource.cpp	class FluidSource	12	按需创建发声实例，复用原生 SF2	mtest/mscore/pluginhost/vst_tests.inc
+分段写法删除	libmscore/regionalvariants.cpp	QVariantMap remove(	693	删除写法、整组与组合，保留当前谱面并一次撤销	mtest/mscore/p1native/regional_070_tests.inc
+谱面按钮位置	libmscore/regionalvariants.cpp	QVariantMap setControlPlacement(	770	手动位置、单组显隐、随谱保存及撤销	mtest/mscore/p1native/regional_070_tests.inc
+分段写法列表操作	mscore/workflow/regionalpanel.cpp	void removeSelected(	431	单击切换、明确当前写法、删除与恢复入口	mtest/mscore/p1native/regional_070_tests.inc

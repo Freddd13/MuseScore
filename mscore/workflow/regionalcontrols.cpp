@@ -19,6 +19,7 @@
 #include <QApplication>
 #include <QHash>
 #include <QMenu>
+#include <QMouseEvent>
 #include <QPointer>
 #include <QSet>
 #include <QSettings>
@@ -32,6 +33,10 @@ class Controls : public QObject {
       QHash<QString, QPointer<QToolButton>> _buttons;
       bool _queued = false;
       QPointer<Score> _owner;
+      QPointer<QToolButton> _dragButton;
+      QPointer<Score> _dragScore;
+      QPoint _pressGlobal, _pressPosition;
+      bool _moving = false;
       void choose(const QString &group, const QString &variant) {
             auto score = _view ? _view->score() : nullptr;
             if (!score || !score->isMaster())
@@ -41,6 +46,42 @@ class Controls : public QObject {
             else if(result.contains("playbackError"))QToolTip::showText(QCursor::pos(),result.value("playbackError").toString(),_view);
       }
       bool eventFilter(QObject* object,QEvent* event)override{
+            auto button = qobject_cast<QToolButton*>(object);
+            if (button && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonDblClick)) {
+                  auto mouse = static_cast<QMouseEvent*>(event);
+                  if (mouse->button() == Qt::LeftButton) {
+                        _dragButton=button; _dragScore=_view ? _view->score() : nullptr;
+                        _pressGlobal=mouse->globalPos(); _pressPosition=button->pos(); _moving=false;
+                        button->setDown(true); mouse->accept(); return true;
+                  }
+            }
+            if (button && button == _dragButton && event->type() == QEvent::MouseMove) {
+                  auto mouse=static_cast<QMouseEvent*>(event);
+                  const auto delta=mouse->globalPos()-_pressGlobal;
+                  _moving |= delta.manhattanLength() >= QApplication::startDragDistance();
+                  if (_moving && _view) {
+                        const auto next=_pressPosition+delta;
+                        button->move(qBound(0,next.x(),qMax(0,_view->width()-button->width())),
+                                     qBound(0,next.y(),qMax(0,_view->height()-button->height())));
+                        button->setDown(false); button->raise();
+                  }
+                  mouse->accept(); return true;
+            }
+            if (button && button == _dragButton && event->type() == QEvent::MouseButtonRelease) {
+                  auto mouse=static_cast<QMouseEvent*>(event);
+                  if (mouse->button() != Qt::LeftButton) return false;
+                  const bool moved=_moving; _dragButton.clear(); button->setDown(false);
+                  if (moved && _view && _dragScore && _view->score() == _dragScore) {
+                        const auto delta = (_view->toLogical(button->pos()) -
+                                            _view->toLogical(button->property("regionalAutomaticPosition").toPoint()))
+                                           / _dragScore->spatium();
+                        auto result=RegionalVariants::setControlPlacement(_dragScore,
+                              button->property("regionalGroup").toString(),{{"x",delta.x()},{"y",delta.y()}});
+                        if (result.contains("error")) QToolTip::showText(mouse->globalPos(),result["error"].toString(),_view);
+                        schedule();
+                  } else if (!moved && button->rect().contains(mouse->pos())) button->showMenu();
+                  _dragScore.clear(); mouse->accept(); return true;
+            }
             if(event->type()!=QEvent::Wheel)return QObject::eventFilter(object,event);auto wheel=static_cast<QWheelEvent*>(event);if(wheel->modifiers()!=Qt::ControlModifier)return false;
             auto score=_view?_view->score():nullptr;if(!score)return false;const auto key=object->property("regionalGroup").toString();
             for(auto value:RegionalVariants::state(score).value("groups").toList()){auto g=value.toMap();if(g.value("id").toString()!=key)continue;auto variants=g.value("variants").toList();if(variants.size()<2)break;
@@ -71,6 +112,16 @@ class Controls : public QObject {
                   menu->addSeparator();
                   auto open = menu->addAction(tr("打开这段的方案面板"));
                   connect(open, &QAction::triggered, this, [id] { showRegionalVariantPanel(id); });
+                  auto reset=menu->addAction(tr("恢复自动位置")); reset->setObjectName("regionalResetPosition");
+                  connect(reset,&QAction::triggered,this,[this,id]{
+                        if (_view) RegionalVariants::setControlPlacement(_view->score(),id,{{"reset",true}});
+                        schedule();
+                  });
+                  auto hide=menu->addAction(tr("隐藏这组按钮")); hide->setObjectName("regionalHideControl");
+                  connect(hide,&QAction::triggered,this,[this,id]{
+                        if (_view) RegionalVariants::setControlPlacement(_view->score(),id,{{"hidden",true}});
+                        schedule();
+                  });
                   break;
             }
       }
@@ -80,7 +131,12 @@ class Controls : public QObject {
                   return;
             auto score = _view->score();
             QSet<QString> shown;
+            QSet<QString> existing;
+            for (auto value : RegionalVariants::state(score).value("groups").toList())
+                  existing.insert(value.toMap().value("id").toString());
             if (_owner != score) {
+                  if (_dragButton) _dragButton->setDown(false);
+                  _dragButton.clear(); _dragScore.clear();
                   for (auto button : _buttons)
                         if (button)
                               button->deleteLater();
@@ -91,6 +147,7 @@ class Controls : public QObject {
                   QHash<int, int> stacked;
                   for (auto value : RegionalVariants::state(score).value("groups").toList()) {
                         auto group = value.toMap();
+                        if (group.value("controlHidden").toBool()) continue;
                         const auto tracks = group.value("tracks").toList();
                         if (tracks.isEmpty())
                               continue;
@@ -135,13 +192,13 @@ class Controls : public QObject {
                             tr("声部%1 · %2").arg(voices.join(","), name), Qt::ElideRight, 145));
                         button->setToolTip(
                             tr("%1 · "
-                               "谱表%2\n点击或Ctrl+滚轮切换写法；当前修改会保存。可在方案面板的“更多”里隐藏这些按钮。")
+                               "谱表%2\n单击或Ctrl+滚轮切换写法；拖动按钮可移位。菜单里可隐藏或恢复位置，Ctrl+Z可撤销。")
                                 .arg(group.value("name").toString())
                                 .arg(staff + 1));
                         button->adjustSize();
                         const int bucket = group.value("start").toInt() * 32 + staff;
                         const int row = stacked[bucket]++;
-                        const int x = qBound(0, where.x(), qMax(0, _view->width() - button->width()));
+                        int x = qBound(0, where.x(), qMax(0, _view->width() - button->width()));
                         int y = qBound(0, where.y() - (row + 1) * (button->height() + 3) - 8,
                                        qMax(0, _view->height() - button->height()));
                         for (const auto &marker : _view->notePreviewMarkerBoxes()) {
@@ -150,8 +207,13 @@ class Controls : public QObject {
                                       .intersects(obstacle.adjusted(-3, -3, 3, 3)))
                                     y = qMax(0, obstacle.top() - button->height() - 5);
                         }
+                        button->setProperty("regionalAutomaticPosition",QPoint(x,y));
+                        const auto offset=group.value("controlOffset").toMap();
+                        const auto shift=_view->toPhysical(QPointF(offset.value("x").toDouble(),offset.value("y").toDouble())*score->spatium())-_view->toPhysical(QPointF());
+                        x=qBound(0,x+qRound(shift.x()),qMax(0,_view->width()-button->width()));
+                        y=qBound(0,y+qRound(shift.y()),qMax(0,_view->height()-button->height()));
                         const QRect box(QPoint(x, y), button->size());
-                        if (button->geometry() != box)
+                        if (button != _dragButton && button->geometry() != box)
                               button->setGeometry(box);
                         if (!button->isVisible()) {
                               button->show();
@@ -161,6 +223,11 @@ class Controls : public QObject {
                   }
             }
             for (auto it = _buttons.begin(); it != _buttons.end();) {
+                  if (!existing.contains(it.key())) {
+                        if (it.value()) it.value()->deleteLater();
+                        it = _buttons.erase(it);
+                        continue;
+                  }
                   if (!shown.contains(it.key())) {
                         if (it.value())
                               it.value()->hide();

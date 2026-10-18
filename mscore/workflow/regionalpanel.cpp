@@ -38,6 +38,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMessageBox>
+#include <QSignalBlocker>
 #include <QPushButton>
 #include <QSaveFile>
 #include <QScrollArea>
@@ -55,6 +57,8 @@ class RegionalPanel : public QWidget {
       QTreeWidget *_tree;
       QLabel *_status;
       QLabel *_scope;
+      QPushButton *_delete = nullptr, *_deleteCombination = nullptr;
+      QCheckBox *_scoreButtons = nullptr;
       QHBoxLayout *_choices;
       QTimer _refresh;
       QCheckBox *_compare,*_listen;
@@ -66,7 +70,7 @@ class RegionalPanel : public QWidget {
       QString _comparedGroup,_comparedVariant;
       QPointer<ScoreView> _compareView;
       bool _refreshing=false;
-      void clearDifference(){if(_compareView)showRegionalDifference(_compareView,nullptr,{});_other.reset();_comparedGroup.clear();_comparedVariant.clear();}
+      void clearDifference(){if(_compareView)showRegionalDifference(_compareView,nullptr,{});_other.reset();_comparedGroup.clear();_comparedVariant.clear();if(_differences)_differences->clear();}
       void compare(){
             if(_refreshing)return;
             _compareWith->setVisible(_compare->isChecked());_differences->setVisible(_compare->isChecked());_differenceStatus->setVisible(_compare->isChecked());
@@ -90,7 +94,9 @@ class RegionalPanel : public QWidget {
             for(auto value:RegionalVariants::state(score()).value("combinations").toList()){auto item=value.toMap();_combinations->addItem(item.value("name").toString(),item.value("id"));}
             int current=0;const auto groups=RegionalVariants::state(score()).value("groups").toList();
             for(int c=1;c<_combinations->count();++c)for(auto value:RegionalVariants::state(score()).value("combinations").toList()){auto item=value.toMap();if(item.value("id")!=_combinations->itemData(c))continue;const auto choices=item.value("choices").toMap();bool matches=choices.size()==groups.size();for(auto v:groups){auto group=v.toMap();matches&=choices.value(group.value("id").toString())==group.value("active");}if(matches&&(current==0||item.value("id")==combination))current=c;}
-            _combinations->setCurrentIndex(current);_refreshing=false;compare();
+            _combinations->setCurrentIndex(current);
+            if (_deleteCombination) _deleteCombination->setEnabled(current > 0);
+            _refreshing=false;compare();
             }
       void saveCombination(){
             if(!idle())return;bool ok=false;const auto name=QInputDialog::getText(this,tr("保存组合"),tr("组合名称（同名保存会更新选择）"),QLineEdit::Normal,_combinations->currentIndex()>0?_combinations->currentText():tr("组合%1").arg(_combinations->count()),&ok);
@@ -171,8 +177,14 @@ class RegionalPanel : public QWidget {
                   delete item;
             }
             auto g = selectedGroup();
+            if (_delete) {
+                  _delete->setEnabled(!g.isEmpty());
+                  _delete->setToolTip(variant().isEmpty() ? tr("删除选中的方案组，保留当前谱面内容。")
+                                                        : tr("删除选中的写法；Ctrl+Z可恢复。"));
+            }
             if (g.isEmpty()) {
                   _scope->setText(tr("选中一段乐谱，点“保存为A”开始。"));
+                  if (_compareWith) comparisonChoices();
                   return;
             }
             QString current;
@@ -212,6 +224,17 @@ class RegionalPanel : public QWidget {
             auto data = RegionalVariants::state(master);
             if (master == _master && data == _last){compare();return;}
             QString selectedGroupId = group(), selectedVariantId = variant();
+            if (master == _master && !selectedVariantId.isEmpty()) {
+                  QString previousActive, nextActive;
+                  for (auto value : _last.value("groups").toList())
+                        if (value.toMap().value("id").toString() == selectedGroupId)
+                              previousActive=value.toMap().value("active").toString();
+                  for (auto value : data.value("groups").toList())
+                        if (value.toMap().value("id").toString() == selectedGroupId)
+                              nextActive=value.toMap().value("active").toString();
+                  if (!nextActive.isEmpty() && previousActive != nextActive)
+                        selectedVariantId=nextActive;
+            }
             _master = master;
             _last = data;
             _tree->clear();
@@ -375,6 +398,11 @@ class RegionalPanel : public QWidget {
       void switchTo() {
             if(variant().isEmpty()){_status->setText(tr("请选中组内的一种写法。"));return;}
             const auto result=switchRegionalWriting(mscore->currentScoreView(),group(),variant());
+            if (result.value("unchanged").toBool()) {
+                  _status->setText(tr("正在编辑“%1”。修改随这份写法保留，Ctrl+S保存到文件。")
+                                       .arg(_tree->currentItem()->text(0)));
+                  return;
+            }
             report(result,result.contains("playbackError")?tr("写法已切换。%1").arg(result.value("playbackError").toString()):regionalAuditionEnabled()?tr("正在从同一片段起点试听。"):tr("已切换写法，可以继续编辑。"));
       }
       void mainChoice() {
@@ -399,6 +427,62 @@ class RegionalPanel : public QWidget {
                                                  _tree->currentItem()->text(0), &ok);
             if (ok)
                   report(RegionalVariants::rename(score(), group(), variant(), text), tr("名称已修改。"));
+      }
+      void removeSelected() {
+            if (!idle() || group().isEmpty()) return;
+            const auto g = selectedGroup();
+            if (g.isEmpty()) { refresh(); return; }
+            const auto variants = g.value("variants").toList();
+            const auto key = group(), selected = variant();
+            QString name, replacement;
+            int index = -1;
+            for (int i=0; i<variants.size(); ++i)
+                  if (variants[i].toMap().value("id").toString() == selected) {
+                        index = i; name = variants[i].toMap().value("name").toString(); break;
+                  }
+            const bool wholeGroup = selected.isEmpty() || variants.size() == 1;
+            if (!selected.isEmpty() && index < 0) { refresh(); return; }
+            QString message;
+            if (wholeGroup)
+                  message = tr("删除“%1”及其中的写法，当前谱面内容继续保留。Ctrl+Z可以恢复。")
+                                .arg(g.value("name").toString());
+            else {
+                  replacement = g.value("active").toString();
+                  if (replacement == selected)
+                        replacement = variants[index+1 < variants.size() ? index+1 : index-1]
+                                          .toMap().value("id").toString();
+                  QString next;
+                  for (auto value : variants)
+                        if (value.toMap().value("id").toString() == replacement)
+                              next = value.toMap().value("name").toString();
+                  message = tr("删除写法“%1”。%2\nCtrl+Z可以恢复。")
+                                .arg(name, g.value("active") == selected
+                                               ? tr("接着显示“%1”。").arg(next)
+                                               : tr("当前谱面继续保留。"));
+                  int references = 0;
+                  for (auto value : RegionalVariants::state(score()).value("combinations").toList())
+                        references += value.toMap().value("choices").toMap().value(key).toString() == selected;
+                  if (references)
+                        message += tr("\n使用这份写法的%1个组合会改用“%2”。").arg(references).arg(next);
+            }
+            QMessageBox prompt(QMessageBox::Question, wholeGroup ? tr("删除方案组") : tr("删除写法"),
+                               message, QMessageBox::Cancel, this);
+            prompt.setObjectName("regionalDeleteDialog");
+            auto confirm = prompt.addButton(tr("删除"), QMessageBox::AcceptRole);
+            confirm->setObjectName("regionalConfirmDelete");
+            prompt.setDefaultButton(QMessageBox::Cancel);
+            prompt.exec(); if (prompt.clickedButton() != confirm) return;
+            const auto result = RegionalVariants::remove(score(), key, selected);
+            clearDifference();
+            report(result, wholeGroup ? tr("方案组已删除，当前谱面保留。Ctrl+Z可恢复。")
+                                      : tr("写法已删除。Ctrl+Z可恢复。"));
+            if (result.value("ok").toBool() && !result.value("removedGroup").toBool())
+                  selectTree(key, result.value("active").toString());
+      }
+      void removeSavedCombination() {
+            if (!idle() || _combinations->currentIndex() <= 0) return;
+            report(RegionalVariants::removeCombination(score(), _combinations->currentData().toString()),
+                   tr("组合已删除，当前各段写法保持原样。Ctrl+Z可恢复。"));
       }
       void audition() {
             if (!idle())
@@ -603,6 +687,8 @@ class RegionalPanel : public QWidget {
             };
             button(primary, tr("保存为A"), "regionalCreateButton", [this] { create(); });
             button(primary, tr("增加写法"), "regionalCopy", [this] { copy(); });
+            _delete = button(primary, tr("删除"), "regionalDelete", [this] { removeSelected(); });
+            _delete->setEnabled(false);
             auto more = new QToolButton(this);
             more->setText(tr("更多"));
             more->setObjectName("regionalMore");
@@ -617,6 +703,12 @@ class RegionalPanel : public QWidget {
             };
             action(tr("改名…"), "regionalRename", [this] { rename(); });
             action(tr("扩大范围…"), "regionalExpand", [this] { expand(); });
+            action(tr("恢复这组谱面按钮与位置"), "regionalResetControl", [this] {
+                  if (!idle()) return;
+                  report(RegionalVariants::setControlPlacement(score(), group(), {{"reset",true}}),
+                         tr("这组切换按钮已显示，并恢复自动位置。"));
+                  _scoreButtons->setChecked(true);
+            });
             menu->addSeparator();
             action(tr("设为主方案"), "regionalMain", [this] { mainChoice(); });
             action(tr("显示主方案组合"), "regionalShowMain", [this] { showMain(); });
@@ -629,6 +721,14 @@ class RegionalPanel : public QWidget {
             controls->setChecked(regionalControlsVisible());
             connect(controls, &QAction::toggled, this,
                     [](bool checked) { setRegionalControlsVisible(checked); });
+            _scoreButtons = new QCheckBox(tr("谱面显示切换按钮"), this);
+            _scoreButtons->setObjectName("regionalScoreButtonsToggle");
+            _scoreButtons->setChecked(regionalControlsVisible());
+            layout->addWidget(_scoreButtons);
+            connect(_scoreButtons, &QCheckBox::toggled, this, [controls](bool checked) {
+                  setRegionalControlsVisible(checked); QSignalBlocker blocked(controls); controls->setChecked(checked);
+            });
+            connect(controls, &QAction::toggled, _scoreButtons, &QCheckBox::setChecked);
             _scope = new QLabel(this);
             _scope->setObjectName("regionalCurrent");
             _scope->setWordWrap(true);
@@ -649,8 +749,11 @@ class RegionalPanel : public QWidget {
             _tree->setHeaderLabels({tr("方案与写法"), tr("范围／用途")});
             _tree->setSelectionMode(QAbstractItemView::SingleSelection);
             layout->addWidget(_tree, 1);
-            connect(_tree, &QTreeWidget::itemDoubleClicked, this,
-                    [this](QTreeWidgetItem *, int) { switchTo(); });
+            _tree->setToolTip(tr("单击写法名称即可切换；也可以用方向键选中后按回车。加粗并标为“当前”的写法正在谱面中编辑。"));
+            connect(_tree, &QTreeWidget::itemClicked, this,
+                    [this](QTreeWidgetItem *item, int) { if (item && item->parent()) switchTo(); });
+            connect(_tree, &QTreeWidget::itemActivated, this,
+                    [this](QTreeWidgetItem *item, int) { if (item && item->parent()) switchTo(); });
             connect(_tree, &QTreeWidget::currentItemChanged, this, [this] { choices(); });
             _compare=new QCheckBox(tr("显示差异"),this);_compare->setObjectName("regionalCompare");
             _compareWith=new QComboBox(this);_compareWith->setObjectName("regionalCompareWith");_compareWith->hide();
@@ -660,6 +763,11 @@ class RegionalPanel : public QWidget {
             connect(_compare,&QCheckBox::toggled,this,[this]{comparisonChoices();});connect(_compareWith,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this]{compare();});
             connect(_differences,&QTreeWidget::itemClicked,this,[this](QTreeWidgetItem* item,int){const auto row=item->data(0,Qt::UserRole).toMap();PluginAPI::Score wrapped(score());_observer->setScore(&wrapped);_observer->navigateWorkflow({{"start",row.value("tick")},{"end",row.value("tick").toInt()+1},{"firstTrack",row.value("track")}},false);});
             auto combinationRow=new QHBoxLayout;_combinations=new QComboBox(this);_combinations->setObjectName("regionalCombinations");combinationRow->addWidget(_combinations,1);button(combinationRow,tr("保存组合…"),"regionalSaveCombination",[this]{saveCombination();});layout->addLayout(combinationRow);
+            _deleteCombination=button(combinationRow,tr("删除"),"regionalDeleteCombination",[this]{removeSavedCombination();});
+            _deleteCombination->setToolTip(tr("删除所选组合；各组写法继续保留，Ctrl+Z可恢复。"));
+            _deleteCombination->setEnabled(false);
+            connect(_combinations,QOverload<int>::of(&QComboBox::currentIndexChanged),this,
+                    [this](int index){ _deleteCombination->setEnabled(index > 0); });
             connect(_combinations,QOverload<int>::of(&QComboBox::activated),this,[this](int i){if(i<=0||!idle())return;report(RegionalVariants::selectCombination(score(),_combinations->itemData(i).toString()),tr("已切换整组选择；Ctrl+Z可一起恢复。"));if(regionalAuditionEnabled())audition();});
             _listen=new QCheckBox(tr("试听比较：切换后从同处听"),this);_listen->setObjectName("regionalAuditionCompare");_listen->setChecked(regionalAuditionEnabled());layout->addWidget(_listen);connect(_listen,&QCheckBox::toggled,this,[](bool value){setRegionalAuditionEnabled(value);});
             auto transport = new QHBoxLayout;

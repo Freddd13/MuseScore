@@ -74,6 +74,7 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMimeData>
 #include <QPushButton>
 #include <QQuickView>
@@ -473,6 +474,10 @@ private slots:
  void regionalGlissandoRequiresBothEnds();
  void regionalScoreSwitchMouseAndRestore();
  void regionalSwitchUndoAndSharedSettings();
+ void regionalEditedWritingsRoundTrip();
+ void regionalSingleClickActuallySwitches();
+ void regionalDeleteUndoAndReopen();
+ void regionalDeleteMouseAndButtonPlacement();
  void regionalCombinationAndDifferences();
  void gateManualReleaseAndAudition();
  void gateEditorMouseComparison();
@@ -488,6 +493,7 @@ private slots:
 #include "reference_tests.inc"
 #include "reference_056_tests.inc"
 #include "regional_tests.inc"
+#include "regional_070_tests.inc"
 #include "regional_comparison_tests.inc"
 #include "gate_comparison_tests.inc"
 QTEST_MAIN(TestP1Native)
