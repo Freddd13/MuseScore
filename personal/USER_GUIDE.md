@@ -641,3 +641,16 @@ sf、八度线和音符括号仍用软件原有操作；速度近似等号与swi
 更新本机包`fonts/kumo-engrave/dist/kumo-score-study-0.480-local.zip`：退出Evolution，将Study与Study Text两个完整文件夹成对替换到私有Score Fonts目录，重启；在乐谱独立副本同时选择两者，保留原字号与其它样式。无需重装MCP、skill或Windows字体。[安装说明](../../../mcp-musescore/fonts/kumo-engrave/README.md)。
 
 字体源码提交`Freddd13/mcp-musescore@ef09156`（codex/musescore-evolution）。本次只同步本体用户说明，不改原生代码或个人软件版本；后续字体更新须同时核查实际尺寸和周围记谱层次。
+
+
+## Kumo Score Study 0.480：当前安装版验收与角色核查（2026-10-19）
+
+当前安装目录的程序已更新为SHA256 `4d739629b557e1393fe764490362d4ac3e40572d4060dba685110b4bc2df5304`。本轮重新完成全套字体注册、常用/扩展/新角色、五种brace跨度、波线、112字图录、十组力度与用户谱归档副本验证；mf、8/8va、Ped.和解除星号的实际尺寸与固定宿主一致。字体文件仍为0.480，原件、除字体字段外的音乐XML与归档附件保持。此前崩溃的是另一份旧二进制，本轮没有定位其根因。
+
+本机包`fonts/kumo-engrave/dist/kumo-score-study-0.480-current-local.zip`更新随包说明，字体与上一0.480包相同；已有0.480无需重复换字体。首次试用仍退出Evolution，成对复制Study/Study Text完整文件夹到私有Score Fonts目录，重启，在独立谱副本选择两者；保留原字号和其它样式。无需重装MCP/skill。详见[当前宿主及覆盖说明](../../../mcp-musescore/fonts/kumo-engrave/COVERAGE_RECONCILIATION.md)。
+
+两宿主共有23张输出中21张逐像素相同。另两张为两种字体的用户谱p8：新宿主各多一段TextLine虚线，其余SVG元素保持；没有改原谱消除它，宿主行为改变原因仍待进一步核查。不能把这段差异说成字体大小变化或整谱完全等价。
+
+另将156个低匹配代表图写为明确角色对应，45项回原页确认；不少自动标签实际是滑音、琶音、拍号或音符括号。对应目标均存在；9项Leland回退实际轮廓/度量保持。1,179成员的具体语义与其它图录仍未逐一完成，原生滑音仍复用trill波形，后续最小适配另做。
+
+脚本及说明提交`Freddd13/mcp-musescore@339a2b5`（codex/musescore-evolution）。此次只同步本体用户说明，不改原生代码或个人软件版本。
