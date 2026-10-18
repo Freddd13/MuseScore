@@ -4,6 +4,9 @@
 #include "paneldock.h"
 #include "featuregate.h"
 #include "aiconnection.h"
+#include "workspaceviews.h"
+#include "editorareas.h"
+#include "mscore/workspace.h"
 #include "mscore/musescore.h"
 #include "mscore/shortcut.h"
 #include "mscore/performanceeditor/performanceeditor.h"
@@ -24,13 +27,32 @@
 #include <QVBoxLayout>
 #include <QTimer>
 #include <QSettings>
+#include <QDynamicPropertyChangeEvent>
 #include "mscore/scoreview.h"
 namespace Ms {namespace {
 QPointer<QDockWidget> harmonyDock;
 QPointer<QmlPlugin> harmonyRoot;
+class ViewPaletteBinding : public QObject {
+ QPointer<QQmlContext> context;QPointer<QWidget> host;QPointer<PerformanceEditor> editor;QVariant lastPalette;bool lastEmbedded=false;
+ void update(){
+  if(!context||!host)return;
+  const bool embedded=!host->property("kumoDetachedArea").toBool();
+  const QVariant colors=embedded&&editor?editor->property("workflowPanelTheme"):QVariant();
+  if(embedded!=lastEmbedded){lastEmbedded=embedded;context->setContextProperty("workflowEmbedded",embedded);}
+  if(colors!=lastPalette){lastPalette=colors;context->setContextProperty("workflowPanelPalette",colors);}
+ }
+ bool eventFilter(QObject*,QEvent* event) override {
+  if(event->type()==QEvent::PaletteChange||event->type()==QEvent::ParentChange||event->type()==QEvent::DynamicPropertyChange)update();
+  return false;
+ }
+ public:ViewPaletteBinding(QQuickView* view,QWidget* owner):QObject(view),context(view->rootContext()),host(owner),editor(mscore?mscore->performanceEditor():nullptr){
+  if(host)host->installEventFilter(this);if(editor)editor->installEventFilter(this);update();
+ }
+};
 QQuickView* loadView(const QString& name,bool embedded,QWidget* owner){
  auto engine=new QmlPluginEngine;auto view=new QQuickView(engine,nullptr);engine->setParent(view);
  view->rootContext()->setContextProperty("workflowEmbedded",embedded);
+ if(embedded&&owner)new ViewPaletteBinding(view,owner);
  const QString file=builtinPanelPath(name);
  view->setResizeMode(QQuickView::SizeRootObjectToView);view->setSource(QUrl::fromLocalFile(file));
  auto root=qobject_cast<QmlPlugin*>(view->rootObject());
@@ -75,24 +97,25 @@ void installExpressionTools(QWidget* editor,QSplitter* splitter,QVBoxLayout* lay
   const QSize previousWindow=mscore?mscore->size():QSize();
   auto root=host->findChild<QmlPlugin*>("embeddedExpressionRoot");
   if(page==1&&!host->property("loaded").toBool()){
-   if(auto view=loadView("PerformanceExpression",true,nullptr)){
+   if(auto view=loadView("PerformanceExpression",true,host)){
     auto content=qobject_cast<QmlPlugin*>(view->rootObject());content->setObjectName("embeddedExpressionRoot");
     view->setMinimumSize(QSize(0,0));view->resize(700,180);
     auto container=QWidget::createWindowContainer(view,host);container->setMinimumSize(0,0);container->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Ignored);
-    box->addWidget(container);host->setMaximumHeight(380);host->setProperty("root",QVariant::fromValue(static_cast<QObject*>(content)));
+    box->addWidget(container);host->setProperty("root",QVariant::fromValue(static_cast<QObject*>(content)));
     QObject::connect(content,&QObject::destroyed,host,[host,container]{host->setProperty("root",QVariant());host->setProperty("loaded",false);container->deleteLater();});
     content->runPlugin();host->setProperty("loaded",true);root=content;
    }
   }
   if(!root)root=qobject_cast<QmlPlugin*>(host->property("root").value<QObject*>());
-  host->setVisible(page==1);if(root)root->setVisible(page==1);
+  if(page==1&&showDetachedEditorArea(host))return;
+  if(!host->property("kumoDetachedArea").toBool()){host->setVisible(page==1);if(root)root->setVisible(page==1);}
   if(root&&page==1)QTimer::singleShot(0,root,[root]{root->focusPanel();});
   if(page==1){auto sizes=splitter->sizes();int at=splitter->indexOf(host);if(at>=0&&sizes[at]<100){sizes[at]=190;splitter->setSizes(sizes);}}
   if(page==1&&mscore)QTimer::singleShot(0,host,[host,previousWindow]{
    if(!mscore)return;
    auto dock=host->parentWidget();while(dock&&!qobject_cast<QDockWidget*>(dock))dock=dock->parentWidget();
    auto editorDock=qobject_cast<QDockWidget*>(dock);
-   if(editorDock&&!editorDock->isFloating()&&mscore->currentScoreView()&&mscore->currentScoreView()->height()<160){
+   if(editorDock&&!editorDock->isFloating()&&mscore->property("kumoWorkspaceView").toString()!="daw"&&mscore->currentScoreView()&&mscore->currentScoreView()->height()<160){
     if(previousWindow.isValid())mscore->resize(previousWindow);
     mscore->resizeDocks({editorDock},{qBound(260,mscore->height()/2,540)},Qt::Vertical);
    }
@@ -103,12 +126,19 @@ void installExpressionTools(QWidget* editor,QSplitter* splitter,QVBoxLayout* lay
 void showExpressionPanel(){
  if(!mscore || !personalFeaturesEnabled())return;const QSize before=mscore->size();mscore->showPerformanceEditor(true);
  if(auto tabs=mscore->performanceEditor()->findChild<QTabBar*>("workflowExpressionTabs")){
+  if(openEditorArea(mscore->performanceEditor(),"embeddedExpressionPage"))return;
   auto host=mscore->performanceEditor()->findChild<QWidget*>("embeddedExpressionPage");if(host&&!host->property("loaded").toBool()&&tabs->currentIndex()==1)tabs->setCurrentIndex(0);tabs->setCurrentIndex(1);
  }
  if(mscore->size()!=before)mscore->resize(before);
- if(auto dock=qobject_cast<QDockWidget*>(mscore->performanceEditor()->parentWidget()))if(!dock->isFloating())mscore->resizeDocks({dock},{qBound(260,before.height()/2,540)},Qt::Vertical);
+ if(auto dock=qobject_cast<QDockWidget*>(mscore->performanceEditor()->parentWidget()))if(!dock->isFloating()&&mscore->property("kumoWorkspaceView").toString()!="daw")mscore->resizeDocks({dock},{qBound(260,before.height()/2,540)},Qt::Vertical);
 }
 void addBuiltinPanelActions(QMenu* menu){
+ auto spectrum = new QAction(QObject::tr("频谱扒谱"),menu);spectrum->setObjectName("kumo-spectrum");markPersonalAction(spectrum);
+ spectrum->setIcon(personalToolIcon("kumo-spectrum"));menu->addAction(spectrum);Workspace::addActionAndString(spectrum,"kumo-spectrum");
+ QObject::connect(spectrum,&QAction::triggered,qApp,[]{
+  if(!personalFeaturesEnabled())return;mscore->showPerformanceEditor(true);
+  openEditorArea(mscore->performanceEditor(),"transcriptionSpectrumPane");
+ });
  addAIConnectionAction(menu);
  addSuggestionPanelAction(menu);
  auto harmony=getAction("harmony-assistant");harmony->setCheckable(true);markPersonalAction(harmony);menu->addAction(harmony);

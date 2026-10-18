@@ -862,6 +862,17 @@ QFont TextFragment::font(const TextBase* t) const
       QString family;
       if (format.fontFamily() == "ScoreText") {
             family = t->score()->styleSt(Sid::musicalTextFont);
+            // Newer Leland Text has smaller metronome glyphs. Keep the text
+            // size and spacing used by 3.6 scores with the bundled symbol subset.
+            if (family == "Leland Text") {
+                  bool metronome = false, other = false;
+                  for (const QChar c : text) {
+                        const auto value = c.unicode();
+                        if (value >= 0xECA0 && value <= 0xECB7) metronome = true;
+                        else if (!c.isSpace()) other = true;
+                        }
+                  if (metronome && !other) family = "Metronome Text 3";
+                  }
 
             // check if all symbols are available
             font.setFamily(family);

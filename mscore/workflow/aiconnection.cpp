@@ -459,7 +459,7 @@ void showAIConnection() {
   dialog->activateWindow();
 }
 void addAIConnectionAction(QMenu *menu) {
-  auto action = new QAction(QObject::tr("AI 连接"), mscore);
+  auto action = new QAction(QObject::tr("AI 连接"), menu);
   action->setObjectName("kumo-ai-connection");
   markPersonalAction(action);
   Workspace::addActionAndString(action, "kumo-ai-connection");
@@ -467,7 +467,7 @@ void addAIConnectionAction(QMenu *menu) {
   QObject::connect(action, &QAction::triggered, qApp,
                    [] { showAIConnection(); });
   if (qEnvironmentVariable("KUMO_MCP_AUTOSTART") != "0")
-    QTimer::singleShot(0, mscore, [] { initializeBuiltinAI(); });
+    QTimer::singleShot(0, menu, [] { initializeBuiltinAI(); });
 }
 void showPersonalGuide(const QString &page) {
   if (!mscore)

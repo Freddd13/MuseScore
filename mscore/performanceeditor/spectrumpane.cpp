@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "spectrumpane.h"
+#include "../workflow/editorareas.h"
 #include "performanceeditor.h"
 #include "../workflow/referencefactory.h"
 #include "../workflow/workflowcontext.h"
@@ -1049,7 +1050,8 @@ void installSpectrumPane(PerformanceEditor *editor, QSplitter *splitter) {
         return;
     tabs->addTab(QObject::tr("扒谱"));
     QObject::connect(tabs, &QTabBar::currentChanged, pane, [pane, splitter, tabs, editor](int page) {
-        pane->setVisible(page == 2);
+        if(page==2&&showDetachedEditorArea(pane))return;
+        if(!pane->property("kumoDetachedArea").toBool())pane->setVisible(page == 2);
         const auto saved =
             QSettings().value("performanceEditor/modeLayout/" + QString::number(page)).toByteArray();
         if (!saved.isEmpty())

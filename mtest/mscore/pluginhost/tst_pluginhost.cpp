@@ -18,6 +18,8 @@
 #include "personalbranding.h"
 #include "mscore/workflow/builtinpanels.h"
 #include "mscore/workflow/featuregate.h"
+#include "mscore/workflow/workspaceviews.h"
+#include "mscore/workflow/editorareas.h"
 #include "mscore/workflow/aiconnection.h"
 #include "mscore/workflow/referencefactory.h"
 #include "mscore/workflow/workflowcontext.h"
@@ -51,6 +53,8 @@
 #include "libmscore/tie.h"
 #include "libmscore/slur.h"
 #include "libmscore/tuplet.h"
+#include "libmscore/tempotext.h"
+#include <QFontDatabase>
 #include "mtest/testutils.h"
 #include "mscore/musescore.h"
 #include "mscore/scoreview.h"
@@ -88,6 +92,120 @@ class TestPluginHost : public QObject {
       Q_OBJECT
       QTemporaryDir _settings;
    private slots:
+      void metronomeFontCompatibility() {
+            QVERIFY(QFontDatabase().families().contains("Metronome Text 3"));
+            auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);
+            score->style().set(Sid::musicalTextFont,QString("Leland Text"));
+            TempoText tempo(score);TextFragment fragment;
+            fragment.format.setFontFamily("ScoreText");fragment.format.setFontSize(12);
+            fragment.text=QString(QChar(0xECA5))+QChar(0xECB7);
+            const auto font=fragment.font(&tempo);QCOMPARE(font.family(),QString("Metronome Text 3"));
+            QFont current("Leland Text");current.setPointSizeF(font.pointSizeF());
+            const QString quarter(QChar(0xECA5));
+            QVERIFY(QFontMetricsF(font).tightBoundingRect(quarter).height()>QFontMetricsF(current).tightBoundingRect(quarter).height()*1.5);
+            fragment.text=QString(QChar(0xE520));QCOMPARE(fragment.font(&tempo).family(),QString("Leland Text"));
+            score->style().set(Sid::musicalTextFont,QString("Bravura Text"));fragment.text=quarter;
+            QCOMPARE(fragment.font(&tempo).family(),QString("Bravura Text"));delete score;
+      }
+      void workspaceViewsAndFirstOpen() {
+            auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);
+            main->setCurrentScoreView(main->appendScore(score));main->resize(1280,960);main->show();main->showPerformanceEditor(true);
+            auto editor=main->performanceEditor();auto split=editor->findChild<QSplitter*>("performanceMainSplitter");QVERIFY(split);
+            auto parameters=editor->findChild<QWidget*>("performanceParametersArea");QVERIFY(parameters);
+            QTRY_VERIFY(main->height()<=1000);
+            const int index=split->indexOf(parameters);QVERIFY(index>=0);
+            split->setCollapsible(index,true);auto sizes=split->sizes();sizes[index]=0;split->setSizes(sizes);
+            main->showPerformanceEditor(false);main->resize(1260,940);main->showPerformanceEditor(true);
+            QTRY_VERIFY(parameters->height()>30);
+            main->findChild<QAction*>("kumo-workspace-daw")->trigger();
+            QTRY_COMPARE(main->property("kumoWorkspaceView").toString(),QString("daw"));
+            QVERIFY(main->centralWidget()->isHidden());
+            auto dock=main->findChild<QDockWidget*>("performanceEditorDock");QVERIFY(dock);
+            QTRY_VERIFY(dock->height()>main->height()*2/3);
+            QVERIFY2(main->height()<=1000,qPrintable(QString("DAW window grew to %1 (minimum %2, hint %3)").arg(main->height()).arg(main->minimumHeight()).arg(main->minimumSizeHint().height())));
+            QVERIFY(main->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("workspace-daw-064.png")));
+            main->findChild<QAction*>("kumo-workspace-score")->trigger();QVERIFY(!main->centralWidget()->isHidden());
+            main->findChild<QAction*>("kumo-workspace-arrange")->trigger();QCOMPARE(main->property("kumoWorkspaceView").toString(),QString("arrange"));
+            dock->setFloating(true);dock->show();auto back=dock->findChild<QToolButton*>("performanceReturnToScore");QVERIFY(back);QTRY_VERIFY(back->isVisible());
+            QTest::mouseClick(back,Qt::LeftButton);QTRY_VERIFY(!dock->isVisible());QVERIFY(!main->centralWidget()->isHidden());dock->setFloating(false);
+      }
+      void detachedEditorAreasAndTheme() {
+            auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);
+            main->setCurrentScoreView(main->appendScore(score));main->resize(1280,960);main->show();main->showPerformanceEditor(true);auto editor=main->performanceEditor();
+            auto notes=editor->findChild<QWidget*>("performanceNotesArea");QVERIFY(notes);
+            auto action=editor->findChild<QAction*>("editorArea/float/performanceNotesArea");QVERIFY(action);action->trigger();
+            auto dock=main->findChild<QDockWidget*>("kumoEditorArea/performanceNotesArea");QVERIFY(dock);QTRY_VERIFY(dock->isVisible());QVERIFY(dock->isFloating());QCOMPARE(notes->parentWidget(),dock);
+            main->showPerformanceEditor(false);QVERIFY(dock->isVisible());
+            auto ruler=notes->findChild<QWidget*>("performanceDetachedNotesRuler");QVERIFY(ruler);QTRY_VERIFY(ruler->isVisible());QTest::qWait(100);
+            QTest::mouseClick(ruler,Qt::LeftButton,Qt::NoModifier,QPoint(150,ruler->height()/2));QTRY_VERIFY(score->masterScore()->playPos().ticks()>0);
+            editor->findChild<QAction*>("editorArea/restore/performanceNotesArea")->trigger();QTRY_VERIFY(!dock->isVisible());QTRY_VERIFY(notes->isVisible());
+            auto expression=editor->findChild<QWidget*>("embeddedExpressionPage");QVERIFY(expression);
+            editor->findChild<QAction*>("editorArea/float/embeddedExpressionPage")->trigger();
+            auto root=expression->property("root").value<QObject*>();QVERIFY(root);QTRY_VERIFY(!root->property("embeddedWorkflow").toBool());
+            auto theme=root->findChild<QObject*>("workflowUiTheme");QVERIFY(theme);QTRY_COMPARE(theme->property("background").value<QColor>(),qApp->palette().color(QPalette::Window));
+            editor->findChild<QAction*>("editorArea/restore/embeddedExpressionPage")->trigger();QTRY_VERIFY(root->property("embeddedWorkflow").toBool());
+            QTRY_COMPARE(theme->property("background").value<QColor>(),editor->property("workflowPanelTheme").toMap().value("background").value<QColor>());
+            auto tabs=editor->findChild<QTabBar*>("workflowExpressionTabs");QVERIFY(tabs);QTest::mouseDClick(tabs,Qt::LeftButton,Qt::NoModifier,tabs->tabRect(2).center());
+            auto spectrumDock=main->findChild<QDockWidget*>("kumoEditorArea/transcriptionSpectrumPane");QVERIFY(spectrumDock);QTRY_VERIFY(spectrumDock->isVisible());
+            editor->findChild<QAction*>("editorArea/restore/transcriptionSpectrumPane")->trigger();QTRY_VERIFY(!spectrumDock->isVisible());tabs->setCurrentIndex(0);
+            QVERIFY(main->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("editor-area-controls-064.png")));
+      }
+      void workspaceAreaPlacements() {
+            auto main=Ms::mscore;
+            auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);
+            main->setCurrentScoreView(main->appendScore(score));
+            main->findChild<QAction*>("kumo-workspace-arrange")->trigger();
+            QSettings().remove("performanceEditor/detached");
+            main->show();main->showPerformanceEditor(true);QTest::qWait(50);
+            auto editor=main->performanceEditor();
+            auto notes=main->findChild<QWidget*>("performanceNotesArea");
+            auto parameters=main->findChild<QWidget*>("performanceParametersArea");QVERIFY(notes);QVERIFY(parameters);
+            editor->findChild<QAction*>("editorArea/float/performanceNotesArea")->trigger();
+            QTRY_VERIFY(notes->property("kumoDetachedArea").toBool());
+            main->findChild<QAction*>("kumo-workspace-daw")->trigger();
+            QTRY_VERIFY(!notes->property("kumoDetachedArea").toBool());
+            editor->findChild<QAction*>("editorArea/float/performanceParametersArea")->trigger();
+            QTRY_VERIFY(parameters->property("kumoDetachedArea").toBool());
+            main->findChild<QAction*>("kumo-workspace-arrange")->trigger();
+            QTRY_VERIFY(notes->property("kumoDetachedArea").toBool());
+            QTRY_VERIFY(!parameters->property("kumoDetachedArea").toBool());
+            main->findChild<QAction*>("kumo-workspace-daw")->trigger();
+            QTRY_VERIFY(!notes->property("kumoDetachedArea").toBool());
+            QTRY_VERIFY(parameters->property("kumoDetachedArea").toBool());
+            editor->findChild<QAction*>("editorArea/restore/performanceParametersArea")->trigger();
+            main->findChild<QAction*>("kumo-workspace-arrange")->trigger();
+            QTRY_VERIFY(notes->property("kumoDetachedArea").toBool());
+            auto notesDock=qobject_cast<QDockWidget*>(notes->parentWidget());QVERIFY(notesDock);notesDock->close();
+            main->findChild<QAction*>("kumo-workspace-daw")->trigger();QTest::qWait(50);
+            main->findChild<QAction*>("kumo-workspace-arrange")->trigger();QTest::qWait(50);
+            QVERIFY(notes->property("kumoDetachedArea").toBool());QVERIFY(!notesDock->isVisible());
+            editor->findChild<QAction*>("editorArea/show/performanceNotesArea")->trigger();QTRY_VERIFY(notesDock->isVisible());
+            editor->findChild<QAction*>("editorArea/restore/performanceNotesArea")->trigger();
+      }
+      void referenceTrackDeletionAndSliders() {
+            auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));
+            main->resize(1280,960);main->show();auto action=getAction("reference-player");if(!action->isChecked())action->trigger();
+            QmlPlugin* root=nullptr;for(auto window:QGuiApplication::allWindows())if(auto view=qobject_cast<QQuickView*>(window))if(auto candidate=qobject_cast<QmlPlugin*>(view->rootObject()))if(candidate->menuPath()=="Plugins.Reference Player")root=candidate;
+            QVERIFY(root);
+            const auto path=_settings.filePath("reference-track.wav");QFile file(path);QVERIFY(file.open(QIODevice::WriteOnly));QDataStream data(&file);data.setByteOrder(QDataStream::LittleEndian);data.writeRawData("RIFF",4);data<<quint32(36+88200);data.writeRawData("WAVEfmt ",8);data<<quint32(16)<<quint16(1)<<quint16(1)<<quint32(44100)<<quint32(88200)<<quint16(2)<<quint16(16);data.writeRawData("data",4);data<<quint32(88200);for(int i=0;i<44100;++i)data<<qint16(0);file.close();
+            for(int i=0;i<2;++i){root->setProperty("addingAudio",true);QVERIFY(QMetaObject::invokeMethod(root,"openAudio",Q_ARG(QVariant,QUrl::fromLocalFile(path).toString())));QTRY_VERIFY(root->property("usable").toBool());}
+            auto list=[root](const char* name){auto value=root->property(name);return value.canConvert<QJSValue>()?value.value<QJSValue>().toVariant().toList():value.toList();};
+            QCOMPARE(list("tracks").size(),2);QVERIFY(root->findChild<QQuickItem*>("referenceTrackRows"));
+            auto slider=root->findChild<QQuickItem*>("referenceVolumeSlider");QVERIFY(slider);QTRY_VERIFY(slider->width()>20);
+            QTest::mouseClick(root->window(),Qt::LeftButton,Qt::NoModifier,slider->mapToScene(QPointF(slider->width()*.3,slider->height()/2)).toPoint());
+            auto mediaValue=root->property("media");auto media=mediaValue.canConvert<QJSValue>()?mediaValue.value<QJSValue>().toQObject():mediaValue.value<QObject*>();QVERIFY(media);QVERIFY(media->property("volume").toDouble()<.6);
+            root->setProperty("transportTarget",0);QVERIFY(QMetaObject::invokeMethod(root,"toggleReferencePlayback"));QCOMPARE(root->property("lastSessionMode").toString(),QString("single"));
+            QMetaObject::invokeMethod(media,"pause");
+            QTest::qWait(350);const int history=score->undoStack()->getCurIdx();
+            QVERIFY(QMetaObject::invokeMethod(root,"removeTrack",Q_ARG(QVariant,0)));QCOMPARE(list("tracks").size(),1);QCOMPARE(list("deletedTracks").size(),1);QCOMPARE(score->undoStack()->getCurIdx(),history+1);
+            QVERIFY(QMetaObject::invokeMethod(root,"restoreDeletedTrack"));QCOMPARE(list("tracks").size(),2);QCOMPARE(list("deletedTracks").size(),0);
+            getAction("undo")->trigger();QTRY_COMPARE(list("tracks").size(),1);
+            getAction("redo")->trigger();QTRY_COMPARE(list("tracks").size(),2);
+            QMetaObject::invokeMethod(root,"setPanelFloating",Q_ARG(bool,true));
+            QMetaObject::invokeMethod(root,"resizePanel",Q_ARG(int,1000),Q_ARG(int,720));
+            QTest::mouseMove(root->window(),QPoint(12,root->window()->height()-12));QTest::qWait(200);
+            QVERIFY(root->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("reference-tracks-064.png")));
+      }
       void featureDisabledStartup() {
             if (qEnvironmentVariable("P2_FEATURE_GATE_OFF").isEmpty()) QSKIP("Run with P2_FEATURE_GATE_OFF=1");
             QVERIFY(!personalFeaturesEnabled());

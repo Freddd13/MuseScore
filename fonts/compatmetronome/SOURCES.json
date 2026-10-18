@@ -1,0 +1,9 @@
+{
+  "source": "https://raw.githubusercontent.com/musescore/MuseScore/v3.6.2/fonts/leland/LelandText.otf",
+  "release": "v3.6.2",
+  "sourceSha256": "74c9dbe932f8657cb61f997abd181e9b267b92c2cbd8918a1e6442fb578e8b80",
+  "outputSha256": "c96a6057fcfb7802c2099c994b8b8eb0305c3dc327597da0862a78427264841c",
+  "license": "SIL Open Font License 1.1",
+  "fontTools": "4.60.2",
+  "changes": "Metronome glyph subset, renamed to Metronome Text 3. Original copyright and license retained."
+}

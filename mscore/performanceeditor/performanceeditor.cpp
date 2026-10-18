@@ -1,5 +1,7 @@
 #include "performanceeditor.h"
 #include "../workflow/featuregate.h"
+#include "../workflow/workspaceviews.h"
+#include "../workflow/editorareas.h"
 #ifdef SCRIPT_INTERFACE
 #include "rhythmpane.h"
 #include "mscore/workflow/builtinpanels.h"
@@ -197,7 +199,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       second->addWidget(_followButton, second->count() / 6, second->count() % 6);
       second->setAlignment(Qt::AlignLeft);
       layout->addLayout(second);
-      _splitter = new QSplitter(Qt::Vertical, this); _splitter->setChildrenCollapsible(true);
+      _splitter = new QSplitter(Qt::Vertical, this); _splitter->setObjectName("performanceMainSplitter"); _splitter->setChildrenCollapsible(false);
       auto noteArea = new QWidget(_splitter); noteArea->setObjectName("performanceNotesArea"); auto noteLayout = new QVBoxLayout(noteArea); noteLayout->setContentsMargins(0, 0, 0, 0); noteLayout->setSpacing(0);
       auto paneControls = [this](QVBoxLayout* parent, bool notes) {
             QWidget* controls = nullptr;
@@ -233,7 +235,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _scroll = new QScrollBar(Qt::Horizontal, this); layout->addWidget(_scroll);
       addWorkflowLanes(this,&_workflowPanel,_splitter);_splitter->addWidget(_workflowPanel);_workflowPanel->hide();
       auto workflowButton=new QToolButton(this);workflowButton->setObjectName("performanceWorkflowToggle");workflowButton->setText(tr("音轨／演奏对应"));workflowButton->setCheckable(true);second->addWidget(workflowButton,second->count()/6,second->count()%6);
-      connect(workflowButton,&QToolButton::toggled,this,[this](bool show){QSettings().setValue("performanceEditor/area/performanceWorkflowPanel",show);_workflowPanel->setVisible(show);if(show){if(!_splitter->restoreState(QSettings().value("performanceEditor/splitter").toByteArray()))_splitter->setSizes({150,130,180});}updateGeometry();});
+      connect(workflowButton,&QToolButton::toggled,this,[this](bool show){setEditorAreaVisible(this,"performanceWorkflowPanel",show);});
       _splitter->restoreState(QSettings().value("performanceEditor/splitter").toByteArray());
       auto areas=new QToolButton(this);areas->setText(tr("区域"));areas->setObjectName("performanceAreaMenu");areas->setPopupMode(QToolButton::InstantPopup);auto areaMenu=new QMenu(areas);areas->setMenu(areaMenu);second->addWidget(areas,second->count()/6,second->count()%6);
       for(auto item:QList<QPair<QString,QWidget*>>{{tr("钢琴卷帘"),noteArea},{tr("力度／速度／踏板"),parameterArea},{tr("音轨／演奏对应"),_workflowPanel}}){auto action=areaMenu->addAction(item.first);action->setCheckable(true);action->setChecked(!item.second->isHidden());connect(action,&QAction::toggled,this,[this,item,workflowButton](bool on){if(item.second==_workflowPanel){workflowButton->setChecked(on);return;}QSettings().setValue("performanceEditor/area/"+item.second->objectName(),on);item.second->setVisible(on);if(on){auto sizes=_splitter->sizes();int n=_splitter->indexOf(item.second);if(n>=0&&sizes[n]<40){sizes[n]=140;_splitter->setSizes(sizes);}}updateGeometry();});connect(areaMenu,&QMenu::aboutToShow,action,[item,action]{QSignalBlocker block(action);action->setChecked(!item.second->isHidden());});}
@@ -245,6 +247,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       installSpectrumPane(this,_splitter);
       installRhythmPane(this,_splitter);
 #endif
+      installEditorAreas(this,_splitter,areaMenu);
       _status = new QLabel(this); _status->setWordWrap(true); layout->addWidget(_status);
       _refreshTimer.setSingleShot(true);
       connect(&_refreshTimer, &QTimer::timeout, this, &PerformanceEditor::refresh);
@@ -316,11 +319,13 @@ void PerformanceEditor::resizeEvent(QResizeEvent*)
             for(int c=0;c<columns;++c)grid->setColumnMinimumWidth(c,unit);
             }
       if (layout()) layout()->activate();
+      ensureEditorAreas(_splitter);
       _toolbarReflowing = false;
       }
 
 PerformanceEditor::~PerformanceEditor()
       {
+      releaseEditorAreas(this);
       invalidateOverlay();
       if (_view && _trackingOwned) _view->setMouseTracking(_trackingBefore || _view->noteEntryMode() || _view->fotoMode());
       finishWheel(false); editors.removeAll(this);
@@ -798,7 +803,7 @@ bool PerformanceEditor::overlayAllowed() const
             && !_view->editMode() && (!_view->noteEntryMode() || _closestWheelActive || _wheelIndex >= 0 || _wheelFeedbackTimer.isActive());
       }
 bool PerformanceEditor::surfacesActive() const
-      { return personalFeaturesEnabled() && (isVisible() || ((_band->isChecked()||_peekHeld||_showValues||_closestWheelActive||(_wheelIndex>=0&&_wheelSurface==_view)||(_wheelFeedbackTimer.isActive()&&_wheelFeedbackSurface==_view)) && _view && _view->isVisible())); }
+      { return personalFeaturesEnabled() && (isVisible() || detachedEditorAreaVisible(this) || ((_band->isChecked()||_peekHeld||_showValues||_closestWheelActive||(_wheelIndex>=0&&_wheelSurface==_view)||(_wheelFeedbackTimer.isActive()&&_wheelFeedbackSurface==_view)) && _view && _view->isVisible())); }
 bool PerformanceEditor::scoreBandEnabled() const
       { return _band->isChecked(); }
 void PerformanceEditor::setScoreBandEnabled(bool enabled)

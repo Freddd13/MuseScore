@@ -75,12 +75,13 @@ MuseScore {
     property string instantDegreeText: "—"
     property int focusedPart: 0
     property var ownedRegion: Timeline.atTick(analysisRegions,currentTick,focusedPart)
-    property string summaryChordText: configuration.summaryMode===0 ? instantChordText : ownedRegion ? ownedRegion.chord : analysisDirty ? "分析中…" : "—"
-    property string summaryDegreeText: configuration.summaryMode===0 ? instantDegreeText : ownedRegion ? ownedRegion.degree : "—"
-    property int summaryRoot: configuration.summaryMode===0 ? liveRoot : ownedRegion ? ownedRegion.root : -1
-    property int summaryDefinition: configuration.summaryMode===0 ? liveDefinition : ownedRegion ? ownedRegion.definition : -1
+    property var summaryRegion: configuration.summaryMode===1&&ownedRegion&&(!analysisDirty||ownedRegion.source==="manual")?ownedRegion:null
+    property string summaryChordText: !summaryRegion ? instantChordText : summaryRegion.chord
+    property string summaryDegreeText: !summaryRegion ? instantDegreeText : degreeForRegion(summaryRegion)
+    property int summaryRoot: !summaryRegion ? liveRoot : summaryRegion.root
+    property int summaryDefinition: !summaryRegion ? liveDefinition : summaryRegion.definition
     property color summaryInk: configuration.chromaticAccent && Harmony.isChromatic(Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,summaryRoot,summaryDefinition) ? configuration.chromaticColor : ink
-    property var summaryToneRows: makeToneRows(summaryRoot,summaryDefinition,configuration.summaryMode===1 && ownedRegion ? ownedRegion.notes : contextNotes.length ? contextNotes : currentNotes)
+    property var summaryToneRows: makeToneRows(summaryRoot,summaryDefinition,summaryRegion ? summaryRegion.notes : contextNotes.length ? contextNotes : currentNotes)
     property int analysisEnd: analysisRecords.length ? (analysisRecords[analysisRecords.length-1].scoreEnd || analysisRecords[analysisRecords.length-1].tick+480) : 1920
     property var pendingRecords: []
     property var importedRecords: []
@@ -103,7 +104,7 @@ MuseScore {
     property bool started: false
     property var observer: null
     property bool surfaceActive: (visible || dualSummaryActive || dualDetailActive || (showChords.checked && !!ownerScore)) && (!observer || observer.surfaceVisible)
-    property string analysisStatus: !ownerScore ? "打开乐谱后开始识别" : analysisTimer.running ? "正在读取 · "+pendingRecords.length+" 个位置" : regionJobToken || regionBuilder ? "正在分析前后和弦" : analysisDirty ? observer && observer.playing ? "播放中 · 当前和弦" : "等待更新" : "已更新 · "+analysisRegions.length+" 处和弦"
+    property string analysisStatus: !ownerScore ? "打开乐谱后开始识别" : analysisTimer.running ? "正在读取 · "+pendingRecords.length+" 个位置" : regionJobToken || regionBuilder ? "正在分析前后和弦" : analysisDirty ? observer && observer.playing ? "正在识别当前位置 · 停播后整理全段" : "正在准备和弦分析" : "已更新 · "+analysisRegions.length+" 处和弦"
     property bool nativeAvailable: observer !== null
     property var nativeSnapshot: ({})
     property bool internalChange: false
@@ -195,7 +196,7 @@ MuseScore {
     }
     function highlightedTick() {return lastPlaying && followPlayback.checked ? currentTick : annotationTick>=0 ? annotationTick : currentTick}
     function rebuildRegions() {
-        analysisRegions=Timeline.overlay(Timeline.overlay(automaticRegions,importedRegions),manualNeedsReview?[]:manualOverrides)
+        analysisRegions=Timeline.overlay(Timeline.overlay(automaticRegions,importedRegions),manualNeedsReview?[]:manualOverrides).map(function(region){region.degree=root.degreeForRegion(region);return region})
         if(!analysisDirty && observer && typeof observer.publishHarmonyAnalysis==="function")
             observer.publishHarmonyAnalysis({snapshotId:observer.analysisContentRevision(),regions:analysisRegions,source:"HarmonyAssistant",schema:1})
     }
@@ -675,6 +676,7 @@ MuseScore {
         chordDefinition = -1
         chordText = "—"
         degreeText = "—"
+        instantChordText="—";instantDegreeText="—";liveRoot=-1;liveDefinition=-1
         voicingText = "—"
         inversionText = "—"
         alternativesText = ""
@@ -861,6 +863,12 @@ MuseScore {
         repaintNotes()
         scheduleAnalysis()
     }
+    function degreeForRegion(region) {
+        if(!region)return "—"
+        var tonic=manualKey||region.tonic===undefined?Harmony.rootPcs[keyTonic.currentIndex]:region.tonic
+        var minor=manualKey||region.minor===undefined?keyMode.currentIndex===1:region.minor
+        return Harmony.roman(tonic,minor,region.root,region.definition,configuration.degreeMode,region.bass)
+    }
     function updateTexts() {
         chordRoot=liveRoot;chordDefinition=liveDefinition
         chordText = chordRoot < 0 ? (currentPitches.length === 1 ? noteName(currentNotes[0]) : "—") :
@@ -877,16 +885,16 @@ MuseScore {
             if (Harmony.mod12(bass.pitch) !== chordRoot) chordText += "/" + Harmony.spelledName(bass.tpc, bass.pitch, prefersFlats())
         }
         instantChordText=chordText;instantDegreeText=degreeText
-        if(configuration.detailMode===1 && ownedRegion) {
-            chordRoot=ownedRegion.root;chordDefinition=ownedRegion.definition
-            chordText=ownedRegion.chord;degreeText=ownedRegion.degree
-            matchText="所属和弦 · "+(ownedRegion.source==="manual"?"人工修正":ownedRegion.kind||"已识别")
-            inversionText=(ownedRegion.inversion||Harmony.inversion(Harmony.labelFor(ownedRegion.bass,chordRoot,chordDefinition)))+(ownedRegion.bass>=0?" · 低音 "+Harmony.pcName(ownedRegion.bass,prefersFlats()):"")
-            var candidates=ownedRegion.alternatives||[]
+        if(configuration.detailMode===1 && summaryRegion) {
+            chordRoot=summaryRegion.root;chordDefinition=summaryRegion.definition
+            chordText=summaryRegion.chord;degreeText=degreeForRegion(summaryRegion)
+            matchText="所属和弦 · "+(summaryRegion.source==="manual"?"人工修正":summaryRegion.kind||"已识别")
+            inversionText=(summaryRegion.inversion||Harmony.inversion(Harmony.labelFor(summaryRegion.bass,chordRoot,chordDefinition)))+(summaryRegion.bass>=0?" · 低音 "+Harmony.pcName(summaryRegion.bass,prefersFlats()):"")
+            var candidates=summaryRegion.alternatives||[]
             alternativesText=candidates.length?"也可能是 "+candidates.map(function(a){return nameOf(a.root)+Harmony.defs[a.definition].suffix}).join(" / "):""
-            if(ownedRegion.harmonicBass!==undefined && ownedRegion.harmonicBass!==ownedRegion.bass)alternativesText+=(alternativesText.length?" · ":"")+"新伴奏低音 "+Harmony.pcName(ownedRegion.harmonicBass,prefersFlats())+"；较早低音仍在延续"
+            if(summaryRegion.harmonicBass!==undefined && summaryRegion.harmonicBass!==summaryRegion.bass)alternativesText+=(alternativesText.length?" · ":"")+"新伴奏低音 "+Harmony.pcName(summaryRegion.harmonicBass,prefersFlats())+"；较早低音仍在延续"
         }
-        var roleNotes = configuration.detailMode===1 && ownedRegion ? ownedRegion.notes : contextNotes.length ? contextNotes : currentNotes
+        var roleNotes = configuration.detailMode===1 && summaryRegion ? summaryRegion.notes : contextNotes.length ? contextNotes : currentNotes
         toneRows = makeToneRows(chordRoot,chordDefinition,roleNotes)
     }
     function makeToneRows(toneRoot,toneDefinition,roleNotes) {
@@ -1069,6 +1077,7 @@ MuseScore {
             catch(error){noticeText="后台和弦计算未启用："+error;regionWorkerSource=""}
         }
         syncDetailPanel()
+        if(observer&&curScore){setScope();displayTick(Math.max(0,observer.tick),true)}
         requestRefresh(true)
     }
     onScoreStateChanged: {
@@ -1257,7 +1266,10 @@ Flickable {
                     id:summaryCard; objectName:"harmonySummary"
                     width: root.expanded ? (panel.width-10)/2 : panel.width
                     fixedBodyHeight:settingsExpanded ? 230 : 200
-                    StableLabel {text:positionText; color:muted; font.pixelSize:11}
+                    RowLayout {width:parent.width;height:28
+                        UiLabel {Layout.fillWidth:true;text:positionText;color:muted;font.pixelSize:11;elide:Text.ElideRight}
+                        DeskComboBox {objectName:"harmonyResultMode";Layout.preferredWidth:112;model:["实时结果","所属和弦"];currentIndex:configuration.resultMode;onActivated:{var c=Timeline.clone(configuration);c.resultMode=currentIndex;root.configuration=Preferences.clean(c);root.updateTexts();root.optionsChanged(false)}}
+                    }
                     Item {width:parent.width;height:44
                         HarmonyLabel {anchors.left:parent.left;anchors.verticalCenter:parent.verticalCenter;width:Math.min(parent.width,implicitWidth);height:Math.min(44,implicitHeight);observer:root.observer;chord:root.chordText;degree:root.degreeText;color:root.chordInk;pixels:24;gap:8;chordFont:["","Edwin","Arial"][configuration.chordFont];degreeFont:configuration.degreeFont;revision:root.analysisFingerprint}
                     }
@@ -1267,6 +1279,16 @@ Flickable {
                     StableLabel {text:inversionText; color:muted; font.pixelSize:11}
                     StableLabel {visible:settingsExpanded; reservedLines:2; text:voicingText; color:ink; font.pixelSize:12}
                 }
+                PanelCard {
+                    id:rangeCard;heading:"修改和弦与范围";collapsed:configuration.collapsedSections.indexOf("range")>=0;onToggleRequested:root.toggleSection("range")
+                    width:root.expanded ? (panel.width-10)/2 : panel.width
+                    visible:settingsExpanded && advancedNative
+                    RangeEditor {width:parent.width;observer:root.observer;handlesVisible:root.scoreRangeEditing;onEditingChanged:root.scoreRangeEditing=enabled;region:root.ownedRegion;regions:root.analysisRegions.filter(function(n){return n.part===root.focusedPart})
+                        tick:Math.max(0,root.currentTick);scoreEnd:root.analysisEnd;canUndo:root.editUndo.length>0;canRedo:root.editRedo.length>0
+                        roots:Harmony.rootNames;rootPcs:Harmony.rootPcs;qualities:root.qualityNames;onAction:root.editRange(command,start,end,rootIndex,qualityIndex,bassIndex)}
+                    DeskButton {text:"复核完成：应用原人工范围";visible:root.manualNeedsReview;onClicked:root.editRange("review",0,0,0,0)}
+                }
+
                 PanelCard {
                     heading:"音程功能";collapsed:configuration.collapsedSections.indexOf("tones")>=0;onToggleRequested:root.toggleSection("tones")
                     id:tonesCard; objectName:"harmonyFunctions"
@@ -1457,7 +1479,7 @@ Flickable {
                     heading:"外观与功能色";collapsed:configuration.collapsedSections.indexOf("appearance")>=0;onToggleRequested:root.toggleSection("appearance")
                     width:root.expanded ? (panel.width-10)/2 : panel.width
                     visible:settingsExpanded
-                    ConfigurationEditor {width:parent.width; configuration:root.configuration; onModified:{root.configuration=configuration; rebuildRegions();analyze();optionsChanged(false)}}
+                    ConfigurationEditor {width:parent.width; configuration:root.configuration; onModified:{root.configuration=configuration; rebuildRegions();analyze();optionsChanged(false)}onLayoutModified:{root.configuration=configuration;configurationTimer.restart()}}
                     RowLayout {
                         width:parent.width
                         DeskButton {text:"导入配置"; Layout.fillWidth:true; enabled:advancedNative; onClicked:chooseFile("import-config")}
@@ -1465,15 +1487,7 @@ Flickable {
                     }
                     UiLabel {width:parent.width; text:"设置自动保存，下次启动自动读取。"; color:muted; font.pixelSize:10; wrapMode:Text.Wrap}
                 }
-                PanelCard {
-                    id:rangeCard;heading:"修改和弦与范围";collapsed:configuration.collapsedSections.indexOf("range")>=0;onToggleRequested:root.toggleSection("range")
-                    width:root.expanded ? (panel.width-10)/2 : panel.width
-                    visible:settingsExpanded && advancedNative
-                    RangeEditor {width:parent.width;observer:root.observer;handlesVisible:root.scoreRangeEditing;onEditingChanged:root.scoreRangeEditing=enabled;region:root.ownedRegion;regions:root.analysisRegions.filter(function(n){return n.part===root.focusedPart})
-                        tick:Math.max(0,root.currentTick);scoreEnd:root.analysisEnd;canUndo:root.editUndo.length>0;canRedo:root.editRedo.length>0
-                        roots:Harmony.rootNames;rootPcs:Harmony.rootPcs;qualities:root.qualityNames;onAction:root.editRange(command,start,end,rootIndex,qualityIndex,bassIndex)}
-                    DeskButton {text:"复核完成：应用原人工范围";visible:root.manualNeedsReview;onClicked:root.editRange("review",0,0,0,0)}
-                }
+
                 PanelCard {
                     heading:"全谱和弦分析";collapsed:configuration.collapsedSections.indexOf("exchange")>=0;onToggleRequested:root.toggleSection("exchange")
                     width:root.expanded ? (panel.width-10)/2 : panel.width
@@ -1510,7 +1524,7 @@ Item {
                 RowLayout {
                     id:ribbonRow;anchors.fill:parent;spacing:8
                     HarmonyLabel {id:ribbonChord;objectName:"harmonyRibbonChord";observer:root.observer;chord:root.summaryChordText;degree:root.summaryDegreeText;color:root.summaryInk;pixels:configuration.summaryPixels;degreeRatio:configuration.summaryDegreeRatio/100;gap:configuration.summaryGap;order:configuration.summaryOrder;degreeFont:configuration.degreeFont;chordFont:["","Edwin","Arial"][configuration.chordFont];revision:root.analysisFingerprint;Layout.preferredWidth:implicitWidth;Layout.preferredHeight:implicitHeight;Layout.maximumHeight:ribbonGroup.height;Layout.maximumWidth:Math.max(50,ribbonGroup.width-90);Layout.alignment:Qt.AlignVCenter}
-                    UiLabel {id:ribbonStatus;text:(root.analysisDirty?"分析中":root.analysisStatus.indexOf("已更新")===0?"已更新":root.analysisStatus)+" · "+positionText.replace(/^当前位置[：:]\s*/,"")+" · "+(configuration.summaryMode===0?"实时":"所属");color:muted;font.pixelSize:11;visible:summarySurface.width>660;elide:Text.ElideRight;Layout.preferredWidth:Math.min(230,implicitWidth);Layout.fillWidth:true;Layout.alignment:Qt.AlignVCenter}
+                    UiLabel {id:ribbonStatus;text:(root.analysisStatus.indexOf("已更新")===0?"已更新":root.analysisStatus)+" · "+positionText.replace(/^当前位置[：:]\s*/,"")+" · "+(!root.summaryRegion?"实时":"所属");color:muted;font.pixelSize:11;visible:summarySurface.width>660;elide:Text.ElideRight;Layout.preferredWidth:Math.min(230,implicitWidth);Layout.fillWidth:true;Layout.alignment:Qt.AlignVCenter}
                     Row {
                         id:ribbonTones;visible:summarySurface.width>=1200;spacing:3;Layout.alignment:Qt.AlignVCenter
                         Repeater {model:root.summaryToneRows;delegate:Rectangle {

@@ -13,6 +13,7 @@
 #include "musescore.h"
 #include "workflow/workflowcontext.h"
 #include "workflow/featuregate.h"
+#include "workflow/workspaceviews.h"
 #include "workflow/aiconnection.h"
 
 #include <QCheckBox>
@@ -739,14 +740,31 @@ void MuseScore::populateAlternativeOperations()
                   alternativeTools->addWidget(w);
                   }
             }
-      // Personal panel entry survives workspace toolbar repopulation, sharing the
-      // View-menu action and its checked state. No new shortcut command is needed.
-      alternativeTools->addSeparator();
-      for (const char* name : {"performance-score-band", "performance-editor"}) if (auto action = findChild<QAction*>(name)) {
-            auto button = new AccessibleToolButton(alternativeTools, action);
-            button->setObjectName(QString(name) + "-button");
-            alternativeTools->addWidget(button);
+      // These buttons share the menu actions and can be moved as one native toolbar.
+      auto tools=findChild<QToolBar*>("kumoPersonalTools");
+      if(!personalFeaturesEnabled()){if(tools)tools->hide();return;}
+      if(!tools){
+            tools=new QToolBar(tr("编曲工具栏"),this);tools->setObjectName("kumoPersonalTools");
+            tools->setIconSize(alternativeTools->iconSize());addToolBar(Qt::TopToolBarArea,tools);
+            connect(alternativeTools,&QToolBar::iconSizeChanged,tools,&QToolBar::setIconSize);
+            markPersonalAction(tools->toggleViewAction());Workspace::addActionAndString(tools->toggleViewAction(),"kumo-personal-toolbar");
             }
+      const auto oldTools=tools->actions();tools->clear();
+      for(auto action:oldTools)if(action->parent()==tools)delete action;
+      for (const char* name : {"performance-editor", "performance-score-band", "harmony-assistant", "reference-player", "performance-expression", "kumo-spectrum", "arrangement-suggestions"}) {
+            auto action = findChild<QAction*>(name);
+#ifdef SCRIPT_INTERFACE
+            if (!action && QStringList{"harmony-assistant", "reference-player", "performance-expression", "arrangement-suggestions"}.contains(name)) action = getAction(name);
+#endif
+            if (!action) continue;
+            if (QString(name) != "performance-editor" && QString(name) != "performance-score-band") action->setIcon(personalToolIcon(name));
+            auto button = new AccessibleToolButton(tools, action);
+            button->setObjectName(QString(name) + "-button");tools->addWidget(button);
+            }
+      addWorkspaceSelector(tools);
+      int needed=16;for(auto action:tools->actions())if(auto widget=tools->widgetForAction(action))needed+=widget->sizeHint().width();
+      tools->setMinimumWidth(needed);
+
       }
 
 //---------------------------------------------------------
@@ -2016,6 +2034,8 @@ MuseScore::MuseScore()
       addReferencePanelAction(menuView);
       addBuiltinPanelActions(menuView);
 #endif
+      addWorkspaceViews(menuView);
+      populateAlternativeOperations();
 
 
       a = getAction("toggle-scorecmp-tool");
@@ -2838,10 +2858,13 @@ void MuseScore::updateMenus()
             if (!menuView->actions().contains(action)) menuView->addAction(action);
             }
 #endif
+      if (auto spectrum = findChild<QAction*>("kumo-spectrum"))
+            if (!menuView->actions().contains(spectrum)) menuView->addAction(spectrum);
       if (auto action = findChild<QAction*>("kumo-ai-connection"))
             if (!menuView->actions().contains(action)) menuView->addAction(action);
       if (auto action = findChild<QAction*>("kumo-user-guide"))
             if (!menuHelp->actions().contains(action)) menuHelp->addAction(action);
+      addWorkspaceViews(menuView);
       applyPersonalFeatureVisibility(this);
       setMenuTitles();
 #ifdef SCRIPT_INTERFACE
@@ -9577,6 +9600,7 @@ void MuseScore::showPerformanceEditor(bool visible)
       {
       if (visible && !personalFeaturesEnabled()) return;
       const QSize windowBeforeEditor=size();
+      const bool opening=visible && (!_performanceDock || !_performanceDock->isVisible());
       if (!_performanceEditor) {
             _performanceDock = new QDockWidget(tr("演奏编辑器"), this);
             _performanceDock->setObjectName("performanceEditorDock");
@@ -9584,6 +9608,7 @@ void MuseScore::showPerformanceEditor(bool visible)
             _performanceEditor = new PerformanceEditor(_performanceDock);
             _performanceEditor->setProperty("windowBeforeEditor",windowBeforeEditor);
             _performanceDock->setWidget(_performanceEditor);
+            addEditorDockActions(_performanceDock);
             connect(_performanceEditor, &PerformanceEditor::scoreBandChanged, this, [this](bool enabled) {
                   if (auto action = findChild<QAction*>("performance-score-band")) { QSignalBlocker blocker(action); action->setChecked(enabled); }
                   });
@@ -9600,5 +9625,13 @@ void MuseScore::showPerformanceEditor(bool visible)
       if(visible && _performanceEditor && (!_performanceDock || !_performanceDock->isVisible()))
             _performanceEditor->setProperty("windowBeforeEditor",windowBeforeEditor);
       if (_performanceDock) {_performanceDock->setVisible(visible);if(visible)_performanceDock->raise();}
+      if (opening) {
+            if (!isMaximized() && size()!=windowBeforeEditor) resize(windowBeforeEditor);
+            QTimer::singleShot(0,this,[this,windowBeforeEditor] {
+                  if (!_performanceDock || !_performanceDock->isVisible()) return;
+                  if (!isMaximized() && size()!=windowBeforeEditor) resize(windowBeforeEditor);
+                  ensureEditorAreas(_performanceEditor->findChild<QSplitter*>("performanceMainSplitter"));
+                  });
+            }
       }
 }

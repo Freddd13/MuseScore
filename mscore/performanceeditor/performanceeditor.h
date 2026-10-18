@@ -232,8 +232,9 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       void invalidateVisual();
       void updateSurfaces();
       void surfaceResized(PerformanceSurface);
-      void paintBackground(QPainter&, PerformanceSurface);
-      void paintForeground(QPainter&, PerformanceSurface);
+      QPointer<QWidget> _seekingSurface;
+      void paintBackground(QPainter&, PerformanceSurface, QWidget*);
+      void paintForeground(QPainter&, PerformanceSurface, QWidget*);
       void buildGeometry();
       QVector<int> hits(QPointF, bool parameter = false, bool onScore = false) const;
       void cycleHit(const QVector<int>&, int step = 1);

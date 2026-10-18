@@ -10,6 +10,12 @@ Column {
     objectName:"harmonyConfiguration"
     property var configuration: Preferences.defaults()
     signal modified(var configuration)
+    signal layoutModified(var configuration)
+    function toggleDetails(key) {
+        var next=JSON.parse(JSON.stringify(configuration)),index=next.expandedSubsections.indexOf(key)
+        if(index<0)next.expandedSubsections.push(key);else next.expandedSubsections.splice(index,1)
+        layoutModified(Preferences.clean(next))
+    }
     spacing: 8
     function change(group,key,value) {
         var next=JSON.parse(JSON.stringify(configuration))
@@ -24,11 +30,14 @@ Column {
         property string key
         onAccepted:editor.change(group,key,String(color))
     }
+    PanelCard {width:parent.width;heading:"记号外观";collapsed:editor.configuration.expandedSubsections.indexOf("appearance")<0;onToggleRequested:editor.toggleDetails("appearance")
     AppearanceEditor {
         width:parent.width; configuration:editor.configuration
         onModified:editor.modified(configuration)
         onChooseColor:editor.openColor("",key,color)
     }
+    }
+    PanelCard {width:parent.width;heading:"功能色";collapsed:editor.configuration.expandedSubsections.indexOf("colors")<0;onToggleRequested:editor.toggleDetails("colors")
     Rectangle {width:parent.width; height:1; color:theme.subtleLine}
     RowLayout {
         width:parent.width
@@ -44,6 +53,8 @@ Column {
         model:Preferences.roles
         ColorOption {width:parent.width; caption:modelData; value:configuration.colors[modelData]; onEdited:editor.change("colors",modelData,color); onChooseRequested:editor.openColor("colors",modelData,value)}
     }
+    }
+    PanelCard {width:parent.width;heading:"音旁文字";collapsed:editor.configuration.expandedSubsections.indexOf("labels")<0;onToggleRequested:editor.toggleDetails("labels")
     UiLabel { text:"音旁文字（留空可隐藏该功能）"; font.bold:true; color:theme.text; font.pixelSize:12 }
     Repeater {
         model:Preferences.labels
@@ -73,6 +84,7 @@ Column {
                 }
             }
         }
+    }
     }
     UiLabel { id:errorText; width:parent.width; visible:text.length>0; color:"#b42626"; font.pixelSize:11; wrapMode:Text.Wrap }
 }

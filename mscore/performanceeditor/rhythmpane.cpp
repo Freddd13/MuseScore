@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "rhythmpane.h"
+#include "../workflow/editorareas.h"
 #include "performanceeditor.h"
 #include "mscore/musescore.h"
 #include "mscore/plugin/api/score.h"
@@ -857,6 +858,8 @@ void installRhythmPane(PerformanceEditor *editor, QSplitter *splitter) {
     };
     auto state = std::make_shared<LayoutState>();
     QObject::connect(tabs, &QTabBar::currentChanged, pane, [pane, splitter, editor, state](int page) {
+        if(page==3&&showDetachedEditorArea(pane))return;
+        if(pane->property("kumoDetachedArea").toBool())return;
         QSize before = mscore ? mscore->size() : QSize();
         if (mscore)
             if (auto screen = mscore->windowHandle() ? mscore->windowHandle()->screen()
@@ -911,7 +914,7 @@ void installRhythmPane(PerformanceEditor *editor, QSplitter *splitter) {
                 while (owner && !qobject_cast<QDockWidget *>(owner))
                     owner = owner->parentWidget();
                 if (auto dock = qobject_cast<QDockWidget *>(owner))
-                    if (!dock->isFloating())
+                    if (!dock->isFloating() && mscore->property("kumoWorkspaceView").toString()!="daw")
                         mscore->resizeDocks({dock}, {qBound(280, mscore->height() / 2, 520)}, Qt::Vertical);
             });
         } else {

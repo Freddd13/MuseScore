@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performanceeditor.h"
+#include "../workflow/editorareas.h"
 #ifdef SCRIPT_INTERFACE
 #include "spectrumpane.h"
 #endif
@@ -27,6 +28,7 @@ void PerformanceEditor::updateSurfaces()
 #ifdef SCRIPT_INTERFACE
       if(_spectrum)_spectrum->viewChanged();
 #endif
+      updateDetachedRulers(this);
       if (_canvas) _canvas->update(); if (_noteCanvas) _noteCanvas->update(); if (_ruler) _ruler->update(); if(_workflowPanel&&_workflowPanel->isVisible())for(auto child:_workflowPanel->findChildren<QWidget*>())child->update(); }
 void PerformanceEditor::invalidateVisual()
       { ++_visualRevision; syncValueScroll(); updateSurfaces(); }
@@ -65,10 +67,9 @@ void PerformanceEditor::buildGeometry()
             _noteGeometry.append({index, QRectF(x, _viewport.pitchY(note.pitch) + 1, qMax(2.0, end - x - 1), qMax(1.0, _viewport.rowHeight - 2))});
             }
       }
-void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface surface)
+void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface surface, QWidget* widget)
       {
       const auto& c = _appearance.colors;
-      QWidget* widget = surface == PerformanceSurface::Notes ? static_cast<QWidget*>(_noteCanvas) : (surface == PerformanceSurface::Ruler ? static_cast<QWidget*>(_ruler) : _canvas);
       painter.fillRect(widget->rect(), c[PerformanceAppearance::Background]);
       if (surface == PerformanceSurface::Notes) {
             const int low = qMax(0, int(_viewport.pitchAtIndex(_viewport.pitchIndex(_viewport.topPitch) - widget->height() / _viewport.rowHeight)) - 2);
@@ -310,10 +311,9 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
       painter.restore();
       }
 
-void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface surface)
+void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface surface, QWidget* widget)
       {
       const auto& c = _appearance.colors;
-      QWidget* widget = surface == PerformanceSurface::Notes ? static_cast<QWidget*>(_noteCanvas) : (surface == PerformanceSurface::Ruler ? static_cast<QWidget*>(_ruler) : _canvas);
       const QRectF area(PerformanceViewport::gutter, 0, widget->width() - PerformanceViewport::gutter - PerformanceViewport::rightMargin, widget->height());
       painter.save(); painter.setClipRect(area, Qt::IntersectClip);
       const QRectF clip = painter.clipBoundingRect();

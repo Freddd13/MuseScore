@@ -17,12 +17,8 @@ Column {
     }
     UiLabel {text:"显示位置与谱面记号"; font.bold:true; color:theme.text; font.pixelSize:13}
     RowLayout {width:parent.width
-        UiLabel {text:"顶部主和弦";color:theme.muted;font.pixelSize:11}
-        DeskComboBox {model:["实时结果","所属和弦"];currentIndex:configuration.summaryMode;Layout.fillWidth:true;onActivated:editor.option("summaryMode",currentIndex)}
-    }
-    RowLayout {width:parent.width
-        UiLabel {text:"侧边主和弦";color:theme.muted;font.pixelSize:11}
-        DeskComboBox {model:["实时结果","所属和弦"];currentIndex:configuration.detailMode;Layout.fillWidth:true;onActivated:editor.option("detailMode",currentIndex)}
+        UiLabel {text:"面板显示结果";color:theme.muted;font.pixelSize:11}
+        DeskComboBox {model:["实时结果","所属和弦"];currentIndex:configuration.resultMode;Layout.fillWidth:true;onActivated:editor.option("resultMode",currentIndex)}
     }
     DeskSwitch {text:"同时显示顶部摘要与右侧详情"; checked:configuration.dualPanel; onToggled:if(checked!==configuration.dualPanel)editor.option("dualPanel",checked)}
     RowLayout {

@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performanceeditor.h"
+#include "../workflow/editorareas.h"
 #ifdef SCRIPT_INTERFACE
 #include "spectrumpane.h"
 #endif
@@ -214,6 +215,9 @@ void PerformanceEditor::applyAppearance()
 #ifdef SCRIPT_INTERFACE
       if(_spectrum)_spectrum->applyAppearance();
 #endif
+      setProperty("workflowPanelTheme",QVariantMap{{"background",_appearance.colors[PerformanceAppearance::Background]},
+            {"text",_appearance.colors[PerformanceAppearance::Text]},{"button",QColor("#484848")},{"field",QColor("#383838")},
+            {"line",QColor("#696969")},{"accent",QColor("#687860")}});
       setAttribute(Qt::WA_StyledBackground, true);
       setStyleSheet(QString("QWidget#performanceEditor {background:%1;} QLabel,QCheckBox {color:%2;} QToolButton,QPushButton,QComboBox,QDoubleSpinBox {background:#484848;color:%2;border:1px solid #696969;border-radius:2px;padding:3px;} QComboBox QAbstractItemView {background:#484848;color:%2;selection-background-color:#687860;selection-color:#ffffff;} QComboBox QAbstractItemView::item {color:%2;min-height:22px;} QMenu {background:#484848;color:%2;border:1px solid #696969;} QMenu::item:selected {background:#687860;color:#ffffff;} QToolButton:hover,QPushButton:hover {background:#595959;} QToolButton:checked {background:#626d5c;} QScrollBar {background:#303030;} QScrollBar::handle {background:#797979;min-height:12px;min-width:12px;} QScrollBar::add-line,QScrollBar::sub-line {width:0;height:0;} QScrollBar::add-page,QScrollBar::sub-page {background:#383838;} QScrollBar::handle:disabled {background:#454545;} QSplitter::handle {background:#686868;}").arg(_appearance.colors[PerformanceAppearance::Background].name(), _appearance.colors[PerformanceAppearance::Text].name()));
       }
@@ -272,6 +276,7 @@ void PerformanceEditor::syncTransport()
       }
 void PerformanceEditor::updatePlayhead()
       {
+      updateDetachedRulers(this);
       if (!_score || !surfacesActive()) { _playTimer.stop(); return; }
       const bool playing = seq && seq->isPlaying() && seq->score() == _score->masterScore();
       if (!playing) _playTimer.stop();
@@ -342,7 +347,7 @@ void PerformanceEditor::cancelSurfaceGesture()
       {
       if (!_marquee && !_seeking && !_rangePanning) return;
       _marquee = _seeking = _rangePanning = false; _selectionBefore.clear(); if (_canvas) _canvas->unsetCursor();
-      qApp->removeEventFilter(this); if (_noteCanvas) _noteCanvas->releaseMouse(); if (_ruler) _ruler->releaseMouse(); if (_canvas) _canvas->releaseMouse(); updateSurfaces();
+      qApp->removeEventFilter(this); if (_noteCanvas) _noteCanvas->releaseMouse(); if (_ruler) _ruler->releaseMouse(); if(_seekingSurface)_seekingSurface->releaseMouse();_seekingSurface=nullptr; if (_canvas) _canvas->releaseMouse(); updateSurfaces();
       }
 void PerformanceEditor::queueGesture(QPointF point)
       { _queuedPoint = point; _moveQueued = true; if (!_moveTimer.isActive()) _moveTimer.start(); }
@@ -353,7 +358,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
       if ((_marquee || _seeking || _rangePanning) && (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
             event->accept(); if (event->type() == QEvent::KeyPress) cancelSurfaceGesture(); return true;
             }
-      const bool notes = object == _noteCanvas, ruler = object == _ruler, parameter = object == _canvas;
+      const bool notes = object == _noteCanvas, ruler = object == _ruler || object->property("performanceExtraRuler").toBool(), parameter = object == _canvas;
       if (!notes && !ruler && !parameter) return false;
       if ((event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Space) {
             event->accept(); if (event->type() == QEvent::KeyPress) togglePlayback(); return true;
@@ -423,7 +428,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
                   pauseFollow(); _rangePanning = true; _last = mouse->pos(); _canvas->setCursor(Qt::ClosedHandCursor); _canvas->grabMouse(); qApp->installEventFilter(this); return true;
                   }
             if (ruler && mouse->button() == Qt::LeftButton && mouse->x() >= PerformanceViewport::gutter) {
-                  pauseFollow(); _seeking = true; _seekTick = tickForX(mouse->x(), false); _ruler->grabMouse(); qApp->installEventFilter(this); updateSurfaces(); return true;
+                  pauseFollow(); _seeking = true; _seekTick = tickForX(mouse->x(), false); _seekingSurface=static_cast<QWidget*>(object); _seekingSurface->grabMouse(); qApp->installEventFilter(this); updateSurfaces(); return true;
                   }
             if (notes || (parameter && _parameter->currentIndex() == 0)) {
                   buildGeometry(); const auto candidates = hits(mouse->pos(), parameter);

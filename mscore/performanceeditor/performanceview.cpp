@@ -114,14 +114,14 @@ void PerformanceCanvas::paintEvent(QPaintEvent* event)
       if (_background.size() != size() * ratio || _background.devicePixelRatioF() != ratio || _revision != _editor->_visualRevision) {
             _background = QPixmap(size() * ratio); _background.setDevicePixelRatio(ratio);
             _background.fill(Qt::transparent);
-            QPainter background(&_background); _editor->paintBackground(background, _surface);
+            QPainter background(&_background); _editor->paintBackground(background, _surface,this);
             _revision = _editor->_visualRevision;
             }
       QPainter painter(this); painter.setClipRegion(event->region()); painter.drawPixmap(0, 0, _background);
 #ifdef SCRIPT_INTERFACE
       if(_surface==PerformanceSurface::Notes&&_editor->_spectrum)_editor->_spectrum->paintOverlay(painter,rect());
 #endif
-      _editor->paintForeground(painter, _surface);
+      _editor->paintForeground(painter, _surface,this);
       if (qEnvironmentVariableIsSet("PERFORMANCE_PAINT_PROFILE")) qInfo("Performance paint %d: %.2f ms", int(_surface), paintTimer.nsecsElapsed() / 1e6);
       }
 }
