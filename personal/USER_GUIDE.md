@@ -629,3 +629,14 @@ Windows 安装需要同 SDK 的 QtWebSockets QML 模块和 `Qt5WebSockets.dll`�
 ## 0.57 的力度对比
 
 新导入和录制默认采用全部演奏力度，并逐音固定保存。编辑器默认同音对比，可切换真实播放时间；原值与拟采用值用并列实心柱显示。完整操作见[演奏力度说明](docs/REPAIR_057_GUIDE.md)。
+
+
+## 官谱字体本机研究 0.410（2026-10-18）
+
+字体插件项目已按用户提供的新官谱目录只读清点146份PDF、1,135页，并制作 **Kumo Score Study / Kumo Score Study Text** 本机小样，替换75个码位；音乐493字覆盖保留，Text由182字补至233字。参考图、轮廓和OTF留在字体项目忽略目录，没有提取/保存原PDF的FontFile程序，不作为公开OFL字体包发布。0.2/0.3已被用户否定，不再推荐。
+
+本机试用：把 `mcp-musescore/fonts/kumo-engrave/dist/corpus-font-049/` 下的 `Kumo Score Study` 与 `Kumo Score Study Text` 两个完整文件夹复制到偏好设置指定的Score Fonts目录并重启；在乐谱独立副本“格式→样式→乐谱”选择上述音乐/音乐Text家族，保持已有谱距和布局参数。此次应搭配新的Text，以显示配套速度音符和完整组合力度。无需重装MCP、skill或Windows字体；后续字体更新成对更换OTF/JSON并重启即可，不覆盖原谱。
+
+固定personal 0.21宿主的独立配置原生图录已绘制75字，九组力度的常规分字母写法与完整字形原生墨迹IoU均为1.0；完整保留底库GPOS/GDEF和原有GSUB特性。当前软件仓库最新版、用户谱副本、连续波线端部、特殊/复合符号、曲线质量、审美和打印仍待验证。字符清点不等于所有字形完成，尤其《in the pool》五页全路径必须另行审计。
+
+本次仅同步用户说明，不修改MuseScore原生代码、内置字体或个人软件版本。源码定位 `Freddd13/mcp-musescore@fefc802`（`codex/musescore-evolution`）。[试用说明](../../../mcp-musescore/fonts/kumo-engrave/README.md)、[全目录研究及限制](../../../mcp-musescore/fonts/kumo-engrave/CORPUS_STUDY.md)。
