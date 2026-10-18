@@ -562,3 +562,16 @@ sf、八度线和音符括号仍用软件原有操作；速度近似等号与swi
 固定personal0.21宿主原生检查：自制钢琴谱、上下X符干与二度和弦、音符/变音括号、谱外Rest、8va/8及swing混排均已查看；十组复合力度在正常分字母与整字形路径的墨迹IoU均为1.0。构建后核对字体覆盖、未改轮廓/字宽、GPOS/GDEF及外框。未宣称当前新宿主或用户谱已回归，连续波线/端部接缝、曲线质量和审美仍在研究。
 
 参考PDF全部只读，原件哈希核对未变，用户MSCZ本轮未打开或修改。只更新本体仓库用户说明，不改本体代码或个人软件版本。源码提交 `Freddd13/mcp-musescore@77106bc`；[字体研究及安装](../../../mcp-musescore/fonts/kumo-engrave/README.md)、[验证范围](../../../mcp-musescore/fonts/kumo-engrave/CORPUS_STUDY.md)。
+
+
+## Kumo Score Study 0.430：波线修正与用户谱副本（2026-10-18）
+
+本机官谱字形小样修正trill波线偏低的问题，按原页重叠墨迹取正确重复周期；琶音方向端部用Leland箭头适配新主体，保留三次曲线。当前处理92码位，音乐501字、Text249字，未修改部分保持Leland。全部音乐角色与原始曲线质量仍在研究。
+
+使用本机 `mcp-musescore/fonts/kumo-engrave/dist/kumo-score-study-0.430-local.zip`，将两个完整家族文件夹放到偏好设置的 Score Fonts 路径并重启；乐谱副本中同时选择 Kumo Score Study 与 Kumo Score Study Text。已有旧小样时成对更新两个家族的OTF/JSON再重启即可，无需重装MCP、skill或Windows字体。保持原有梁、间距和页面设置，先看字体本身的变化。
+
+固定0.21和当前安装目录宿主已渲染普通/上下方向琶音的短、中、长形态，trill及跨系统延续。当前安装宿主还完成常用谱、扩展谱、92字图录与十组力度；力度分字母/整字形墨迹IoU均为1.0。当前宿主二进制SHA256为 `f14b2a0dd24b2ff9052ce2a32ff4d547194124210ac3d7b3ee13f92e85df472a`，按此快照定位，不将工作区版本号视为二进制验证证据。
+
+只读《如果有来生-release5.mscz》创建字体副本：改名Leland Control为9页，Study为8页；这只是字体输入导致的分页变化，不等于布局质量排名。已浏览8页联系表与末页细节；程序核查除两项字体样式外XML一致，归档附件字节相同，原件SHA不变。没有覆盖用户PDF/MSCZ，也没有更改软件本体或当前用户设置。
+
+源码 `Freddd13/mcp-musescore@037da3c`；[安装说明](../../../mcp-musescore/fonts/kumo-engrave/README.md)、[波线与用户谱验证](../../../mcp-musescore/fonts/kumo-engrave/WAVE_STUDY.md)。本体仓库本轮只附加此用户说明。
