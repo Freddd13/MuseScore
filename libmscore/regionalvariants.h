@@ -20,6 +20,9 @@ MasterScore *comparison(Score *, const QString &group, const QString &variant, Q
 QVariantList differences(Score *, Score *, const QString &group);
 QVariantMap chooseMain(Score *, const QString &group, const QString &variant);
 QVariantMap rename(Score *, const QString &group, const QString &variant, const QString &name);
+QVariantMap remove(Score *, const QString &group, const QString &variant = QString());
+QVariantMap removeCombination(Score *, const QString &combination);
+QVariantMap setControlPlacement(Score *, const QString &group, const QVariantMap &placement);
 QVariantMap expand(Score *, const QString &group, int start, int end);
 QVariantMap importVersion(Score *, Score *source, const QString &group, const QString &name);
 bool exportOrdinary(Score *, QIODevice *, const QString &filename, bool main);

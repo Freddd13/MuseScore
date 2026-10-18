@@ -104,7 +104,13 @@ bool regionalAuditionEnabled(){return QSettings().value("regionalVariants/auditi
 void setRegionalAuditionEnabled(bool value){QSettings().setValue("regionalVariants/auditionCompare",value);}
 QVariantMap switchRegionalWriting(ScoreView* view,const QString& group,const QString& variant){
       if(!view||!view->score()||!view->score()->isMaster())return {{"error",QObject::tr("请回到可编辑的总谱。")}};
-      mscore->setCurrentScoreView(view);stopPlaybackPreview(true);auto media=referenceProject();if(media->property("playing").toBool())QMetaObject::invokeMethod(media,"stop");
+      if (mscore->currentScoreView() != view) mscore->setCurrentScoreView(view);
+      for (auto value : RegionalVariants::state(view->score()).value("groups").toList()) {
+            const auto g=value.toMap();
+            if (g.value("id").toString()==group && g.value("active").toString()==variant)
+                  return {{"ok",true},{"unchanged",true}};
+      }
+      stopPlaybackPreview(true);auto media=referenceProject();if(media->property("playing").toBool())QMetaObject::invokeMethod(media,"stop");
       if(seq&&seq->isPlaying())seq->stopWait();if(seq&&!seq->backgroundRenderingIdle())return {{"error",QObject::tr("声音正在准备，请稍后切换。")}};
       setReferenceClock({});setReferenceEndTick(-1);auto score=view->score();auto result=RegionalVariants::select(score,group,variant);if(result.contains("error"))return result;mscore->endCmd();view->update();
       if(regionalAuditionEnabled())for(auto value:RegionalVariants::state(score).value("groups").toList()){

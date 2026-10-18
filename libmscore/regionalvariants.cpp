@@ -690,6 +690,102 @@ QVariantMap rename(Score *score, const QString &group, const QString &variant, c
       score->endCmd();
       return {{"ok", true}};
 }
+QVariantMap remove(Score *score, const QString &group, const QString &variant) {
+      if (!score || !score->isMaster() || score->readOnly())
+            return error(QObject::tr("请在可编辑的总谱中删除写法。"));
+      QString problem;
+      auto data = state(score);
+      auto groups = data.value("groups").toList();
+      const int index = groupIndex(groups, group);
+      if (index < 0)
+            return error(QObject::tr("请选择要删除的方案组。"));
+      auto g = groups[index].toMap();
+      auto variants = g.value("variants").toList();
+      const int removed = variant.isEmpty() ? -1 : variantIndex(variants, variant);
+      if (!variant.isEmpty() && removed < 0)
+            return error(QObject::tr("请选择要删除的写法。"));
+      const bool removeGroup = variant.isEmpty() || variants.size() == 1;
+      if (!removeGroup) {
+            data = capturedState(score, &problem);
+            if (!problem.isEmpty()) return error(problem);
+            groups = data.value("groups").toList();
+            g = groups[index].toMap();
+            variants = g.value("variants").toList();
+      }
+      bool replaceMusic = false;
+      QVariantMap target;
+      QByteArray fragment;
+      if (removeGroup) {
+            groups.removeAt(index);
+      } else {
+            variants.removeAt(removed);
+            target = variants[qMin(removed, variants.size()-1)].toMap();
+            replaceMusic = g.value("active") == variant;
+            if (replaceMusic) {
+                  fragment = unpacked(target.value("data"), &problem);
+                  if (!problem.isEmpty() || !validateFragment(g, fragment, &problem))
+                        return error(problem);
+                  g["active"] = target.value("id");
+            }
+            if (g.value("main") == variant)
+                  g["main"] = g.value("active");
+            g["variants"] = variants;
+            groups[index] = g;
+      }
+      auto combinations = data.value("combinations").toList();
+      int updated = 0;
+      for (int i=combinations.size()-1; i>=0; --i) {
+            auto item = combinations[i].toMap();
+            auto choices = item.value("choices").toMap();
+            if (!choices.contains(group)) continue;
+            if (removeGroup) choices.remove(group);
+            else if (choices.value(group).toString() == variant)
+                  choices[group] = g.value("active");
+            else continue;
+            ++updated;
+            if (choices.isEmpty()) combinations.removeAt(i);
+            else { item["choices"] = choices; combinations[i] = item; }
+      }
+      data["groups"] = groups;
+      data["combinations"] = combinations;
+      score->startCmd();
+      score->undo(new ChangeState(score->masterScore(), data));
+      const bool ok = !replaceMusic || replace(score, g, fragment, &problem, target);
+      score->endCmd(!ok);
+      return ok ? QVariantMap{{"ok",true},{"removedGroup",removeGroup},
+                              {"active",removeGroup ? QVariant() : g.value("active")},
+                              {"updatedCombinations",updated}} : error(problem);
+}
+QVariantMap removeCombination(Score *score, const QString &combination) {
+      if (!score || !score->isMaster() || score->readOnly())
+            return error(QObject::tr("请在可编辑的总谱中删除组合。"));
+      auto data = state(score);
+      auto combinations = data.value("combinations").toList();
+      const int index = variantIndex(combinations, combination);
+      if (index < 0) return error(QObject::tr("请选择要删除的组合。"));
+      combinations.removeAt(index); data["combinations"] = combinations;
+      score->startCmd(); score->undo(new ChangeState(score->masterScore(),data)); score->endCmd();
+      return {{"ok",true}};
+}
+QVariantMap setControlPlacement(Score *score, const QString &group, const QVariantMap &placement) {
+      if (!score || !score->isMaster() || score->readOnly())
+            return error(QObject::tr("请在可编辑的总谱中摆放切换按钮。"));
+      auto data = state(score); auto groups = data.value("groups").toList();
+      const int index = groupIndex(groups,group);
+      if (index < 0) return error(QObject::tr("请选择一组方案。"));
+      auto g = groups[index].toMap(); const auto previous = g;
+      if (placement.value("reset").toBool()) {
+            g.remove("controlOffset"); g.remove("controlHidden");
+      }
+      if (placement.contains("hidden")) g["controlHidden"] = placement.value("hidden").toBool();
+      if (placement.contains("x") && placement.contains("y"))
+            g["controlOffset"] = QVariantMap{{"x",placement.value("x").toDouble()},
+                                            {"y",placement.value("y").toDouble()}};
+      if (g == previous) return {{"ok",true},{"unchanged",true}};
+      groups[index] = g; data["groups"] = groups;
+      score->startCmd(); score->undo(new ChangeState(score->masterScore(),data)); score->endCmd();
+      return {{"ok",true}};
+}
 bool save(Score *input, QIODevice *destination, const QString &filename, bool thumbnail) {
       auto score = input->masterScore();
       QString problem;
