@@ -19,10 +19,21 @@ QString spectrumKey(const SpectrumRequest &r) {
     QByteArray values;
     QDataStream stream(&values, QIODevice::WriteOnly);
     stream.setVersion(QDataStream::Qt_5_9);
-    stream << quint32(2) << file.absoluteFilePath() << file.size() << file.lastModified().toMSecsSinceEpoch()
+    stream << quint32(3) << file.absoluteFilePath() << file.size() << file.lastModified().toMSecsSinceEpoch()
            << r.fromMs << r.untilMs << r.columns << r.rows << r.fftSize << r.lowPitch << r.highPitch
            << r.tuning;
     return QString::fromLatin1(QCryptographicHash::hash(values, QCryptographicHash::Sha256).toHex());
+}
+
+QString validateSpectrumRequest(const SpectrumRequest &r) {
+    if (!std::isfinite(r.fromMs) || !std::isfinite(r.untilMs) || r.fromMs < 0 || r.untilMs > 1e12 || r.untilMs <= r.fromMs ||
+        r.untilMs - r.fromMs > 120000 || r.columns < 1 || r.columns > 1024 || r.rows < 1 || r.rows > 1024 ||
+        (r.fftSize != 4096 && r.fftSize != 16384 && r.fftSize != 32768) || !std::isfinite(r.lowPitch) ||
+        !std::isfinite(r.highPitch) || r.lowPitch < 0 || r.highPitch > 128 || r.highPitch <= r.lowPitch ||
+        !std::isfinite(r.tuning) || r.tuning < 400 || r.tuning > 480) {
+        return QObject::tr("频谱参数超出可用范围。请恢复显示预设后重试。");
+    }
+    return {};
 }
 
 SpectrumTile spectrum(const SpectrumRequest &r, const std::atomic_bool &cancel) {
@@ -31,14 +42,8 @@ SpectrumTile spectrum(const SpectrumRequest &r, const std::atomic_bool &cancel) 
     tile.untilMs = r.untilMs;
     tile.lowPitch = r.lowPitch;
     tile.highPitch = r.highPitch;
-    if (!std::isfinite(r.fromMs) || !std::isfinite(r.untilMs) || r.fromMs < 0 || r.untilMs <= r.fromMs ||
-        r.untilMs - r.fromMs > 120000 || r.columns < 1 || r.columns > 1024 || r.rows < 1 || r.rows > 1024 ||
-        (r.fftSize != 4096 && r.fftSize != 16384 && r.fftSize != 32768) || !std::isfinite(r.lowPitch) ||
-        !std::isfinite(r.highPitch) || r.lowPitch < 0 || r.highPitch > 128 || r.highPitch <= r.lowPitch ||
-        !std::isfinite(r.tuning) || r.tuning < 400 || r.tuning > 480) {
-        tile.error = QObject::tr("频谱参数超出可用范围。请恢复显示预设后重试。");
-        return tile;
-    }
+    tile.error = validateSpectrumRequest(r);
+    if (!tile.error.isEmpty()) return tile;
     if (cancel)
         return tile;
     Reader reader;
@@ -126,5 +131,30 @@ SpectrumTile spectrum(const SpectrumRequest &r, const std::atomic_bool &cancel) 
     if (cancel)
         tile.image = QImage();
     return tile;
+}
+// Harmonic-weighted peak support guides optional display attenuation. Raw blocks
+// remain unchanged; the user can mix the result with the measured spectrum.
+QImage emphasizeFundamental(const SpectrumTile& tile,double mix,const std::atomic_bool& cancel){
+    if(tile.image.isNull()||!std::isfinite(mix)||mix<=0)return tile.image;
+    mix=qBound(0.,mix,1.);const auto& raw=tile.image;QImage result=raw.copy();
+    QVector<double> amplitude(raw.height()),support(raw.height());
+    QVector<int> offsets;for(int h=1;h<=8;++h)offsets.append(qRound(12.*std::log2(h)*raw.height()/(tile.highPitch-tile.lowPitch)));
+    double levels[256];for(int i=0;i<256;++i)levels[i]=std::pow(10.,(i/255.*85.-85.)/20.);
+    for(int x=0;x<raw.width()&&!cancel;++x){
+        double maximum=0;
+        for(int y=0;y<raw.height();++y){amplitude[y]=levels[raw.constScanLine(y)[x]];maximum=qMax(maximum,amplitude[y]);}
+        auto peak=[&](int at){double v=0;for(int dy=-1;dy<=1;++dy)if(at+dy>=0&&at+dy<amplitude.size())v=qMax(v,amplitude[at+dy]);return v;};
+        for(int y=0;y<raw.height();++y){double value=0,weight=1;for(int h=0;h<offsets.size();++h){value+=peak(y-offsets[h])*weight;weight*=.8;}support[y]=value;}
+        for(int y=0;y<raw.height();++y){
+            double reduction=0;
+            for(int h=1;h<offsets.size();++h){const int below=y+offsets[h];if(below>=amplitude.size())break;
+                if(peak(below)<maximum*.01||peak(below)<amplitude[y]*.15)continue;
+                reduction=qMax(reduction,qBound(0.,(support[below]/qMax(1e-7,support[y])-1.)*.5,.9));
+            }
+            const double db=20.*std::log10(qMax(1e-8,amplitude[y]*(1-mix*reduction)));
+            result.scanLine(y)[x]=uchar(qBound(0,qRound((db+85.)/85.*255.),255));
+        }
+    }
+    return cancel?QImage():result;
 }
 } // namespace KumoAudio

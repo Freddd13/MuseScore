@@ -2,6 +2,7 @@
 #include "mediaproject.h"
 #include "pcmring.h"
 #include "audioreader.h"
+#include "auditionfilter.h"
 #include <QtConcurrent>
 #include <QAudioOutput>
 #include <QAudioDeviceInfo>
@@ -85,9 +86,10 @@ QVariantMap ReferenceMediaProject::start(const QVariantMap& plan) {
                   previous=at+duration;s->total=qMax(s->total,qint64(std::llround(previous*rate/1000)));}
             }
       if(s->total<=0||(s->loop&&s->total<s->rate/5))return {{"error",tr("多音轨循环至少选择 0.2 秒的片段。更短的循环可使用单曲播放器。")}};
-      _completed=false;_session=s;_joint=s->joint;_status=tr("正在准备 %1 条音频…").arg(clips.size());
-      for(auto clipValue:clips){auto clip=clipValue.toMap();auto ring=std::make_shared<PcmRing>();s->lanes.push_back(ring);QString path=localPath(clip.value("path").toString());auto pieces=clip.value("pieces").toList();const float gain=float(clip.value("volume",1).toDouble());
-            QtConcurrent::run(&_pool,[s,ring,path,pieces,gain]{
+      setProperty("workflowPlaybackPlan",plan);_completed=false;_session=s;_joint=s->joint;_status=tr("正在准备 %1 条音频…").arg(clips.size());
+      for(auto clipValue:clips){auto clip=clipValue.toMap();auto ring=std::make_shared<PcmRing>();s->lanes.push_back(ring);QString path=localPath(clip.value("path").toString());auto pieces=clip.value("pieces").toList();const float gain=float(clip.value("volume",1).toDouble());const auto listen=clip.value("listen").toMap();
+            QtConcurrent::run(&_pool,[s,ring,path,pieces,gain,listen]{
+                  KumoAudio::AuditionFilter filter(s->rate,listen);
                   qint64 written=0;std::array<float,8192> silence{};
                   auto zeros=[&](qint64 end){while(written<end&&!s->canceled){unsigned n=unsigned(qMin<qint64>(4096,end-written));if(!ring->push(silence.data(),n,s->canceled))return false;written+=n;}return !s->canceled;};
                   do{written=0;
@@ -95,7 +97,7 @@ QVariantMap ReferenceMediaProject::start(const QVariantMap& plan) {
                         std::vector<KumoAudio::Segment> chain;auto append=[&](const QVariantMap& piece){chain.push_back({piece.value("from").toDouble(),piece.value("until").toDouble(),qBound(.5,(piece.value("until").toDouble()-piece.value("from").toDouble())/piece.value("duration").toDouble(),1.5),piece.value("fade",true).toBool()});};append(p);
                         while(pi+1<pieces.size()){auto next=pieces[pi+1].toMap();qint64 nextAt=std::llround(next.value("at").toDouble()*s->rate/1000);if(nextAt!=end||std::abs(next.value("from").toDouble()-chain.back().end)>.01)break;append(next);end=std::llround((next.value("at").toDouble()+next.value("duration").toDouble())*s->rate/1000);++pi;}
                         QString error;
-                        bool ok=KumoAudio::streamSequence(path,chain,s->rate,[&](const float* data,int count){count=int(qMin<qint64>(count,end-written));std::array<float,8192> scaled;for(int i=0;i<count*2;++i)scaled[i]=data[i]*gain;written+=count;return ring->push(scaled.data(),unsigned(count),s->canceled);},s->canceled,&error);
+                        bool ok=KumoAudio::streamSequence(path,chain,s->rate,[&](const float* data,int count){count=int(qMin<qint64>(count,end-written));std::array<float,8192> scaled;for(int i=0;i<count*2;++i)scaled[i]=data[i]*gain;filter.process(scaled.data(),count);written+=count;return ring->push(scaled.data(),unsigned(count),s->canceled);},s->canceled,&error);
                         if(!ok&&!s->canceled){s->fail(error);break;}if(!zeros(end))break;
                         }
                   zeros(s->total);

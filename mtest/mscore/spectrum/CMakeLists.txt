@@ -1,5 +1,5 @@
 if(TARGET kumo_referenceaudio)
- add_executable(tst_spectrum tst_spectrum.cpp)
+ add_executable(tst_spectrum tst_spectrum.cpp ${PROJECT_SOURCE_DIR}/mscore/referenceaudio/auditionfilter.cpp)
  set_target_properties(tst_spectrum PROPERTIES AUTOMOC ON)
  target_link_libraries(tst_spectrum Qt5::Core Qt5::Gui Qt5::Test)
  target_include_directories(tst_spectrum PRIVATE ${PROJECT_SOURCE_DIR}/mscore)

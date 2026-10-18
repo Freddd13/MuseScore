@@ -6,6 +6,7 @@
 #include <QDataStream>
 #include <QElapsedTimer>
 #include "referenceaudio/spectrumfactory.h"
+#include "referenceaudio/auditionfilter.h"
 #include <cmath>
 
 class TestSpectrum : public QObject {
@@ -15,12 +16,12 @@ class TestSpectrum : public QObject {
     QPluginLoader _loader;
     QObject *_session = nullptr;
     QString tone(const QString &name, int rate = 44100, int channels = 1, bool silent = false,
-                 double frequency = 440, bool harmonics = false, double startAt = 0) {
+                 double frequency = 440, bool harmonics = false, double startAt = 0, bool pulse = false) {
         const auto path = _dir.filePath(name + ".wav");
         QFile file(path);
         if (!file.open(QIODevice::WriteOnly))
             return {};
-        const int frames = rate * 2;
+        const int frames = rate * (pulse?8:2);
         QDataStream s(&file);
         s.setByteOrder(QDataStream::LittleEndian);
         s.writeRawData("RIFF", 4);
@@ -37,7 +38,7 @@ class TestSpectrum : public QObject {
                 : harmonics ? .30 * std::sin(phase) + .15 * std::sin(2 * phase) + .10 * std::sin(3 * phase)
                             : .45 * std::sin(phase);
             for (int c = 0; c < channels; ++c)
-                s << qint16(v * (c ? -1 : 1) * 32767);
+                s << qint16(v * (pulse && std::fmod(double(f)/rate,.5)>.08 ? 0 : 1) * (c ? -1 : 1) * 32767);
         }
         return path;
     }
@@ -91,6 +92,20 @@ class TestSpectrum : public QObject {
         QMetaObject::invokeMethod(restored.data(), "request", Q_ARG(QVariantMap, value));
         QTRY_VERIFY_WITH_TIMEOUT(!restored->property("busy").toBool(), 10000);
         QCOMPARE(qvariant_cast<QImage>(restored->property("image")), result);
+    }
+    void fixedBlocksReuseAcrossPanAndZoom() {
+        auto value=options(tone("fixed-block"));request(value);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(),10000);
+        QCOMPARE(_session->property("info").toMap()["computedBlocks"].toInt(),1);
+        value["from"]=450.;value["until"]=1800.;value["columns"]=384;request(value);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(),10000);
+        auto info=_session->property("info").toMap();QCOMPARE(info["computedBlocks"].toInt(),0);QCOMPARE(info["cachedBlocks"].toInt(),1);QCOMPARE(image().width(),384);
+        value["from"]=3900.;value["until"]=4100.;request(value);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(),10000);
+        info=_session->property("info").toMap();QCOMPARE(info["computedBlocks"].toInt(),1);QCOMPARE(info["cachedBlocks"].toInt(),1);
+        value["refresh"]=true;request(value);QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(),10000);
+        info=_session->property("info").toMap();QCOMPARE(info["computedBlocks"].toInt(),2);QCOMPARE(info["cachedBlocks"].toInt(),0);
+        qInfo()<<"Fixed block memory KiB"<<_session->property("cacheOptions").toMap()["usedMemoryKiB"]<<"worker ms"<<info["workerMilliseconds"];
     }
     void oppositeStereoAndResampled() {
         auto value = options(tone("stereo", 48000, 2));
@@ -155,6 +170,13 @@ class TestSpectrum : public QObject {
         QVERIFY(brightness(53) < 80);
     }
 
+    void fundamentalDisplayUsesExistingAnalysis(){
+        auto value=options(tone("fundamental-mix",44100,1,false,440,true));request(value);QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(),10000);const auto original=image();
+        value["fundamentalMix"]=1.;request(value);QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(),10000);const auto shaped=image();QCOMPARE(_session->property("info").toMap()["computedBlocks"].toInt(),0);
+        auto peak=[](const QImage& image,int pitch){int row=qRound((108.5-pitch)/88.*image.height()),v=0;for(int y=qMax(0,row-1);y<=qMin(image.height()-1,row+1);++y)v=qMax(v,int(image.constScanLine(y)[48]));return v;};
+        QVERIFY(peak(shaped,69)>=peak(original,69)-5);QVERIFY(peak(shaped,81)<peak(original,81)-5);
+        value["fundamentalMix"]=0.;request(value);QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(),10000);QCOMPARE(image(),original);
+    }
     void lowPresetKeepsOnsetTime() {
         auto value = options(tone("step", 44100, 1, false, 440., false, 1.));
         value["from"] = 0.;
@@ -217,6 +239,18 @@ class TestSpectrum : public QObject {
         request(value);
         QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
         QVERIFY(image().isNull());
+    }
+    void pulseTempoAndCancellation(){
+        const auto path=tone("pulse-120",44100,1,false,440,false,0,true);QSignalSpy ready(_session,SIGNAL(tempoReady(QVariantMap)));
+        QVariantMap request{{"path",path},{"from",0.},{"until",8000.}};
+        QVERIFY(QMetaObject::invokeMethod(_session,"estimateTempo",Q_ARG(QVariantMap,request)));QTRY_COMPARE_WITH_TIMEOUT(ready.count(),1,10000);auto result=ready.front()[0].toMap();QVERIFY2(!result.contains("error"),qUtf8Printable(result["error"].toString()));auto candidates=result["candidates"].toList();QVERIFY(!candidates.isEmpty());qInfo()<<"Tempo candidates"<<candidates;QVERIFY(qAbs(candidates.front().toMap()["bpm"].toDouble()-120)<1.);const double phase=std::fmod(candidates.front().toMap()["firstBeat"].toDouble(),500.);QVERIFY(qMin(phase,500-phase)<35.);
+        ready.clear();QVERIFY(QMetaObject::invokeMethod(_session,"estimateTempo",Q_ARG(QVariantMap,request)));QVERIFY(QMetaObject::invokeMethod(_session,"cancel"));QTest::qWait(100);QVERIFY(!_session->property("tempoBusy").toBool());QCOMPARE(ready.count(),0);
+    }
+    void listeningFilterResponse(){
+        auto render=[](double frequency,const QVariantMap& options){KumoAudio::AuditionFilter filter(48000,options);QVector<float> samples(96000);for(int i=0;i<48000;++i){const float value=float(.1*std::sin(2*3.14159265358979323846*frequency*i/48000));samples[i*2]=value;samples[i*2+1]=-value;}filter.process(samples.data(),48000);double power=0;for(int i=24000;i<48000;++i){power+=double(samples[i*2])*samples[i*2];if(qAbs(samples[i*2]+samples[i*2+1])>1e-5)return -1.;}return std::sqrt(power/24000);};
+        const double original=render(900,{}),boost=render(900,{{"enabled",true},{"middle",6.}});QVERIFY(qAbs(boost/original-std::pow(10.,6./20))<.02);
+        const double center=render(440,{{"selectedFrequency",true},{"frequency",440.},{"width",.5}}),outside=render(1760,{{"selectedFrequency",true},{"frequency",440.},{"width",.5}});QVERIFY(qAbs(center/original-1)<.02);QVERIFY(outside<center*.15);
+        QVector<float> untouched{.1f,-.1f,.2f,-.2f},copy=untouched;KumoAudio::AuditionFilter bypass(48000,{{"enabled",false},{"middle",12.}});bypass.process(copy.data(),2);QCOMPARE(copy,untouched);
     }
     void cleanupTestCase() {
         delete _session;

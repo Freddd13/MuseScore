@@ -1,7 +1,7 @@
 find_package(Qt5Multimedia 5.9 QUIET)
 if(Qt5Multimedia_FOUND AND HAS_AUDIOFILE)
  file(GLOB SOUND_TOUCH_SRC vendor/soundtouch/source/SoundTouch/*.cpp)
- add_library(kumo_referenceaudio MODULE mediaplugin.cpp mediasession.cpp mediasession.h mediaproject.cpp mediaproject.h audioreader.cpp spectrum.cpp spectrumsession.cpp spectrumsession.h vendor/kissfft/kiss_fft.c vendor/kissfft/kiss_fftr.c ${SOUND_TOUCH_SRC})
+ add_library(kumo_referenceaudio MODULE mediaplugin.cpp mediasession.cpp mediasession.h mediaproject.cpp mediaproject.h audioreader.cpp auditionfilter.cpp auditionfilter.h tempoestimate.cpp tempoestimate.h spectrum.cpp spectrumsession.cpp spectrumsession.h vendor/kissfft/kiss_fft.c vendor/kissfft/kiss_fftr.c ${SOUND_TOUCH_SRC})
  set_target_properties(kumo_referenceaudio PROPERTIES AUTOMOC ON PREFIX "")
  target_compile_definitions(kumo_referenceaudio PRIVATE SOUNDTOUCH_FLOAT_SAMPLES)
  target_include_directories(kumo_referenceaudio PRIVATE ${PROJECT_SOURCE_DIR}/dependencies/include vendor/soundtouch/include vendor/soundtouch/source/SoundTouch)

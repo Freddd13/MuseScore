@@ -24,7 +24,7 @@ QString pitchName(int pitch)
 int PerformanceEditor::rangeKind() const
       { return _parameter->currentIndex() == 0 ? _axis->currentIndex() : _parameter->currentIndex() + 1; }
 void PerformanceEditor::updateSurfaces()
-      {
+      { if(property("kumoEditorClosing").toBool())return;
 #ifdef SCRIPT_INTERFACE
       if(_spectrum)_spectrum->viewChanged();
 #endif
@@ -34,7 +34,7 @@ void PerformanceEditor::invalidateVisual()
       { ++_visualRevision; syncValueScroll(); updateSurfaces(); }
 void PerformanceEditor::surfaceResized(PerformanceSurface surface)
       {
-      if (!_scroll || !_noteCanvas) return;
+      if (property("kumoEditorClosing").toBool() || !_scroll || !_noteCanvas) return;
       if (_valueScroll && _canvas) _valueScroll->setGeometry(_canvas->width() - PerformanceViewport::rightMargin, 0, PerformanceViewport::rightMargin, _canvas->height());
       if (surface == PerformanceSurface::Notes && _pitchScroll) {
             const double rows = _noteCanvas->height() / _viewport.rowHeight;
@@ -46,7 +46,12 @@ void PerformanceEditor::surfaceResized(PerformanceSurface surface)
             _pitchScroll->setPageStep(qRound(rows * 100)); _pitchScroll->setSingleStep(100);
             _pitchScroll->setValue(qRound((_viewport.rowMaximum() - _viewport.pitchIndex(_viewport.topPitch)) * 100));
             }
-      const double units=qMax(10,_canvas->width()-PerformanceViewport::gutter-PerformanceViewport::rightMargin)/_viewport.pixelsPerQuarter;
+      int width=_canvas->width();bool visible=false;
+      for(QWidget* canvas:QList<QWidget*>{_canvas,_noteCanvas})if(canvas&&canvas->isVisible()){width=visible?qMin(width,canvas->width()):canvas->width();visible=true;}
+#ifdef SCRIPT_INTERFACE
+      if(_spectrum&&_spectrum->linkedTimelineWidth()>0)width=visible?qMin(width,_spectrum->linkedTimelineWidth()):_spectrum->linkedTimelineWidth();
+#endif
+      const double units=qMax(10,width-PerformanceViewport::gutter-PerformanceViewport::rightMargin)/_viewport.pixelsPerQuarter;
       const int span=qMax(1,comparisonTimeActive()?_score->tempomap()->time2tick(_score->tempomap()->tick2time(_scroll->value())+units*.5)-_scroll->value():qRound(units*DIVISION));
       _scroll->setPageStep(span); _scroll->setRange(0, qMax(0, (comparisonTimeActive()?qMax(_endTick,_comparisonEnd):_endTick) - span));
       invalidateVisual();
@@ -319,8 +324,14 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
       const QRectF clip = painter.clipBoundingRect();
       if (surface == PerformanceSurface::Notes) {
             buildGeometry(); QSet<quint64> cells;
+#ifdef SCRIPT_INTERFACE
+            const bool showNotes=!_spectrum||_spectrum->showRollNotes();
+#endif
             for (const auto& geometry : _noteGeometry) {
                   const int i = geometry.index; const auto& note = _notes[i];
+#ifdef SCRIPT_INTERFACE
+                  if(!showNotes)continue;
+#endif
                   if (!geometry.rect.adjusted(-3, -3, 3, 3).intersects(clip)) continue;
                   if (_viewport.pixelsPerQuarter < 8 && !note.selected && i != _hover && !_playingNotes.contains(i) && !_pending.contains(note.note)) {
                         const quint64 cell = (quint64(qMax(0, int(qMax(area.left(), geometry.rect.left())) / 2)) << 8) | note.pitch;

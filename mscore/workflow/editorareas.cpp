@@ -472,9 +472,12 @@ public:
   void release() {
     updating = true;
     for (int i = 0; i < areas.size(); ++i) {
-      restore(i, false);
-      if (areas[i].dock)
+      // The editor is being destroyed. Delete its external windows in place;
+      // reparenting focused children here can enter Qt's dismantled focus chain.
+      if (areas[i].dock) {
+        disconnect(areas[i].dock, nullptr, this, nullptr);
         delete areas[i].dock;
+      }
     }
   }
 };

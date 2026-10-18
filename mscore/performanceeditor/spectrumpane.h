@@ -1,11 +1,11 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #pragma once
-#include <QWidget>
-#include <QVariantMap>
-#include <QPointer>
 #include <QImage>
+#include <QPointer>
 #include <QTimer>
+#include <QVariantMap>
 #include <QVector>
+#include <QWidget>
 class QGridLayout;
 class QSplitter;
 class QMouseEvent;
@@ -17,10 +17,16 @@ class QToolButton;
 class QLabel;
 class QListWidget;
 class QPainter;
+class QScrollBar;
+class QScrollArea;
+class QCheckBox;
 namespace Ms {
 class Score;
 class PerformanceEditor;
 class SpectrumCanvas;
+class SpectrumDisplayControls;
+class SpectrumListenControls;
+class SpectrumBeatControls;
 class SpectrumPane : public QWidget {
     Q_OBJECT
     friend class SpectrumCanvas;
@@ -34,14 +40,26 @@ class SpectrumPane : public QWidget {
     QDoubleSpinBox *_tuning = nullptr, *_speed = nullptr;
     QSpinBox *_transpose = nullptr;
     QToolButton *_play = nullptr, *_loop = nullptr, *_harmonics = nullptr;
-    QLabel *_status = nullptr;
+    QLabel *_status = nullptr, *_target = nullptr;
+    QCheckBox *_durationFromMark = nullptr;
+    bool _drawingMark = false;
+    double _drawStart = 0, _drawEnd = 0, _drawFrequency = 440, _drawOriginal = 440, _drawOffset = 0;
+    int _drawEdge = 1;
+    QString _editingMark;
     QListWidget *_marks = nullptr;
     SpectrumCanvas *_canvas = nullptr;
     QGridLayout *_tools = nullptr;
     QVector<QWidget *> _controls;
     int _columns = 7;
     QTimer _requestTimer;
-    QImage _image;
+    SpectrumDisplayControls *_displayControls = nullptr;
+    SpectrumListenControls *_listenControls = nullptr;
+    SpectrumBeatControls *_beatControls = nullptr;
+    QVariantMap _grids;
+    QTimer _listenTimer;
+    QScrollBar *_timeScroll = nullptr, *_pitchScroll = nullptr;
+    QScrollArea *_displayPanel = nullptr;
+    QImage _rawImage, _image;
     QVariantMap _info, _request, _track, _clip;
     QVariantList _annotations;
     QString _path, _savedData, _playOwner;
@@ -51,11 +69,24 @@ class SpectrumPane : public QWidget {
     QPointF _press;
     double _pressFrom = 0;
     bool _panning = false, _dragging = false;
-    bool _audioLoaded = false;
+    bool _audioLoaded = false, _forceSpectrum = false;
     Q_SLOT void refreshTracks();
     Q_SLOT void audioChanged();
     Q_SLOT void projectChanged();
     void refreshMarks();
+    QVariantMap pitchMark() const;
+    void markPitch();
+    void finishDrawnMark();
+    void selectMark(const QString &);
+    void restoreGrid();
+    void estimateTempo();
+    void tapGrid();
+    void paintGrid(QPainter &, const QRectF &);
+    void recolor();
+    void syncScrollBars();
+    void setStatus(const QString &);
+    int sourceWidth() const;
+    bool eventFilter(QObject *, QEvent *) override;
     void updateActions();
     int inputPitch(const QVariantMap &) const;
     void requestVisible();
@@ -65,6 +96,7 @@ class SpectrumPane : public QWidget {
     void playSource();
     void seekSource(double);
     bool ownsPlayback() const;
+    bool sourceInPlayback() const;
     double sourcePosition() const;
     void cacheSettings();
     double timeAtX(double) const;
@@ -79,13 +111,18 @@ class SpectrumPane : public QWidget {
     void hideEvent(QHideEvent *) override;
   private slots:
     void spectrumChanged();
+    void tempoStateChanged();
+    void tempoReady(const QVariantMap &);
 
   public:
     explicit SpectrumPane(PerformanceEditor *);
     Q_SLOT void viewChanged();
     void scoreChanged();
+    void updateInputTarget();
     void applyAppearance();
     void paintOverlay(QPainter &, const QRectF &);
+    bool showRollNotes() const;
+    int linkedTimelineWidth() const;
     bool overlayEvent(QEvent *);
 };
 void installSpectrumPane(PerformanceEditor *, QSplitter *);

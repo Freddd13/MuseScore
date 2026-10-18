@@ -325,6 +325,7 @@ void PerformanceEditor::resizeEvent(QResizeEvent*)
 
 PerformanceEditor::~PerformanceEditor()
       {
+      setProperty("kumoEditorClosing",true);
       releaseEditorAreas(this);
       invalidateOverlay();
       if (_view && _trackingOwned) _view->setMouseTracking(_trackingBefore || _view->noteEntryMode() || _view->fotoMode());

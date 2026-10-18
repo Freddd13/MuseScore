@@ -20,6 +20,8 @@ struct SpectrumTile {
     int sampleRate = 0;
     QString error;
 };
+QString validateSpectrumRequest(const SpectrumRequest &);
 SpectrumTile spectrum(const SpectrumRequest &, const std::atomic_bool &cancel);
+QImage emphasizeFundamental(const SpectrumTile &, double mix, const std::atomic_bool &);
 QString spectrumKey(const SpectrumRequest &);
 } // namespace KumoAudio

@@ -32,5 +32,5 @@ set(PERFORMANCEEDITOR_SRC
       )
 
 if(SCRIPT_INTERFACE)
- list(APPEND PERFORMANCEEDITOR_SRC ${CMAKE_CURRENT_LIST_DIR}/spectrumpane.cpp ${CMAKE_CURRENT_LIST_DIR}/spectrumpane.h)
+ list(APPEND PERFORMANCEEDITOR_SRC ${CMAKE_CURRENT_LIST_DIR}/spectrumpane.cpp ${CMAKE_CURRENT_LIST_DIR}/spectrumpane.h ${CMAKE_CURRENT_LIST_DIR}/spectrumdisplay.cpp ${CMAKE_CURRENT_LIST_DIR}/spectrumdisplay.h ${CMAKE_CURRENT_LIST_DIR}/spectrumlisten.cpp ${CMAKE_CURRENT_LIST_DIR}/spectrumlisten.h ${CMAKE_CURRENT_LIST_DIR}/spectrumbeat.cpp ${CMAKE_CURRENT_LIST_DIR}/spectrumbeat.h ${CMAKE_CURRENT_LIST_DIR}/spectrumannotation.cpp ${CMAKE_CURRENT_LIST_DIR}/spectrumannotation.h)
 endif()
