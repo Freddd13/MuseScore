@@ -594,3 +594,15 @@ sf、八度线和音符括号仍用软件原有操作；速度近似等号与swi
 《如果有来生》字体副本仍为Study8页/改名Leland Control9页，这不作为布局质量排名。原件SHA、除两项字体外的主XML和归档附件保持；已查看8页联系表与第2页细节。当前验证宿主二进制SHA256为 `8eab62b8569baece94da20e008855f283e08231155ca7b7d5e334e8abef5a83a`。本轮只附加本体用户说明，不改软件代码、用户设置或原PDF/MSCZ。
 
 源码 `Freddd13/mcp-musescore@2b20152`；[安装说明](../../../mcp-musescore/fonts/kumo-engrave/README.md)、[来源与曲线验证](../../../mcp-musescore/fonts/kumo-engrave/VECTOR_STUDY.md)。
+
+## 官谱字体研究0.450：补少见角色与大括号（2026-10-18）
+
+继续按所给Animenz官谱实际字形推进，全目录已清点146份PDF/1,135页，尚未完成全部符号。当前108个处理码位，本轮新增16个：圈叉符头、呼吸、上下marcato-staccato、32分上/内部符尾、独立滑音段、两道震音、m/s/z、反复点及四种brace尺寸。15个新增字形保留曲线；震音错误Unicode映射明确回退实际字符渲染。未修改部分保持完整Leland，音乐502字/Text262字。
+
+本机包 `mcp-musescore/fonts/kumo-engrave/dist/kumo-score-study-0.450-local.zip`。退出Evolution后成对更换Score Fonts路径下Kumo Score Study与Kumo Score Study Text两个完整文件夹，重启。在谱子独立副本的 **格式→样式→乐谱** 同时选择两个家族，保持其它样式。无需重装MCP、skill或Windows字体；圈叉、呼吸、奏法、反复号与大括号使用原有界面操作。
+
+原生滑音目前复用wiggleTrill，Tremolo使用几何；独立新增字形不自动替代这两个原生路径。大括号按宿主特殊倍率适配，检查1/2/3/4/6谱表，三个备选尺寸是派生适配，并非恢复四套原版光学尺寸。固定0.21宿主SHA7581cb76完成常用/扩展/新角色/波线/108字图录/十组力度与用户谱副本；原PDF/MSCZ、除字体字段外音乐XML和附件保持，Control/Study在此宿主均9页。
+
+本轮repair_current宿主SHA59e245e0导入测试谱时退出码3221226356；旧0.440字体及空私有字体目录也复现，尚未定位原因，未将当前宿主记作通过。故本包当前兼容证据以固定宿主为准。失败证据与显示路径发现已同步净书任务，本轮只追加用户说明，未改本体代码或用户设置。
+
+源码 `Freddd13/mcp-musescore@02cee88`；[安装说明](../../../mcp-musescore/fonts/kumo-engrave/README.md)、[来源与验证边界](../../../mcp-musescore/fonts/kumo-engrave/OBSERVED_SYMBOLS.md)。
