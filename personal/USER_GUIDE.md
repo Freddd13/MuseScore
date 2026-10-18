@@ -679,3 +679,11 @@ sf、八度线和音符括号仍用软件原有操作；速度近似等号与swi
 本机包`fonts/kumo-engrave/dist/kumo-score-study-0.500-local.zip`，退出Evolution，成对更新私有Score Fonts中的Study与Study Text完整文件夹并重启；在独立谱副本选择两者，保持原字号及排版。无需重装MCP、skill或Windows字体。旧包保留，专用滑音仍需个人0.71。没有替换当前安装程序。
 
 字体工具提交`Freddd13/mcp-musescore@6711ebc`，分支codex/musescore-evolution。仅同步本体用户说明，原生代码与个人软件版本仍为0.71；参考轮廓及字体包只留本机研究。
+
+## 字体研究：A064路径用途与尺寸保护补记（2026-10-19）
+
+Study仍为0.500。本轮没有更换字体、字号或用户乐谱；既有mf、八度及踏板的Text校准保持，同宿主／谱距回归与0.490一致。早期mf偏小来自Text适配错误，已在0.480修复；不要通过增大原谱字号补救旧包问题。
+
+A064《in the pool》的864个路径代表已保存用途决定，65处原页情境核查并完成7,299项填充路径的成员归属。十项旧空白异常均以精确反向边和4x／16x单独渲染证明为填充抵消，无需补字。普通文字、连音／速度数字、八度数字及页面线弧分开，未把形状匹配结果直接当音乐语义；不宣称所有成员均逐个认证或全目录目标完成。详情见[路径角色与具体例子](../../../mcp-musescore/fonts/kumo-engrave/PATH_ROLE_COVERAGE.md)及[实际大小保护](../../../mcp-musescore/fonts/kumo-engrave/TEXT_SIZING.md)。
+
+继续使用既有[0.500包和成对字体安装方法](../../../mcp-musescore/fonts/kumo-engrave/CATALOG_COVERAGE.md)，本轮无需重装字体、MCP或skill。未处理角色保留Leland，原PDF／MSCZ只读。提交定位 `Freddd13/mcp-musescore@dc73cb5`（codex/musescore-evolution）；本体仓库仅补用户说明，没有改软件代码或个人版本。
