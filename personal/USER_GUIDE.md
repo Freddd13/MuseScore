@@ -618,3 +618,14 @@ sf、八度线和音符括号仍用软件原有操作；速度近似等号与swi
 全目录仍146份PDF；A064的7,299路径全部纳入复核计数，补回128个可见对象，864组24张联系表已浏览；10项弧线情境的孤立渲染异常单列。全目录角色和剩余映射仍未结案，不将数量当作全目标完成证明。本轮仅追加用户说明，不改本体代码或用户设置。
 
 源码 `Freddd13/mcp-musescore@9487cef`；[安装说明](../../../mcp-musescore/fonts/kumo-engrave/README.md)、[来源与验证边界](../../../mcp-musescore/fonts/kumo-engrave/CURVE_REFINEMENT.md)。
+
+
+## Kumo Score Study 0.470 本机字体研究（2026-10-19）
+
+本轮将sf、8va/数字8、音符左右括号、速度八分及三项swing等9个旧字形改为与所给官谱原图核对过的字符曲线。仍处理112码位，95个字形含三次曲线，完整Leland底库保持；这不表示全目录所有角色已完成。速度八分先整体核对音符及相邻附点，再只取音符，避免把附点误做进字形。Coda和下方重音断音的替代映射不符原图，保留此前轮廓。
+
+本机包位于mcp-musescore的`fonts/kumo-engrave/dist/kumo-score-study-0.470-local.zip`。退出Evolution，将Kumo Score Study与Kumo Score Study Text两个完整文件夹成对更新到偏好设置的Score Fonts目录，重启；在乐谱独立副本的“格式→样式→乐谱”同时选择两者，第一轮保持其它样式。普通sf、八度线和括号仍用原有操作，独立swing入口见[字体使用说明](../../../mcp-musescore/fonts/kumo-engrave/TEXT_EXTRAS.md)。无需重装MCP、skill或Windows字体。
+
+六项单字符与三项混排均通过最终OTF/原PDF墨迹对照；混排从生成的OTF回读曲线，以固定物理尺度回放。固定0.21宿主完成全套原生SVG/PNG、112字图录、十组力度及用户谱副本检查，原件、音乐内容和附件保持。当前repair_current此前导入崩溃的独立问题仍未定位，未称其通过。详见[来源、验收及余项](../../../mcp-musescore/fonts/kumo-engrave/REMAINING_CURVES.md)。
+
+字体源码提交`Freddd13/mcp-musescore@5399761`（codex/musescore-evolution）；参考轮廓与字体包仅保留本机研究，未公开提交。此次只更新本体仓库用户说明，不改原生代码或个人软件版本。
