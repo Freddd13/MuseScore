@@ -627,3 +627,12 @@ Windows 安装需要同 SDK 的 QtWebSockets QML 模块和 `Qt5WebSockets.dll`�
 ## 0.57 的力度对比
 
 新导入和录制默认采用全部演奏力度，并逐音固定保存。编辑器默认同音对比，可切换真实播放时间；原值与拟采用值用并列实心柱显示。完整操作见[演奏力度说明](docs/REPAIR_057_GUIDE.md)。
+
+
+## Kumo Piano EX 字体修订 0.3（2026-10-18）
+
+用户否定0.2过细、不像Chaconne Ex的观感后，字体线直接对照官方字形修订，新增独立 **Kumo Piano EX**。相对0.2改26个字形（符头、谱号、休止、旗尾、变音、琶音等），不是整套字库已仿制完成；旧家族/旧包保留。
+
+两张可直接看的对照图和设计记录见 [EX修订](../../../mcp-musescore/fonts/kumo-engrave/EX_REDRAW.md)。无需先安装/打印才给反馈。需要试用时，取 `fonts/kumo-engrave/dist/v03/kumo-engrave-0.3.0-prototypes.zip`，将 `ex/Kumo Piano EX` 文件夹复制到私有Score Fonts目录，重启，在独立副本 **格式→样式→乐谱** 选该音乐字体，Text继续选内置 **Leland Text**，先关闭推荐样式/自动优化。MCP和skill无需重装。
+
+全音符advance从373改为438单位，其余字宽与普通头接杆点保持；字形改变可能影响局部避让。未同时改梁、干长、间距和页面参数，未改原谱/全局字体或本体代码。纸面、更多共享头/二度及组合符号仍待专项，本轮尚未获得新的审美认可。原生验证固定personal 0.21；配套改名EX Text仍不作默认搭配。源码提交 `Freddd13/mcp-musescore@23eae84d7bff188f1077a9fa987ec10e80fd06b1`，独立字体版本0.3.0，不改变个人软件版本。
