@@ -8,6 +8,8 @@ namespace PluginAPI {
 class ScoreObserver;
 }
 QVariantMap arrangementOperation(PluginAPI::ScoreObserver *, Score *, const QString &, const QVariantMap &);
+QVariantMap applyRollNotation(PluginAPI::ScoreObserver *, Score *, const QVariantMap &);
+QString rollNotationIdentity(Score *, const QVariantMap &);
 QVariantMap arrangementSuggestions(Score *);
 void showSuggestionPanel(bool visible = true);
 void addSuggestionPanelAction(QMenu *);

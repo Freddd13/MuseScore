@@ -204,6 +204,7 @@ QVariantMap ScoreObserver::arrangementRange(const QVariantMap &request) {
         row["tpc2"] = note->tpc2();
         row["velocityType"] = int(note->veloType());
         row["velocityRaw"] = note->veloOffset();
+        row["playEventType"]=int(chord->playEventType());QVariantList events;for(const auto &event:note->playEvents())events.append(QVariantMap{{"pitch",event.pitch()},{"onTime",event.ontime()},{"length",event.len()}});row["playEvents"]=events;
         const int base = NoteVelocity::referenceBase(note);
         row["velocityBase"] = base;
         row["velocity"] = NoteVelocity::effective(base, note->veloType(), note->veloOffset());

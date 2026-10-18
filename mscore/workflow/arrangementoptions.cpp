@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "arrangement.h"
+#include "featuregate.h"
 #include "playbackpreview.h"
 #include "regionalcomparison.h"
 #include "mscore/plugin/api/scoreobserver.h"
@@ -39,6 +40,7 @@
 #include <QElapsedTimer>
 #include <algorithm>
 #include <memory>
+#include <cmath>
 
 namespace Ms {
 namespace {
@@ -131,6 +133,7 @@ QByteArray digest(Score *score, const QVariantMap &scope) {
                     for (auto n : toChord(e)->notes()) {
                         out << n->pitch() << n->tpc1() << n->tpc2() << int(n->veloType()) << n->veloOffset()
                             << bool(n->tieBack()) << bool(n->tieFor());
+                        out<<int(n->chord()->playEventType());if(n->chord()->playEventType()==PlayEventType::User)out<<n->playEvents().size();if(n->chord()->playEventType()==PlayEventType::User)for(const auto &event:n->playEvents())out<<event.pitch()<<event.ontime()<<event.len();
                         for (auto a : n->el())
                             if (a->isFingering() || a->isSymbol())
                                 out << a->mimeData(QPointF());
@@ -242,6 +245,9 @@ bool mutate(Score *score, const Option &option, QString *problem) {
     QMap<QString, QVariantMap> sourceAnchors;
     QSet<QString> capturedChords;
     QMap<QString, QPair<int, int>> sourceVelocity, sourceCurrentVelocity;
+    QMap<QString,NoteEventList> sourceEvents;QSet<QString> sourceManual;
+    QMap<QString,QPair<Note*,QVariantMap>> timingHeads;
+    QMap<QString,QPair<Note*,QString>> copyHeads;
     QMap<QString, QMap<Pid, QVariant>> sourceProperties, chordProperties;
     QMap<QString, Note *> newHeads, newTails;
     auto retain = [](QList<std::shared_ptr<Element>> &list, Element *element) {
@@ -470,10 +476,15 @@ bool mutate(Score *score, const Option &option, QString *problem) {
                     return false;
                 }
                 distinct.insert(pitch);
-                const auto sourceId = p.value("sourceId").toString();
+                if(p.value("tieNext").toBool()){
+                    bool found=false;if(eventIndex+1<events.size())for(auto nextValue:events[eventIndex+1].toMap()["pitches"].toList()){const auto next=nextValue.toMap();found|=next["pitch"]==p["pitch"]&&next["tpc1"]==p["tpc1"]&&next["tpc2"]==p["tpc2"];}
+                    if(!found){*problem=QObject::tr("延音后需要同一音高，请检查这个音的长度。");return false;}
+                }
+                if(p.contains("performance")){const auto t=p["performance"].toMap();const int offset=t["offset"].toInt(),length=t["duration"].toInt();if(qAbs(offset)>1920||length<1||length>64*DIVISION){*problem=QObject::tr("请把这段演奏细节分成较短的音再采用。");return false;}}
+                const auto sourceId = p.value("sourceId",p.value("copySourceId")).toString();
                 if (!sourceId.isEmpty() && !sourceAnchors.contains(sourceId)) {
                     auto origin = noteFor(score, sourceId);
-                    if (!origin || origin->track() != track ||
+                    if (!origin || (origin->track() != track && !(option.values.value("source").toMap().value("allowVoiceReassignment").toBool() && origin->track()/4==track/4 && !protect.contains(origin->track()))) ||
                         !contains(option.scope, origin->chord()->tick().ticks(), track)) {
                         *problem = QObject::tr("原音符已经变化，请重新读取音高。");
                         return false;
@@ -488,6 +499,7 @@ bool mutate(Score *score, const Option &option, QString *problem) {
                             ? originalVelocity
                             : QPair<int, int>{int(origin->veloType()), origin->veloOffset()};
                     sourceCurrentVelocity[sourceId] = {int(origin->veloType()), origin->veloOffset()};
+                    sourceEvents[sourceId]=origin->playEvents();if(origin->chord()->playEventType()==PlayEventType::User)sourceManual.insert(sourceId);
                     for (auto pid : {Pid::COLOR, Pid::VISIBLE, Pid::SMALL, Pid::TUNING, Pid::HEAD_GROUP,
                                      Pid::HEAD_TYPE, Pid::HEAD_SCHEME, Pid::PLAY})
                         sourceProperties[sourceId][pid] = origin->getProperty(pid);
@@ -680,7 +692,7 @@ bool mutate(Score *score, const Option &option, QString *problem) {
                     for (auto value : pitches) {
                         auto p = value.toMap();
                         if (p["pitch"].toInt() == n->pitch()) {
-                            auto id = p.value("sourceId").toString();
+                            auto id = p.value("sourceId",p.value("copySourceId")).toString();
                             for (auto prop = chordProperties[id].cbegin(); prop != chordProperties[id].cend();
                                  ++prop)
                                 if (chord->getProperty(prop.key()) != prop.value())
@@ -754,6 +766,7 @@ bool mutate(Score *score, const Option &option, QString *problem) {
                 auto p = value.toMap();
                 auto id = p["sourceId"].toString();
                 int pitch = p["pitch"].toInt();
+                const auto editId=p["editId"].toString();if(!editId.isEmpty()&&!p["copySourceId"].toString().isEmpty()&&heads.contains(pitch)&&!copyHeads.contains(editId))copyHeads[editId]={heads[pitch],p["copySourceId"].toString()};if(!editId.isEmpty()&&p.contains("performance")&&heads.contains(pitch)&&!timingHeads.contains(editId))timingHeads[editId]={heads[pitch],p["performance"].toMap()};
                 if (id.isEmpty() || !heads.contains(pitch))
                     continue;
                 if (!newHeads.contains(id)) {
@@ -774,8 +787,14 @@ bool mutate(Score *score, const Option &option, QString *problem) {
                 newTails[id] = tails[pitch];
             }
             tieFrom = event.value("tieNext").toBool() ? tails : QMap<int, Note *>();
+            for(auto value:pitches){const auto p=value.toMap();if(p.value("tieNext").toBool()&&tails.contains(p["pitch"].toInt()))tieFrom[p["pitch"].toInt()]=tails[p["pitch"].toInt()];}
             at = until;
         }
+    }
+    for(auto i=newHeads.cbegin();i!=newHeads.cend();++i)if(sourceManual.contains(i.key())){i.value()->setPlayEvents(sourceEvents.value(i.key()));i.value()->chord()->setPlayEventType(PlayEventType::User);}
+    for(auto copied:copyHeads){auto note=copied.first;const auto id=copied.second;for(const auto &prototype:noteMarks[id]){auto mark=prototype->clone();mark->setParent(note);mark->setTrack(note->track());score->undoAddElement(mark);}for(const auto &prototype:chordMarks[id]){auto mark=prototype->clone();mark->setParent(note->chord());mark->setTrack(note->track());score->undoAddElement(mark);}if(sourceManual.contains(id)){note->setPlayEvents(sourceEvents.value(id));note->chord()->setPlayEventType(PlayEventType::User);}}
+    for(auto value:timingHeads){auto note=value.first;const auto timing=value.second;int remaining=timing["duration"].toInt();bool first=true;
+        while(note){const int span=qMax(1,note->chord()->actualTicks().ticks());auto next=note->tieFor()?note->tieFor()->endNote():nullptr;const int length=next?qMin(span,remaining):remaining;NoteEventList events;events.clear();events.append(NoteEvent(0,first?(timing["offset"].toInt()>=0?int(std::ceil(double(timing["offset"].toInt())*1000/span)):int(std::floor(double(timing["offset"].toInt())*1000/span))):0,int(std::ceil(double(qMax(0,length))*1000/span))));note->setPlayEvents(events);note->chord()->setPlayEventType(PlayEventType::User);remaining=qMax(0,remaining-length);note=next;first=false;}
     }
     // Reattach lines to the same material when the rhythm moves its onsets.
     for (auto &value : preserved) {
@@ -842,6 +861,19 @@ QVariantMap summary(const Option &option) {
             {"used", option.used}};
 }
 } // namespace
+
+QString rollNotationIdentity(Score* score,const QVariantMap& scope){return score?QString::fromLatin1(digest(score,scope).toHex()):QString();}
+QVariantMap applyRollNotation(PluginAPI::ScoreObserver* observer,Score* score,const QVariantMap& request){
+    if(!personalFeaturesEnabled())return error(QObject::tr("个人扩展功能已关闭。"));
+    if(!score||score->readOnly())return error(QObject::tr("打开可编辑的乐谱后写音。"));
+    if(seq&&(!seq->backgroundRenderingIdle()||seq->isPlaying()))return error(QObject::tr("暂停播放后即可把这次写音保存到乐谱。"));
+    if(request.value("snapshotId")!=observer->analysisContentRevision())return error(QObject::tr("乐谱刚有修改，请点“改用当前选区”重新读取后继续。"));
+    const auto state=observer->arrangementState({{"scope",request["scope"]}});if(state.contains("error"))return state;
+    Option option;option.snapshot=request["snapshotId"].toString();option.scope=state["scope"].toMap();option.values=request;option.brief={{"scope",option.scope},{"preserveTracks",request.value("lockedTracks",QVariantList{})},{"allowMelodyChanges",true},{"preserveHarmony",false}};
+    const auto record=request.value("workflowRecord").toMap();if(QJsonDocument::fromVariant(record).toJson(QJsonDocument::Compact).size()>4*1024*1024)return error(QObject::tr("草稿较大，请按几个谱段保存。"));
+    QString message;score->startCmd();const bool ok=mutate(score,option,&message);if(ok&&!record.isEmpty()){auto saved=record;auto drafts=saved["drafts"].toMap();const auto key=saved["activeId"].toString();auto entry=drafts[key].toMap();entry["identity"]=rollNotationIdentity(score,entry.value("scope",option.scope).toMap());entry["draft"]=false;drafts[key]=entry;saved["drafts"]=drafts;const auto text=QString::fromUtf8(QJsonDocument::fromVariant(saved).toJson(QJsonDocument::Compact));score->undo(new ChangeMetaText(score->masterScore(),"kumo.rollWriting",text));}score->endCmd(!ok);if(mscore&&mscore->currentScore()==score)mscore->endCmd();if(!ok)return error(message);
+    if(mscore&&mscore->currentScore()==score)notifyArrangementSuggestions(score);return {{"ok",true},{"snapshotId",observer->analysisContentRevision()},{"identity",rollNotationIdentity(score,option.scope)}};
+}
 
 QVariantMap arrangementSuggestions(Score *score) {
     QVariantList items;

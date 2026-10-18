@@ -3,6 +3,7 @@
 #include "../workflow/editorareas.h"
 #ifdef SCRIPT_INTERFACE
 #include "spectrumpane.h"
+#include "rollwriting.h"
 #endif
 #include "libmscore/select.h"
 #include "libmscore/pedal.h"
@@ -27,6 +28,7 @@ void PerformanceEditor::updateSurfaces()
       { if(property("kumoEditorClosing").toBool())return;
 #ifdef SCRIPT_INTERFACE
       if(_spectrum)_spectrum->viewChanged();
+      if(_rollWriting)_rollWriting->contextChanged();
 #endif
       updateDetachedRulers(this);
       if (_canvas) _canvas->update(); if (_noteCanvas) _noteCanvas->update(); if (_ruler) _ruler->update(); if(_workflowPanel&&_workflowPanel->isVisible())for(auto child:_workflowPanel->findChildren<QWidget*>())child->update(); }
@@ -340,6 +342,9 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
                   const auto edit = _pending.value(note.note, {note.type, note.raw});
                   const int midi = NoteVelocity::effective(note.base, edit.type, edit.raw);
                   QColor color = note.base < 0 && edit.type == Note::ValueType::OFFSET_VAL && _appearance.mode == 0 ? c[PerformanceAppearance::Grid].lighter(130) : _appearance.noteColor(midi, note.track); if (!note.enabled || !note.audible) color.setAlpha(45);
+#ifdef SCRIPT_INTERFACE
+                  if(_rollWriting&&_rollWriting->dimsOriginal(note.tick,note.track))color.setAlpha(38);
+#endif
                   painter.setBrush(color); painter.setPen(note.selected ? QPen(c[PerformanceAppearance::Selection], 1.5) : QPen(color.darker(120), 1)); painter.drawRect(geometry.rect);
                   if (_playingNotes.contains(i)) { painter.setBrush(Qt::NoBrush); painter.setPen(QPen(c[PerformanceAppearance::Playhead], 2.5)); painter.drawRect(geometry.rect.adjusted(2, 2, -2, -2)); }
                   if (_pending.contains(note.note)) { painter.setBrush(Qt::NoBrush); painter.setPen(QPen(c[PerformanceAppearance::Preview], 1.5, Qt::DashLine)); painter.drawRect(geometry.rect.adjusted(-1, -1, 1, 1)); }
@@ -354,6 +359,9 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
                         painter.fillRect(label,c[PerformanceAppearance::Background]);painter.setPen(c[PerformanceAppearance::Text]);painter.drawText(label,Qt::AlignCenter,value);
                         }
                   }
+#ifdef SCRIPT_INTERFACE
+            if(_rollWriting)_rollWriting->paint(painter,area);
+#endif
             if (_marquee) {
                   painter.setBrush(QColor(130, 190, 230, 35)); painter.setPen(QPen(c[PerformanceAppearance::Selection], 1, Qt::DashLine)); painter.drawRect(QRectF(_marqueeStart, _marqueeEnd).normalized());
                   }

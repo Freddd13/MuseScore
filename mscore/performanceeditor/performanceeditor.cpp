@@ -6,6 +6,7 @@
 #include "rhythmpane.h"
 #include "mscore/workflow/builtinpanels.h"
 #include "spectrumpane.h"
+#include "rollwriting.h"
 #endif
 #include <QJsonDocument>
 #include "markvelocity.h"
@@ -215,9 +216,15 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             if (notes) { row->addStretch(); parent->addLayout(row); }
             };
       paneControls(noteLayout, true);
+#ifdef SCRIPT_INTERFACE
+      auto writeToggle=new QToolButton(noteArea);writeToggle->setObjectName("rollWriteToggle");writeToggle->setDefaultAction(rollWritingAction());writeToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);if(auto row=qobject_cast<QHBoxLayout*>(noteLayout->itemAt(0)->layout()))row->insertWidget(qMax(0,row->count()-1),writeToggle);
+#endif
       _noteCanvas = new PerformanceCanvas(this, PerformanceSurface::Notes); _noteCanvas->installEventFilter(this); noteLayout->addWidget(_noteCanvas, 1);
       _pitchScroll = new QScrollBar(Qt::Vertical, _noteCanvas); _pitchScroll->setRange(0, 12700);
       connect(_pitchScroll, &QScrollBar::valueChanged, this, [this](int value) { pauseFollow(); _viewport.topPitch = _viewport.pitchAtIndex(_viewport.rowMaximum() - value / 100.0); invalidateVisual(); });
+#ifdef SCRIPT_INTERFACE
+      _rollWriting=new RollWritingBar(this,writeToggle,noteArea);noteLayout->insertWidget(1,_rollWriting);
+#endif
       _splitter->addWidget(noteArea);
       auto parameterArea = new QWidget(_splitter); parameterArea->setObjectName("performanceParametersArea"); auto areaLayout = new QVBoxLayout(parameterArea); areaLayout->setContentsMargins(0, 0, 0, 0); areaLayout->setSpacing(0);
       _ruler = new PerformanceCanvas(this, PerformanceSurface::Ruler); _ruler->installEventFilter(this); areaLayout->addWidget(_ruler);
@@ -326,6 +333,9 @@ void PerformanceEditor::resizeEvent(QResizeEvent*)
 PerformanceEditor::~PerformanceEditor()
       {
       setProperty("kumoEditorClosing",true);
+#ifdef SCRIPT_INTERFACE
+      if(_rollWriting)_rollWriting->shutdown();
+#endif
       releaseEditorAreas(this);
       invalidateOverlay();
       if (_view && _trackingOwned) _view->setMouseTracking(_trackingBefore || _view->noteEntryMode() || _view->fotoMode());

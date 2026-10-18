@@ -1,5 +1,8 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performanceeditor.h"
+#ifdef SCRIPT_INTERFACE
+#include "rollwriting.h"
+#endif
 #include "../workflow/editorareas.h"
 #include "../workflow/workflowcontext.h"
 #ifdef SCRIPT_INTERFACE
@@ -362,6 +365,9 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
             }
       const bool notes = object == _noteCanvas, ruler = object == _ruler || object->property("performanceExtraRuler").toBool(), parameter = object == _canvas;
       if (!notes && !ruler && !parameter) return false;
+#ifdef SCRIPT_INTERFACE
+      if(notes&&_rollWriting&&_rollWriting->handle(event))return true;
+#endif
       if ((event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Space) {
             event->accept(); if (event->type() == QEvent::KeyPress) togglePlayback(); return true;
             }

@@ -32,11 +32,14 @@ class TempoText;
 class TextLine;
 class PerformanceCanvas;
 class SpectrumPane;
+class RollWritingBar;
 class PerformanceEditor : public QWidget, public MuseScoreView {
       Q_OBJECT
       friend class PerformanceCanvas;
       friend class WorkflowLanes;
       friend class SpectrumPane;
+      friend class RollWritingBar;
+      RollWritingBar* _rollWriting=nullptr;
       friend void installSpectrumPane(PerformanceEditor*,QSplitter*);
       SpectrumPane* _spectrum=nullptr;
       QWidget* _workflowPanel=nullptr;
