@@ -549,3 +549,16 @@ Windows 安装需要同 SDK 的 QtWebSockets QML 模块和 `Qt5WebSockets.dll`�
 ## 0.57 的力度对比
 
 新导入和录制默认采用全部演奏力度，并逐音固定保存。编辑器默认同音对比，可切换真实播放时间；原值与拟采用值用并列实心柱显示。完整操作见[演奏力度说明](docs/REPAIR_057_GUIDE.md)。
+
+
+## Kumo Score Study 0.420：八度、括号与swing小样（2026-10-18）
+
+本机官谱字形研究扩至90个码位。新增sf、8va/8、音符括号、等号/近似等号、五种swing说明图形及短下符尾备选，统一全/半休止加线形式，并修正X符头的上下接杆点。完整保留Leland未改字形，音乐493→501字、Text182→247字；尚未宣布整套字体或所有出现符号已完成。
+
+取得本机 `mcp-musescore/fonts/kumo-engrave/dist/kumo-score-study-0.420-local.zip`，将其中 `Kumo Score Study` 与 `Kumo Score Study Text` 两个完整文件夹复制到偏好设置指定的 Score Fonts 路径并重启。在乐谱独立副本的 **格式→样式→乐谱** 同时选择这两个家族，第一轮保持其它样式。已有0.410时成对更换两个家族的OTF/JSON后重启即可；无需重装MCP、skill或Windows字体。
+
+sf、八度线和音符括号仍用软件原有操作；速度近似等号与swing有独立Unicode文字入口，选中相应字符设置为Kumo Score Study Text，详见 [额外符号说明](../../../mcp-musescore/fonts/kumo-engrave/TEXT_EXTRAS.md)。短下符尾只保存为显式备选，不会替换正常音符；swing图形不改变节奏语义或回放。
+
+固定personal0.21宿主原生检查：自制钢琴谱、上下X符干与二度和弦、音符/变音括号、谱外Rest、8va/8及swing混排均已查看；十组复合力度在正常分字母与整字形路径的墨迹IoU均为1.0。构建后核对字体覆盖、未改轮廓/字宽、GPOS/GDEF及外框。未宣称当前新宿主或用户谱已回归，连续波线/端部接缝、曲线质量和审美仍在研究。
+
+参考PDF全部只读，原件哈希核对未变，用户MSCZ本轮未打开或修改。只更新本体仓库用户说明，不改本体代码或个人软件版本。源码提交 `Freddd13/mcp-musescore@77106bc`；[字体研究及安装](../../../mcp-musescore/fonts/kumo-engrave/README.md)、[验证范围](../../../mcp-musescore/fonts/kumo-engrave/CORPUS_STUDY.md)。
