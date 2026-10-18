@@ -120,3 +120,5 @@ P1 D：MIDI范围、声部及旋律保护；薄宿主接口在mscore/workflow，
 [P1 0.31 最终验证](P1_VALIDATION.md)：183通过及实测预算；人工素材验收边界明确列出。
 
 0.32：按功能使用的[用户说明](../USER_GUIDE.md)，面板与操作修复位于mscore/workflow/paneldock及独立插件目录。
+
+0.71外部字体专用波浪滑音：见[字体净书接口](font-engraving.md)，涵盖可选JSON声明、旧字体回退、绘制/外框及原生测试。

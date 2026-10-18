@@ -130,3 +130,5 @@ PlaybackTiming 是 libmscore 的局部助手，MidiRenderer 生成带 nominalTic
 在既有Symbol内增加可选两段折线，仅四个手符号适用；不新增ElementType。Chord的已有子ElementList局部补齐Symbol生命周期，Note附着沿用。Inspector与ScoreView复用原属性/Undo/端点协议，默认关闭保护旧谱，绘制/导出统一。
 
 0.26 谱带位置、音头映射与性能优化全部在已有 performanceeditor 子模块；没有新增模型／音乐格式／主窗口依赖。scoreBandLane／xForNote 统一屏幕几何，隐藏选择延迟同步、谱行范围索引与局部播放损伤仍使用原生数据与单一缓存。见 [14](14-performance-editor.md) 与[性能审查](performance-audit.md)。
+
+0.71字体滑音扩展只位于ScoreFont元数据加载与GlissandoSegment绘制/外框；独立完整应用测试在mtest/mscore/fontengraving，不增加谱面序列化字段。见[接口说明](font-engraving.md)。

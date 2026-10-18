@@ -3158,6 +3158,7 @@ class ScoreFont {
       double _textEnclosureThickness = 0;
       mutable QFont* font { 0 };
       bool _external { false };
+      SymId _wavyGlissandoSym { SymId::noSym };
 
       static QVector<ScoreFont> _builtinScoreFonts; // built onto the Application
       static QVector<ScoreFont> _privateScoreFonts; // private to the Application
@@ -3186,6 +3187,8 @@ class ScoreFont {
       double textEnclosureThickness() { return _textEnclosureThickness; }
 
       QString fontPath() const { return _fontPath; }
+      // noSym keeps the historical trill-wave rendering for existing fonts.
+      SymId wavyGlissandoSym() const { return _wavyGlissandoSym; }
 
       static void initScoreFonts();
       static void scanUserFonts(const QString& path, bool isPrivate = true);

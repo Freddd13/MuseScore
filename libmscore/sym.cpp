@@ -11,6 +11,7 @@
 //=============================================================================
 
 #include <QDirIterator>
+#include <cmath>
 
 #include "mscore.h"
 #include "score.h"
@@ -7090,6 +7091,23 @@ void ScoreFont::load(bool isPrivate)
       Sym* sym = &_symbols[int(SymId::space)];
       computeMetrics(sym, 32);
 
+      // Optional external-font extension. Require a real glyph in this font;
+      // a fallback glyph must not silently opt the font into a new wave style.
+      _wavyGlissandoSym = SymId::noSym;
+      if (_external) {
+            const QString waveName = metadataJson.value("kumoEngraving").toObject()
+                  .value("wavyGlissandoGlyph").toString();
+            const SymId wave = Sym::name2id(waveName);
+            if (wave != SymId::noSym) {
+                  const Sym& primary = _symbols[int(wave)];
+                  const QRectF box = primary.bbox();
+                  if (primary.isValid() && std::isfinite(primary.advance()) && primary.advance() > 0.0
+                      && std::isfinite(box.x()) && std::isfinite(box.y())
+                      && std::isfinite(box.width()) && std::isfinite(box.height()))
+                        _wavyGlissandoSym = wave;
+                  }
+            }
+
 #if 0
       //
       // check for missing symbols
@@ -7307,6 +7325,7 @@ ScoreFont::ScoreFont(const ScoreFont& f)
       _fontPath = f._fontPath;
       _filename = f._filename;
       _external = f._external;
+      _wavyGlissandoSym = f._wavyGlissandoSym;
 
       // fontImage;
       cache = 0;

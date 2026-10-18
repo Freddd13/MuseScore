@@ -37,6 +37,7 @@ NICE-TO-HAVE TODO:
 #include "xml.h"
 #include "accidental.h"
 #include "utils.h"
+#include <cmath>
 
 namespace Ms {
 
@@ -50,6 +51,29 @@ static const ElementStyle glissandoElementStyle {
 
 static const qreal      GLISS_PALETTE_WIDTH           = 4.0;
 static const qreal      GLISS_PALETTE_HEIGHT          = 4.0;
+
+// Keep repetition, centring and the selection/collision box in agreement.
+// A custom wave shorter than one complete glyph fits one horizontally; its
+// height stays unchanged and its ink cannot protrude beyond the endpoints.
+struct WavyGlissandoRun {
+      int count;
+      qreal x;
+      qreal widthScale;
+      QRectF ink;
+      };
+
+static WavyGlissandoRun wavyGlissandoRun(qreal length, const QRectF& box, qreal advance, bool custom)
+      {
+      const int count = static_cast<int>(length / advance);
+      if (custom && (count == 0 || length < box.width())) {
+            const qreal scale = length / box.width();
+            return { 1, -box.x() * scale, scale, QRectF(0.0, -box.height() * .5, length, box.height()) };
+            }
+      const qreal x = (length - count * advance) * .5;
+      return { count, x, 1.0, count > 0
+            ? QRectF(x + box.x(), -box.height() * .5, box.width() + (count - 1) * advance, box.height())
+            : QRectF() };
+      }
 
 const std::array<const char *, 2> Glissando::glissandoTypeNames = {
       QT_TRANSLATE_NOOP("Palette", "Straight glissando"),
@@ -69,6 +93,15 @@ void GlissandoSegment::layout()
       if (staff())
             setMag(staff()->mag(tick()));
       QRectF r = QRectF(0.0, 0.0, pos2().x(), pos2().y()).normalized();
+      const ScoreFont* scoreFont = score() ? score()->scoreFont() : nullptr;
+      const SymId customWave = scoreFont ? scoreFont->wavyGlissandoSym() : SymId::noSym;
+      const qreal length = std::hypot(pos2().x(), pos2().y());
+      if (glissando()->glissandoType() == GlissandoType::WAVY && customWave != SymId::noSym && length > 0.0) {
+            const auto run = wavyGlissandoRun(length, symBbox(customWave), symAdvance(customWave), true);
+            QTransform rotation;
+            rotation.rotate(std::atan2(pos2().y(), pos2().x()) * 180.0 / M_PI);
+            r = r.united(rotation.mapRect(run.ink));
+            }
       qreal lw = glissando()->lineWidth() * .5;
       setbbox(r.adjusted(-lw, -lw, lw, lw));
       }
@@ -90,8 +123,15 @@ void GlissandoSegment::draw(QPainter* painter) const
       // rotate painter so that the line become horizontal
       qreal w     = pos2().x();
       qreal h     = pos2().y();
-      qreal l     = sqrt(w * w + h * h);
-      qreal wi    = asin(-h / l) * 180.0 / M_PI;
+      const ScoreFont* scoreFont = score() ? score()->scoreFont() : nullptr;
+      const SymId customWave = scoreFont ? scoreFont->wavyGlissandoSym() : SymId::noSym;
+      const bool custom = customWave != SymId::noSym && glissando()->glissandoType() == GlissandoType::WAVY;
+      qreal l     = custom ? std::hypot(w, h) : sqrt(w * w + h * h);
+      if (qFuzzyIsNull(l)) {
+            painter->restore();
+            return;
+            }
+      qreal wi    = custom ? -std::atan2(h, w) * 180.0 / M_PI : asin(-h / l) * 180.0 / M_PI;
       qreal scale = painter->worldTransform().m11();
       painter->rotate(-wi);
 
@@ -99,17 +139,17 @@ void GlissandoSegment::draw(QPainter* painter) const
             painter->drawLine(QLineF(0.0, 0.0, l, 0.0));
             }
       else if (glissando()->glissandoType() == GlissandoType::WAVY) {
-            QRectF b = symBbox(SymId::wiggleTrill);
-            qreal a  = symAdvance(SymId::wiggleTrill);
-            int n    = static_cast<int>(l / a);      // always round down (truncate) to avoid overlap
-            qreal x  = (l - n*a) * 0.5;   // centre line in available space
+            const SymId wave = custom ? customWave : SymId::wiggleTrill;
+            QRectF b = symBbox(wave);
+            const auto run = wavyGlissandoRun(l, b, symAdvance(wave), custom);
             std::vector<SymId> ids;
-            for (int i = 0; i < n; ++i)
-                  ids.push_back(SymId::wiggleTrill);
+            for (int i = 0; i < run.count; ++i)
+                  ids.push_back(wave);
             // this is very ugly but fix #68846 for now
             bool tmp = MScore::pdfPrinting;
             MScore::pdfPrinting = true;
-            score()->scoreFont()->draw(ids, painter, magS(), QPointF(x, -(b.y() + b.height()*0.5) ), scale);
+            score()->scoreFont()->draw(ids, painter, QSizeF(magS() * run.widthScale, magS()),
+                  QPointF(run.x, -(b.y() + b.height()*0.5)), scale);
             MScore::pdfPrinting = tmp;
             }
 

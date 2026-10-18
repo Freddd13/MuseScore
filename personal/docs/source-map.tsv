@@ -103,7 +103,7 @@ SF2文件跳转	audio/midi/fluid/sfont.cpp	void SFont::safe_fseek(qint64 ofs)	18
 rhythm-rules	libmscore/durationtype.cpp	std::vector<TDuration> toRhythmicDurationList	526	Simple/compound meter duration spelling; see personal guide 13	mtest/libmscore/inputrhythm
 restored-rhythm-menu	mscore/musescore.cpp	void MuseScore::updateMenus()	2835	Restore personal action into old workspace menus	mtest/mscore/pluginhost
 text-font-fallback	libmscore/textbase.cpp	QFont TextFragment::font(	851	ScoreText music font vs ordinary Qt font merging	mtest/libmscore/text
-music-text-fallback	libmscore/sym.cpp	const char* ScoreFont::fallbackTextFont()	7156	Bravura Text fallback; not CJK title fallback	-
+music-text-fallback	libmscore/sym.cpp	const char* ScoreFont::fallbackTextFont()	7174	Bravura Text fallback; not CJK title fallback	-
 harmony-regions	share/plugins/HarmonyAssistant/Timeline.js	function createBuilder	48	Numeric interval builder and manual overlays	mtest/mscore/scoreobserver
 harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName:""harmonyRangeEditor"""	8	Range handles, ticks and independent history	mtest/mscore/pluginhost
 演奏界面	mscore/performanceeditor/performanceeditor.cpp	PerformanceEditor::PerformanceEditor	77	独立停靠参数面板	mtest/mscore/performanceeditor
@@ -335,3 +335,5 @@ VST3 适配	audio/vst/vst3plugin.cpp	class Vst3Plugin	57	音频、MIDI、参数�
 VST2 适配	audio/vst/vst2plugin.cpp	class Vst2Plugin	21	x64 ABI、CC、预设、CFX 和插件界面	mtest/mscore/pluginhost/vst_tests.inc
 VST 独立进程	audio/vst/proxy.cpp	class Proxy	15	固定缓冲、独立扫描、进程退出和离线处理	../../muse3_plugins/P2/tests/vst/checks.cpp
 SF2 单乐器效果	audio/vst/fluidsource.cpp	class FluidSource	12	按需创建发声实例，复用原生 SF2	mtest/mscore/pluginhost/vst_tests.inc
+外部字体滑音声明	libmscore/sym.cpp	const QString waveName = metadataJson	7098	验证本字库有效字形并缓存可选波浪滑音符号	mtest/libmscore/spanners/private_font_glissando_tests.inc
+波浪滑音墨迹布局	libmscore/glissando.cpp	static WavyGlissandoRun wavyGlissandoRun	65	重复居中、短段横向适配与旋转外框	mtest/mscore/fontengraving/tst_fontengraving.cpp
