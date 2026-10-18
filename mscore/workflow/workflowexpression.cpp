@@ -167,7 +167,17 @@ QVariantMap ScoreObserver::showEditorCorrespondence(){
 }
 QVariantMap ScoreObserver::expressionSelection(){
  QVariantList notes;if(_score)for(auto note:_score->selection().noteList()){auto value=describe(note,note->ppitch());if(note->chord()->isGrace()&&note->chord()->parent()&&note->chord()->parent()->isChord())value["graceIndex"]=toChord(note->chord()->parent())->graceNotes().indexOf(note->chord());notes.append(value);}
- return {{"scope",analysisScope(false)},{"notes",notes},{"rangeSelected",_score&&_score->selection().isRange()}};
+ auto scope=analysisScope(false);
+ if(_score&&_score->selection().isRange()) {
+  const auto& selection=_score->selection();const int start=selection.tickStart().ticks(),end=selection.tickEnd().ticks();
+  scope["partial"]=scope.value("start").toInt()!=start||scope.value("end").toInt()!=end;
+  scope["start"]=start;scope["end"]=end;scope["firstTrack"]=selection.staffStart()*VOICES;scope["endTrack"]=selection.staffEnd()*VOICES;scope["exact"]=true;
+  if(auto measure=_score->tick2measure(Fraction::fromTicks(start)))scope["firstBeat"]=1.+(start-measure->tick().ticks())/(DIVISION*4./measure->timesig().denominator());
+  auto last=_score->tick2measure(Fraction::fromTicks(end));if(!last)last=_score->lastMeasure();
+  if(last){scope["endMeasure"]=last->no()+1;scope["endBeat"]=1.+(end-last->tick().ticks())/(DIVISION*4./last->timesig().denominator());scope["endAtBar"]=end==last->endTick().ticks();}
+
+ }
+ return {{"scope",scope},{"notes",notes},{"rangeSelected",_score&&_score->selection().isRange()}};
 }
 QVariantMap ScoreObserver::closeExpressionPreviewTabs(){
  if(!idle())return {{"error",tr("停止播放后可以整理旧试听页。")}};

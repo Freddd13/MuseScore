@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performanceeditor.h"
 #include "../workflow/editorareas.h"
+#include "../workflow/workflowcontext.h"
 #ifdef SCRIPT_INTERFACE
 #include "spectrumpane.h"
 #endif
@@ -280,9 +281,10 @@ void PerformanceEditor::updatePlayhead()
       if (!_score || !surfacesActive()) { _playTimer.stop(); return; }
       const bool playing = seq && seq->isPlaying() && seq->score() == _score->masterScore();
       if (!playing) _playTimer.stop();
-      const int tick = playing ? _score->repeatList().utick2tick(seq->getCurTick()) : _score->playPos().ticks();
+      const bool recording=workflowContext()->captureCurrent(_score)&&workflowContext()->capture().value("recording").toBool();
+      const int tick = recording ? workflowContext()->capture().value("matchedTick",-1).toInt() : playing ? _score->repeatList().utick2tick(seq->getCurTick()) : _score->playPos().ticks();
       const int previous = _playTick; _playTick = tick;
-      if (_following && playing && !_dragging && !_marquee && !_seeking) {
+      if (_following && (playing||recording) && tick>=0 && !_dragging && !_marquee && !_seeking) {
             _followButton->setText(tr("跟随播放"));
             const int span = _scroll->pageStep();
             const int shown=comparisonPlayTick(tick);

@@ -72,8 +72,8 @@ function movement(old, keys, fs, side, seconds, w) {
     }
     return c;
 }
-function handFrames(state, config) {
-    var out={}, released={}, active=[], assignments={}, reports=[], native=typeof PianoHands!=="undefined";
+function handFrames(state, config, settings) {
+    var out={}, released={}, active=[], assignments={}, reports=[], messages=[], native=typeof PianoHands!=="undefined";
     for(var i=0;i<state.frames.length;++i) {
         var frame=state.frames[i], tick=frame.tick;
         active=active.filter(function(n){return n.logicalEnd>tick && !released[n.logicalId];});
@@ -81,6 +81,7 @@ function handFrames(state, config) {
         var parts={};
         active.forEach(function(n) {
             var hand=Rules.handFor(state,n,tick), v=copy(n);
+            if(settings && settings.lockFingers===false)v.fingerings=[];
             v.analysisHand=assignments[n.logicalId]||hand.hand;
             v.handKnown=hand.source.indexOf("自动推断")<0 || !!assignments[n.logicalId];
             (parts[n.partId===undefined?0:n.partId]||(parts[n.partId===undefined?0:n.partId]=[])).push(v);
@@ -92,14 +93,14 @@ function handFrames(state, config) {
             for(var f=i+1;f<state.frames.length && lookahead.length<2;++f) {
                 var future=state.frames[f];
                 if(!(state.byTick[future.tick]||[]).some(function(n){return n.partId===Number(part);}))continue;
-                var futureNotes=future.notes.filter(function(n){return n.partId===Number(part) && n.logicalEnd>future.tick;}).map(function(n){var v=copy(n),h=Rules.handFor(state,n,future.tick);v.analysisHand=h.hand;v.handKnown=h.source.indexOf("自动推断")<0;return v;});
+                var futureNotes=future.notes.filter(function(n){return n.partId===Number(part) && n.logicalEnd>future.tick;}).map(function(n){var v=copy(n),h=Rules.handFor(state,n,future.tick);if(settings && settings.lockFingers===false)v.fingerings=[];v.analysisHand=h.hand;v.handKnown=h.source.indexOf("自动推断")<0;return v;});
                 var futureSeconds=futureNotes.filter(function(n){return n.attackTick===future.tick;}).map(function(n){return n.onSeconds;});
                 lookahead.push({tick:future.tick,seconds:futureSeconds.length?Math.max.apply(null,futureSeconds):future.tick/960,notes:futureNotes});
             }
             var report=native?PianoHands.analyse(notes,state.data.pedals||[],{part:Number(part),tick:tick,seconds:seconds,left:config.left,right:config.right,minimumHoldMs:config.minimumHoldMs,lookahead:lookahead}):null;
             var sideNotes={left:[],right:[]};
+            if(report && (report.uncertain || report.limited)){messages.push("第"+(notes[0].measure||"当前")+"小节需要确认分手或已有指法");notes=notes.filter(function(n){return n.handKnown;});report=null;}
             if(report) {
-                if(report.uncertain || report.limited)continue;
                 for(var h=0;h<report.sides.length;++h) {
                     var side=report.sides[h];
                     (side.released||[]).forEach(function(index){released[notes[index].logicalId]=true;});
@@ -119,10 +120,10 @@ function handFrames(state, config) {
             }
         }
     }
-    return {frames:out,reports:reports,assignments:assignments};
+    return {frames:out,reports:reports,assignments:assignments,messages:messages.filter(function(v,i,a){return a.indexOf(v)===i;})};
 }
 function fingering(state, config, settings) {
-    var hands=handFrames(state,config), routes=[], messages=[], w=weights(settings.weights);
+    var hands=handFrames(state,config,settings), routes=[], messages=hands.messages.slice(), w=weights(settings.weights);
     for(var key in hands.frames) {
         var frames=hands.frames[key], beam=[{cost:0,history:[],assigned:{},keys:[],fs:[],seconds:0}], skipped=0;
         for(var i=0;i<frames.length;++i) {

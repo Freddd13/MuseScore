@@ -52,6 +52,7 @@ class ViewPaletteBinding : public QObject {
 QQuickView* loadView(const QString& name,bool embedded,QWidget* owner){
  auto engine=new QmlPluginEngine;auto view=new QQuickView(engine,nullptr);engine->setParent(view);
  view->rootContext()->setContextProperty("workflowEmbedded",embedded);
+ view->rootContext()->setContextProperty("workflowNativeTools",name=="PerformanceExpression");
  if(embedded&&owner)new ViewPaletteBinding(view,owner);
  const QString file=builtinPanelPath(name);
  view->setResizeMode(QQuickView::SizeRootObjectToView);view->setSource(QUrl::fromLocalFile(file));

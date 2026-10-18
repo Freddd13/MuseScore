@@ -22,6 +22,7 @@
 namespace Ms {
 void PerformanceEditor::setupExpressionComparison()
       {
+      connect(workflowContext(),&WorkflowContext::captureChanged,this,&PerformanceEditor::updatePlayhead);
       _comparisonButton=new QToolButton(this);_comparisonButton->setObjectName("performanceExpressionCompare");
       _comparisonButton->setText(tr("演奏前后对比"));_comparisonButton->setCheckable(true);_comparisonButton->setChecked(true);_comparisonButton->hide();
       _comparisonButton->setToolTip(tr("左侧中性色柱为谱中力度，右侧强调色柱为拟采用力度。拖动强调色柱调整；点击使用力度保存到乐谱。"));

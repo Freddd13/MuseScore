@@ -107,6 +107,29 @@ class TestPluginHost : public QObject {
             score->style().set(Sid::musicalTextFont,QString("Bravura Text"));fragment.text=quarter;
             QCOMPARE(fragment.font(&tempo).family(),QString("Bravura Text"));delete score;
       }
+      void expressionTargetAndInputControls() {
+            auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);
+            main->setCurrentScoreView(main->appendScore(score));main->resize(1250,940);main->show();
+            auto start=score->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest);
+            auto end=score->tick2segment(Fraction::fromTicks(960),false,SegmentType::ChordRest);QVERIFY(start);QVERIFY(end);
+            score->selection().setRange(start,end,0,1);score->selection().updateSelectedElements();
+            QVERIFY(score->selection().isRange());QCOMPARE(score->selection().tickStart().ticks(),480);QCOMPARE(score->selection().tickEnd().ticks(),960);
+            getAction("performance-expression")->trigger();
+            QVERIFY(score->selection().isRange());QCOMPARE(score->selection().tickStart().ticks(),480);
+            auto editor=main->performanceEditor();QVERIFY(editor);auto host=editor->findChild<QWidget*>("embeddedExpressionPage");QVERIFY(host);
+            auto root=qobject_cast<QmlPlugin*>(host->property("root").value<QObject*>());QVERIFY(root);
+            QVERIFY(QMetaObject::invokeMethod(root,"chooseTarget",Q_ARG(QVariant,false)));
+            auto scope=[root]{auto v=root->property("retainedScope");return v.userType()==qMetaTypeId<QJSValue>()?v.value<QJSValue>().toVariant().toMap():v.toMap();};
+            QCOMPARE(scope().value("start").toInt(),480);QCOMPARE(scope().value("end").toInt(),960);QCOMPARE(scope().value("firstBeat").toDouble(),2.);QCOMPARE(scope().value("endBeat").toDouble(),3.);
+            score->deselectAll();QVERIFY(QMetaObject::invokeMethod(root,"updateScoreContext"));QCOMPARE(scope().value("start").toInt(),480);
+            editor->findChild<QAction*>("editorArea/float/embeddedExpressionPage")->trigger();QTRY_VERIFY(!root->property("withinEditor").toBool());
+            auto click=[root](const char* name){auto item=root->findChild<QQuickItem*>(name);if(!item||!item->isVisible()||!item->isEnabled())return false;QTest::mouseClick(item->window(),Qt::LeftButton,Qt::NoModifier,item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint());return true;};
+            QTest::qWait(150);QVERIFY(click("expressionTargetWhole"));QCOMPARE(scope().value("start").toInt(),0);QCOMPARE(scope().value("end").toInt(),1920);
+            const bool enabled=main->isMidiInEnabled();QVERIFY(click("expressionMidiInput"));QTRY_COMPARE(main->isMidiInEnabled(),!enabled);QVERIFY(click("expressionMidiInput"));QTRY_COMPARE(main->isMidiInEnabled(),enabled);
+            QVERIFY(main->isEnabled());QCOMPARE(root->window()->modality(),Qt::NonModal);
+            QVERIFY(root->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("expression-scope-065.png")));
+            editor->findChild<QAction*>("editorArea/restore/embeddedExpressionPage")->trigger();
+      }
       void workspaceViewsAndFirstOpen() {
             auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);
             main->setCurrentScoreView(main->appendScore(score));main->resize(1280,960);main->show();main->showPerformanceEditor(true);
@@ -141,9 +164,9 @@ class TestPluginHost : public QObject {
             editor->findChild<QAction*>("editorArea/restore/performanceNotesArea")->trigger();QTRY_VERIFY(!dock->isVisible());QTRY_VERIFY(notes->isVisible());
             auto expression=editor->findChild<QWidget*>("embeddedExpressionPage");QVERIFY(expression);
             editor->findChild<QAction*>("editorArea/float/embeddedExpressionPage")->trigger();
-            auto root=expression->property("root").value<QObject*>();QVERIFY(root);QTRY_VERIFY(!root->property("embeddedWorkflow").toBool());
+            auto root=expression->property("root").value<QObject*>();QVERIFY(root);QTRY_VERIFY(!root->property("withinEditor").toBool());QVERIFY(root->property("embeddedWorkflow").toBool());
             auto theme=root->findChild<QObject*>("workflowUiTheme");QVERIFY(theme);QTRY_COMPARE(theme->property("background").value<QColor>(),qApp->palette().color(QPalette::Window));
-            editor->findChild<QAction*>("editorArea/restore/embeddedExpressionPage")->trigger();QTRY_VERIFY(root->property("embeddedWorkflow").toBool());
+            editor->findChild<QAction*>("editorArea/restore/embeddedExpressionPage")->trigger();QTRY_VERIFY(root->property("withinEditor").toBool());
             QTRY_COMPARE(theme->property("background").value<QColor>(),editor->property("workflowPanelTheme").toMap().value("background").value<QColor>());
             auto tabs=editor->findChild<QTabBar*>("workflowExpressionTabs");QVERIFY(tabs);QTest::mouseDClick(tabs,Qt::LeftButton,Qt::NoModifier,tabs->tabRect(2).center());
             auto spectrumDock=main->findChild<QDockWidget*>("kumoEditorArea/transcriptionSpectrumPane");QVERIFY(spectrumDock);QTRY_VERIFY(spectrumDock->isVisible());
@@ -389,6 +412,7 @@ class TestPluginHost : public QObject {
             auto page=editor->findChild<QWidget*>("embeddedExpressionPage");QVERIFY(page);QVERIFY(page->isVisible());QVERIFY(page->property("loaded").toBool());
             auto root=qobject_cast<QmlPlugin*>(page->property("root").value<QObject*>());QVERIFY(root);QVERIFY(root->property("embeddedWorkflow").toBool());
             auto loaded=root;tabs->setCurrentIndex(0);QVERIFY(!page->isVisible());showExpressionPanel();QCOMPARE(page->property("root").value<QObject*>(),static_cast<QObject*>(loaded));QVERIFY(page->isVisible());
+            editor->findChild<QAction*>("editorArea/float/embeddedExpressionPage")->trigger();QTest::qWait(100);
             // Use the real import button and file picker, then adopt through the page.
             QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
             root->window()->requestActivate();QTest::qWait(100);
@@ -420,7 +444,7 @@ class TestPluginHost : public QObject {
             QVERIFY(editor->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("builtin-expression-058.png")));
             QVERIFY(main->currentScoreView()->height()>80);
             QVERIFY(root->window());QTest::qWait(80);QVERIFY(root->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("builtin-expression-controls-058.png")));
-            tabs->setCurrentIndex(0);main->showPerformanceEditor(false);
+            editor->findChild<QAction*>("editorArea/restore/embeddedExpressionPage")->trigger();tabs->setCurrentIndex(0);main->showPerformanceEditor(false);
             }
       void transcriptionManualFlow()
             {
@@ -560,7 +584,7 @@ class TestPluginHost : public QObject {
             auto result=completed.front()[0].toMap();QVERIFY(!result["options"].toList().isEmpty());QCOMPARE(score->undoStack()->getCurIdx(),before);
             auto apply=panel->findChild<QPushButton*>("arrangement-apply");QVERIFY(apply&&apply->isEnabled());
             QVERIFY(panel->findChild<QPushButton*>("localSuggestionStart")->isEnabled());
-            QTest::mouseClick(panel->findChild<QPushButton*>("arrangement-preview"),Qt::LeftButton);
+            QTRY_VERIFY(main->currentScoreView()->findChild<QWidget*>("regionalDifferenceLayer")->isVisible());
             main->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("traditional-suggestions-061.png"));
             QTest::mouseClick(apply,Qt::LeftButton);QTRY_COMPARE(score->undoStack()->getCurIdx(),before+1);int fingers=0;
             for(auto segment=score->firstSegment(SegmentType::ChordRest);segment;segment=segment->next1(SegmentType::ChordRest))for(int track=0;track<score->ntracks();++track){auto e=segment->element(track);if(e&&e->isChord())for(auto n:toChord(e)->notes())for(auto mark:n->el())fingers+=mark->isFingering();}
@@ -594,7 +618,7 @@ class TestPluginHost : public QObject {
             auto repeated=observer.arrangementRequest("submitArrangementOptions",{{"snapshotId",snapshot},{"options",QVariantList{option}},{"operationId","submit-ui-1"}});QCOMPARE(repeated,submit);
             auto panel=main->findChild<QWidget*>("arrangementSuggestionPanel");QVERIFY(panel);QVERIFY(panel->isVisible());
             auto choices=panel->findChild<QTreeWidget*>("arrangementChoices");QVERIFY(choices);QCOMPARE(choices->topLevelItemCount(),1);
-            auto preview=panel->findChild<QPushButton*>("arrangement-preview");QVERIFY(preview);QTest::mouseClick(preview,Qt::LeftButton);QVERIFY(main->currentScoreView()->findChild<QWidget*>("regionalDifferenceLayer")->isVisible());
+            auto preview=panel->findChild<QPushButton*>("arrangement-preview");QVERIFY(preview);QTRY_VERIFY(main->currentScoreView()->findChild<QWidget*>("regionalDifferenceLayer")->isVisible());QTest::mouseClick(preview,Qt::LeftButton);QVERIFY(!main->currentScoreView()->findChild<QWidget*>("regionalDifferenceLayer")->isVisible());QTest::mouseClick(preview,Qt::LeftButton);QVERIFY(main->currentScoreView()->findChild<QWidget*>("regionalDifferenceLayer")->isVisible());
             auto image=main->grab();image.save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("arrangement-options-060.png"));
             auto apply=panel->findChild<QPushButton*>("arrangement-apply");QVERIFY(apply);QTest::mouseClick(apply,Qt::LeftButton);
             auto bass=toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(4))->notes()[0];QCOMPARE(bass->veloOffset(),53);QCOMPARE(bass->veloType(),Note::ValueType::USER_VAL);QCOMPARE(score->undoStack()->getCurIdx(),before+1);QVERIFY(!bass->el().empty());QVERIFY(!observer.workflowData("arrangement").value("adoptions").toList().isEmpty());

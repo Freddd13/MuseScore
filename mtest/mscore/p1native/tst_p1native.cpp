@@ -92,7 +92,11 @@
 static void initP1Resources(){Q_INIT_RESOURCE(musescorefonts_Petaluma);}
 using namespace Ms;
 static void floatWorkflowPanel(QmlPlugin* root){
- if(root->property("embeddedWorkflow").toBool()){if(auto dock=mscore->findChild<QDockWidget*>("performanceEditorDock")){dock->setFloating(true);dock->resize(1060,760);dock->show();}}
+ if(root->property("embeddedWorkflow").toBool()){
+  auto editor=mscore->performanceEditor();
+  if(root->property("withinEditor").toBool())editor->findChild<QAction*>("editorArea/float/embeddedExpressionPage")->trigger();
+  if(auto dock=mscore->findChild<QDockWidget*>("kumoEditorArea/embeddedExpressionPage")){dock->resize(760,620);dock->show();QTest::qWait(100);}
+ }
  else{root->setPanelFloating(true);root->window()->resize(520,800);}
 }
 class TestP1Native:public QObject{
@@ -118,6 +122,19 @@ private slots:
 #include "tempo_palette_tests.inc"
 #include "tap_mark_tests.inc"
 #endif
+ void liveMatcherRecovery(){
+  QVector<RealtimeMatcher::Group> groups;const QList<int> pitches{60,62,64,67,65,69,71,72};
+  for(int i=0;i<pitches.size();++i)groups.append({i*480,i*.5,{pitches[i]}});
+  RealtimeMatcher matcher;matcher.reset(groups,false);
+  matcher.observe({60},0);QCOMPARE(matcher.tick(),0);matcher.observe({62},.5);matcher.observe({64},1.);
+  matcher.observe({91},1.1);QCOMPARE(matcher.tick(),960);
+  matcher.observe({65},2.);QCOMPARE(matcher.tick(),1920);matcher.observe({69},2.5);matcher.observe({71},3.);matcher.observe({72},3.5);QVERIFY(matcher.atEnd());
+  matcher.reset(groups,true);matcher.observe({20},0);matcher.observe({88},.5);matcher.observe({42},1.);matcher.observe({10},2.);
+  QCOMPARE(matcher.tick(),1920);matcher.observe({33},2.5);matcher.observe({70},3.);matcher.observe({19},3.5);QVERIFY(matcher.atEnd());
+  groups.clear();for(int i=0;i<20000;++i)groups.append({i*120,i*.125,{48+i%24}});
+  matcher.reset(groups,false);QElapsedTimer timer;timer.start();for(int i=0;i<1000;++i)matcher.observe(groups[i].pitches,i*.1);
+  QCOMPARE(matcher.tick(),groups[999].tick);qInfo("Live matching 1000 onset groups, 20000 target groups: %lld ms",timer.elapsed());
+ }
  void midiCaptureRecordingAndTiming(){
   MidiCaptureSession capture;QSignalSpy finished(&capture,&MidiCaptureSession::finished),failed(&capture,&MidiCaptureSession::failed);
   QVERIFY(!captureMidiInput(NPlayEvent(ME_NOTEON,0,60,80),midiInputTime()));
@@ -135,15 +152,37 @@ private slots:
   QVERIFY2(!result.contains("error"),qPrintable(result.value("error").toString()));
   auto notes=result["notes"].toList();QCOMPARE(notes.size(),2);auto note=notes[0].toMap();
   QCOMPARE(note["pitch"].toInt(),60);QCOMPARE(note["velocity"].toInt(),93);QCOMPARE(note["channel"].toInt(),1);
+  QVERIFY(note["seconds"].toDouble()<.001);
   QVERIFY(qAbs(note["endSeconds"].toDouble()-note["seconds"].toDouble()-.07)<.001);
   QVERIFY(!notes[1].toMap()["unreleased"].toBool());
   int pedalEvents=0;for(auto value:result["events"].toList()){auto e=value.toMap();if((e["type"].toInt()&240)==ME_CONTROLLER&&e["a"].toInt()==64)++pedalEvents;}
   QCOMPARE(pedalEvents,2);QVERIFY(!capture.state()["recording"].toBool());
   QVERIFY(!captureMidiInput(NPlayEvent(ME_NOTEON,0,60,80),midiInputTime()));
  }
+ void midiCaptureFastOnsets(){
+  QVariantList target;for(int i=0;i<3;++i)target.append(QVariantMap{{"tick",i*480},{"pitch",60+i*2},{"scoreSeconds",i*.04}});
+  MidiCaptureSession capture;QVERIFY(!capture.begin({{"notes",target},{"monitor",false}},false).contains("error"));const auto start=midiInputTime();
+  for(int i=0;i<3;++i){captureMidiInput(NPlayEvent(ME_NOTEON,0,60+i*2,80),start+i*40000000);captureMidiInput(NPlayEvent(ME_NOTEOFF,0,60+i*2,0),start+i*40000000+10000000);}
+  QTRY_COMPARE(capture.state()["matchedTick"].toInt(),960);capture.cancel();
+ }
+ void midiCapturePositionAndSelection(){
+  auto score=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);mscore->setCurrentScoreView(mscore->appendScore(score));mscore->showPerformanceEditor(true);
+  PluginAPI::Score wrapped(score);PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);auto scope=observer.analysisScope(true);
+  auto notes=observer.performanceRange(0,1920,0,8,0,32,observer.analysisRevision())["notes"].toList();QVERIFY(!notes.isEmpty());
+  auto selected=toChord(score->firstSegment(SegmentType::ChordRest)->element(4))->notes()[0];score->select(selected);const auto selection=score->selection().elements();
+  MidiCaptureSession capture;QVERIFY(!capture.begin({{"notes",notes},{"scope",scope},{"monitor",false}},false).contains("error"));
+  QTest::qWait(100);QVERIFY(capture.state()["waitingForFirstNote"].toBool());QCOMPARE(capture.state()["seconds"].toDouble(),0.);
+  for(int pitch:{36,52,55}){captureMidiInput(NPlayEvent(ME_NOTEON,0,pitch,80),midiInputTime());captureMidiInput(NPlayEvent(ME_NOTEOFF,0,pitch,0),midiInputTime());}
+  QTRY_COMPARE(capture.state()["matchedTick"].toInt(),0);QTRY_COMPARE(workflowContext()->capture()["matchedTick"].toInt(),0);
+  for(int pitch:{59,62,69}){captureMidiInput(NPlayEvent(ME_NOTEON,0,pitch,90),midiInputTime());captureMidiInput(NPlayEvent(ME_NOTEOFF,0,pitch,0),midiInputTime());}
+  QTRY_COMPARE(capture.state()["matchedTick"].toInt(),480);QTRY_COMPARE(workflowContext()->capture()["matchedTick"].toInt(),480);
+  QCOMPARE(score->selection().elements(),selection);QCOMPARE(score->masterScore()->playPos().ticks(),0);
+  capture.cancel();QVERIFY(workflowContext()->capture().isEmpty());QCOMPARE(score->selection().elements(),selection);
+ }
  void midiCaptureEndModesAndCancellation(){
   MidiCaptureSession capture;QSignalSpy finished(&capture,&MidiCaptureSession::finished),failed(&capture,&MidiCaptureSession::failed);
   QVERIFY(!capture.begin({{"endMode","duration"},{"duration",1}},false).contains("error"));
+  QTest::qWait(1100);QVERIFY(capture.state()["recording"].toBool());QVERIFY(capture.state()["waitingForFirstNote"].toBool());
   captureMidiInput(NPlayEvent(ME_NOTEON,0,64,80),midiInputTime());captureMidiInput(NPlayEvent(ME_NOTEOFF,0,64,0),midiInputTime());
   QTRY_COMPARE(finished.count(),1);QVERIFY(finished[0][1].toString().contains(QString::fromUtf8("设定时长")));
   QVariantList target{QVariantMap{{"tick",0},{"pitch",60}},QVariantMap{{"tick",0},{"pitch",48}},QVariantMap{{"tick",480},{"pitch",64}},QVariantMap{{"tick",480},{"pitch",52}}};
@@ -318,8 +357,8 @@ private slots:
   auto info=observer->workflowInfo(),scope=observer->analysisScope(false);auto page=observer->performanceRange(scope["start"].toInt(),scope["end"].toInt(),0,score->ntracks(),0,32,observer->analysisRevision());auto notes=page["notes"].toList();QVERIFY(notes.size()>1);auto n=notes[1].toMap();
   QVariantList performance;for(int i=0;i<notes.size();++i){auto note=notes[i].toMap();performance.append(QVariantMap{{"id",QString("m%1").arg(i)},{"pitch",note["pitch"]},{"seconds",note["scoreSeconds"]},{"velocity",72}});}
   auto row=QVariantMap{{"original",n},{"tick",n["tick"]},{"track",n["track"]},{"index",n["index"]},{"pitch",n["pitch"]},{"seconds",n["scoreSeconds"]},{"scoreId",n["id"]},{"midiId","m1"},{"confirmed",false},{"confidence",.7},{"status","待确认"}};
-  expression->setProperty("scope",scope);expression->setProperty("info",info);expression->setProperty("notes",notes);expression->setProperty("midi",QVariantMap{{"notes",performance},{"sha256","test"}});expression->setProperty("revision",observer->analysisRevision());expression->setProperty("result",QVariantMap{{"matches",QVariantList{row}},{"pending",1},{"missing",QVariantList{}},{"extra",QVariantList{}}});expression->setProperty("selected",0);expression->setProperty("advancedSettings",true);QTest::qWait(30);
-  QVERIFY(click(expression,"expressionLocate"));QCOMPARE(score->selection().noteList().size(),1);QCOMPARE(score->selection().noteList()[0]->pitch(),n["writtenPitch"].toInt());QVERIFY(expression->property("status").toString().contains("已选中"));
+  QVERIFY(QMetaObject::invokeMethod(expression,"chooseTarget",Q_ARG(QVariant,false)));expression->setProperty("stale",false);expression->setProperty("scope",scope);expression->setProperty("info",info);expression->setProperty("notes",notes);expression->setProperty("midi",QVariantMap{{"notes",performance},{"sha256","test"}});expression->setProperty("revision",observer->analysisRevision());expression->setProperty("result",QVariantMap{{"matches",QVariantList{row}},{"pending",1},{"missing",QVariantList{}},{"extra",QVariantList{}}});expression->setProperty("selected",0);expression->setProperty("advancedSettings",true);QTest::qWait(30);
+  QVERIFY(click(expression,"expressionLocate"));QVERIFY2(score->selection().noteList().size()==1,qUtf8Printable(expression->property("status").toString()));QCOMPARE(score->selection().noteList()[0]->pitch(),n["writtenPitch"].toInt());QVERIFY(expression->property("status").toString().contains("已选中"));
   QVERIFY(click(expression,"expressionConfirm"));QTRY_VERIFY(!expression->property("busy").toBool());QVERIFY(expression->property("status").toString().contains("已确认"));
   expression->setProperty("advancedSettings",false);QTRY_VERIFY(expression->property("candidate").value<QJSValue>().isObject());
   const int auditionTabs=mscore->scores().size();

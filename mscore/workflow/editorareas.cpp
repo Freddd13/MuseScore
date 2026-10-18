@@ -258,6 +258,7 @@ public:
       auto widget = split->widget(order);
       if (!names.contains(widget->objectName()))
         continue;
+      split->setStretchFactor(order, 1);
       Area area;
       area.widget = widget;
       area.title = names.value(widget->objectName()).first;

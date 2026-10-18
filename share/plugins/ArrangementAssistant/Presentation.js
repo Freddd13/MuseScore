@@ -12,3 +12,10 @@ function groups(issues) {
     });
     return result.sort(function(a,b){return a.tick-b.tick;});
 }
+
+function filter(issues, mask, severity) {
+    var bits={harmony:1,counterpoint:2,playability:4};
+    return issues.filter(function(issue) {
+        return !!(mask & bits[issue.type]) && (!severity || issue.severity === ["","需核查","注意","提示"][severity]);
+    });
+}

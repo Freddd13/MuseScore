@@ -1,11 +1,14 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2.
 #include "midicapture.h"
 #include "featuregate.h"
+#include "workflowcontext.h"
 #include "mscore/musescore.h"
 #include "mscore/seq.h"
 #include "mscore/scoreview.h"
 #include "mscore/pianotools.h"
 #include "mscore/preferences.h"
+#include "mscore/shortcut.h"
+#include <QAction>
 #include "libmscore/staff.h"
 #include "libmscore/part.h"
 #include "libmscore/instrument.h"
@@ -57,9 +60,28 @@ MidiCaptureSession::MidiCaptureSession(QObject* parent):QObject(parent) {
       }
 MidiCaptureSession::~MidiCaptureSession() { cancel(); }
 QVariantMap MidiCaptureSession::state() const {
-      const double elapsed=_start ? std::max(0.,double((_end?_end:midiInputTime())-_start)/1e9) : 0.;
+      const double elapsed=_firstNote ? std::max(0.,double((_end?_end:midiInputTime())-_firstNote)/1e9) : 0.;
       return {{"recording",_recording},{"stopping",_stopping},{"saving",_saving},{"seconds",elapsed},{"count",_count},
-            {"pitch",_lastPitch},{"velocity",_lastVelocity},{"device",_device},{"reason",_reason}};
+            {"pitch",_lastPitch},{"velocity",_lastVelocity},{"device",_device},{"reason",_reason},
+            {"matchedTick",_matcher.tick()},{"positionUncertain",_matcher.uncertain()},
+            {"position",_positions.value(_matcher.tick())},
+            {"waitingForFirstNote",_recording&&!_firstNote},{"input",inputState()}};
+      }
+QVariantMap MidiCaptureSession::inputState() const {
+      const bool enabled=mscore&&mscore->isMidiInEnabled();
+      bool ready=seq&&seq->isRunning()&&seq->driver();
+#if defined(USE_PORTAUDIO) && defined(USE_PORTMIDI)
+      if(ready)if(auto audio=dynamic_cast<Portaudio*>(seq->driver())) {
+            auto input=dynamic_cast<PortMidiDriver*>(audio->mididriver());
+            ready=input&&input->getInputStream();
+            }
+#endif
+      return {{"enabled",enabled},{"ready",ready},{"device",preferences.getString(PREF_IO_PORTMIDI_INPUTDEVICE)}};
+      }
+void MidiCaptureSession::setInputEnabled(bool enabled) {
+      if(!mscore||!personalFeaturesEnabled())return;
+      auto action=getAction("midi-on");if(action&&action->isChecked()!=enabled)action->trigger();
+      emit changed();
       }
 QVariantMap MidiCaptureSession::start(const QVariantMap& options) { return begin(options,true); }
 QVariantMap MidiCaptureSession::begin(const QVariantMap& options, bool requireDevice) {
@@ -79,18 +101,21 @@ QVariantMap MidiCaptureSession::begin(const QVariantMap& options, bool requireDe
       _duration=options.value("duration",30).toDouble();
       if ((_mode!="manual"&&_mode!="duration"&&_mode!="passage") || !std::isfinite(_duration) || _duration<1 || _duration>3600)
             return {{"error",tr("录制时长可设置为 1 秒至 1 小时。")}};
-      _target.clear(); _tap=options.value("tap").toBool();
+      _target.clear(); _positions.clear(); _tap=options.value("tap").toBool();
       QMap<int,QSet<int>> groups;
+      QMap<int,double> seconds;
       const int role=options.value("role").toInt(), track=options.value("track").toInt();
       for (auto value:options.value("notes").toList()) {
             auto note=value.toMap(); if (note.value("tieBack").toBool() || note.value("grace").toBool()) continue;
             if(role==2 && note.value("track").toInt()!=track)continue;
-            const int pitch=note.value("pitch",-1).toInt(); if(pitch>=0&&pitch<=127)groups[note.value("tick").toInt()].insert(pitch);
+            const int pitch=note.value("pitch",-1).toInt(); if(pitch>=0&&pitch<=127){const int tick=note.value("tick").toInt();groups[tick].insert(pitch);seconds[tick]=note.value("scoreSeconds",tick/960.).toDouble();const int measure=note.value("measure").toInt();if(measure>0)_positions[tick]=tr("第 %1 小节 · 第 %2 拍").arg(measure).arg(note.value("beat",1).toDouble(),0,'g',4);}
             }
-      for (const auto& group:groups) {
-            if(role==1)_target.append(QSet<int>{*std::max_element(group.cbegin(),group.cend())});
-            else _target.append(group);
+      for (auto it=groups.cbegin();it!=groups.cend();++it) {
+            auto pitches=it.value();if(role==1)pitches={*std::max_element(pitches.cbegin(),pitches.cend())};
+            _target.append({it.key(),seconds.value(it.key()),pitches});
             }
+      _onsetWindow=80000000;
+      for(int i=1;i<_target.size();++i){const double dt=_target[i].seconds-_target[i-1].seconds;if(dt>0)_onsetWindow=qMin(_onsetWindow,qint64(qBound(.018,dt*.45,.08)*1e9));}
       if (_mode=="passage" && (_target.isEmpty() || _target.size()>4096)) return {{"error",tr("请选中一段乐谱，再使用“弹完选段后结束”。")}};
       _source=mscore && mscore->currentScoreView() ? mscore->currentScoreView()->score() : nullptr;
       if (requireDevice && !_source) return {{"error",tr("打开乐谱并选中要演奏的段落。")}};
@@ -104,10 +129,10 @@ QVariantMap MidiCaptureSession::begin(const QVariantMap& options, bool requireDe
       if (_monitor) seq->stopNoteTimer();
       _device=preferences.getString(PREF_IO_PORTMIDI_INPUTDEVICE);
       if (_device.isEmpty()) _device=tr("软件当前 MIDI 输入");
-      _events.clear(); _keys.clear(); _pedals.clear(); _onset.clear(); _cost.resize(_target.size()+1);
-      for (int i=0;i<_cost.size();++i)_cost[i]=i;
+      _events.clear(); _keys.clear(); _pedals.clear(); _onset.clear(); _matcher.reset(_target,_tap);
       _count=0; _groups=0; _lastPitch=-1; _lastVelocity=0; _lastOn=0; _groupTime=0; _atEnd=false;
-      ++_generation; _reason.clear(); _end=0; _start=midiInputTime(); _recording=true; activeCapture=this;
+      ++_generation; _reason.clear(); _end=0; _firstNote=0;_cursorTick=-1;_start=midiInputTime(); _recording=true; activeCapture=this;
+      _captureView=mscore?mscore->currentScoreView():nullptr;_restoreInputCursor=_captureView&&_captureView->noteEntryMode();
       _timer.start(); emit changed(); return {{"ok",true}};
       }
 void MidiCaptureSession::monitor(const NPlayEvent& event) {
@@ -135,13 +160,19 @@ void MidiCaptureSession::releaseMonitor() {
             }
       _monitor=false;
       }
+void MidiCaptureSession::releaseCaptureVisual() {
+      workflowContext()->clearCapture(this);
+      if(_captureView){_captureView->setCursorVisible(false);if(_restoreInputCursor&&_captureView->noteEntryMode())_captureView->moveCursor();}
+      _captureView.clear();
+      }
 void MidiCaptureSession::receive(const NPlayEvent& event, qint64 timestamp) {
       if ((!_recording&&!_stopping)||timestamp<_start||(_end&&timestamp>_end))return;
       int type=event.type(),channel=event.channel(),a=event.dataA(),b=event.dataB();
       if(type<ME_NOTEOFF||type>ME_PITCHBEND||channel>15||a>127||b>127)return;
       _events.append({timestamp,type,channel,a,b});
       if(type==ME_NOTEON&&b>0) {
-            if(_groupTime&&timestamp-_groupTime>80000000)finishGroup();
+            if(!_firstNote)_firstNote=timestamp;
+            if(_groupTime&&timestamp-_groupTime>_onsetWindow)finishGroup();
             if(_onset.isEmpty())_groupTime=timestamp;
             _onset.insert(a);_lastOn=timestamp;++_count;_lastPitch=a;_lastVelocity=b;++_keys[channel*128+a];
             }
@@ -159,18 +190,7 @@ void MidiCaptureSession::receive(const NPlayEvent& event, qint64 timestamp) {
 void MidiCaptureSession::finishGroup() {
       if(_onset.isEmpty())return;
       ++_groups;
-      if(!_target.isEmpty()) {
-            QVector<double> next(_cost.size());next[0]=_groups;
-            for(int i=1;i<next.size();++i) {
-                  int common=0;for(int pitch:_onset)if(_target[i-1].contains(pitch))++common;
-                  double substitution=_tap?0.:1.-double(common)/std::max(_onset.size(),_target[i-1].size());
-                  next[i]=std::min({_cost[i]+1.,next[i-1]+1.,_cost[i-1]+substitution});
-                  }
-            _cost.swap(next);
-            int common=0;for(int pitch:_onset)if(_target.last().contains(pitch))++common;
-            _atEnd=(_tap||common*2>=std::max(_onset.size(),_target.last().size())) && _groups>=std::ceil(_target.size()*.7)
-                  && _cost.last()<=std::max(.5,_target.size()*.3);
-            }
+      _matcher.observe(_onset,double(_groupTime-_firstNote)/1e9);_atEnd=_matcher.atEnd();
       _onset.clear();
       }
 void MidiCaptureSession::pulse() {
@@ -180,22 +200,28 @@ void MidiCaptureSession::pulse() {
       if(_requireDevice&&(!seq||!seq->isRunning()||!seq->driver()||!mscore->isMidiInEnabled())){_reason=tr("MIDI 输入已停止，已保留收到的演奏");stop();}
       const qint64 now=midiInputTime();
       if(_recording) {
-            if(_groupTime&&now-_groupTime>120000000)finishGroup();
-            if(_mode=="duration"&&now-_start>=qint64(_duration*1e9)){_reason=tr("已到设定时长");stop();}
+            if(_groupTime&&now-_groupTime>qMax(qint64(30000000),_onsetWindow*3/2))finishGroup();
+            if(_mode=="duration"&&_firstNote&&now-_firstNote>=qint64(_duration*1e9)){_reason=tr("已到设定时长");stop();}
             else if(_mode=="passage"&&_atEnd&&_keys.isEmpty()&&now-_lastOn>=800000000){_reason=tr("已弹到选段末尾");stop();}
             else if(now-_start>=3600000000000LL){_reason=tr("已录制 1 小时");stop();}
             }
       if(_stopping&&now-_end>=200000000)finish();
+      if(_recording&&_source){
+            const int tick=_matcher.tick();
+            workflowContext()->setCapture(this,_source,{{"recording",true},{"matchedTick",tick},{"positionUncertain",_matcher.uncertain()}});
+            if(tick>=0&&tick!=_cursorTick&&_captureView&&_captureView->score()==_source){_cursorTick=tick;_captureView->moveCursor(Fraction::fromTicks(tick));_captureView->setCursorVisible(true);}
+            }
       emit changed();
       }
 void MidiCaptureSession::stop() {
       if(!_recording)return;
       _recording=false;_stopping=true;_end=midiInputTime();
+      finishGroup();releaseCaptureVisual();
       if(_reason.isEmpty())_reason=tr("已停止录制");emit changed();
       }
 void MidiCaptureSession::cancel() {
       ++_generation;_timer.stop();if(activeCapture==this){discardThrough=midiInputTime();activeCapture.clear();}
-      releaseMonitor();_recording=false;_stopping=false;_saving=false;_keys.clear();_pedals.clear();emit changed();
+      releaseMonitor();releaseCaptureVisual();_recording=false;_stopping=false;_saving=false;_keys.clear();_pedals.clear();emit changed();
       }
 void MidiCaptureSession::finish() {
       _timer.stop();discardThrough=_end;activeCapture.clear();releaseMonitor();
@@ -205,7 +231,7 @@ void MidiCaptureSession::finish() {
       _keys.clear();_pedals.clear();_stopping=false;
       if(!_count){emit changed();emit failed(tr("这次还没有收到音符。检查键盘连接和 MIDI 输入设置后再录制。"));return;}
       _saving=true;emit changed();
-      auto events=std::move(_events);auto start=_start;auto generation=_generation;auto watcher=new QFutureWatcher<QString>(this);
+      auto events=std::move(_events);auto start=_firstNote?_firstNote:_start;auto generation=_generation;auto watcher=new QFutureWatcher<QString>(this);
       connect(watcher,&QFutureWatcher<QString>::finished,this,[this,watcher,generation] {
             const QString path=watcher->result();watcher->deleteLater();if(generation!=_generation)return;_saving=false;emit changed();
             if(path.isEmpty())emit failed(tr("录制文件未能保存。请检查临时文件夹的可用空间。"));else emit finished(QUrl::fromLocalFile(path).toString(),_reason);

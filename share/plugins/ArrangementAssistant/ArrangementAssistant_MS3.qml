@@ -44,9 +44,10 @@ MuseScore {
     property int workerToken:0
     property var issues:[]
     property int rangeChoice:0
-    property int categoryFilter:0
+    property int categoryMask:7
+    property string categoryCaption:categoryMask===7?"全部问题":categoryMask===0?"选择问题类别":[categoryMask&1?"和声":"",categoryMask&2?"对位":"",categoryMask&4?"可弹性":""].filter(function(v){return v.length}).join("、")
     property int severityFilter:0
-    property var filteredIssues:issues.filter(function(issue){return (!categoryFilter||issue.type===["","harmony","counterpoint","playability"][categoryFilter])&&(!severityFilter||issue.severity===["","需核查","注意","提示"][severityFilter])})
+    property var filteredIssues:Presentation.filter(issues,categoryMask,severityFilter)
     onFilteredIssuesChanged:if(!current||!filteredIssues.some(function(i){return i.id===root.current.id}))currentIssueIndex=filteredIssues.length?issues.findIndex(function(i){return i.id===root.filteredIssues[0].id}):-1
     function issueStep(direction){var row=filteredIssues.findIndex(function(i){return root.current&&i.id===root.current.id});row+=direction;if(row>=0&&row<filteredIssues.length){currentIssueIndex=issues.findIndex(function(i){return i.id===root.filteredIssues[row].id});locate()}}
     property var hintGroups:Presentation.groups(filteredIssues)
@@ -396,7 +397,16 @@ Item {
             Desk.DeskComboBox {id:styleBox;model:["调性钢琴／流行","严格对位","爵士"];currentIndex:root.config.style;Layout.fillWidth:true;onActivated:{var c=Rules.clone(root.config);c.style=currentIndex;root.config=c;root.persist();root.markDirty()}}
             Label {text:root.status;Layout.fillWidth:true;Layout.preferredHeight:28;Layout.minimumHeight:28;Layout.maximumHeight:28;maximumLineCount:2;elide:Text.ElideRight;wrapMode:Text.WordWrap;color:theme.muted;font.pixelSize:11}
             RowLayout {Layout.fillWidth:true
-                Desk.DeskComboBox {objectName:"arrangementCategoryFilter";Layout.fillWidth:true;model:["全部问题","和声 · "+root.counts.harmony,"对位 · "+root.counts.counterpoint,"可弹性 · "+root.counts.playability];currentIndex:root.categoryFilter;onActivated:root.categoryFilter=currentIndex}
+                Desk.DeskButton {id:categoryButton;objectName:"arrangementCategoryFilter";Layout.fillWidth:true;text:root.categoryCaption+" ▾";onClicked:categoryMenu.open()
+                    Menu {id:categoryMenu;y:categoryButton.height;width:Math.max(230,categoryButton.width)
+                        MenuItem {text:"全选";onTriggered:root.categoryMask=7}
+                        MenuItem {text:"清空";onTriggered:root.categoryMask=0}
+                        MenuSeparator {}
+                        Repeater {model:[{bit:1,key:"harmony",name:"和声"},{bit:2,key:"counterpoint",name:"对位"},{bit:4,key:"playability",name:"可弹性"}]
+                            CheckDelegate {objectName:"arrangementCategory_"+modelData.key;width:categoryMenu.width;text:modelData.name+" · "+root.counts[modelData.key];checked:!!(root.categoryMask&modelData.bit);onClicked:root.categoryMask=root.categoryMask^modelData.bit}
+                        }
+                    }
+                }
                 Desk.DeskComboBox {objectName:"arrangementSeverityFilter";model:["全部程度","需核查","注意","提示"];currentIndex:root.severityFilter;onActivated:root.severityFilter=currentIndex}
             }
             ListView {

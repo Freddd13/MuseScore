@@ -8,9 +8,11 @@
 #include <QSet>
 #include <QMap>
 #include "libmscore/score.h"
+#include "realtimematcher.h"
 
 namespace Ms {
 class NPlayEvent;
+class ScoreView;
 qint64 midiInputTime();
 // Called on the GUI thread, after the existing sequencer input FIFO.
 bool captureMidiInput(const NPlayEvent&, qint64 timestamp);
@@ -21,14 +23,19 @@ class MidiCaptureSession : public QObject {
       Q_PROPERTY(QVariantMap state READ state NOTIFY changed)
       struct RecordedEvent { qint64 time; int type, channel, a, b; };
       QVector<RecordedEvent> _events;
-      QVector<QSet<int>> _target;
-      QVector<double> _cost;
+      QVector<RealtimeMatcher::Group> _target;
+      RealtimeMatcher _matcher;
       QSet<int> _onset;
       QMap<int,int> _keys, _pedals;
+      QMap<int,QString> _positions;
       QPointer<Score> _source;
+      QPointer<ScoreView> _captureView;
       ScoreContentState _sourceState;
       QTimer _timer;
-      qint64 _start=0, _end=0, _lastOn=0, _groupTime=0;
+      qint64 _start=0, _firstNote=0, _end=0, _lastOn=0, _groupTime=0;
+      qint64 _onsetWindow=80000000;
+      int _cursorTick=-1;
+      bool _restoreInputCursor=false;
       int _count=0, _groups=0, _lastPitch=-1, _lastVelocity=0, _monitorChannel=0;
       int _generation=0;
       double _duration=0;
@@ -37,6 +44,7 @@ class MidiCaptureSession : public QObject {
       void receive(const NPlayEvent&, qint64);
       void monitor(const NPlayEvent&);
       void releaseMonitor();
+      void releaseCaptureVisual();
       void finishGroup();
       void pulse();
       void finish();
@@ -46,6 +54,8 @@ public:
       explicit MidiCaptureSession(QObject* parent=nullptr);
       ~MidiCaptureSession() override;
       QVariantMap state() const;
+      Q_INVOKABLE QVariantMap inputState() const;
+      Q_INVOKABLE void setInputEnabled(bool enabled);
       Q_INVOKABLE QVariantMap start(const QVariantMap& options);
       // C++ test harnesses may supply a synthetic MIDI source without a sound device.
       QVariantMap begin(const QVariantMap& options, bool requireDevice);

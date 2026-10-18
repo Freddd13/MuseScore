@@ -4,6 +4,8 @@
 #include "localsuggestions.h"
 #include "paneldock.h"
 #include "workflowcontext.h"
+#include "regionalcomparison.h"
+#include "mscore/scoreview.h"
 #include "mscore/musescore.h"
 #include "mscore/plugin/api/score.h"
 #include "mscore/plugin/api/scoreobserver.h"
@@ -39,6 +41,7 @@ class SuggestionPanel : public QWidget {
     QTextBrowser *_explanation;
     QLabel *_status;
     QString _selected;
+    QPushButton *_showDifferences = nullptr;
     QVariantList _items;
     LocalSuggestionTask _local;
     QVariantMap _localSettings;
@@ -60,10 +63,18 @@ class SuggestionPanel : public QWidget {
                 return v.toMap();
         return {};
     }
+    void updateDifference() {
+        if (!mscore || !mscore->currentScoreView()) return;
+        const auto option = selected();
+        if (isVisible() && _showDifferences && _showDifferences->isChecked() && !option.isEmpty() && !option.value("used").toBool())
+            operate("preview");
+        else
+            showRegionalDifference(mscore->currentScoreView(), nullptr, {});
+    }
     void details() {
         auto option = selected();
         auto scope = option.value("scope").toMap();
-        _scope->setText(option.isEmpty() ? tr("在Codex中选取谱段并提出编配要求，收到的写法会列在这里。")
+        _scope->setText(option.isEmpty() ? tr("在乐谱中选几小节，选择要比较的内容，再点“分析选段”。Codex 发来的写法也列在这里。")
                                          : tr("第%1–%2小节 · %3处变化")
                                                .arg(scope.value("firstMeasure").toInt())
                                                .arg(scope.value("lastMeasure").toInt())
@@ -103,9 +114,9 @@ class SuggestionPanel : public QWidget {
         for (auto button : findChildren<QPushButton *>())
             if (button->objectName().startsWith("arrangement-"))
                 button->setEnabled(!option.isEmpty() && !option.value("used").toBool());
-        _status->setText(option.value("used").toBool()
+        _status->setText(option.isEmpty() ? tr("分析完成后，选择写法查看变化、试听或采用。") : option.value("used").toBool()
                              ? tr("已采用这版 · Ctrl+Z撤销 · Ctrl+S保存")
-                             : tr("点一项变化可以定位；“查看差异”会在谱上叠加另一写法。"));
+                             : tr("已选写法的变化显示在谱上；点列表中的位置查看相关音。"));
     }
     void operate(const QString &action) {
         if (!attach() || _selected.isEmpty())
@@ -116,6 +127,8 @@ class SuggestionPanel : public QWidget {
                                   {"operationId", QUuid::createUuid().toString(QUuid::WithoutBraces)}});
         if (result.contains("error"))
             _status->setText(result.value("error").toString());
+        else if (action == "preview")
+            _status->setText(tr("已在谱上显示%1处变化；点列表中的位置查看相关音。").arg(result.value("differences").toList().size()));
         else if (action == "audition" || action == "original")
             _status->setText(action == "audition" ? tr("正在听：新写法") : tr("正在听：谱中写法"));
         else if (action == "variant")
@@ -126,7 +139,7 @@ class SuggestionPanel : public QWidget {
             _status->setText(tr("已停止比较，可以继续编辑乐谱。"));
     }
 
-    void hideEvent(QHideEvent* event) override {_local.cancel();QWidget::hideEvent(event);}
+    void hideEvent(QHideEvent* event) override {_local.cancel();QWidget::hideEvent(event);updateDifference();}
 
   public:
     explicit SuggestionPanel(QWidget *parent) : QWidget(parent), _observer(this), _local(this) {
@@ -260,7 +273,16 @@ class SuggestionPanel : public QWidget {
             row->addWidget(b);
             connect(b, &QPushButton::clicked, this, [this, action] { operate(action); });
         };
-        button(tr("查看差异"), "preview", controls);
+        _showDifferences = new QPushButton(tr("谱面差异"));
+        _showDifferences->setObjectName("arrangement-preview");
+        _showDifferences->setCheckable(true);
+        _showDifferences->setChecked(QSettings().value("arrangementSuggestions/showDifferences", true).toBool());
+        _showDifferences->setToolTip(tr("选中写法后，在原谱上显示另一写法；关闭后收起差异。"));
+        controls->addWidget(_showDifferences);
+        connect(_showDifferences, &QPushButton::clicked, this, [this](bool checked) {
+            QSettings().setValue("arrangementSuggestions/showDifferences", checked);
+            updateDifference();
+        });
         button(tr("试听谱中"), "original", controls);
         button(tr("试听新写法"), "audition", controls);
         auto apply = new QHBoxLayout;
@@ -275,6 +297,7 @@ class SuggestionPanel : public QWidget {
         connect(_choices, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem *item) {
             _selected = item ? item->data(0, Qt::UserRole).toString() : QString();
             details();
+            updateDifference();
         });
         connect(_changes, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem *item) {
             if (!attach())
@@ -310,6 +333,7 @@ class SuggestionPanel : public QWidget {
         _selected =
             _choices->currentItem() ? _choices->currentItem()->data(0, Qt::UserRole).toString() : QString();
         details();
+        updateDifference();
     }
 };
 QPointer<QDockWidget> dock;
