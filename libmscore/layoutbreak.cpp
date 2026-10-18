@@ -60,6 +60,7 @@ LayoutBreak::LayoutBreak(const LayoutBreak& lb)
       _startWithMeasureOne    = lb._startWithMeasureOne;
       _firstSystemIndentation = lb._firstSystemIndentation;
       _showCourtesy           = lb._showCourtesy;
+      _systemLockData         = lb._systemLockData;
       layout0();
       }
 
@@ -71,6 +72,8 @@ void LayoutBreak::write(XmlWriter& xml) const
       {
       xml.stag(this);
       Element::writeProperties(xml);
+      if (!_systemLockData.isEmpty())
+            xml.tag("kumoSystemLock", _systemLockData);
 
       for (auto id : { Pid::LAYOUT_BREAK, Pid::PAUSE, Pid::START_WITH_LONG_NAMES, Pid::START_WITH_MEASURE_ONE, Pid::FIRST_SYSTEM_INDENTATION, Pid::SHOW_COURTESY })
             writeProperty(xml, id);
@@ -98,6 +101,8 @@ void LayoutBreak::read(XmlReader& e)
                   readProperty(e, Pid::FIRST_SYSTEM_INDENTATION);
             else if (tag == "showCourtesySig")
                   readProperty(e, Pid::SHOW_COURTESY);
+            else if (tag == "kumoSystemLock")
+                  _systemLockData = e.readElementText().left(16384);
             else if (!Element::readProperties(e))
                   e.unknown();
             }

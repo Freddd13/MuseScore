@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "workspaceviews.h"
+#include "systemlocks.h"
 #include "editorareas.h"
 #include "featuregate.h"
 #include "mscore/musescore.h"
@@ -226,6 +227,7 @@ void addWorkspaceViews(QMenu *menu) {
     instance->addMenu(menu);
 }
 void addWorkspaceSelector(QToolBar *toolbar) {
+  addSystemLockSelector(toolbar);
   if (auto instance = controller(qobject_cast<MuseScore *>(
           toolbar ? toolbar->parentWidget() : nullptr)))
     instance->addButton(toolbar);
@@ -255,7 +257,14 @@ QIcon personalToolIcon(const QString &key) {
   const auto ink = qApp->palette().color(QPalette::WindowText);
   const auto accent = qApp->palette().color(QPalette::Highlight);
   p.setPen(QPen(ink, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-  if (key == "harmony-assistant") {
+  if (key == "kumo-system-lock") {
+    p.drawLine(3, 6, 21, 6);
+    p.drawLine(3, 10, 21, 10);
+    p.drawLine(3, 14, 9, 14);
+    p.setPen(QPen(accent, 1.5));
+    p.drawRoundedRect(QRectF(11, 13, 9, 8), 1, 1);
+    p.drawArc(QRectF(13, 8, 5, 9), 0, 180 * 16);
+  } else if (key == "harmony-assistant") {
     for (int y : {8, 12, 16}) {
       p.setBrush(ink);
       p.drawEllipse(QRectF(5, y, 5, 3));

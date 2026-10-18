@@ -1,6 +1,6 @@
 # MuseScore Evolution 个人功能说明
 
-当前个人版本：**0.67.0** · Kumo branch / Freddd13。提交定位：`personal-v0.67.0`。
+当前个人版本：**0.68.0** · Kumo branch / Freddd13。提交定位：`personal-v0.68.0`。
 
 先按下面的任务找到入口。每章有完整操作例子、按钮说明、保存和撤销方法。“帮助 → 个人功能说明”可以在软件里直接阅读。
 
@@ -17,6 +17,7 @@
 | 在卷帘画音、移动或先试草稿 | [卷帘写音完整步骤](docs/WORKSPACE_067_GUIDE.md) |
 | 给已经写好的音高换节奏 | [写节奏](docs/P2_RHYTHM_062_GUIDE.md) |
 | 查看指法、分手、配音与对位建议 | [编配建议](docs/P2_SUGGESTIONS_061_GUIDE.md) |
+| 保留一行的小节、解除锁定 | [谱行锁定](docs/WORKSPACE_068_GUIDE.md) |
 | 分享前统一关闭个人工具 | [kumo.ini 开关](docs/WORKSPACE_063_GUIDE.md) |
 
 ## 打开功能

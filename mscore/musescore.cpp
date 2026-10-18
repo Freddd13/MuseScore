@@ -14,6 +14,10 @@
 #include "workflow/workflowcontext.h"
 #include "workflow/featuregate.h"
 #include "workflow/workspaceviews.h"
+#include "workflow/systemlocks.h"
+#ifdef SCRIPT_INTERFACE
+#include "performanceeditor/rollwriting.h"
+#endif
 #include "workflow/aiconnection.h"
 
 #include <QCheckBox>
@@ -2883,6 +2887,10 @@ void MuseScore::updateMenus()
             if (!menuView->actions().contains(action)) menuView->addAction(action);
       if (auto action = findChild<QAction*>("kumo-user-guide"))
             if (!menuHelp->actions().contains(action)) menuHelp->addAction(action);
+      addSystemLockActions(menuView);
+#ifdef SCRIPT_INTERFACE
+      if (!menuView->actions().contains(rollWritingAction())) menuView->addAction(rollWritingAction());
+#endif
       addWorkspaceViews(menuView);
       applyPersonalFeatureVisibility(this);
       setMenuTitles();

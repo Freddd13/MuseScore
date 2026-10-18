@@ -1,5 +1,6 @@
 // GPL-2.0-or-later. Native ownership with one shared view per tool.
 #include "builtinpanels.h"
+#include "systemlocks.h"
 #include "mscore/performanceeditor/rollwriting.h"
 #include "arrangement.h"
 #include "paneldock.h"
@@ -135,8 +136,9 @@ void showExpressionPanel(){
  if(auto dock=qobject_cast<QDockWidget*>(mscore->performanceEditor()->parentWidget()))if(!dock->isFloating()&&mscore->property("kumoWorkspaceView").toString()!="daw")mscore->resizeDocks({dock},{qBound(260,before.height()/2,540)},Qt::Vertical);
 }
 void addBuiltinPanelActions(QMenu* menu){
+ addSystemLockActions(menu);
  auto writing=rollWritingAction();menu->addAction(writing);Workspace::addActionAndString(writing,"kumo-roll-writing");
- auto spectrum = new QAction(QObject::tr("频谱扒谱"),menu);spectrum->setObjectName("kumo-spectrum");markPersonalAction(spectrum);
+ auto spectrum = new QAction(QObject::tr("频谱扒谱"),menu->parentWidget());spectrum->setObjectName("kumo-spectrum");markPersonalAction(spectrum);
  spectrum->setIcon(personalToolIcon("kumo-spectrum"));menu->addAction(spectrum);Workspace::addActionAndString(spectrum,"kumo-spectrum");
  QObject::connect(spectrum,&QAction::triggered,qApp,[]{
   if(!personalFeaturesEnabled())return;mscore->showPerformanceEditor(true);

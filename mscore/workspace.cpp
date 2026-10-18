@@ -1641,6 +1641,12 @@ QString Workspace::findStringFromAction(QAction* action)
 
 void Workspace::addMenuAndString(QMenu* menu, QString string)
       {
+      for (auto& pair : menuToStringList) {
+            if (pair.second == string) {
+                  pair.first = menu;
+                  return;
+                  }
+            }
       QPair<QMenu*, QString> pair;
       pair.first = menu;
       pair.second = string;

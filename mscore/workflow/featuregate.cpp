@@ -66,6 +66,8 @@ bool personalAction(const QString &key) {
       "regional-variants",      "kumo-ai-connection",
       "kumo-spectrum",          "kumo-rhythm",
       "kumo-roll-writing",
+      "kumo-system-lock-menu", "kumo-system-lock-current", "kumo-system-lock-selected",
+      "kumo-system-lock-unlock", "kumo-system-lock-all",
       "kumo-workspace",         "tap-tempo",
       "auto-rhythmic-input",    "auto-tie-beams",
       "coherent-tie-stems"};

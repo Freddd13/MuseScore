@@ -18,6 +18,10 @@
 #include "mscore/musescoredialogs.h"
 #include "personalbranding.h"
 #include "mscore/workflow/builtinpanels.h"
+#include "mscore/workflow/systemlocks.h"
+#include "mscore/debuglog.h"
+#include "mscore/pianoroll/pianoroll.h"
+#include "libmscore/layoutbreak.h"
 #include "mscore/workflow/featuregate.h"
 #include "mscore/workflow/workspaceviews.h"
 #include "mscore/workflow/editorareas.h"
@@ -471,6 +475,12 @@ class TestPluginHost : public QObject {
             const auto output=QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path()));QVERIFY(area->grab().save(output.filePath("roll-writing-067.png")));QFileInfo saved(_settings.filePath("roll-draft.mscz"));QVERIFY(score->saveCompressedFile(saved,false,false));std::unique_ptr<MasterScore> restored(main->readScore(saved.absoluteFilePath()));QVERIFY(restored);QCOMPARE(restored->metaTag("kumo.rollWriting"),score->metaTag("kumo.rollWriting"));
             area->resize(520,720);QTest::qWait(100);QVERIFY(bar->width()<=area->width());QVERIFY(bar->grab().save(output.filePath("roll-writing-narrow-067.png")));canvas->setFocus();QTest::keyClick(canvas,Qt::Key_Escape);QTRY_VERIFY(!toggle->isChecked());QVERIFY(!rollWritingAction()->isChecked());editor->findChild<QAction*>("editorArea/restore/performanceNotesArea")->trigger();
       }
+#ifdef Q_MOC_RUN
+      void systemLocksUndoAndFile();
+      void upstreamLiveTranslationAndPreferences();
+#else
+      #include "system_lock_tests.inc"
+#endif
       void rollLocalScopeCost(){
             QVariantList rows,measures;for(int i=0;i<10000;++i){rows.append(QVariantMap{{"id",QString::number(i)},{"track",0},{"pitch",60},{"start",1920*i},{"end",1920*i+480}});measures.append(QVariantMap{{"start",1920*i},{"end",1920*(i+1)}});}auto current=rows;auto changed=current[5000].toMap();changed["pitch"]=62;current[5000]=changed;const QVariantMap scope{{"start",0},{"end",19200000},{"firstTrack",0},{"endTrack",4}};QElapsedTimer time;time.start();const auto affected=rollAffectedScope(current,rows,scope,measures,{},QVariantList{0});qInfo()<<"Roll affected scope 10k notes ms"<<time.nsecsElapsed()/1e6;QCOMPARE(affected["start"].toInt(),9600000);QCOMPARE(affected["end"].toInt(),9601920);
       }

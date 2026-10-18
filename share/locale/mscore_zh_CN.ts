@@ -12450,52 +12450,52 @@ A human-readable summary is available:
     <message>
         <location filename="../../mscore/debuglog.cpp" line="252"/>
         <source>Clear</source>
-        <translation type="unfinished">清除</translation>
+        <translation>清除</translation>
     </message>
     <message>
         <location filename="../../mscore/debuglog.cpp" line="253"/>
         <source>Copy All</source>
-        <translation type="unfinished"></translation>
+        <translation>全部复制</translation>
     </message>
     <message>
         <location filename="../../mscore/debuglog.cpp" line="255"/>
         <source>Enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>启用日志</translation>
     </message>
     <message>
         <location filename="../../mscore/debuglog.cpp" line="262"/>
         <source>Details</source>
-        <translation type="unfinished"></translation>
+        <translation>详细信息</translation>
     </message>
     <message>
         <location filename="../../mscore/debuglog.cpp" line="265"/>
         <source>Source</source>
-        <translation type="unfinished"></translation>
+        <translation>来源函数</translation>
     </message>
     <message>
         <location filename="../../mscore/debuglog.cpp" line="268"/>
         <source>Autoscroll</source>
-        <translation type="unfinished"></translation>
+        <translation>自动滚动</translation>
     </message>
     <message>
         <location filename="../../mscore/debuglog.cpp" line="284"/>
         <source>Find in log</source>
-        <translation type="unfinished"></translation>
+        <translation>查找日志</translation>
     </message>
     <message>
         <location filename="../../mscore/debuglog.cpp" line="289"/>
         <source>Find previous</source>
-        <translation type="unfinished"></translation>
+        <translation>上一处</translation>
     </message>
     <message>
         <location filename="../../mscore/debuglog.cpp" line="293"/>
         <source>Find next</source>
-        <translation type="unfinished"></translation>
+        <translation>下一处</translation>
     </message>
     <message>
         <location filename="../../mscore/debuglog.cpp" line="315"/>
         <source>Copy</source>
-        <translation type="unfinished">复制</translation>
+        <translation>复制</translation>
     </message>
 </context>
 <context>

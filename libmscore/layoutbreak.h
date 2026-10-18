@@ -44,6 +44,7 @@ class LayoutBreak final : public Element {
       bool _firstSystemIndentation = false;
       bool _showCourtesy = false;
       Type _layoutBreakType = LayoutBreak::Type::NOBREAK;
+      QString _systemLockData;
 
       void draw(QPainter*) const override;
       void layout0();
@@ -59,6 +60,8 @@ class LayoutBreak final : public Element {
 
       void setLayoutBreakType(Type);
       Type layoutBreakType() const  { return _layoutBreakType; }
+      const QString& systemLockData() const { return _systemLockData; }
+      void setSystemLockData(const QString& value) { _systemLockData = value; }
 
       bool acceptDrop(EditData&) const override;
       Element* drop(EditData&) override;
