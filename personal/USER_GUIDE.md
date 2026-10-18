@@ -687,3 +687,11 @@ Study仍为0.500。本轮没有更换字体、字号或用户乐谱；既有mf�
 A064《in the pool》的864个路径代表已保存用途决定，65处原页情境核查并完成7,299项填充路径的成员归属。十项旧空白异常均以精确反向边和4x／16x单独渲染证明为填充抵消，无需补字。普通文字、连音／速度数字、八度数字及页面线弧分开，未把形状匹配结果直接当音乐语义；不宣称所有成员均逐个认证或全目录目标完成。详情见[路径角色与具体例子](../../../mcp-musescore/fonts/kumo-engrave/PATH_ROLE_COVERAGE.md)及[实际大小保护](../../../mcp-musescore/fonts/kumo-engrave/TEXT_SIZING.md)。
 
 继续使用既有[0.500包和成对字体安装方法](../../../mcp-musescore/fonts/kumo-engrave/CATALOG_COVERAGE.md)，本轮无需重装字体、MCP或skill。未处理角色保留Leland，原PDF／MSCZ只读。提交定位 `Freddd13/mcp-musescore@dc73cb5`（codex/musescore-evolution）；本体仓库仅补用户说明，没有改软件代码或个人版本。
+
+## 字体研究：空白图录与跨PDF编码核查（2026-10-19）
+
+Study保持0.500，不改字形、字号、软件代码或个人版本，无需重新安装字体、MCP或skill。字体项目当前试用说明已统一指向0.500包，保留旧包供历史对照。
+
+遍历117份使用Chaconne／CIDFont+F1的PDF，三项旧空白图录对应457个源字符位置均未发现墨迹，另区分298个PDFium自动生成间隔；两项无字图接口返回的空格对象在原页隔离后32／64倍渲染均白，原件SHA保持。八份特殊编码谱的296逐PDF键样本、65组代表及18处原页已核对，纠正mf、mp、踏板、速度音符等跨PDF同码误认；Chaconne U+004B的选样应为八分上符尾。其实际字形均已有对应，当前Music／Text哈希与上一轮完全一致，mf及八度等尺寸校准保持。见[具体编码差异及检查范围](../../../mcp-musescore/fonts/kumo-engrave/ENCODING_VARIANTS.md)。
+
+这不等于全目录所有对象语义均逐一认证；其它编码冲突及隐藏字体未展示字符继续检查，未处理部分保留Leland。原PDF／MSCZ只读。本轮提交 `Freddd13/mcp-musescore@3a25fe3`（codex/musescore-evolution）；本体仓库仅同步用户说明。
