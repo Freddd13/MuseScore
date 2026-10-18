@@ -580,3 +580,16 @@ sf、八度线和音符括号仍用软件原有操作；速度近似等号与swi
 只读《如果有来生-release5.mscz》创建字体副本：改名Leland Control为9页，Study为8页；这只是字体输入导致的分页变化，不等于布局质量排名。已浏览8页联系表与末页细节；程序核查除两项字体样式外XML一致，归档附件字节相同，原件SHA不变。没有覆盖用户PDF/MSCZ，也没有更改软件本体或当前用户设置。
 
 源码 `Freddd13/mcp-musescore@037da3c`；[安装说明](../../../mcp-musescore/fonts/kumo-engrave/README.md)、[波线与用户谱验证](../../../mcp-musescore/fonts/kumo-engrave/WAVE_STUDY.md)。本体仓库本轮只附加此用户说明。
+
+
+## Kumo Score Study 0.440：参考页曲线接入字库（2026-10-18）
+
+总处理码位保持92，本轮改善其中42个字形的轮廓：常规符头、G/F谱号、主要休止与旗尾、拍号、力度、踏板及波线等采用页面矢量或配套适配。41个含1,212段三次曲线，升号主体为直线；音乐501字、Text249字，未改部分继续保留Leland。音乐OTF从约1.63MB降至0.86MB，剩余角色与轮廓仍在研究。
+
+本机包为 `mcp-musescore/fonts/kumo-engrave/dist/kumo-score-study-0.440-local.zip`。查看偏好设置的 Score Fonts 路径后退出软件，将两个完整字体家族目录放入该路径，重新打开。在乐谱副本的 **格式→样式→乐谱** 同时选择 **Kumo Score Study** 与 **Kumo Score Study Text**，保持其它样式。已有旧小样时先退出，再成对更换两个家族的OTF/JSON即可；不需重装MCP、skill或Windows字体。
+
+40项原页来源/派生与最终OTF比较通过；复合对象按原始轮廓单独验证，避免裁图混入相邻笔画，琶音整数周期量化单独记录。当前宿主完成常用谱、扩展谱、长短方向琶音/跨系统trill、92字图录、十组力度和用户谱副本；力度分字母/完整字形墨迹IoU均为1.0。
+
+《如果有来生》字体副本仍为Study8页/改名Leland Control9页，这不作为布局质量排名。原件SHA、除两项字体外的主XML和归档附件保持；已查看8页联系表与第2页细节。当前验证宿主二进制SHA256为 `8eab62b8569baece94da20e008855f283e08231155ca7b7d5e334e8abef5a83a`。本轮只附加本体用户说明，不改软件代码、用户设置或原PDF/MSCZ。
+
+源码 `Freddd13/mcp-musescore@2b20152`；[安装说明](../../../mcp-musescore/fonts/kumo-engrave/README.md)、[来源与曲线验证](../../../mcp-musescore/fonts/kumo-engrave/VECTOR_STUDY.md)。
