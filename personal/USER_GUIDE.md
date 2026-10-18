@@ -629,3 +629,14 @@ sf、八度线和音符括号仍用软件原有操作；速度近似等号与swi
 六项单字符与三项混排均通过最终OTF/原PDF墨迹对照；混排从生成的OTF回读曲线，以固定物理尺度回放。固定0.21宿主完成全套原生SVG/PNG、112字图录、十组力度及用户谱副本检查，原件、音乐内容和附件保持。当前repair_current此前导入崩溃的独立问题仍未定位，未称其通过。详见[来源、验收及余项](../../../mcp-musescore/fonts/kumo-engrave/REMAINING_CURVES.md)。
 
 字体源码提交`Freddd13/mcp-musescore@5399761`（codex/musescore-evolution）；参考轮廓与字体包仅保留本机研究，未公开提交。此次只更新本体仓库用户说明，不改原生代码或个人软件版本。
+
+
+## Kumo Score Study 0.480：修正力度、八度与踏板大小（2026-10-19）
+
+用户指出此前预览mf及八度标记偏小。已确认0.470把Music轮廓按相同EM尺寸写入Text，没有适配文字使用路径；这是字体构建问题，不应让用户调大全谱字号补救。本轮只等比修正19个Text字形：力度字母及完整组合1.9倍，8va/数字8为1.1倍，Ped.1.6倍，解除星号1.15倍。Music502字形和度量完全保持，原谱样式、音乐与附件不变。
+
+同一固定0.21宿主、同谱距实测：用户谱mf高度原字体2.585sp，0.470仅1.308sp，修正为2.485sp；数字8、完整8va、Ped.及星号也接近原有大小。2倍八度试验明显过大已拒绝，不能由理论EM换算代替实际谱面核对。十组力度原生组合/单字对照保持，用户谱Control/Study副本均9页。来源/实际尺寸和宿主限制见[TEXT_SIZING](../../../mcp-musescore/fonts/kumo-engrave/TEXT_SIZING.md)。当前安装版此前的独立导入异常仍未解决，不能将固定宿主通过称作当前版通过。
+
+更新本机包`fonts/kumo-engrave/dist/kumo-score-study-0.480-local.zip`：退出Evolution，将Study与Study Text两个完整文件夹成对替换到私有Score Fonts目录，重启；在乐谱独立副本同时选择两者，保留原字号与其它样式。无需重装MCP、skill或Windows字体。[安装说明](../../../mcp-musescore/fonts/kumo-engrave/README.md)。
+
+字体源码提交`Freddd13/mcp-musescore@ef09156`（codex/musescore-evolution）。本次只同步本体用户说明，不改原生代码或个人软件版本；后续字体更新须同时核查实际尺寸和周围记谱层次。
