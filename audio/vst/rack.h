@@ -19,6 +19,7 @@ public:
   QVariantList effects(int slot) const;
   Plugin *plugin(int slot, int effect = -1) const;
   bool takeChanges();
+  bool hasOpenEditors() const;
   QStringList problems() const;
   int latency() const;
   qint64 tail() const;

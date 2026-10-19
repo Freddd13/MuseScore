@@ -128,6 +128,7 @@ class EditorAreas : public QObject {
     if (!area.widget || !area.dock ||
         !area.widget->property("kumoDetachedArea").toBool())
       return;
+    area.widget->setProperty("kumoAreaMoving", true);
     if (geometry)
       QSettings().setValue(key(area) + "/geometry", area.dock->saveGeometry());
     if (remember)
@@ -148,6 +149,7 @@ class EditorAreas : public QObject {
     if (remember && tabs)
       tabs->setCurrentIndex(area.page);
     applyPage();
+    area.widget->setProperty("kumoAreaMoving", false);
   }
   void detach(int index, bool floating) {
     auto &area = areas[index];
@@ -366,6 +368,7 @@ public:
     applyPage();
   }
 
+  void settleLayout() { applyPage(); }
   void saveLayout() {
     if (updating)
       return;
@@ -524,6 +527,10 @@ namespace Ms {
 bool openEditorArea(PerformanceEditor *editor, const QString &name) {
   auto controller = controllers.value(editor);
   return controller && controller->openArea(name);
+}
+void settleEditorAreaLayout(PerformanceEditor *editor) {
+  if (auto controller = controllers.value(editor))
+    controller->settleLayout();
 }
 void saveEditorAreaLayout(PerformanceEditor *editor) {
   if (auto controller = controllers.value(editor))

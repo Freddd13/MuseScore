@@ -204,6 +204,7 @@ int main(int argc, char **argv) {
   }
   QTimer dirty;
   QObject::connect(&dirty, &QTimer::timeout, &app, [&] {
+    InterlockedExchange(&bridge.memory->editorOpen, plugin && plugin->editorVisible() ? 1 : 0);
     if (plugin && plugin->takeChanges())
       InterlockedExchange(&bridge.memory->dirty, 1);
   });

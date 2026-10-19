@@ -796,13 +796,21 @@ void showRegionalVariantPanel(const QString &group) {
             dock = new QDockWidget(QObject::tr("分段试写方案"), mscore);
             dock->setObjectName("regionalVariantsDock");
             dock->setAllowedAreas(Qt::AllDockWidgetAreas);
-            dock->setWidget(new RegionalPanel(dock));
+            auto scroll = new QScrollArea(dock);
+            scroll->setObjectName("regionalScrollArea");
+            scroll->setFrameShape(QFrame::NoFrame);
+            scroll->setWidgetResizable(true);
+            scroll->setMinimumSize(0, 0);
+            scroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Ignored);
+            scroll->setWidget(new RegionalPanel(scroll));
+            dock->setWidget(scroll);
             mscore->addDockWidget(Qt::RightDockWidgetArea, dock);
             arrangeWorkflowDock(mscore, dock, "regionalVariantsDock", "rightTools", Qt::RightDockWidgetArea);
       }
       dock->show();
       dock->raise();
       if (!group.isEmpty())
-            static_cast<RegionalPanel *>(dock->widget())->focusGroup(group);
+            if (auto content = dock->findChild<QWidget *>("regionalVariantPanel"))
+                  static_cast<RegionalPanel *>(content)->focusGroup(group);
 }
 } // namespace Ms

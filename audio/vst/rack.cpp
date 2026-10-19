@@ -431,6 +431,19 @@ bool Rack::takeChanges() {
       changed |= e->processor->takeChanges();
   return changed;
 }
+bool Rack::hasOpenEditors() const {
+  for (const auto &slot : d->slots) {
+    if (slot->source.processor && slot->source.processor->editorVisible())
+      return true;
+    for (const auto &unit : slot->effects)
+      if (unit->processor && unit->processor->editorVisible())
+        return true;
+  }
+  for (const auto &unit : d->master)
+    if (unit->processor && unit->processor->editorVisible())
+      return true;
+  return false;
+}
 int Rack::latency() const { return d->totalLatency; }
 qint64 Rack::tail() const {
   qint64 result = 0;

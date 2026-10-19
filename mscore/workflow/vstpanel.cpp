@@ -13,6 +13,7 @@
 #include "mscore/seq.h"
 #include "mscore/workspace.h"
 #include "workspaceviews.h"
+#include "controlflowlayout.h"
 #include <QJsonDocument>
 #include <QProcess>
 #include <QSaveFile>
@@ -46,10 +47,15 @@ SynthesizerState withConfiguration(SynthesizerState state,
 class ChangeVstState final : public UndoCommand {
   Score *score;
   SynthesizerState value;
+  bool captureLive = false;
   void flip(EditData *) override {
     const auto old = score->synthesizerState();
     score->setSynthesizerState(value);
     value = old;
+    if (captureLive) {
+      captureLive = false;
+      return;
+    }
     if (mscore && mscore->currentScore() &&
         mscore->currentScore()->masterScore() == score) {
       if (seq) {
@@ -73,8 +79,8 @@ class ChangeVstState final : public UndoCommand {
   }
 
 public:
-  ChangeVstState(Score *target, const SynthesizerState &next)
-      : score(target), value(next) {}
+  ChangeVstState(Score *target, const SynthesizerState &next, bool capture = false)
+      : score(target), value(next), captureLive(capture) {}
   UNDO_NAME("ChangeVstState")
 };
 QString identity(const QVariantMap &d) {
@@ -85,7 +91,7 @@ class Panel final : public QDockWidget {
   QListWidget *chain;
   QStackedWidget *chainArea;
   QLabel *state, *current, *chainHint;
-  QPushButton *scan, *choose, *removeSource, *restoreSource, *openSource,
+  QPushButton *scan, *forget, *choose, *removeSource, *restoreSource, *openSource,
       *addEffect, *removeEffect, *up, *down, *openEffect, *loadPreset,
       *savePreset;
   QCheckBox *isolate;
@@ -186,9 +192,18 @@ class Panel final : public QDockWidget {
     const auto key = catalog->currentData().toString();
     QSignalBlocker b(catalog);
     catalog->clear();
+    catalog->setEnabled(!known.isEmpty());
+    forget->setEnabled(!known.isEmpty());
+    if (known.isEmpty()) {
+      catalog->addItem(tr("先点“添加插件…”选择 VST 音源或效果器"), QString());
+      catalog->setCurrentIndex(0);
+      return;
+    }
     for (const auto &v : known) {
       auto d = v.toMap();
-      catalog->addItem(d["name"].toString() + " · " + d["format"].toString(),
+      catalog->addItem(d["name"].toString() + " · " +
+                       (d["instrument"].toBool() ? tr("音源") : tr("效果")) +
+                       " · " + d["format"].toString(),
                        identity(d));
       catalog->setItemData(catalog->count() - 1, d, Qt::UserRole + 1);
     }
@@ -344,7 +359,7 @@ class Panel final : public QDockWidget {
                                 : tr("音源文件待重新定位"))
                  : tr("当前：SF2／%1").arg(c->synti()))
           : tr("打开乐谱后选择乐器。"));
-    choose->setEnabled(c && catalog->count() &&
+    choose->setEnabled(c && !picked().isEmpty() &&
                        picked()["instrument"].toBool());
     const bool loaded = id && engine && engine->rack().plugin(id);
     openSource->setEnabled(loaded);
@@ -373,7 +388,7 @@ class Panel final : public QDockWidget {
                                     : static_cast<QWidget *>(chainHint));
     if (row >= 0 && row < chain->count())
       chain->setCurrentRow(row);
-    addEffect->setEnabled(score && catalog->count() &&
+    addEffect->setEnabled(score && !picked().isEmpty() &&
                           !picked()["instrument"].toBool() &&
                           (id || effectTarget->currentIndex() == 1 ||
                            (c && c->synti() == "Fluid")));
@@ -391,16 +406,17 @@ class Panel final : public QDockWidget {
       return;
     if (backend()->rack().takeChanges())
       savePending = true;
-    if (!savePending || (seq && seq->isPlaying()))
+    if (!savePending || (seq && seq->isPlaying()) || backend()->rack().hasOpenEditors())
       return;
     savePending = false;
-    report(applyVstConfiguration(score, configuration()));
+    saveVstEdits(score);
   }
 
 public:
   explicit Panel(QWidget *parent) : QDockWidget(tr("音源与效果"), parent) {
     setObjectName("kumoVstPanel");
     setAllowedAreas(Qt::AllDockWidgetAreas);
+    addEditorDockActions(this);
     auto body = new QWidget(this);
     auto scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
@@ -426,12 +442,14 @@ public:
     catalog->setObjectName("kumoVstCatalog");
     catalog->setSizeAdjustPolicy(
         QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    layout->addWidget(new QLabel(tr("VST 音源与效果列表"), body));
     layout->addWidget(catalog);
     row = new QHBoxLayout;
     scan = new QPushButton(tr("添加插件…"), body);
     scan->setObjectName("kumoVstScan");
     row->addWidget(scan);
-    auto forget = new QPushButton(tr("移出列表"), body);
+    forget = new QPushButton(tr("移出列表"), body);
+    forget->setObjectName("kumoVstForget");
     row->addWidget(forget);
     row->addStretch();
     layout->addLayout(row);
@@ -439,22 +457,24 @@ public:
     isolate->setToolTip(tr("将这个插件放在单独进程，额外增加约两个 256 "
                            "样本块的播放延迟。直接运行适合低延迟弹奏。"));
     layout->addWidget(isolate);
-    row = new QHBoxLayout;
+    auto sourceActions = new ControlFlowLayout;
     choose = new QPushButton(tr("用作此乐器音源"), body);
     choose->setObjectName("kumoVstChoose");
     openSource = new QPushButton(tr("打开音源"), body);
-    row->addWidget(choose);
-    row->addWidget(openSource);
-    layout->addLayout(row);
-    row = new QHBoxLayout;
-    removeSource = new QPushButton(tr("恢复原音源"), body);
+    openSource->setObjectName("kumoVstOpenSource");
+    sourceActions->addWidget(choose);
+    sourceActions->addWidget(openSource);
+    layout->addLayout(sourceActions);
+    auto restoreActions = new ControlFlowLayout;
+    removeSource = new QPushButton(tr("切回原音源"), body);
     removeSource->setObjectName("kumoVstRemoveSource");
+    removeSource->setToolTip(tr("恢复选用 VST 之前的音源与音色，例如 SF2 钢琴。"));
     restoreSource = new QPushButton(tr("恢复刚才音源"), body);
     restoreSource->setObjectName("kumoVstRestoreSource");
-    row->addWidget(removeSource);
-    row->addWidget(restoreSource);
-    layout->addLayout(row);
-    auto presets = new QHBoxLayout;
+    restoreActions->addWidget(removeSource);
+    restoreActions->addWidget(restoreSource);
+    layout->addLayout(restoreActions);
+    auto presets = new ControlFlowLayout;
     auto import = new QPushButton(tr("载入预设…"), body);
     auto save = new QPushButton(tr("保存预设…"), body);
     loadPreset = import;
@@ -482,7 +502,7 @@ public:
     chainArea->addWidget(chain);
     chainArea->addWidget(chainHint);
     layout->addWidget(chainArea, 1);
-    row = new QHBoxLayout;
+    auto effectActions = new ControlFlowLayout;
     addEffect = new QPushButton(tr("加效果"), body);
     addEffect->setObjectName("kumoVstAddEffect");
     openEffect = new QPushButton(tr("打开"), body);
@@ -490,12 +510,12 @@ public:
     up = new QPushButton(tr("上移"), body);
     down = new QPushButton(tr("下移"), body);
     for (auto b : {addEffect, openEffect, removeEffect})
-      row->addWidget(b);
-    layout->addLayout(row);
-    row = new QHBoxLayout;
-    row->addWidget(up);
-    row->addWidget(down);
-    layout->addLayout(row);
+      effectActions->addWidget(b);
+    layout->addLayout(effectActions);
+    auto effectOrder = new ControlFlowLayout;
+    effectOrder->addWidget(up);
+    effectOrder->addWidget(down);
+    layout->addLayout(effectOrder);
     state = new QLabel(tr("添加已安装的 VST3 或 x64 VST2 文件，再选择音源。"),
                        body);
     state->setWordWrap(true);
@@ -548,7 +568,7 @@ public:
             });
     connect(forget, &QPushButton::clicked, this, [this] {
       int i = catalog->currentIndex();
-      if (i >= 0) {
+      if (i >= 0 && i < known.size()) {
         known.removeAt(i);
         saveCatalog();
         refresh();
@@ -1026,11 +1046,16 @@ void saveVstEdits(Score *score) {
   const auto value = backend()->configuration();
   if (value.isEmpty())
     return;
-  const auto bytes = QString::fromUtf8(
-      QJsonDocument::fromVariant(value).toJson(QJsonDocument::Compact));
   const auto group = score->masterScore()->synthesizerState().group("KumoVST");
-  if (group.empty() || group.front().data != bytes)
-    applyVstConfiguration(score, value);
+  if (group.empty() || !VstHost::sameConfiguration(value,
+      QJsonDocument::fromJson(group.front().data.toUtf8()).toVariant().toMap())) {
+    auto state = score->masterScore()->synthesizerState();
+    if (state.isDefault())
+      state = synti->state();
+    score->startCmd();
+    score->undo(new ChangeVstState(score->masterScore(), withConfiguration(state, value), true));
+    score->endCmd();
+  }
 }
 void showVstPanel(Channel *channel) {
   if (!personalFeaturesEnabled() || !mscore)

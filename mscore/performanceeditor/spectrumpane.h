@@ -24,6 +24,7 @@ namespace Ms {
 class Score;
 class PerformanceEditor;
 class SpectrumCanvas;
+class ControlFlowLayout;
 class SpectrumDisplayControls;
 class SpectrumListenControls;
 class SpectrumBeatControls;
@@ -48,9 +49,8 @@ class SpectrumPane : public QWidget {
     QString _editingMark;
     QListWidget *_marks = nullptr;
     SpectrumCanvas *_canvas = nullptr;
-    QGridLayout *_tools = nullptr;
+    ControlFlowLayout *_tools = nullptr;
     QVector<QWidget *> _controls;
-    int _columns = 7;
     QTimer _requestTimer;
     SpectrumDisplayControls *_displayControls = nullptr;
     SpectrumListenControls *_listenControls = nullptr;
@@ -106,7 +106,7 @@ class SpectrumPane : public QWidget {
     void paint(QPainter &, const QRectF &, bool overlay);
     void pointer(QMouseEvent *, bool release);
     void wheel(QWheelEvent *);
-    void resizeEvent(QResizeEvent *) override;
+
     void showEvent(QShowEvent *) override;
     void hideEvent(QHideEvent *) override;
   private slots:

@@ -14,4 +14,5 @@ bool showDetachedEditorArea(QWidget *);
 bool setEditorAreaVisible(PerformanceEditor *, const QString &, bool);
 bool openEditorArea(PerformanceEditor *, const QString &);
 void saveEditorAreaLayout(PerformanceEditor *);
+void settleEditorAreaLayout(PerformanceEditor *);
 } // namespace Ms

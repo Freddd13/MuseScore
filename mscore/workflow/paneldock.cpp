@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "paneldock.h"
+#include "panelwindowcontrols.h"
 #include <QMainWindow>
 #include <QDockWidget>
 #include <QSettings>
@@ -14,7 +15,7 @@ class PanelPosition : public QObject {
       QTimer timer;
       bool ready=false;
       void save() {
-            if(!ready||!main||!dock)return;
+            if(!ready||!main||!dock||dock->property("kumoPanelFullScreen").toBool())return;
             QSettings settings;settings.beginGroup(key);
             settings.setValue("area",int(main->dockWidgetArea(dock)));
             settings.setValue("floating",dock->isFloating());
@@ -39,6 +40,7 @@ class PanelPosition : public QObject {
 }
 bool arrangeWorkflowDock(QMainWindow* main,QDockWidget* dock,const QString& id,const QString& group,Qt::DockWidgetArea requested) {
       if(!main||!dock||group.isEmpty())return false;
+      installPanelWindowControls(dock);
       const QString name=id.startsWith("kumoPanel/")?id.mid(10):id;
       dock->setObjectName("kumoPanel/"+name);
       const QString key="kumoPanels/"+name;QSettings settings;settings.beginGroup(key);

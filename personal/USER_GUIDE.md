@@ -1,11 +1,14 @@
 # MuseScore Evolution 个人功能说明
 
-当前个人版本：**0.71.0** · Kumo branch / Freddd13。提交定位：`personal-v0.71.0`。
+本文对应正在检查的个人版本：**0.72.0** · Kumo branch / Freddd13。发布进度与操作结果见[本轮检查](docs/WINDOWS_072_CHECKS.md)。
+
+本轮[完整使用检查与返工进度](docs/USABILITY_REWORK_20261019.md)按功能逐项记录。
 
 先按下面的任务找到入口。每章有完整操作例子、按钮说明、保存和撤销方法。“帮助 → 个人功能说明”可以在软件里直接阅读。
 
 | 想完成的事 | 从哪里开始 |
 |---|---|
+| 面板单独全屏、回到原位置、处理窗口跑到屏幕外 | [面板窗口与工具栏](docs/WINDOWS_072_GUIDE.md) |
 | 把编辑器铺满、把区域移到右侧或悬浮 | [工作视图与区域摆放](docs/WORKSPACE_064_GUIDE.md) |
 | 选择原曲音轨、删除恢复、拖滑块调速度 | [原曲音轨操作](docs/WORKSPACE_064_GUIDE.md#管理多条原曲音轨) |
 | 连接 Codex，让它读取或建议写法 | 视图 → AI 连接；[第一次连接的步骤](docs/WORKSPACE_063_GUIDE.md) |

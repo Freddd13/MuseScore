@@ -11,6 +11,7 @@ class Vst3Editor final : public QWidget,
   Steinberg::IPtr<Steinberg::IPlugView> view;
   bool attached = false;
   void resizeEvent(QResizeEvent *) override;
+  void showEvent(QShowEvent *) override;
 
 public:
   Vst3Editor(Steinberg::IPlugView *, QWidget *);

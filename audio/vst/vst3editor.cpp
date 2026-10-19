@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "vst3editor.h"
+#include "plugin.h"
 #include <QResizeEvent>
 #include <QThread>
+#include <QTimer>
 namespace Ms {
 namespace VstHost {
 using namespace Steinberg;
 Vst3Editor::Vst3Editor(IPlugView *plugin, QWidget *parent)
     : QWidget(parent, Qt::Tool), view(plugin, false) {
+  setObjectName("kumoVstPluginEditor");
   setAttribute(Qt::WA_DeleteOnClose);
   setAttribute(Qt::WA_NativeWindow);
 }
@@ -16,6 +19,10 @@ Vst3Editor::~Vst3Editor() {
       view->removed();
     view->setFrame(nullptr);
   }
+}
+void Vst3Editor::showEvent(QShowEvent* event) {
+  QWidget::showEvent(event);
+  QTimer::singleShot(0, this, [this] { placeEditorOnScreen(this); });
 }
 bool Vst3Editor::attach(QString *error) {
   if (view->isPlatformTypeSupported(kPlatformTypeHWND) != kResultTrue) {

@@ -459,15 +459,31 @@ void showAIConnection() {
   dialog->activateWindow();
 }
 void addAIConnectionAction(QMenu *menu) {
-  auto action = new QAction(QObject::tr("AI 连接"), menu);
-  action->setObjectName("kumo-ai-connection");
-  markPersonalAction(action);
-  Workspace::addActionAndString(action, "kumo-ai-connection");
-  menu->addAction(action);
-  QObject::connect(action, &QAction::triggered, qApp,
-                   [] { showAIConnection(); });
-  if (qEnvironmentVariable("KUMO_MCP_AUTOSTART") != "0")
-    QTimer::singleShot(0, menu, [] { initializeBuiltinAI(); });
+  if (!menu)
+    return;
+  auto owner = mscore;
+  for (auto widget = menu->parentWidget(); !owner && widget;
+       widget = widget->parentWidget())
+    owner = qobject_cast<MuseScore *>(widget);
+  if (!owner)
+    return;
+  // Saved workspaces replace their menus. Keep the shared action alive with
+  // the main window so its menu entry and toolbar can reuse it afterwards.
+  auto action = owner->findChild<QAction *>("kumo-ai-connection",
+                                           Qt::FindDirectChildrenOnly);
+  if (!action) {
+    action = new QAction(owner);
+    action->setObjectName("kumo-ai-connection");
+    markPersonalAction(action);
+    Workspace::addActionAndString(action, "kumo-ai-connection");
+    QObject::connect(action, &QAction::triggered, qApp,
+                     [] { showAIConnection(); });
+    if (qEnvironmentVariable("KUMO_MCP_AUTOSTART") != "0")
+      QTimer::singleShot(0, owner, [] { initializeBuiltinAI(); });
+  }
+  action->setText(QObject::tr("AI 连接"));
+  if (!menu->actions().contains(action))
+    menu->addAction(action);
 }
 void showPersonalGuide(const QString &page) {
   if (!mscore)

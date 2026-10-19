@@ -3,6 +3,7 @@
 #include "paneldock.h"
 #include "featuregate.h"
 #include "aiconnection.h"
+#include "workspaceviews.h"
 #include "mscore/musescore.h"
 #include "mscore/shortcut.h"
 #include "mscore/plugin/qmlpluginengine.h"
@@ -25,7 +26,10 @@ void showReferencePanel(bool visible){
  view->setResizeMode(QQuickView::SizeRootObjectToView);view->setSource(QUrl::fromLocalFile(file));
  auto root=qobject_cast<QmlPlugin*>(view->rootObject());if(!root){mscore->showMessage(QObject::tr("原曲参考界面读取失败，请检查安装目录中的 ReferencePlayer。"),8000);delete view;return;}
  auto dock=new QDockWidget(QObject::tr("原曲参考"),mscore);referenceDock=dock;referenceRoot=root;
- dock->setWidget(QWidget::createWindowContainer(view));dock->setMinimumSize(270,96);
+ auto container=QWidget::createWindowContainer(view);
+ container->setMinimumSize(0,0);container->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Ignored);
+ dock->setWidget(container);dock->setMinimumSize(270,96);
+ addEditorDockActions(dock);
  const bool restored=arrangeWorkflowDock(mscore,dock,"ReferencePlayer_MS3","bottomTools",Qt::BottomDockWidgetArea);
  QObject::connect(root,&QObject::destroyed,dock,&QObject::deleteLater);
  root->attachPanelDock(dock);root->setFilePath(QFileInfo(file).absolutePath());

@@ -167,10 +167,21 @@ void addSystemLockActions(QMenu* menu) {
     if (!owner) owner = mscore;
     if (owner)
         if (auto existing = owner->findChild<QMenu*>("kumo-system-lock-menu")) {
+            existing->setTitle(QObject::tr("谱行锁定"));
             for (auto action : menu->actions())
-                if (action->menu() && action->menu() != existing &&
-                    action->menu() == Workspace::findMenuFromString("menu-kumo-system-lock"))
-                    menu->removeAction(action);
+                if (auto restored = action->menu())
+                    if (restored != existing &&
+                        (restored == Workspace::findMenuFromString("menu-kumo-system-lock") ||
+                         restored->title() == "menu-kumo-system-lock")) {
+                        for (auto saved : restored->actions()) {
+                            if (existing->actions().contains(saved)) continue;
+                            if (auto child = saved->menu()) {
+                                if (child->parent() == restored) child->setParent(existing);
+                            } else if (saved->parent() == restored) saved->setParent(existing);
+                            existing->addAction(saved);
+                        }
+                        menu->removeAction(action);
+                    }
             Workspace::addMenuAndString(existing, "menu-kumo-system-lock");
             if (!menu->actions().contains(existing->menuAction())) menu->addMenu(existing);
             return;

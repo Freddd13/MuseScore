@@ -88,6 +88,7 @@ void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface su
                   painter.setPen(c[PerformanceAppearance::Grid]); painter.drawLine(QPointF(PerformanceViewport::gutter, y), QPointF(widget->width() - PerformanceViewport::rightMargin, y));
                   }
             painter.save(); painter.setClipRect(QRectF(0, 0, PerformanceViewport::gutter, widget->height()));
+            QVector<QPair<int, QRectF>> labels;
             for (bool black : {false, true}) for (int pitch = low; pitch <= high; ++pitch) {
                   if (PerformanceKeyboard::isBlack(pitch) != black || !_viewport.showsPitch(pitch)) continue;
                   painter.setPen(QPen(QColor(black ? "#161616" : "#777777"), 1)); painter.setBrush(QColor(black ? "#161616" : "#f1f1f1"));
@@ -95,15 +96,27 @@ void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface su
                   if(_keyboardMode==2&&!_viewport.pitchRows.isEmpty())painter.drawRect(QRectF(0,_viewport.pitchY(pitch),PerformanceViewport::gutter*(black?.58:1.),_viewport.rowHeight));
                   else painter.drawPolygon(PerformanceKeyboard::shape(pitch, _viewport.topPitch, _viewport.rowHeight, PerformanceViewport::gutter));
                   if (_keyboardNames && (_viewport.rowHeight >= 10 || pitch % 12 == 0)) {
-                        painter.setPen(black ? QColor("#ededed") : QColor("#292929"));
-                        QFont font = painter.font(); font.setPixelSize(qBound(7, int(_viewport.rowHeight * .82), 12)); painter.setFont(font);
                         const double y = _viewport.pitchY(pitch);
                         const auto keyBounds = (_keyboardMode==2&&!_viewport.pitchRows.isEmpty()) ? QRectF(0,y,PerformanceViewport::gutter,_viewport.rowHeight) : PerformanceKeyboard::shape(pitch,_viewport.topPitch,_viewport.rowHeight,PerformanceViewport::gutter).boundingRect();
-                        painter.drawText(QRectF(black ? 2 : PerformanceViewport::gutter * .58 + 2, keyBounds.center().y()-_viewport.rowHeight/2,
-                              PerformanceViewport::gutter * (black ? .58 : .42) - 4, _viewport.rowHeight), Qt::AlignVCenter | Qt::AlignHCenter, pitchName(pitch));
+                        labels.append(qMakePair(pitch, keyBounds));
                         }
                   painter.setOpacity(1);
                   }
+            // Keep text above adjacent key shapes at compact pitch zoom.
+            QFont font = painter.font(); font.setPixelSize(qBound(7, int(_viewport.rowHeight * .82), 12)); painter.setFont(font);
+            const double labelHeight = qMax(_viewport.rowHeight, double(painter.fontMetrics().height() + 2));
+            for (const auto& label : labels) {
+                  const double center = label.second.center().y();
+                  if (center < 0 || center > widget->height()) continue;
+                  const int pitch = label.first;
+                  const bool black = PerformanceKeyboard::isBlack(pitch);
+                  painter.setPen(black ? QColor("#ededed") : QColor("#292929"));
+                  painter.setOpacity(_keyboardMode == 1 && !_usedPitches.contains(pitch) ? .28 : 1.);
+                  const double y = qBound(0., center - labelHeight / 2, qMax(0., widget->height() - labelHeight));
+                  painter.drawText(QRectF(black ? 2 : PerformanceViewport::gutter * .58 + 2, y,
+                        PerformanceViewport::gutter * (black ? .58 : .42) - 4, labelHeight), Qt::AlignCenter, pitchName(pitch));
+                  }
+            painter.setOpacity(1);
             painter.restore();
             }
       if (surface == PerformanceSurface::Parameter && !(_velocityArrangement&&_parameter->currentIndex()==0)) {

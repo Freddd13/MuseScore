@@ -492,6 +492,7 @@ public:
     editor->show();
     return true;
   }
+  bool editorVisible() const override { return editor && editor->isVisible(); }
   void closeEditor() override {
     if (editor) {
       auto window = editor.data();

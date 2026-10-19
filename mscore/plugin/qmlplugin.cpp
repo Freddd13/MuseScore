@@ -11,6 +11,7 @@
 //=============================================================================
 
 #include "qmlplugin.h"
+#include "mscore/workflow/panelwindowcontrols.h"
 #include "mscore/workflow/paneldock.h"
 #include <QDockWidget>
 #include <QMainWindow>
@@ -63,6 +64,8 @@ void QmlPlugin::disposePanelForReload()
 void QmlPlugin::attachPanelDock(QDockWidget* dock)
       {
       _panelDock = dock;
+      if (!property("preferredPanelGroup").toString().isEmpty())
+            installPanelWindowControls(dock);
       if(property("independentPanelSurfaces").toBool())dock->setAttribute(Qt::WA_DeleteOnClose,false);
       auto watchKeys = [this](QQuickWindow* window) { if (window) window->installEventFilter(this); };
       connect(this, &QQuickItem::windowChanged, this, watchKeys);
@@ -82,7 +85,8 @@ void QmlPlugin::attachPanelDock(QDockWidget* dock)
                   auto old=_panelDock->titleBarWidget();_panelDock->setTitleBarWidget(nullptr);if(old)old->deleteLater();
                   _panelDock->setProperty("compactPluginTitle",false);
                   }
-            if (preferred > 0 && (area == Qt::TopDockWidgetArea || area == Qt::BottomDockWidgetArea))
+            if (preferred > 0 && !_panelDock->property("kumoWindowTransition").toBool()
+                && (area == Qt::TopDockWidgetArea || area == Qt::BottomDockWidgetArea))
                   QTimer::singleShot(0,this,[this,preferred]() {
                         if (!_panelDock || _panelDock->isFloating()) return;
                         if (auto main=qobject_cast<QMainWindow*>(_panelDock->parentWidget()))
@@ -117,9 +121,12 @@ QVariantMap QmlPlugin::panelScreen(QQuickItem* target) const
       }
 void QmlPlugin::fitPanelHeight(int height,bool auxiliary,bool reset)
       {
+      auto target=auxiliary?_summaryDock.data():_panelDock.data();
+      if(target&&(target->property("kumoPanelFullScreen").toBool()||target->property("kumoWindowTransition").toBool()))return;
       const int content=qBound(28,height,200);
       QTimer::singleShot(0,this,[this,content,auxiliary,reset]{
             auto dock=auxiliary?_summaryDock.data():_panelDock.data();if(!dock||!dock->widget()||!dock->isVisible())return;
+            if(dock->property("kumoPanelFullScreen").toBool()||dock->property("kumoWindowTransition").toBool())return;
             const int chrome=qMax(0,dock->height()-dock->widget()->height());
             if(!reset&&dock->widget()->height()>=content)return;
             if(dock->isFloating()){dock->resize(dock->width(),content+chrome);return;}
@@ -174,6 +181,7 @@ void QmlPlugin::showDetailPanel(bool visible)
             _detailWindow->setColor(background.isValid() ? background : QApplication::palette().color(QPalette::Window));
             _detailDock->setWidget(QWidget::createWindowContainer(_detailWindow));
             _detailDock->setMinimumWidth(240);_detailDock->resize(360,740);
+            installPanelWindowControls(_detailDock);
             _detailDock->installEventFilter(this);
             connect(_detailDock,&QDockWidget::visibilityChanged,this,[this](bool){emit panelDetailChanged();});
             // One shared QML tree, no second plugin / observer / analysis worker.
@@ -214,6 +222,7 @@ void QmlPlugin::showSummaryPanel(bool visible)
             auto grip=new PanelGrip(_summaryDock);
             grip->setToolTip(tr("拖动此处调整摘要位置"));
             _summaryDock->setTitleBarWidget(grip);
+            installPanelWindowControls(_summaryDock);
             _summaryDock->installEventFilter(this);
             connect(_summaryDock,&QDockWidget::visibilityChanged,this,[this](bool){emit panelSummaryChanged();});
             connect(_summaryDock,&QDockWidget::topLevelChanged,this,[this](bool){emit panelSummaryChanged();});

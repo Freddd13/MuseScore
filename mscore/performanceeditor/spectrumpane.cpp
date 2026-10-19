@@ -116,11 +116,11 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(3);
     auto toolHost = new QWidget;
-    auto tools = new QGridLayout(toolHost);
+    auto tools = new ControlFlowLayout(toolHost);
     _tools = tools;
-    tools->setHorizontalSpacing(4);
-    tools->setVerticalSpacing(3);
-    auto toolbarScroll = new QScrollArea;
+    toolHost->setObjectName("spectrumTransportTools");
+    tools->setSpacing(5);
+    auto toolbarScroll = new ControlScrollArea;
     toolbarScroll->setWidget(toolHost);
     toolbarScroll->setWidgetResizable(true);
     toolbarScroll->setFrameShape(QFrame::NoFrame);
@@ -132,35 +132,44 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
         auto b = new QToolButton(this);
         b->setText(text);
         connect(b, &QToolButton::clicked, this, fn);
-        tools->addWidget(b, row, col);
+        Q_UNUSED(row); Q_UNUSED(col);
+        tools->addWidget(b);
         return b;
     };
-    button(tr("原曲参考"), 0, 0, [] { showReferencePanel(true); });
+    auto referenceButton = button(tr("原曲参考"), 0, 0, [] { showReferencePanel(true); });
     _tracks = new QComboBox;
     _tracks->setObjectName("transcriptionTracks");
+    _tracks->setPlaceholderText(tr("选择原曲音轨"));
+    _tracks->addItem(tr("先打开音频"), QString());
+    _tracks->setCurrentIndex(0);
+    _tracks->setEnabled(false);
     _tracks->setMinimumContentsLength(12);
     _tracks->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-    tools->addWidget(_tracks, 0, 1);
+    tools->addWidget(_tracks);
     _clips = new QComboBox;
     _clips->setObjectName("transcriptionClips");
+    _clips->setPlaceholderText(tr("原曲片段"));
+    _clips->addItem(tr("原曲时间"), QVariantMap());
+    _clips->setCurrentIndex(0);
+    _clips->setEnabled(false);
     _clips->setMinimumContentsLength(10);
     _clips->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-    tools->addWidget(_clips, 0, 2);
+    tools->addWidget(_clips);
     _display = new QComboBox;
     _display->setObjectName("transcriptionDisplay");
     _display->addItems({tr("上下对照"), tr("叠加对照")});
     _display->setToolTip(tr("叠加在钢琴卷帘后对照；按住 Alt 可以选择和拖动谱中音符。"));
     _display->setCurrentIndex(QSettings().value("spectrum/display", 0).toInt());
-    tools->addWidget(_display, 0, 3);
+    tools->addWidget(_display);
     _preset = new QComboBox;
     _preset->addItems({tr("音高与起音"), tr("低音更清楚"), tr("起音更清楚")});
     _preset->setCurrentIndex(QSettings().value("spectrum/preset", 0).toInt());
-    tools->addWidget(_preset, 0, 4);
+    tools->addWidget(_preset);
     _tool = new QComboBox;
     _tool->setObjectName("transcriptionTool");
     _tool->addItems({tr("取音／试音"), tr("选择循环"), tr("手形平移"), tr("画／调整标注")});
-    tools->addWidget(_tool, 0, 5);
-    button(tr("缓存设置"), 0, 6, [this] { cacheSettings(); });
+    tools->addWidget(_tool);
+    auto cacheButton = button(tr("缓存设置"), 0, 6, [this] { cacheSettings(); });
     _play = button(tr("播放原曲"), 1, 0, [this] { playSource(); });
     _play->setObjectName("transcriptionPlay");
     _play->setEnabled(false);
@@ -193,6 +202,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     speedSlider->setValue(100);
     speedSlider->setMinimumWidth(30);
     speedSlider->setToolTip(tr("保调播放速度：50%–150%"));
+    speedLayout->addWidget(new QLabel(tr("速度")));
     speedLayout->addWidget(speedSlider, 1);
     speedLayout->addWidget(_speed);
     connect(speedSlider, &QSlider::valueChanged, this, [this](int value) { _speed->setValue(value); });
@@ -200,21 +210,22 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
         QSignalBlocker block(speedSlider);
         speedSlider->setValue(qRound(value));
     });
-    tools->addWidget(speedControl, 1, 2);
+    tools->addWidget(speedControl);
     _tuning = new QDoubleSpinBox;
     _tuning->setRange(400, 480);
     _tuning->setDecimals(1);
     _tuning->setSuffix(" Hz");
+    _tuning->setPrefix("A4 ");
     _tuning->setValue(QSettings().value("spectrum/tuning", 440).toDouble());
     _tuning->setToolTip(tr("A4 调律频率；只改变频率与音名的对照"));
-    tools->addWidget(_tuning, 1, 3);
+    tools->addWidget(_tuning);
     _transpose = new QSpinBox;
     _transpose->setRange(-24, 24);
     _transpose->setPrefix(tr("移调 "));
     _transpose->setSuffix(tr(" 半音"));
     _transpose->setValue(QSettings().value("spectrum/transpose", 0).toInt());
     _transpose->setToolTip(tr("将选出的音名移调后标注和输入；录音频率保持原值"));
-    tools->addWidget(_transpose, 1, 4);
+    tools->addWidget(_transpose);
     _harmonics = button(tr("谐波参考"), 1, 5, [this] {
         _canvas->update();
         _editor->updateSurfaces();
@@ -226,9 +237,9 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     inputButton->setEnabled(false);
     inputButton->setToolTip(
         tr("把选中的音高按当前输入位置、声部和时值写入；多个音高组成和弦。Ctrl+Z 撤销。"));
-    for (int row = 0; row < 2; ++row)
-        for (int col = 0; col < 7; ++col)
-            _controls.append(tools->itemAtPosition(row, col)->widget());
+    _controls = {referenceButton, _tracks, _clips, _display, _preset, _tool,
+                 cacheButton, _play, _loop, speedControl, _tuning, _transpose,
+                 _harmonics, inputButton};
     auto displayButton = button(tr("频谱设置"), 2, 0, [this] {
         _displayPanel->setVisible(!_displayPanel->isVisible());
         QSettings().setValue("spectrum/displayControls", _displayPanel->isVisible());
@@ -283,11 +294,16 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _controls = {primary[0],  primary[1],    primary[2], primary[7],  primary[8],  primary[3], primary[5],
                  primary[13], displayButton, primary[9], primary[10], primary[11], primary[12]};
     for (auto control : _controls) {
-        control->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        control->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
         control->setMinimumWidth(0);
     }
-    _columns = 0;
-    resizeEvent(nullptr);
+    speedControl->setFixedWidth(224);
+    for (auto box : {_tracks, _clips}) {
+        box->setMinimumWidth(140);
+        box->setMaximumWidth(240);
+    }
+    for (auto control : _controls)
+        tools->addWidget(control);
 
     _displayPanel = new QScrollArea;
     _displayPanel->setObjectName("spectrumOptionsScroll");
@@ -422,6 +438,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
         const auto previousTrack = _track.value("id");
         const auto previousClip = _clip;
         _track = index >= 0 && index < tracks.size() ? tracks[index].toMap() : QVariantMap();
+        _clips->setEnabled(!_track.isEmpty());
         if (index >= 0 && index < tracks.size() && _media->property("selectedTrack").toInt() != index)
             _media->setProperty("selectedTrack", index);
         const auto path = _track.value("path").toString();
@@ -818,28 +835,34 @@ void SpectrumPane::refreshTracks() {
         ids.append(value.toMap().value("id").toString());
     QStringList old;
     for (int i = 0; i < _tracks->count(); ++i)
-        old.append(_tracks->itemData(i).toString());
+        if (!_tracks->itemData(i).toString().isEmpty())
+            old.append(_tracks->itemData(i).toString());
     const int wanted =
         tracks.isEmpty() ? -1 : qBound(0, _media->property("selectedTrack").toInt(), tracks.size() - 1);
-    if (ids == old && _tracks->currentIndex() == wanted && (wanted < 0 || tracks[wanted].toMap() == _track))
+    const int displayedIndex = tracks.isEmpty() ? 0 : wanted;
+    if (ids == old && _tracks->currentIndex() == displayedIndex &&
+        (wanted < 0 ? _track.isEmpty() : tracks[wanted].toMap() == _track))
         return;
     QString selected = wanted < 0 ? QString() : tracks[wanted].toMap().value("id").toString();
     {
         QSignalBlocker block(_tracks);
         _tracks->clear();
+        if (tracks.isEmpty())
+            _tracks->addItem(tr("先打开音频"), QString());
         for (auto value : tracks) {
             auto t = value.toMap();
             _tracks->addItem(t.value("name").toString(), t.value("id"));
         }
     }
+    _tracks->setEnabled(!tracks.isEmpty());
     int index = _tracks->findData(selected);
     if (index < 0)
         index = qBound(0, _media->property("selectedTrack").toInt(), qMax(0, _tracks->count() - 1));
     {
         QSignalBlocker block(_tracks);
-        _tracks->setCurrentIndex(tracks.isEmpty() ? -1 : index);
+        _tracks->setCurrentIndex(tracks.isEmpty() ? 0 : index);
     }
-    QMetaObject::invokeMethod(_tracks, "currentIndexChanged", Q_ARG(int, _tracks->currentIndex()));
+    QMetaObject::invokeMethod(_tracks, "currentIndexChanged", Q_ARG(int, tracks.isEmpty() ? -1 : _tracks->currentIndex()));
 }
 void SpectrumPane::audioChanged() {
     _play->setEnabled(!_path.isEmpty() && _audio->property("duration").toDouble() > 0);
@@ -970,24 +993,6 @@ void SpectrumPane::projectChanged() {
         _editor->_noteCanvas->update();
     }
 }
-void SpectrumPane::resizeEvent(QResizeEvent *) {
-    if (!_tools || _controls.isEmpty())
-        return;
-    const int columns = width() >= 1200  ? 7
-                        : width() >= 900 ? 5
-                        : width() >= 650 ? 4
-                        : width() >= 450 ? 3
-                                         : 2;
-    if (columns == _columns)
-        return;
-    _columns = columns;
-    for (int col = 0; col < _tools->columnCount(); ++col)
-        _tools->setColumnStretch(col, col < columns ? 1 : 0);
-    for (auto widget : _controls)
-        _tools->removeWidget(widget);
-    for (int i = 0; i < _controls.size(); ++i)
-        _tools->addWidget(_controls[i], i / columns, i % columns);
-}
 void SpectrumPane::showEvent(QShowEvent *) {
     ensureSessions();
     refreshTracks();
@@ -999,6 +1004,9 @@ void SpectrumPane::showEvent(QShowEvent *) {
     viewChanged();
 }
 void SpectrumPane::hideEvent(QHideEvent *) {
+    for (auto owner = static_cast<QWidget*>(this); owner; owner = owner->parentWidget())
+        if (owner->property("kumoAreaMoving").toBool() || owner->property("kumoWindowTransition").toBool())
+            return;
     _drawingMark = false;
     _listenTimer.stop();
     _requestTimer.stop();
@@ -1156,6 +1164,7 @@ void SpectrumPane::paint(QPainter &p, const QRectF &bounds, bool overlay) {
     if (!overlay) {
         p.fillRect(QRectF(0, 0, gutter, bounds.height()), palette().window());
         const double row = bounds.height() / (_high - _low), top = _high - .5;
+        QVector<QPair<int, QRectF>> labels;
         p.save();
         p.setClipRect(QRectF(0, 0, gutter, bounds.height()));
         for (bool black : {false, true})
@@ -1171,17 +1180,27 @@ void SpectrumPane::paint(QPainter &p, const QRectF &bounds, bool overlay) {
                 else
                     p.setPen(QColor(black ? "#161616" : "#777777"));
                 p.drawPolygon(shape);
-                if (row >= 10 || shown % 12 == 0) {
-                    auto font = p.font();
-                    font.setPixelSize(qBound(7, int(row * .82), 12));
-                    p.setFont(font);
-                    p.setPen(QColor(black ? "#ededed" : "#292929"));
-                    const double h = qMax(row, double(p.fontMetrics().height() + 2));
-                    p.drawText(QRectF(black ? 2 : gutter * .58 + 2, shape.boundingRect().center().y() - h / 2,
-                                      gutter * (black ? .58 : .42) - 4, h),
-                               Qt::AlignCenter, pitchName(shown));
-                }
+                if (row >= 10 || shown % 12 == 0)
+                    labels.append(qMakePair(shown, shape.boundingRect()));
             }
+        // Adjacent keys can cover text at small row heights. Finish the key
+        // shapes first, then center labels in the visible part of each key.
+        auto font = p.font();
+        font.setPixelSize(qBound(7, int(row * .82), 12));
+        p.setFont(font);
+        const double labelHeight = qMax(row, double(p.fontMetrics().height() + 2));
+        for (const auto &label : labels) {
+            const double center = label.second.center().y();
+            if (center < 0 || center > bounds.height())
+                continue;
+            const bool black = PerformanceKeyboard::isBlack(label.first);
+            p.setPen(QColor(black ? "#ededed" : "#292929"));
+            const double y = qBound(0., center - labelHeight / 2,
+                                    qMax(0., bounds.height() - labelHeight));
+            p.drawText(QRectF(black ? 2 : gutter * .58 + 2, y,
+                              gutter * (black ? .58 : .42) - 4, labelHeight),
+                       Qt::AlignCenter, pitchName(label.first));
+        }
         p.restore();
     }
     p.setClipRect(bounds.adjusted(gutter, 0, -PerformanceViewport::rightMargin, 0));

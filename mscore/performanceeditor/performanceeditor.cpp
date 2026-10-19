@@ -48,6 +48,7 @@
 #include <QResizeEvent>
 #include <QComboBox>
 #include <QCheckBox>
+#include <QTabBar>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollBar>
@@ -88,9 +89,18 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       auto layout = new QVBoxLayout(this);
       layout->setSizeConstraint(QLayout::SetNoConstraint);
       layout->setContentsMargins(6, 4, 6, 4);
-      auto row = new QGridLayout; _topRow = row;
+      auto toolHost = new QWidget(this);
+      toolHost->setObjectName("performanceToolbarContent");
+      auto toolLayout = new QVBoxLayout(toolHost);
+      toolLayout->setContentsMargins(0, 0, 0, 0);
+      toolLayout->setSpacing(4);
+      auto toolbar = new ControlScrollArea(this);
+      toolbar->setObjectName("performanceControlScroll");
+      toolbar->setWidget(toolHost);
+      layout->addWidget(toolbar);
+      auto row = new ControlFlowLayout; _topRow = row;
       auto combo = [this, row](const QStringList& labels, const char* name) {
-            auto box = new QComboBox(this); box->addItems(labels); box->setObjectName(name); row->addWidget(box, row->count() / 5, row->count() % 5); return box;
+            auto box = new QComboBox(this); box->addItems(labels); box->setObjectName(name); row->addWidget(box); return box;
             };
       _parameter = combo({tr("力度"), tr("速度 · 阶梯"), tr("延音踏板")}, "performanceParameter");
       _axis = combo({tr("MIDI 力度"), tr("相对 %")}, "performanceAxis");
@@ -110,10 +120,10 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             auto action = voiceMenu->addAction(scope == 0 ? tr("选择这些声部：时间选区／当前视窗") : (scope == 1 ? tr("选择这些声部：当前视窗") : tr("选择这些声部：全曲")));
             connect(action, &QAction::triggered, this, [this, scope] { selectVoices(scope); });
             }
-      row->addWidget(voiceButton, row->count() / 5, row->count() % 5);
+      row->addWidget(voiceButton);
       auto staffButton = new QToolButton(this); staffButton->setText(tr("谱表…")); staffButton->setObjectName("performanceStaffFilter"); staffButton->setPopupMode(QToolButton::InstantPopup);
       staffButton->setToolTip(tr("在上方的当前乐器／当前谱表／全谱范围内筛选谱表；过滤保留原选择，只限制新编辑。"));
-      _staffMenu = new QMenu(staffButton); staffButton->setMenu(_staffMenu); row->addWidget(staffButton, row->count() / 5, row->count() % 5);
+      _staffMenu = new QMenu(staffButton); staffButton->setMenu(_staffMenu); row->addWidget(staffButton);
       connect(_staffMenu, &QMenu::aboutToShow, this, &PerformanceEditor::rebuildStaffMenu);
       _tool = combo({tr("拖动"), tr("铅笔"), tr("直线")}, "performanceTool");
       _pedalGrid = combo({tr("踏板 1/16"), tr("踏板 1/32"), tr("踏板 1/64"), tr("踏板 1/128"), tr("踏板自由"), tr("踏板音符边界")}, "performancePedalGrid");
@@ -121,38 +131,38 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _pedalGrid->setToolTip(tr("按小节起点吸附细分；自由模式精确到 1 tick。不会添加音符或休止。"));
       connect(_pedalGrid, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int value) { cancelGesture(); QSettings().setValue("performanceEditor/pedalGrid", value); });
       row->setAlignment(Qt::AlignLeft);
-      layout->addLayout(row);
+      toolLayout->addLayout(row);
       _playButton = new QToolButton(this); _playButton->setObjectName("performancePlay"); _playButton->setText(tr("▶ 播放"));
-      _playButton->setToolTip(tr("从当前播放光标开始／停止（空格）")); connect(_playButton, &QToolButton::clicked, this, [this] { togglePlayback(); }); row->addWidget(_playButton, 0, row->count());
+      _playButton->setToolTip(tr("从当前播放光标开始／停止（空格）")); connect(_playButton, &QToolButton::clicked, this, [this] { togglePlayback(); }); row->addWidget(_playButton);
       auto locate = new QToolButton(this); locate->setObjectName("performanceLocateSelection"); locate->setText(tr("移至选音"));
-      locate->setToolTip(tr("把播放光标移到最近选中的音；双击音符可从该处播放。")); connect(locate, &QToolButton::clicked, this, &PerformanceEditor::locateSelection); row->addWidget(locate, 0, row->count());
+      locate->setToolTip(tr("把播放光标移到最近选中的音；双击音符可从该处播放。")); connect(locate, &QToolButton::clicked, this, &PerformanceEditor::locateSelection); row->addWidget(locate);
       _auditionButton = new QToolButton(this); _auditionButton->setObjectName("performanceAudition"); _auditionButton->setText(tr("试听")); _auditionButton->setCheckable(true);
       _auditionButton->setChecked(QSettings().value("performanceEditor/audition", true).toBool()); _auditionButton->setToolTip(tr("停播时点选音符／力度端点发声，不移动播放位置。"));
-      connect(_auditionButton, &QToolButton::toggled, this, [](bool on) { QSettings().setValue("performanceEditor/audition", on); }); row->addWidget(_auditionButton, 0, row->count());
+      connect(_auditionButton, &QToolButton::toggled, this, [](bool on) { QSettings().setValue("performanceEditor/audition", on); }); row->addWidget(_auditionButton);
       _wheelButton = new QToolButton(this); _wheelButton->setObjectName("performanceWheelVelocity");
       _wheelButton->setText(tr("滚轮调力度")); _wheelButton->setCheckable(true);
       _wheelButton->setChecked(QSettings().value("performanceEditor/wheelVelocity", false).toBool());
       _wheelButton->setToolTip(tr("指向音符／力度柱／音旁手柄滚轮细调 1，Shift 粗调 8。编辑器 Alt+滚轮临时调节；谱面开启此模式后直接指向未选音头。Alt 保留谱面移动，Ctrl 仍缩放。只改指向的一个音，停转 300 ms 合并一次撤销，Esc 取消。"));
       connect(_wheelButton, &QToolButton::toggled, this, [this](bool on) { finishWheel(); QSettings().setValue("performanceEditor/wheelVelocity", on); syncOverlayTracking(); invalidateOverlay(); });
-      row->addWidget(_wheelButton, 0, row->count());
+      row->addWidget(_wheelButton);
       _wheelTimer.setParent(this); _wheelTimer.setSingleShot(true); _wheelTimer.setInterval(300); _wheelTimer.setObjectName("performanceWheelTimer");
       connect(&_wheelTimer, &QTimer::timeout, this, [this] { finishWheel(); });
-      auto second = new QGridLayout; _actionsRow = second;
+      auto second = new ControlFlowLayout; _actionsRow = second;
       auto button = [this, second](const QString& label, auto callback) {
-            auto result = new QPushButton(label, this); second->addWidget(result, second->count() / 6, second->count() % 6); connect(result, &QPushButton::clicked, this, callback); return result;
+            auto result = new QPushButton(label, this); second->addWidget(result); connect(result, &QPushButton::clicked, this, callback); return result;
             };
-      _handles = new QCheckBox(tr("音旁手柄"), this); second->addWidget(_handles, second->count() / 6, second->count() % 6);
-      _band = new QCheckBox(tr("谱行参数带"), this); second->addWidget(_band, second->count() / 6, second->count() % 6);
+      _handles = new QCheckBox(tr("音旁手柄"), this); second->addWidget(_handles);
+      _band = new QCheckBox(tr("谱行参数带"), this); second->addWidget(_band);
       _band->setObjectName("performanceScoreBand");
       button(tr("跟随力度记号"), [this] { convertSelected(Note::ValueType::OFFSET_VAL); })->setObjectName("performanceConvertRelative");
       button(tr("固定这个音的力度"), [this] { convertSelected(Note::ValueType::USER_VAL); })->setObjectName("performanceConvertAbsolute");
-      _number = new QDoubleSpinBox(this); _number->setObjectName("performanceValue"); _number->setRange(1, 127); _number->setDecimals(0); second->addWidget(_number, second->count() / 6, second->count() % 6);
+      _number = new QDoubleSpinBox(this); _number->setObjectName("performanceValue"); _number->setRange(1, 127); _number->setDecimals(0); second->addWidget(_number);
       button(tr("写入选中"), [this] { setSelectedValue(_number->value()); })->setObjectName("performanceWriteValue");
       button(tr("全曲"), [this] { fit(); });
       button(tr("选区"), [this] { fit(true); });
       button(tr("取消预览"), [this] { cancelWheel(); cancelGesture(); _pending.clear(); _propertyPending.clear(); status(); updateSurfaces(); if (_view) _view->update(); })->setObjectName("performanceCancelPreview");
       auto viewControls = new QToolButton(this); viewControls->setText(tr("视窗…")); viewControls->setPopupMode(QToolButton::InstantPopup);
-      auto viewMenu = new QMenu(viewControls); viewControls->setMenu(viewMenu); second->addWidget(viewControls, second->count() / 6, second->count() % 6);
+      auto viewMenu = new QMenu(viewControls); viewControls->setMenu(viewMenu); second->addWidget(viewControls);
       auto viewAction = [this, viewMenu](const QString& label, auto callback) { auto action = viewMenu->addAction(label); connect(action, &QAction::triggered, this, callback); };
       viewAction(tr("音域"), [this] { centerPitch(); });
       viewAction(tr("定位选音"), [this] { centerPitch(true); });
@@ -194,12 +204,12 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       auto appearanceAction = displayMenu->addAction(tr("配色／力度柱宽…")); appearanceAction->setObjectName("performanceAppearance");
       connect(appearanceAction, &QAction::triggered, this, [this] { if (_appearance.edit(this)) { applyAppearance(); invalidateVisual(); if (_view) _view->update(); } });
       connect(displayMenu->addAction(tr("REAPER 默认力度色")), &QAction::triggered, this, [this] { _appearance = PerformanceAppearance(); _appearance.save(); applyAppearance(); invalidateVisual(); if (_view) _view->update(); });
-      second->addWidget(appearance, second->count() / 6, second->count() % 6);
+      second->addWidget(appearance);
       _followButton = new QToolButton(this); _followButton->setText(tr("跟随播放")); _followButton->setToolTip(tr("手动浏览后暂停跟随；单击恢复，下一次开始播放也会恢复。")); _followButton->setCheckable(true); _followButton->setChecked(true);
       connect(_followButton, &QToolButton::clicked, this, [this] { _following = true; _followButton->setChecked(true); updatePlayhead(); });
-      second->addWidget(_followButton, second->count() / 6, second->count() % 6);
+      second->addWidget(_followButton);
       second->setAlignment(Qt::AlignLeft);
-      layout->addLayout(second);
+      toolLayout->addLayout(second);
       _splitter = new QSplitter(Qt::Vertical, this); _splitter->setObjectName("performanceMainSplitter"); _splitter->setChildrenCollapsible(false);
       auto noteArea = new QWidget(_splitter); noteArea->setObjectName("performanceNotesArea"); auto noteLayout = new QVBoxLayout(noteArea); noteLayout->setContentsMargins(0, 0, 0, 0); noteLayout->setSpacing(0);
       auto paneControls = [this](QVBoxLayout* parent, bool notes) {
@@ -241,10 +251,10 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       connect(_splitter, &QSplitter::splitterMoved, this, [this] { QSettings().setValue("performanceEditor/splitter", _splitter->saveState()); });
       _scroll = new QScrollBar(Qt::Horizontal, this); layout->addWidget(_scroll);
       addWorkflowLanes(this,&_workflowPanel,_splitter);_splitter->addWidget(_workflowPanel);_workflowPanel->hide();
-      auto workflowButton=new QToolButton(this);workflowButton->setObjectName("performanceWorkflowToggle");workflowButton->setText(tr("音轨／演奏对应"));workflowButton->setCheckable(true);second->addWidget(workflowButton,second->count()/6,second->count()%6);
+      auto workflowButton=new QToolButton(this);workflowButton->setObjectName("performanceWorkflowToggle");workflowButton->setText(tr("音轨／演奏对应"));workflowButton->setCheckable(true);second->addWidget(workflowButton);
       connect(workflowButton,&QToolButton::toggled,this,[this](bool show){setEditorAreaVisible(this,"performanceWorkflowPanel",show);});
       _splitter->restoreState(QSettings().value("performanceEditor/splitter").toByteArray());
-      auto areas=new QToolButton(this);areas->setText(tr("区域"));areas->setObjectName("performanceAreaMenu");areas->setPopupMode(QToolButton::InstantPopup);auto areaMenu=new QMenu(areas);areas->setMenu(areaMenu);second->addWidget(areas,second->count()/6,second->count()%6);
+      auto areas=new QToolButton(this);areas->setText(tr("区域"));areas->setObjectName("performanceAreaMenu");areas->setPopupMode(QToolButton::InstantPopup);auto areaMenu=new QMenu(areas);areas->setMenu(areaMenu);second->addWidget(areas);
       for(auto item:QList<QPair<QString,QWidget*>>{{tr("钢琴卷帘"),noteArea},{tr("力度／速度／踏板"),parameterArea},{tr("音轨／演奏对应"),_workflowPanel}}){auto action=areaMenu->addAction(item.first);action->setCheckable(true);action->setChecked(!item.second->isHidden());connect(action,&QAction::toggled,this,[this,item,workflowButton](bool on){if(item.second==_workflowPanel){workflowButton->setChecked(on);return;}QSettings().setValue("performanceEditor/area/"+item.second->objectName(),on);item.second->setVisible(on);if(on){auto sizes=_splitter->sizes();int n=_splitter->indexOf(item.second);if(n>=0&&sizes[n]<40){sizes[n]=140;_splitter->setSizes(sizes);}}updateGeometry();});connect(areaMenu,&QMenu::aboutToShow,action,[item,action]{QSignalBlocker block(action);action->setChecked(!item.second->isHidden());});}
       auto restoreAreas=areaMenu->addAction(tr("恢复区域高度"));connect(restoreAreas,&QAction::triggered,this,[this]{_splitter->setSizes({150,130,180});});
       noteArea->setVisible(QSettings().value("performanceEditor/area/performanceNotesArea",true).toBool());parameterArea->setVisible(QSettings().value("performanceEditor/area/performanceParametersArea",true).toBool());
@@ -255,6 +265,20 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       installRhythmPane(this,_splitter);
 #endif
       installEditorAreas(this,_splitter,areaMenu);
+#ifdef SCRIPT_INTERFACE
+      if (auto tabs = findChild<QTabBar*>("workflowExpressionTabs")) {
+            second->removeWidget(areas);
+            auto heading = new QWidget(this);
+            auto headingLayout = new QHBoxLayout(heading);
+            headingLayout->setContentsMargins(0, 0, 0, 0);
+            layout->removeWidget(tabs);
+            headingLayout->addWidget(tabs, 1);
+            headingLayout->addWidget(areas);
+            layout->insertWidget(0, heading);
+            connect(tabs, &QTabBar::currentChanged, toolbar, [toolbar](int page) { toolbar->setVisible(page != 3); });
+            toolbar->setVisible(tabs->currentIndex() != 3);
+      }
+#endif
       _status = new QLabel(this); _status->setWordWrap(true); layout->addWidget(_status);
       _refreshTimer.setSingleShot(true);
       connect(&_refreshTimer, &QTimer::timeout, this, &PerformanceEditor::refresh);
@@ -286,7 +310,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             _number->setRange(velocity ? (rangeKind()==1 ? NoteVelocity::minOffset : 1) : 5,
                   velocity ? (rangeKind()==1 ? NoteVelocity::maxOffset : 127) : 999);
             _number->setDecimals(velocity ? 0 : 2);
-            resizeEvent(nullptr); updateSelection(); status(); invalidateVisual(); if (_view) _view->update();
+            if (this->layout()) this->layout()->invalidate(); updateSelection(); status(); invalidateVisual(); if (_view) _view->update();
             });
       for (auto box : {_handles, _band}) connect(box, &QCheckBox::toggled, this, [this] { cancelGesture(); syncOverlayTracking(); if (_view) _view->update(); });
       connect(_band, &QCheckBox::toggled, this, [this](bool enabled) { emit scoreBandChanged(enabled); scheduleRefresh(); syncTransport(); });
@@ -301,33 +325,13 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _moveTimer.setSingleShot(true); _moveTimer.setInterval(16);
       connect(&_moveTimer, &QTimer::timeout, this, &PerformanceEditor::drainGesture);
       setupUsabilityControls();setupExpressionComparison();
-      _toolbarReady = true; resizeEvent(nullptr); applyAppearance(); status();
+      applyAppearance(); status();
       }
 
-void PerformanceEditor::resizeEvent(QResizeEvent*)
+void PerformanceEditor::resizeEvent(QResizeEvent* event)
       {
-      if (!_toolbarReady || _toolbarReflowing) return;
-      _toolbarReflowing = true;
-      int bar = 0;
-      for (auto grid : {_topRow, _actionsRow}) {
-            auto& widgets = _toolbarWidgets[bar++];
-            if (!grid) continue;
-            const bool rememberOrder = widgets.isEmpty();
-            while (auto item = grid->takeAt(0)) { if (rememberOrder && item->widget()) widgets.append(item->widget()); delete item; }
-            // Pack using each control's width. One long caption must not give
-            // every button the same large cell and push the score out of view.
-            for(int column=0;column<grid->columnCount();++column){grid->setColumnMinimumWidth(column,0);grid->setColumnStretch(column,0);}
-            grid->setHorizontalSpacing(0);const int unit=8,columns=qMax(1,(width()-12)/unit);int row=0,column=0;
-            for(auto widget:widgets)if(!widget->isHidden()){
-                  const int span=qBound(1,(widget->minimumSizeHint().width()+13)/unit,columns);
-                  if(column&&column+span>columns){++row;column=0;}
-                  grid->addWidget(widget,row,column,1,span,Qt::AlignLeft);column+=span;
-                  }
-            for(int c=0;c<columns;++c)grid->setColumnMinimumWidth(c,unit);
-            }
-      if (layout()) layout()->activate();
-      ensureEditorAreas(_splitter);
-      _toolbarReflowing = false;
+      QWidget::resizeEvent(event);
+      // Layouts handle wrapping. A window resize preserves the split areas.
       }
 
 PerformanceEditor::~PerformanceEditor()

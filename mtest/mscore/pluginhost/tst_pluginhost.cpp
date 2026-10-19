@@ -31,6 +31,8 @@
 #include "mscore/workflow/featuregate.h"
 #include "mscore/workflow/workspaceviews.h"
 #include "mscore/workflow/editorareas.h"
+#include "mscore/workflow/referencepanel.h"
+#include "mscore/workflow/regionalpanel.h"
 #include "mscore/workflow/aiconnection.h"
 #include "mscore/workflow/referencefactory.h"
 #include "mscore/workflow/workflowcontext.h"
@@ -112,6 +114,13 @@ class TestPluginHost : public QObject {
       Q_OBJECT
       QTemporaryDir _settings;
    private slots:
+      void contentWidthControlsWrapWithoutOverlap();
+      void restoredWorkspaceKeepsPersonalTools();
+      void vstFirstUseControls();
+      void toolWindowScreenAndFullscreenRoundTrip();
+      void spectrumButtonsAndFirstOpenContent();
+      void cfxLiveStateKeepsEditorInstance();
+      void personalToolWindowsRemainIndependent();
       void metronomeFontCompatibility() {
             QVERIFY(QFontDatabase().families().contains("Metronome Text 3"));
             auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);
@@ -538,7 +547,17 @@ class TestPluginHost : public QObject {
             main->showPerformanceEditor(true);auto editor=main->performanceEditor();auto tabs=editor->findChild<QTabBar*>("workflowExpressionTabs");QVERIFY(tabs);QVERIFY(tabs->count()>=4);tabs->setCurrentIndex(2);QTest::qWait(150);
             auto pane=editor->findChild<QWidget*>("transcriptionSpectrumPane");QVERIFY(pane&&pane->isVisible());auto session=pane->findChild<QObject*>("transcriptionSpectrumSession");QVERIFY(session);QVERIFY(session->property("available").toBool());
             QTRY_VERIFY_WITH_TIMEOUT(!qvariant_cast<QImage>(session->property("image")).isNull(),10000);
-            auto playback=pane->findChild<QToolButton*>("transcriptionPlay");QVERIFY(playback);QTRY_VERIFY(playback->isEnabled());const auto oldVolume=media->property("volume");media->setProperty("volume",0.);QSignalSpy playbackChanged(media,SIGNAL(changed()));QTest::mouseClick(playback,Qt::LeftButton);QVERIFY(playbackChanged.count()>0);QTRY_VERIFY_WITH_TIMEOUT(!media->property("playing").toBool()||media->property("diagnostics").toMap().value("outputFrames").toLongLong()>0,4000);if(media->property("playing").toBool())QTest::mouseClick(playback,Qt::LeftButton);QTRY_VERIFY(!media->property("playing").toBool());media->setProperty("volume",oldVolume);
+            auto playback=pane->findChild<QToolButton*>("transcriptionPlay");QVERIFY(playback);QTRY_VERIFY(playback->isEnabled());const auto oldVolume=media->property("volume");media->setProperty("volume",0.);QSignalSpy playbackChanged(media,SIGNAL(changed()));QTest::mouseClick(playback,Qt::LeftButton);QVERIFY(playbackChanged.count()>0);QTRY_VERIFY_WITH_TIMEOUT(!media->property("playing").toBool()||media->property("diagnostics").toMap().value("outputFrames").toLongLong()>0,4000);if(media->property("playing").toBool()) {
+                editor->findChild<QAction*>("editorArea/float/transcriptionSpectrumPane")->trigger();
+                auto floating = main->findChild<QDockWidget*>("kumoEditorArea/transcriptionSpectrumPane");QVERIFY(floating);
+                QTRY_VERIFY(floating->isVisible());QVERIFY(media->property("playing").toBool());
+                auto full = floating->findChild<QAction*>("kumoPanelFullscreen");QVERIFY(full);
+                full->trigger();QTest::qWait(30);QVERIFY(media->property("playing").toBool());
+                full->trigger();QTest::qWait(30);QVERIFY(media->property("playing").toBool());
+                editor->findChild<QAction*>("editorArea/restore/transcriptionSpectrumPane")->trigger();
+                QTest::qWait(30);QVERIFY(media->property("playing").toBool());
+                QTest::mouseClick(playback,Qt::LeftButton);
+            }QTRY_VERIFY(!media->property("playing").toBool());media->setProperty("volume",oldVolume);
             auto canvas=pane->findChild<QWidget*>("transcriptionSpectrumCanvas");QVERIFY(canvas);auto piano=canvas->grab().toImage();int white=0,black=0;for(int y=0;y<piano.height();++y){auto color=piano.pixelColor(20,y);if(color.lightness()>200)++white;if(color.lightness()<40)++black;}QVERIFY(white>piano.height()/8);QVERIFY(black>piano.height()/8);auto mark=pane->findChild<QToolButton*>("transcriptionMark");auto input=pane->findChild<QToolButton*>("transcriptionInput");QVERIFY(mark&&input);
             auto sharedPlan=media->property("workflowPlaybackPlan").toMap();sharedPlan["owner"]="reference-panel";sharedPlan["volume"]=0.;QVERIFY(QMetaObject::invokeMethod(media,"start",Q_RETURN_ARG(QVariantMap,response),Q_ARG(QVariantMap,sharedPlan)));QVERIFY(!response.contains("error"));QTRY_VERIFY(playback->text().contains(QString::fromUtf8("暂停")));QTest::keyClick(canvas,Qt::Key_Space);QTRY_VERIFY(!media->property("playing").toBool());media->setProperty("volume",oldVolume);
             auto rest=score->findCR(Fraction(),0);QVERIFY(rest&&rest->isRest());score->select(rest);main->currentScoreView()->cmd("note-input");score->inputState().setDuration(TDuration(TDuration::DurationType::V_QUARTER));
@@ -546,7 +565,8 @@ class TestPluginHost : public QObject {
             QTest::mouseMove(canvas,QPoint(canvas->width()-20,canvas->height()-2));const int before=score->undoStack()->getCurIdx();QTest::mouseClick(mark,Qt::LeftButton);QTRY_COMPARE(score->undoStack()->getCurIdx(),before+1);
             const auto saved=QJsonDocument::fromJson(score->masterScore()->metaTag("kumo.transcription").toUtf8()).toVariant().toMap();QCOMPARE(saved.value("pitches").toList().size(),1);QCOMPARE(saved.value("pitches").toList().front().toMap().value("pitch").toInt(),69);
             auto marks=pane->findChild<QListWidget*>("transcriptionMarks");QVERIFY(marks&&marks->count()==1);marks->item(0)->setSelected(true);QTest::mouseClick(input,Qt::LeftButton);QTRY_COMPARE(score->undoStack()->getCurIdx(),before+2);auto chord=score->findCR(Fraction(),0);QVERIFY(chord&&chord->isChord());QCOMPARE(toChord(chord)->notes().front()->pitch(),69);
-            Shortcut::load();for(const char* key:{"undo","redo"}){auto shortcut=Shortcut::getShortcut(key);shortcut->setStandardKey(shortcut->standardKey());}QVERIFY(!getAction("undo")->shortcut().isEmpty());main->activateWindow();canvas->setFocus();QTest::keySequence(canvas,getAction("undo")->shortcut());QTRY_VERIFY(score->findCR(Fraction(),0)->isRest());QTest::keySequence(canvas,getAction("undo")->shortcut());QTRY_VERIFY(score->masterScore()->metaTag("kumo.transcription").isEmpty());QTRY_COMPARE(marks->count(),0);QTest::keySequence(canvas,getAction("redo")->shortcut());QTest::keySequence(canvas,getAction("redo")->shortcut());QTRY_VERIFY(score->findCR(Fraction(),0)->isChord());
+            Shortcut::load();for(const char* key:{"undo","redo"}){auto shortcut=Shortcut::getShortcut(key);shortcut->setStandardKey(shortcut->standardKey());}QVERIFY(!getAction("undo")->shortcut().isEmpty());main->activateWindow();
+            canvas->setFocus();QTest::keySequence(canvas,getAction("undo")->shortcut());QTRY_VERIFY(score->findCR(Fraction(),0)->isRest());QTest::keySequence(canvas,getAction("undo")->shortcut());QTRY_VERIFY(score->masterScore()->metaTag("kumo.transcription").isEmpty());QTRY_COMPARE(marks->count(),0);QTest::keySequence(canvas,getAction("redo")->shortcut());QTest::keySequence(canvas,getAction("redo")->shortcut());QTRY_VERIFY(score->findCR(Fraction(),0)->isChord());
             QFileInfo info(_settings.filePath("spectral-mark.mscz"));QVERIFY(score->saveCompressedFile(info,false,false));std::unique_ptr<MasterScore> restored(main->readScore(info.absoluteFilePath()));QVERIFY(restored);QCOMPARE(restored->metaTag("kumo.transcription"),score->masterScore()->metaTag("kumo.transcription"));
             const auto out=QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path()));
             QFile savedInput(info.absoluteFilePath());QVERIFY(savedInput.open(QIODevice::ReadOnly));QFile savedOutput(out.filePath("transcription-compat-059.mscz"));QVERIFY(savedOutput.open(QIODevice::WriteOnly));QCOMPARE(savedOutput.write(savedInput.readAll()),savedInput.size());savedOutput.close();
@@ -1215,5 +1235,6 @@ class TestPluginHost : public QObject {
             main->hide();
             }
       };
+#include "usability_072_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

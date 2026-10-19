@@ -8,6 +8,7 @@ namespace VstHost {
 class Vst2Editor final : public QWidget {
   QTimer idle;
   std::function<void()> detach;
+  void showEvent(QShowEvent *) override;
 
 public:
   Vst2Editor(QWidget *, std::function<void()> onIdle,

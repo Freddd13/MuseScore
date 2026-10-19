@@ -428,6 +428,7 @@ public:
     uiTimer->start(40);
     return true;
   }
+  bool editorVisible() const override { return editor && editor->isVisible(); }
   void closeEditor() override {
     if (uiTimer)
       uiTimer->stop();

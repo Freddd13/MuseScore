@@ -26,13 +26,13 @@ void PerformanceEditor::setupExpressionComparison()
       _comparisonButton=new QToolButton(this);_comparisonButton->setObjectName("performanceExpressionCompare");
       _comparisonButton->setText(tr("演奏前后对比"));_comparisonButton->setCheckable(true);_comparisonButton->setChecked(true);_comparisonButton->hide();
       _comparisonButton->setToolTip(tr("左侧中性色柱为谱中力度，右侧强调色柱为拟采用力度。拖动强调色柱调整；点击使用力度保存到乐谱。"));
-      const int row=_actionsRow->rowCount();_actionsRow->addWidget(_comparisonButton,row,0);
+      _actionsRow->addWidget(_comparisonButton);
       _comparisonView=new QComboBox(this);_comparisonView->setObjectName("performanceComparisonView");
       _comparisonView->addItems({tr("同音对比"),tr("真实播放时间对比")});_comparisonView->hide();
       _comparisonView->setCurrentIndex(qBound(0,QSettings().value("performanceEditor/comparisonView",0).toInt(),1));
       _comparisonTime=_comparisonView->currentIndex()==1;
       _comparisonView->setToolTip(tr("同音对比把原、新力度放在同一个谱位。真实播放时间按两种效果各自的秒数排列，用来查看速度变化。"));
-      _actionsRow->addWidget(_comparisonView,row,1);
+      _actionsRow->addWidget(_comparisonView);
       connect(_comparisonView,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int mode){cancelComparisonDrag();const double center=_canvas->width()*.5;const int anchor=tickForX(center,false);_comparisonTime=mode==1;
             QSettings().setValue("performanceEditor/comparisonView",mode);surfaceResized(PerformanceSurface::Parameter);_scroll->setValue(qMax(0,leftTickForAnchor(anchor,center)));invalidateVisual();});
       connect(_comparisonButton,&QToolButton::toggled,this,[this]{cancelComparisonDrag();syncExpressionComparison();updateSelection();status(comparisonActive()?tr("调整拟采用效果 · 中性色为谱中值，强调色为预览值"):tr("继续编辑谱中效果"));});

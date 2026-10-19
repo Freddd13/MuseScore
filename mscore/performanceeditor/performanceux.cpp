@@ -50,7 +50,7 @@ void PerformanceEditor::setupUsabilityControls()
             ++_wheelFeedbackTicks;if(_wheelFeedbackTicks>=30){_wheelFeedbackTimer.stop();}
             if(_wheelFeedbackSurface){auto damage=wheelBadge(_wheelFeedbackSurface).adjusted(-3,-3,3,3);if(_wheelFeedbackSurface==_view)damage=damage.united(_view->matrix().mapRect(_wheelFeedbackHead).adjusted(-6,-6,6,6));_wheelFeedbackSurface->update(damage.toAlignedRect());}
             });
-      auto add=[this](QWidget* w){_topRow->addWidget(w,0,_topRow->count());};
+      auto add=[this](QWidget* w){_topRow->addWidget(w);};
       auto filters=new QToolButton(this); filters->setText(tr("谱表／声部")); filters->setObjectName("performanceTrackFilter");
       filters->setToolTip(tr("一张表选择可编辑的谱表和声部；编辑器、谱行带、音旁手柄同步使用。"));
       connect(filters,&QToolButton::clicked,this,&PerformanceEditor::showTrackFilter); add(filters);

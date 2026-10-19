@@ -1,6 +1,7 @@
 #ifndef MS_PERFORMANCEEDITOR_H
 #define MS_PERFORMANCEEDITOR_H
 #include <QWidget>
+#include "../workflow/controlflowlayout.h"
 #include <QPointer>
 #include <QTimer>
 #include <QVector>
@@ -275,9 +276,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QCheckBox *_handles, *_band;
       QDoubleSpinBox* _number;
       QScrollBar* _scroll = nullptr;
-      QGridLayout *_topRow = nullptr, *_actionsRow = nullptr;
-      bool _toolbarReady = false, _toolbarReflowing = false;
-      std::array<QVector<QWidget*>, 2> _toolbarWidgets;
+      ControlFlowLayout *_topRow = nullptr, *_actionsRow = nullptr;
       QTimer _refreshTimer, _commitTimer;
       ScoreContentState _state;
       bool _fitOnRefresh = true, _dirty = true, _committing = false, _dragging = false, _scoreGesture = false, _offsetDrag = false;

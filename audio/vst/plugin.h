@@ -94,6 +94,7 @@ public:
   virtual QString presetName() const = 0;
   virtual bool openEditor(QWidget *, QString *error) = 0;
   virtual void closeEditor() = 0;
+  virtual bool editorVisible() const { return false; }
   virtual bool importPreset(const QString &, QString *error);
   // Buffers and events are borrowed for this call. No host allocation or
   // waiting here.
@@ -107,6 +108,8 @@ public:
   std::function<void()> stateChanged;
 };
 std::unique_ptr<Plugin> createIsolated(const Descriptor &);
+bool sameConfiguration(const QVariantMap &, const QVariantMap &);
+void placeEditorOnScreen(QWidget *);
 QVariantList scanVst3(const QString &, QString *error);
 QVariantList scanVst2(const QString &, QString *error);
 std::unique_ptr<Plugin> createVst3(const Descriptor &, QString *error);

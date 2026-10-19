@@ -16,9 +16,10 @@ struct BridgePacket {
   std::array<Parameter, BridgeParameters> parameters{};
 };
 struct BridgeMemory {
-  quint32 protocol = 1;
+  quint32 protocol = 2;
   volatile LONG stop = 0;
   volatile LONG dirty = 0;
+  volatile LONG editorOpen = 0;
   std::array<BridgePacket, BridgeSlots> packets;
 };
 struct BridgeHandles {
@@ -47,7 +48,7 @@ struct BridgeHandles {
                                value.c_str());
     if (create && memory)
       new (memory) BridgeMemory;
-    return memory && request && done && memory->protocol == 1;
+    return memory && request && done && memory->protocol == 2;
   }
   ~BridgeHandles() {
     if (memory)

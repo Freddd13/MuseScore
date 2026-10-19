@@ -2,6 +2,7 @@
 #include "workspaceviews.h"
 #include "systemlocks.h"
 #include "editorareas.h"
+#include "panelwindowcontrols.h"
 #include "featuregate.h"
 #include "mscore/musescore.h"
 #include "mscore/performanceeditor/performanceeditor.h"
@@ -40,6 +41,7 @@ class WorkspaceViews : public QObject {
   void save() {
     if (!window || changing || !personalFeaturesEnabled())
       return;
+    finishToolFullscreen(window);
     if (auto editor = window->findChild<PerformanceEditor *>())
       saveEditorAreaLayout(editor);
     QSettings settings;
@@ -54,14 +56,14 @@ class WorkspaceViews : public QObject {
       if (button)
         button->setText(action->text());
   }
-  void showScore(bool visible) {
+  void showScore(bool visible, bool arrangeFirstTime = false) {
     if (!window || !window->centralWidget())
       return;
     window->centralWidget()->setVisible(visible);
     window->setProperty("kumoScoreComparison", visible);
     if (current == "daw") {
       QSettings().setValue(key("daw/showScore"), visible);
-      if (visible)
+      if (visible && arrangeFirstTime)
         QTimer::singleShot(0, this, [this] {
           if (!window || current != "daw" ||
               window->centralWidget()->isHidden())
@@ -111,7 +113,7 @@ public:
     markPersonalAction(scoreComparison);
     Workspace::addActionAndString(scoreComparison, "kumo-workspace-score");
     connect(scoreComparison, &QAction::triggered, this,
-            [this](bool shown) { showScore(shown); });
+            [this](bool shown) { showScore(shown, true); });
     connect(qApp, &QCoreApplication::aboutToQuit, this, [this] { save(); });
     QTimer::singleShot(0, this, [this] {
       const auto saved =
@@ -133,6 +135,25 @@ public:
   void addMenu(QMenu *target) {
     if (!target)
       return;
+    // readMenu creates a placeholder submenu from the saved identifier.
+    // Replace that entry with the existing shared menu and its live actions.
+    auto restored = Workspace::findMenuFromString("menu-kumo-workspace");
+    if (restored && restored != menu) {
+      for (auto action : restored->actions()) {
+        if (menu->actions().contains(action))
+          continue;
+        if (auto child = action->menu()) {
+          if (child->parent() == restored)
+            child->setParent(menu);
+        } else if (action->parent() == restored) {
+          action->setParent(menu);
+        }
+        menu->addAction(action);
+      }
+      target->removeAction(restored->menuAction());
+    }
+    menu->setTitle(tr("工作视图"));
+    Workspace::addMenuAndString(menu, "menu-kumo-workspace");
     if (!target->actions().contains(menu->menuAction()))
       target->addMenu(menu);
     if (window)
@@ -194,7 +215,13 @@ public:
       QSignalBlocker block(scoreComparison);
       scoreComparison->setChecked(visible);
     }
-    showScore(visible);
+    showScore(visible, state.isEmpty());
+    // Restore internal heights after the main window has restored dock sizes.
+    QTimer::singleShot(0, this, [this, mode] {
+      if (window && current == mode)
+        if (auto editor = window->findChild<PerformanceEditor*>())
+          settleEditorAreaLayout(editor);
+    });
     selected->setChecked(true);
     updateButtons();
     changing = false;
@@ -231,6 +258,16 @@ void addWorkspaceSelector(QToolBar *toolbar) {
   if (auto instance = controller(qobject_cast<MuseScore *>(
           toolbar ? toolbar->parentWidget() : nullptr)))
     instance->addButton(toolbar);
+}
+void finishToolFullscreen(QMainWindow *window) {
+  if (!window)
+    return;
+  for (auto dock : window->findChildren<QDockWidget*>())
+    if (auto action = dock->findChild<QAction*>("kumoPanelFullscreen"))
+      if (action->isChecked())
+        action->setChecked(false);
+  if (window->layout())
+    window->layout()->activate();
 }
 void ensureEditorAreas(QSplitter *splitter) {
   if (!splitter || splitter->height() < 40)
@@ -306,6 +343,7 @@ void addEditorDockActions(QDockWidget *dock) {
   if (!dock || dock->property("kumoDockActions").toBool())
     return;
   dock->setProperty("kumoDockActions", true);
+  auto windows = installPanelWindowControls(dock);
   const Qt::DockWidgetAreas areas =
       Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea | Qt::TopDockWidgetArea |
       Qt::BottomDockWidgetArea;
@@ -320,7 +358,9 @@ void addEditorDockActions(QDockWidget *dock) {
                                      : areas);
       });
   auto toScore = new QAction(QObject::tr("回到乐谱"), dock);
-  QObject::connect(toScore, &QAction::triggered, dock, [dock] {
+  QObject::connect(toScore, &QAction::triggered, dock, [dock, windows] {
+    windows->fullscreenAction()->setChecked(false);
+    dock->setProperty("kumoWindowTransition", false);
     if (dock->isFloating())
       dock->hide();
     if (auto instance = controller())
@@ -333,6 +373,7 @@ void addEditorDockActions(QDockWidget *dock) {
   row->setContentsMargins(5, 1, 3, 1);
   row->setSpacing(3);
   auto name = new QLabel(dock->windowTitle(), title);
+  name->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
   row->addWidget(name, 1);
   QObject::connect(dock, &QWidget::windowTitleChanged, name, &QLabel::setText);
   auto button = new QToolButton(title);
@@ -345,12 +386,18 @@ void addEditorDockActions(QDockWidget *dock) {
   row->addWidget(button);
   QObject::connect(dock, &QDockWidget::topLevelChanged, button,
                    &QWidget::setVisible);
+  auto full = new QToolButton(title);
+  full->setObjectName("kumoPanelFullscreenButton");
+  full->setAutoRaise(true);
+  full->setDefaultAction(windows->fullscreenAction());
+  row->addWidget(full);
   auto detach = new QToolButton(title);
   detach->setAutoRaise(true);
   detach->setIcon(dock->style()->standardIcon(QStyle::SP_TitleBarNormalButton));
   detach->setToolTip(QObject::tr("悬浮／放回原位置"));
   row->addWidget(detach);
-  QObject::connect(detach, &QToolButton::clicked, dock, [dock, floating] {
+  QObject::connect(detach, &QToolButton::clicked, dock, [dock, floating, windows] {
+    windows->fullscreenAction()->setChecked(false);
     if (dock->isFloating())
       floating->setChecked(false);
     dock->setFloating(!dock->isFloating());
@@ -360,7 +407,10 @@ void addEditorDockActions(QDockWidget *dock) {
   close->setIcon(dock->style()->standardIcon(QStyle::SP_TitleBarCloseButton));
   close->setToolTip(QObject::tr("关闭面板"));
   row->addWidget(close);
-  QObject::connect(close, &QToolButton::clicked, dock, &QDockWidget::close);
+  QObject::connect(close, &QToolButton::clicked, dock, [dock, windows] {
+    windows->fullscreenAction()->setChecked(false);
+    dock->close();
+  });
   dock->setTitleBarWidget(title);
 }
 } // namespace Ms

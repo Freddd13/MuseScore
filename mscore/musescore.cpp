@@ -467,6 +467,7 @@ static const int RECENT_LIST_SIZE = 20;
 
 void MuseScore::closeEvent(QCloseEvent* ev)
       {
+      finishToolFullscreen(this);
       unloadPlugins();
       QList<MasterScore*> removeList;
       for (MasterScore* score : qAsConst(scoreList)) {
@@ -2888,8 +2889,9 @@ void MuseScore::updateMenus()
 #endif
       if (auto spectrum = findChild<QAction*>("kumo-spectrum"))
             if (!menuView->actions().contains(spectrum)) menuView->addAction(spectrum);
-      if (auto action = findChild<QAction*>("kumo-ai-connection"))
-            if (!menuView->actions().contains(action)) menuView->addAction(action);
+#ifdef SCRIPT_INTERFACE
+      addAIConnectionAction(menuView);
+#endif
       if (auto action = findChild<QAction*>("kumo-user-guide"))
             if (!menuHelp->actions().contains(action)) menuHelp->addAction(action);
       addSystemLockActions(menuView);
@@ -3342,6 +3344,8 @@ void MuseScore::setCurrentView(int tabIdx, int idx)
 
 void MuseScore::setCurrentScoreView(ScoreView* view)
       {
+      if (cs && cs != (view ? view->score() : nullptr))
+            saveVstEdits(cs);
       cv = view;
       if (cv) {
             ctab = (tab2 && tab2->view() == view) ? tab2 : tab1;
@@ -4805,6 +4809,10 @@ bool MuseScore::eventFilter(QObject *obj, QEvent *event)
                         }
 
                   if(obj->isWidgetType() && e->key() == Qt::Key_Escape && e->modifiers() == Qt::NoModifier) {
+                        // A full-screen tool owns Escape until it returns to its original place.
+                        for (auto owner = static_cast<QWidget*>(obj); owner; owner = owner->parentWidget())
+                              if (owner->property("kumoPanelFullScreen").toBool())
+                                    return QMainWindow::eventFilter(obj, event);
                         // Close the search dialog when Escape is pressed:
                         if(_searchDialog != 0)
                               endSearch();

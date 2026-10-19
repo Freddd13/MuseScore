@@ -213,7 +213,14 @@ public:
   qint64 tail() const override { return pluginTail; }
   QString presetName() const override { return preset; }
   bool openEditor(QWidget *, QString *error) override {
-    return rpc({{"op", "editor"}}, error)["ok"].toBool();
+    const bool opened = rpc({{"op", "editor"}}, error)["ok"].toBool();
+    if (opened && bridge.memory)
+      InterlockedExchange(&bridge.memory->editorOpen, 1);
+    return opened;
+  }
+  bool editorVisible() const override {
+    return child.state() == QProcess::Running && bridge.memory &&
+           InterlockedCompareExchange(&bridge.memory->editorOpen, 0, 0) != 0;
   }
   void closeEditor() override {
     QString error;
