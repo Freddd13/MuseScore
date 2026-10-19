@@ -120,7 +120,7 @@ Fluid::~Fluid()
       {
       _state = FLUID_SYNTH_STOPPED;
       _globalTerminate = true;
-      while (!mutex.tryLock()) {}
+      QMutexLocker locker(&mutex);
       qDeleteAll(activeVoices);
       qDeleteAll(freeVoices);
       qDeleteAll(sfonts);

@@ -17,9 +17,6 @@ ColumnLayout {
             elide: Text.ElideRight
             color: theme.text
             font: Qt.application.font
-            ToolTip.visible: targetHover.containsMouse
-            ToolTip.text: text
-            MouseArea { id: targetHover; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
         }
         Desk.DeskButton { objectName: "expressionTargetSelection"; text: "当前选区"; enabled: !bar.workflow.busy; onClicked: bar.workflow.chooseTarget(false) }
         Desk.DeskButton { objectName: "expressionTargetWhole"; text: "全谱"; enabled: !bar.workflow.busy; onClicked: bar.workflow.chooseTarget(true) }

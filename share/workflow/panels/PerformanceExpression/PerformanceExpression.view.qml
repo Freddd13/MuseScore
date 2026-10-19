@@ -34,7 +34,7 @@ MuseScore {
 
  menuPath:"Plugins.Performance Expression"
  description:"演奏表达：把 MIDI 演奏的力度和速度用于选中的乐谱。"
- version:"1.5.1";requiresScore:true;pluginType:"dock";dockArea:"right"
+ version:"1.6.0";requiresScore:true;pluginType:"dock";dockArea:"right"
  implicitWidth:embeddedWorkflow?700:440;implicitHeight:embeddedWorkflow?180:720
  property var observer:null
  property var editorContext:null
@@ -83,7 +83,7 @@ MuseScore {
  property string publishedComparisonKey:""
  function publishComparison(){
   if(!observer||typeof observer.setEditorComparison!=="function"||stale)return;
-  var state={owner:editorOwner,revision:revision,selectedMidiId:selectedMidiId,previewCanUndo:previewUndo.length>0,previewCanRedo:previewRedo.length>0,busy:busy||(candidate!==null&&previewUpdating),applyCounts:{velocity:scopedCandidate.velocity.length,tempos:scopedCandidate.tempos.length},selectedScoreId:selected>=0&&selected<result.matches.length?result.matches[selected].scoreId:""};
+  var state={owner:editorOwner,revision:revision,selectedMidiId:selectedMidiId,previewCanUndo:previewUndo.length>0,previewCanRedo:previewRedo.length>0,busy:busy||(candidate!==null&&previewUpdating),applyCounts:{velocity:scopedCandidate.velocity.length,tempos:scopedCandidate.tempos.length},selectedScoreId:selected>=0&&selected<result.matches.length?result.matches[selected].scoreId:selectedIssueScoreId};
   var key=revision+":"+previewVersion+":"+resultVersion;
   if(publishedComparisonKey===key&&typeof observer.updateEditorComparisonState==="function"){
    var updated=observer.updateEditorComparisonState(state);if(updated.ok)return;
@@ -123,7 +123,7 @@ MuseScore {
  }
  onResultChanged:{publishComparison();candidateTimer.restart()}
  onCandidateChanged:{previewVersion++;publishComparison();if(candidate&&previewing&&!legacyAudition&&playbackState.playing&&playbackState.mode==="candidate"&&!applying&&!refreshingApplication){pendingAudition=true;auditionRetry.restart()}}
- onSelectedChanged:publishComparison()
+ onSelectedChanged:{selectedIssueScoreId="";publishComparison()}
  onStatusChanged:{if(editorContext)editorContext.feedback=status}
  Connections {target:root.editorContext;ignoreUnknownSignals:true;onRequested:root.editorRequest(action,scoreId,midiId)}
  property string workerSource:""
@@ -138,6 +138,7 @@ MuseScore {
  property int previewVersion:0
  property int resultVersion:0
  property string selectedMidiId:""
+ property string selectedIssueScoreId:""
  property var previewUndo:[]
  property var previewRedo:[]
  onPreviewUndoChanged:publishComparison()
@@ -281,6 +282,24 @@ MuseScore {
   var m=result.matches[selected],target=Project.copy(m.original);target.start=m.tick;target.firstTrack=m.track;
   var r=observer.navigateWorkflow(target,false);if(r.error)fail(r.error);else status="已选中第 "+m.original.measure+" 小节的对应音；演奏位置 "+m.seconds.toFixed(3)+" 秒。";
  }
+ function selectResultRow(row){
+  if(!observer||!row)return;
+  if(row.kind==="match"){
+   selected=row.index;selectedMidiId=row.match.midiId;publishComparison();
+   if(!observer.playing&&!previewing)locate();
+   return;
+  }
+  selected=-1;selectedIssueScoreId=row.kind==="missing"?row.note.id:"";
+  selectedMidiId=row.kind==="extra"?row.note.id:"";publishComparison();
+  var note=row.note;
+  if(row.kind==="extra"){
+   var at=Progress.tickAt(displayed.result.timing,note.seconds),closest=null;
+   if(at!==null)notes.forEach(function(n){if(!closest||Math.abs(n.tick-at)<Math.abs(closest.tick-at))closest=n;});
+   note=closest;
+  }
+  if(note&&!observer.playing&&!previewing){var target=Project.copy(note);target.start=note.tick;target.firstTrack=note.track;observer.navigateWorkflow(target,false);}
+  status=row.kind==="missing"?"已选中漏弹位置；在对应区可重新连接演奏音。":"已选中演奏中的多弹音；在对应区可连接它所指的谱音。";
+ }
  function save(url){
   try{
    if(!midi)throw new Error("先导入演奏");
@@ -402,48 +421,56 @@ MuseScore {
   }
  }
  Rectangle {anchors.fill:parent;color:theme.background}
- // Compact editor page: source, result and adoption share one visible surface.
+ // Source, listening, adoption and per-note results stay on the same page.
  ScrollView {
+  id:embeddedScroll
   visible:root.embeddedWorkflow;anchors.fill:parent;clip:true
   ColumnLayout {
-   width:Math.max(260,root.width-16);spacing:5
+   id:embeddedContent
+   width:Math.max(260,embeddedScroll.availableWidth);spacing:6
    Loader {Layout.fillWidth:true;active:root.embeddedWorkflow;sourceComponent:Component {ExpressionScopeBar {workflow:root}}}
-   GridLayout {
-    columns:root.width>1000?6:root.width>650?4:2;Layout.fillWidth:true;columnSpacing:6;rowSpacing:5
-    Desk.DeskButton {objectName:"embeddedExpressionImport";text:"导入 MIDI";Layout.fillWidth:true;enabled:!root.busy&&!root.captureState.recording;onClicked:root.chooseMidi()}
-    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionRecord":"embedded_expressionRecord";text:root.captureState.recording?"停止录制":"录制";Layout.fillWidth:true;enabled:root.captureSession!==null&&!root.captureState.stopping&&!root.captureState.saving&&(!root.busy||root.captureState.recording);onClicked:{if(root.captureState.recording)root.captureSession.stop();else root.startRecording()}}
-    Desk.DeskButton {text:"重新对应";Layout.fillWidth:true;enabled:!!root.midi&&!root.busy&&!root.captureState.recording;onClicked:root.analyze()}
-    Desk.DeskComboBox {objectName:root.embeddedWorkflow?"expressionApplicationScope":"embedded_expressionApplicationScope";Layout.fillWidth:true;model:["选中音","当前选段","全部已对应范围"];currentIndex:root.applicationScope;onActivated:root.applicationScope=currentIndex}
-    Desk.DeskComboBox {objectName:root.embeddedWorkflow?"expressionVelocityWriteMode":"embedded_expressionVelocityWriteMode";Layout.fillWidth:true;model:["逐音固定力度","继续跟随力度记号","保留原保存方式"];currentIndex:root.config.velocityWriteMode==="fixed"?0:root.config.velocityWriteMode==="follow"?1:2;onActivated:root.editConfig("velocityWriteMode",["fixed","follow","preserve"][currentIndex])}
-    Desk.DeskButton {objectName:"embeddedExpressionSettings";text:"设置与详情";Layout.fillWidth:true;onClicked:root.openToolDialog(expressionSettings)}
-    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionOriginalAudition":"embedded_expressionOriginalAudition";text:"谱中效果";Layout.fillWidth:true;enabled:root.notes.length>0&&!root.busy&&!root.stale;onClicked:root.audition(false)}
-    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionCandidateAudition":"embedded_expressionCandidateAudition";text:"拟采用效果";Layout.fillWidth:true;enabled:root.candidate!==null&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.audition(true)}
-    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionApplyVelocity":"embedded_expressionApplyVelocity";text:"使用力度 · "+root.scopedCandidate.velocity.length+"音";Layout.fillWidth:true;enabled:root.candidate!==null&&root.scopedCandidate.velocity.length>0&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.applyPart("velocity")}
-    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionApplyTempo":"embedded_expressionApplyTempo";text:"使用速度 · "+root.scopedCandidate.tempos.length+"处";Layout.fillWidth:true;enabled:root.candidate!==null&&root.scopedCandidate.tempos.length>0&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.applyPart("tempo")}
-    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionStop":"embedded_expressionStop";text:"停止试听";Layout.fillWidth:true;enabled:root.previewing;onClicked:root.stopAudition()}
-    Desk.DeskButton {id:embeddedOperations;objectName:root.embeddedWorkflow?"expressionApplicationMenuButton":"embedded_expressionApplicationMenuButton";text:"更多操作";Layout.fillWidth:true;onClicked:root.openMenu(applicationMenu,embeddedOperations)}
+   Flow {
+    Layout.fillWidth:true;spacing:6
+    Desk.DeskButton {objectName:"embeddedExpressionImport";text:"导入 MIDI";enabled:!root.busy&&!root.captureState.recording;onClicked:root.chooseMidi()}
+    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionRecord":"embedded_expressionRecord";text:root.captureState.recording?"停止录制":"录制";enabled:root.captureSession!==null&&!root.captureState.stopping&&!root.captureState.saving&&(!root.busy||root.captureState.recording);onClicked:{if(root.captureState.recording)root.captureSession.stop();else root.startRecording()}}
+    Desk.DeskButton {text:"重新对应";enabled:!!root.midi&&!root.busy&&!root.captureState.recording;onClicked:root.analyze()}
+    Desk.DeskButton {objectName:"embeddedExpressionSettings";text:"设置与详情";onClicked:root.openToolDialog(expressionSettings)}
+    Desk.DeskButton {id:embeddedOperations;objectName:root.embeddedWorkflow?"expressionApplicationMenuButton":"embedded_expressionApplicationMenuButton";text:"更多操作";onClicked:root.openMenu(applicationMenu,embeddedOperations)}
    }
-   GridLayout {
-    columns:root.width>700?8:3;Layout.fillWidth:true
-    Label {text:"采用演奏力度";color:theme.muted}
-    Desk.DeskSpinBox {objectName:"embeddedExpressionStrength";from:0;to:100;value:root.config.velocityStrength===undefined?root.config.strength:root.config.velocityStrength;onValueModified:root.editConfig("velocityStrength",value)}
-    Label {text:"%";color:theme.muted}
-    Desk.DeskSwitch {text:"使用速度";checked:root.config.rubato;onClicked:root.editConfig("rubato",checked)}
-    Desk.DeskSwitch {objectName:root.embeddedWorkflow?"expressionKeepManual":"embedded_expressionKeepManual";text:"保留手动调整";checked:root.config.keepManual===true;onClicked:root.editConfig("keepManual",checked)}
-    Desk.DeskSwitch {text:"循环试听";checked:root.auditionLoop;onClicked:{root.auditionLoop=checked;if(root.observer&&typeof root.observer.setExpressionAuditionLoop==="function")root.observer.setExpressionAuditionLoop(checked)}}
-    Desk.DeskButton {text:"漏弹 "+root.result.missing.length;enabled:root.result.missing.length>0;onClicked:{root.issueKind="missing";root.openToolDialog(issues)}}
-    Desk.DeskButton {text:"多弹 "+root.result.extra.length;enabled:root.result.extra.length>0;onClicked:{root.issueKind="extra";root.openToolDialog(issues)}}
-    Desk.DeskButton {text:"需核对 "+root.result.pending;enabled:root.result.pending>0;onClicked:{root.issueKind="pending";root.openToolDialog(issues)}}
-    Item {Layout.fillWidth:true}
+   Flow {
+    Layout.fillWidth:true;spacing:6
+    Label {text:"比较试听";height:28;verticalAlignment:Text.AlignVCenter;color:theme.muted;font:Qt.application.font}
+    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionOriginalAudition":"embedded_expressionOriginalAudition";text:"谱中效果";checkable:true;checked:root.previewing&&root.playbackState.mode==="original";enabled:root.notes.length>0&&!root.busy&&!root.stale;onClicked:root.audition(false)}
+    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionCandidateAudition":"embedded_expressionCandidateAudition";text:"拟采用效果";checkable:true;checked:root.previewing&&root.playbackState.mode==="candidate";enabled:root.candidate!==null&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.audition(true)}
+    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionStop":"embedded_expressionStop";text:"停止试听";enabled:root.previewing;onClicked:root.stopAudition()}
+    Desk.DeskSwitch {text:"循环";checked:root.auditionLoop;onClicked:{root.auditionLoop=checked;if(root.observer&&typeof root.observer.setExpressionAuditionLoop==="function")root.observer.setExpressionAuditionLoop(checked)}}
    }
-   RowLayout {Layout.fillWidth:true
-    Label {text:"录制结束";color:theme.muted}
-    Desk.DeskComboBox {Layout.fillWidth:true;model:["手动停止","到时停止","弹完选段停止"];currentIndex:root.captureEndMode;enabled:!root.captureState.recording;onActivated:{root.captureEndMode=currentIndex;root.saveCaptureOptions()}}
+   Flow {
+    Layout.fillWidth:true;spacing:6
+    Label {text:"应用范围";height:28;verticalAlignment:Text.AlignVCenter;color:theme.muted;font:Qt.application.font}
+    Desk.DeskComboBox {objectName:root.embeddedWorkflow?"expressionApplicationScope":"embedded_expressionApplicationScope";width:148;model:["选中音","当前选段","全部已对应范围"];currentIndex:root.applicationScope;enabled:!root.busy;onActivated:root.applicationScope=currentIndex}
+    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionApplyVelocity":"embedded_expressionApplyVelocity";text:"使用力度 · "+root.scopedCandidate.velocity.length+"音";enabled:root.candidate!==null&&root.scopedCandidate.velocity.length>0&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.applyPart("velocity")}
+    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionApplyTempo":"embedded_expressionApplyTempo";text:"使用速度 · "+root.scopedCandidate.tempos.length+"处";visible:root.config.rubato;enabled:root.candidate!==null&&root.scopedCandidate.tempos.length>0&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.applyPart("tempo")}
+   }
+   Flow {
+    Layout.fillWidth:true;spacing:6
+    Label {text:"采用演奏力度";height:28;verticalAlignment:Text.AlignVCenter;color:theme.muted;font:Qt.application.font}
+    Desk.DeskSpinBox {objectName:"embeddedExpressionStrength";width:86;from:0;to:100;value:root.config.velocityStrength===undefined?root.config.strength:root.config.velocityStrength;enabled:!root.busy;onValueModified:root.editConfig("velocityStrength",value)}
+    Label {text:"%";height:28;verticalAlignment:Text.AlignVCenter;color:theme.muted;font:Qt.application.font}
+    Desk.DeskComboBox {objectName:root.embeddedWorkflow?"expressionVelocityWriteMode":"embedded_expressionVelocityWriteMode";width:172;model:["逐音固定力度","继续跟随力度记号","保留原保存方式"];currentIndex:root.config.velocityWriteMode==="fixed"?0:root.config.velocityWriteMode==="follow"?1:2;enabled:!root.busy;onActivated:root.editConfig("velocityWriteMode",["fixed","follow","preserve"][currentIndex])}
+    Desk.DeskSwitch {objectName:root.embeddedWorkflow?"expressionKeepManual":"embedded_expressionKeepManual";text:"保留手动调整";checked:root.config.keepManual===true;enabled:!root.busy;onClicked:root.editConfig("keepManual",checked)}
+    Desk.DeskSwitch {text:"使用速度";checked:root.config.rubato;enabled:!root.busy;onClicked:root.editConfig("rubato",checked)}
+   }
+   Flow {
+    Layout.fillWidth:true;spacing:6
+    Label {text:"录制结束";height:28;verticalAlignment:Text.AlignVCenter;color:theme.muted;font:Qt.application.font}
+    Desk.DeskComboBox {width:148;model:["手动停止","到时停止","弹完选段停止"];currentIndex:root.captureEndMode;enabled:!root.captureState.recording;onActivated:{root.captureEndMode=currentIndex;root.saveCaptureOptions()}}
     Desk.DeskSpinBox {visible:root.captureEndMode===1;from:1;to:3600;value:root.captureDuration;onValueModified:{root.captureDuration=value;root.saveCaptureOptions()}}
-    Label {visible:root.captureEndMode===1;text:"秒";color:theme.muted}
+    Label {visible:root.captureEndMode===1;text:"秒";height:28;verticalAlignment:Text.AlignVCenter;color:theme.muted;font:Qt.application.font}
    }
-   Label {Layout.fillWidth:true;wrapMode:Text.Wrap;color:theme.muted;text:root.status}
-   Label {Layout.fillWidth:true;color:theme.accent;visible:root.previewing;text:(root.playbackState.playing?"正在播放：":"当前试听：")+(root.playbackState.mode==="candidate"?"拟采用效果":"谱中效果")}
+   Label {Layout.fillWidth:true;wrapMode:Text.Wrap;color:theme.muted;text:root.status;font:Qt.application.font}
+   Label {Layout.fillWidth:true;color:theme.accent;visible:root.previewing;text:(root.playbackState.playing?"正在播放：":"当前试听：")+(root.playbackState.mode==="candidate"?"拟采用效果":"谱中效果");font:Qt.application.font}
+   ExpressionResults {Layout.fillWidth:true;Layout.preferredHeight:Math.max(180,Math.min(360,root.height-y-12));workflow:root}
   }
  }
 

@@ -21,6 +21,7 @@
 #include "mscore/workflow/systemlocks.h"
 #include "mscore/workflow/vstpanel.h"
 #include "audio/midi/msynthesizer.h"
+#include "audio/midi/fluid/fluid.h"
 #include "mscore/synthcontrol.h"
 #ifdef KUMO_VST_HOST
 #include "audio/vst/vstsynth.h"
@@ -464,6 +465,19 @@ class TestPluginHost : public QObject {
             QVERIFY(click("embeddedExpressionImport"));QTRY_VERIFY_WITH_TIMEOUT(clicked.count()>0,1500);QTRY_VERIFY_WITH_TIMEOUT(picked,6000);chooseMidi.stop();
             auto candidate=[root](){auto value=root->property("candidate");return value.canConvert<QJSValue>()?value.value<QJSValue>().toVariant().toMap():value.toMap();};
             QTRY_VERIFY2_WITH_TIMEOUT(!candidate().value("velocity").toList().isEmpty(),qUtf8Printable(root->property("status").toString()),10000);
+            auto resultList=root->findChild<QQuickItem*>("embeddedExpressionResults");QVERIFY(resultList);
+            QTRY_VERIFY(resultList->property("count").toInt()>0);
+            std::function<QQuickItem*(QQuickItem*)> findResultRow=[&](QQuickItem* item)->QQuickItem*{
+                  if(item->objectName()=="expressionResultRow")return item;
+                  for(auto child:item->childItems())if(auto found=findResultRow(child))return found;
+                  return nullptr;
+                  };
+            QTRY_VERIFY(findResultRow(resultList));
+            root->setProperty("selected",-1);
+            auto firstRow=findResultRow(resultList);QVERIFY(firstRow->height()>0&&firstRow->isVisible());
+            QTest::mouseClick(root->window(),Qt::LeftButton,Qt::NoModifier,firstRow->mapToScene(QPointF(firstRow->width()/2,firstRow->height()/2)).toPoint());
+            QTRY_COMPARE(root->property("selected").toInt(),0);
+            QVERIFY(!score->selection().noteList().empty());
             QTest::qWait(80);QVERIFY(root->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("builtin-expression-ready-058.png")));
             auto chord=score->findCR(Fraction::fromTicks(480),0);QVERIFY(chord&&chord->isChord());auto first=toChord(chord)->notes().front();
             const auto previousType=first->veloType();const int previousRaw=first->veloOffset();const int beforeUndo=score->undoStack()->getCurIdx();
@@ -474,6 +488,19 @@ class TestPluginHost : public QObject {
             QVERIFY(main->currentScoreView()->height()>80);
             QVERIFY(root->window());QTest::qWait(80);QVERIFY(root->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("builtin-expression-controls-058.png")));
             editor->findChild<QAction*>("editorArea/restore/embeddedExpressionPage")->trigger();tabs->setCurrentIndex(0);main->showPerformanceEditor(false);
+            }
+      void fluidResourceReleaseUnlocksMutex()
+            {
+            static std::atomic<int> warnings{0};
+            static QtMessageHandler previous=nullptr;
+            warnings=0;
+            previous=qInstallMessageHandler([](QtMsgType type,const QMessageLogContext& context,const QString& message){
+                  if(message.contains("QMutex: destroying locked mutex"))++warnings;
+                  if(previous)previous(type,context,message);
+                  });
+            struct RestoreHandler {QtMessageHandler original;~RestoreHandler(){qInstallMessageHandler(original);}} restore{previous};
+            for(int i=0;i<3;++i){FluidS::Fluid synth;synth.init(44100);}
+            QCOMPARE(warnings.load(),0);
             }
       void rollWritingMouseAndDraft(){
             struct SettingsRestore{QVariantMap values;SettingsRestore(){QSettings settings;for(auto key:settings.allKeys())values[key]=settings.value(key);}~SettingsRestore(){QSettings settings;settings.clear();for(auto i=values.cbegin();i!=values.cend();++i)settings.setValue(i.key(),i.value());}} restoreSettings;

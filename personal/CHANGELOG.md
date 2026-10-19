@@ -1,5 +1,14 @@
 # 个人版本更新日志
 
+## 0.73.0 — 2026-10-20
+
+- 演奏表达在导入或录制后直接列出音名、小节拍位、演奏时间和前后力度；支持待使用、需核对、漏弹、多弹及已使用分类。
+- 点结果联动谱面选音和编辑器对应，保留当前目标范围；采用部分结果后收起已使用的音，仍可查看与恢复。
+- 导入、试听、应用与设置按操作分组，按钮按内容宽度排列；移除目标范围文字上的悬浮提示。
+- 检查脚本按每次运行保存实际输出。窗口与 CFX 旧的错误日志引用在本轮重新核对。
+- 内置 Fluid 音源释放资源时改用成对的锁定与解锁，消除音源切换和关闭时的 QMutex 警告。重复创建释放、CFX/Pianoteq 渲染、SF2 恢复与参数保存检查通过。
+- 本批源码提交主题：`Show expression matches directly after MIDI import and recording`。操作说明见 docs/EXPRESSION_073_GUIDE.md。
+
 ## 0.72.0 — 2026-10-19
 
 - 本批源码提交主题：`Repair personal tool windows and preserve VST editor sessions`。操作、配图与待查项目集中记录在 docs/WINDOWS_072_CHECKS.md。
