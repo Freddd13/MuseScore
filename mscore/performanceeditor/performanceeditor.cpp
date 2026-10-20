@@ -572,7 +572,7 @@ System* PerformanceEditor::systemAtTick(int tick) const
 void PerformanceEditor::setOverlaySystem(System* system)
       {
       _system = system; _systemIndices.clear();
-      _systemBottom = _nextSystemTop = 0;
+      _systemTop = _systemBottom = _previousSystemBottom = _nextSystemTop = 0;
       _systemSegments.clear();
       if (!_system || !_system->firstMeasure() || !_system->lastMeasure()) return;
       const int from = _system->firstMeasure()->tick().ticks(), until = _system->lastMeasure()->endTick().ticks();
@@ -582,15 +582,28 @@ void PerformanceEditor::setOverlaySystem(System* system)
       for (; segment != _segments.cend() && segment->tick <= until; ++segment) if (segment->system == _system) _systemSegments.append(*segment);
       if (_system && !_systemSegments.isEmpty()) {
             // Cache native ink clearance only on row/layout changes, not at 60 Hz.
-            for (auto staff : *_system->staves()) if (staff->show())
-                  _systemBottom = qMax(_systemBottom, _system->canvasPos().y() + qMax(staff->bbox().bottom(), staff->y() + staff->yBottom()));
+            const auto inkBounds = [](System* system) {
+                  QPair<double,double> bounds;bool first = true;
+                  for (auto staff : *system->staves()) if (staff->show()) {
+                        const double north = staff->skyline().north().valid() ? staff->y() + staff->skyline().north().max() : staff->bbox().top();
+                        const double top = system->canvasPos().y() + qMin(staff->bbox().top(), north);
+                        const double bottom = system->canvasPos().y() + qMax(staff->bbox().bottom(), staff->y() + staff->yBottom());
+                        bounds.first = first ? top : qMin(bounds.first, top);
+                        bounds.second = first ? bottom : qMax(bounds.second, bottom);first = false;
+                        }
+                  return bounds;
+                  };
+            const auto ownBounds = inkBounds(_system);
+            _systemTop = ownBounds.first;_systemBottom = ownBounds.second;
+            auto first = _system->firstMeasure();
+            if (first && first->prevMeasure()) {
+                  auto previous = first->prevMeasure()->system();
+                  if (previous && previous != _system)_previousSystemBottom = inkBounds(previous).second;
+                  }
             auto last = _system->lastMeasure();
             if (last && last->nextMeasure()) {
                   auto next = last->nextMeasure()->system();
-                  if (next && next != _system) for (auto staff : *next->staves()) if (staff->show()) {
-                        const double ink = staff->skyline().north().valid() ? staff->y() + staff->skyline().north().max() : staff->bbox().top();
-                        _nextSystemTop = next->canvasPos().y() + qMin(staff->bbox().top(), ink); break;
-                        }
+                  if (next && next != _system)_nextSystemTop = inkBounds(next).first;
                   }
             if (last && _systemSegments.back().tick < last->endTick().ticks())
                   _systemSegments.append({last->endTick().ticks(), last->canvasPos() + QPointF(last->width(), 0), _system, _systemSegments.back().bpm});

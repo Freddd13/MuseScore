@@ -199,7 +199,7 @@ void PerformanceEditor::paintOriginalVelocity(QPainter& painter,const QRectF& re
             else previous[line]=point;
             const QString key=QString("%1:%2:%3").arg(staff).arg(reference).arg(n.dynamicText);
             if(labelled.contains(key))continue;
-            const QString text=tr("谱表 %1 · %2 %3").arg(staff+1).arg(n.dynamicText.isEmpty()?tr("力度参考线"):n.dynamicText).arg(reference);
+            const QString text=tr("谱表 %1 · %2 %3").arg(staff+1).arg(n.dynamicText.isEmpty()?tr("默认"):n.dynamicText).arg(reference);
             const double width=painter.fontMetrics().horizontalAdvance(text)+8,height=painter.fontMetrics().height()+2;
             const double offsets[4]={-height-3,3,-2*height-5,height+5};
             for(int attempt=0;attempt<12;++attempt){
@@ -208,7 +208,9 @@ void PerformanceEditor::paintOriginalVelocity(QPainter& painter,const QRectF& re
                   if(!lane.contains(box))continue;
                   bool overlaps=false;for(const auto& used:labels)if(box.intersects(used)){overlaps=true;break;}
                   if(overlaps)continue;
-                  painter.setPen(QPen(color,1));painter.fillRect(box,_appearance.colors[PerformanceAppearance::Background]);painter.drawText(box.adjusted(4,0,-4,0),Qt::AlignVCenter,text);
+                  painter.setPen(QPen(onScore?color.darker(160):color,1));
+                  painter.fillRect(box,onScore?QColor("#f1f2ef"):_appearance.colors[PerformanceAppearance::Background]);
+                  painter.drawText(box.adjusted(4,0,-4,0),Qt::AlignVCenter,text);
                   labels.append(box);labelled.insert(key);break;
                   }
             }

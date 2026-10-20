@@ -19,11 +19,11 @@ function defaults() {
         ribbonAlign:1,ribbonPosition:50,chordContent:2,chordOrder:0,chordFont:0,chordScale:100,
         chordColor:"#343a3f",highlightColor:"#0043ce",highlightBackground:"#d0e2ff",
         chromaticAccent:true,chromaticColor:"#a2191f",respectExistingHarmony:true,avoidScoreContent:false,chordMask:true,dualPanel:true,
-        pedalMode:0,resultMode:1,summaryMode:1,detailMode:1,repeatBars:false,degreeFont:"Edwin",degreeMode:1,summaryPixels:20,summaryDegreeRatio:100,summaryGap:6,summaryOrder:0,collapsedSections:[],expandedSubsections:[]};
+        pedalMode:0,resultMode:1,summaryMode:1,detailMode:1,holdLastHarmony:false,repeatBars:false,degreeFont:"Edwin",degreeMode:1,summaryPixels:20,summaryDegreeRatio:100,summaryGap:6,summaryOrder:0,collapsedSections:[],expandedSubsections:[]};
 }
 function clean(source) {
     if(!source || source.schema!==1) throw Error("配置版本应为 1");
-    var out=defaults(), booleans=["auto","follow","coloring","allColor","chordLabels","noteFunctions","pedal","manualKey","keyboard","settings","chromaticAccent","respectExistingHarmony","avoidScoreContent","chordMask","dualPanel","repeatBars"];
+    var out=defaults(), booleans=["auto","follow","coloring","allColor","chordLabels","noteFunctions","pedal","manualKey","keyboard","settings","chromaticAccent","respectExistingHarmony","avoidScoreContent","chordMask","dualPanel","repeatBars","holdLastHarmony"];
     for(var i=0;i<booleans.length;++i) if(typeof source[booleans[i]]==="boolean") out[booleans[i]]=source[booleans[i]];
     var limits={window:4,scope:1,keyMode:1,keyTonic:16,root:16,quality:28,ribbonAlign:3,ribbonPosition:100,chordContent:2,chordOrder:3,chordFont:2,pedalMode:1,resultMode:1,summaryMode:1,detailMode:1,degreeMode:1};
     for(var key in limits) if(typeof source[key]==="number" && source[key]===Math.floor(source[key]) && source[key]>=0 && source[key]<=limits[key])out[key]=source[key];

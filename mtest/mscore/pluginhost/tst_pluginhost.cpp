@@ -115,6 +115,10 @@ class TestPluginHost : public QObject {
       Q_OBJECT
       QTemporaryDir _settings;
    private slots:
+      void nearestWheelOnBandAxis();
+      void scoreBandStaysNearSelectedSystem();
+      void harmonyDisplayAndHold();
+      void chordHandlesStayAtMusicRange();
       void contentWidthControlsWrapWithoutOverlap();
       void restoredWorkspaceKeepsPersonalTools();
       void vstFirstUseControls();
@@ -1318,5 +1322,7 @@ class TestPluginHost : public QObject {
             }
       };
 #include "usability_072_tests.inc"
+#include "score_editing_075_tests.inc"
+#include "harmony_display_075_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

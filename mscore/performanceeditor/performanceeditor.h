@@ -180,7 +180,9 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       int _bandHeight = 48, _tempoPointTick = -1;
       bool _selectionRefreshNeeded = false;
       bool _bandFollowsSystem = false;
-      double _systemBottom = 0, _nextSystemTop = 0;
+      double _systemTop = 0, _systemBottom = 0, _previousSystemBottom = 0, _nextSystemTop = 0;
+      bool _bandResizeDown = false;
+      double _bandResizeAnchor = 0;
       QRectF scoreBandLane() const;
       QRectF _scoreAxis, _scoreFrame;
       std::array<QRectF, 6> _scoreControls;

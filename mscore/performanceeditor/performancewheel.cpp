@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performanceeditor.h"
 #include "mscore/scoreview.h"
+#include "mscore/workflow/featuregate.h"
 #include <QApplication>
 #include <QPainter>
 #include <QWheelEvent>
@@ -128,6 +129,7 @@ void PerformanceEditor::repaintWheelTarget(int index)
 
 bool PerformanceEditor::nearestWheelShortcut(const QWheelEvent* event)
       {
+      if(!personalFeaturesEnabled())return false;
       const int required=QSettings().value("performanceEditor/nearestWheelModifiers",int(Qt::AltModifier|Qt::ShiftModifier)).toInt();
       return required && (int(event->modifiers())&~int(Qt::KeypadModifier))==required;
       }

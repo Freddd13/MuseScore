@@ -154,7 +154,7 @@ function detectWeighted(notes, weights, previous, tonic, minorKey, tick, hint) {
     if(best.context)best.kind+=" · "+best.context;
     return best;
 }
-function roman(tonic, minorKey, chordRoot, definition, degreeMode, bass) {
+function roman(tonic, minorKey, chordRoot, definition, degreeMode, bass, bassName) {
     if(chordRoot<0 || definition<0) return "—";
     // Conventional Roman numerals reference the parallel major: A minor uses ♭III, ♭VI, ♭VII.
     var map=["I","♭II","II","♭III","III","IV","♯IV","V","♭VI","VI","♭VII","VII"];
@@ -170,7 +170,8 @@ function roman(tonic, minorKey, chordRoot, definition, degreeMode, bass) {
         if(seventh && /7$/.test(suffix))suffix=suffix.slice(0,-1);
         return numeral+suffix+figure;
     }
-    return numeral+suffix+"/"+label;
+    // A non-triad bass is named explicitly, matching the slash in the chord name.
+    return numeral+suffix+"/"+(bassName || pcName(bass,[1,3,5,8,10].indexOf(tonic)>=0));
 }
 function isChromatic(tonic, minorKey, chordRoot, definition) {
     if(chordRoot<0 || definition<0 || !defs[definition])return false;

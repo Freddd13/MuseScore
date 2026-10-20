@@ -11,6 +11,7 @@
 #include <QCheckBox>
 #include <QToolButton>
 #include <QToolTip>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QHelpEvent>
@@ -52,7 +53,12 @@ void PerformanceEditor::overlayViewChanged()
 bool PerformanceEditor::overlayEvent(QEvent* event)
       {
       if(_bandResizing){
-            if(event->type()==QEvent::MouseMove){auto mouse=static_cast<QMouseEvent*>(event);invalidateOverlay();_bandHeight=qBound(48,_bandResizeHeight+(_bandFollowsSystem?1:-1)*(mouse->y()-qRound(_press.y())),240);_view->update();return true;}
+            if(event->type()==QEvent::MouseMove){
+                  auto mouse=static_cast<QMouseEvent*>(event);invalidateOverlay();
+                  const int available=qRound(_bandResizeDown?_view->height()-17-_bandResizeAnchor:_bandResizeAnchor-30);
+                  const int height=_bandResizeHeight+(_bandResizeDown?1:-1)*(mouse->y()-qRound(_press.y()));
+                  _bandHeight=qBound(48,height,qMax(48,qMin(240,available)));_view->update();return true;
+                  }
             if(event->type()==QEvent::MouseButtonRelease){_bandResizing=false;QSettings().setValue("performanceEditor/bandHeight",_bandHeight);qApp->removeEventFilter(this);_view->releaseMouse();_view->unsetCursor();return true;}
             }
       if (_scoreRangePanning) {
@@ -63,17 +69,38 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
                   }
             if (event->type() == QEvent::MouseButtonRelease) { _scoreRangePanning = false; qApp->removeEventFilter(this); _view->releaseMouse(); _view->unsetCursor(); return true; }
             }
-      if (event->type() == QEvent::MouseButtonPress && _band->isChecked() && !_dirty && !_scoreLane.isEmpty()) {
+      if (event->type() == QEvent::MouseButtonPress && _band->isChecked() && !_dirty && !_geometryDirty && !_scoreLane.isEmpty()) {
             auto mouse = static_cast<QMouseEvent*>(event);
             if (mouse->button() == Qt::LeftButton) {
-                  if(QRectF(_scoreFrame.left(),(_bandFollowsSystem?_scoreFrame.bottom():_scoreFrame.top())-4,_scoreFrame.width(),8).contains(mouse->pos())){finishWheel();cancelGesture();_bandResizing=true;_bandResizeHeight=_bandHeight;_press=mouse->pos();qApp->installEventFilter(this);_view->setCursor(Qt::SizeVerCursor);_view->grabMouse();return true;}
-                  for (int i = 0; i < 6; ++i) if (_scoreControls[i].contains(mouse->pos())) { scoreRangeControl(i); return true; }
+                  const bool growDown=_bandFollowsSystem && _scoreFrame.top()>=_view->matrix().map(QPointF(0,_systemBottom)).y();
+                  const double edge=growDown?_scoreFrame.bottom():_scoreFrame.top();
+                  if(QRectF(_scoreFrame.left(),edge-4,_scoreFrame.width(),8).contains(mouse->pos())){
+                        finishWheel();cancelGesture();_bandResizing=true;_bandResizeDown=growDown;
+                        _bandResizeAnchor=growDown?_scoreLane.top():_scoreLane.bottom();
+                        _bandResizeHeight=_bandHeight;_press=mouse->pos();qApp->installEventFilter(this);
+                        _view->setCursor(Qt::SizeVerCursor);_view->grabMouse();return true;
+                        }
+                  for (int i = 0; i < 6; ++i) if (_scoreControls[i].contains(mouse->pos())) {
+                        if(i==2 && _scoreFrame.width()<400) {
+                              auto menu=new QMenu(_view);menu->setObjectName("performanceScoreBandMore");
+                              menu->setAttribute(Qt::WA_DeleteOnClose);
+                              const QStringList names{tr("上移显示范围"),tr("下移显示范围"),tr("匹配当前谱行"),tr("恢复完整范围")};
+                              for(int actionIndex=2;actionIndex<6;++actionIndex){
+                                    auto action=menu->addAction(names[actionIndex-2]);
+                                    action->setObjectName(QString("performanceScoreBandAction%1").arg(actionIndex));
+                                    connect(action,&QAction::triggered,this,[this,actionIndex]{scoreRangeControl(actionIndex);});
+                                    }
+                              menu->popup(mouse->globalPos());
+                              }
+                        else scoreRangeControl(i);
+                        return true;
+                        }
                   if (_scoreAxis.contains(mouse->pos()) && rangeKind() != 3) { finishWheel(); cancelGesture(); _scoreRangePanning = true; _last = mouse->pos(); qApp->installEventFilter(this); _view->setCursor(Qt::ClosedHandCursor); _view->grabMouse(); return true; }
                   }
             }
       if (event->type() == QEvent::Wheel && _band->isChecked() && !_dirty) {
             auto wheel = static_cast<QWheelEvent*>(event);
-            if (_scoreAxis.contains(wheel->position())) {
+            if (_scoreAxis.contains(wheel->position()) && wheel->modifiers() == Qt::NoModifier) {
                   finishWheel(); cancelGesture(); _scoreViewport.zoomRange(rangeKind(), wheel->angleDelta().y() > 0 ? 1.2 : 1 / 1.2, valueForY(wheel->position().y(), _scoreLane, true), false); invalidateOverlay(); return true;
                   }
             }
@@ -121,7 +148,7 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
             }
       if (event->type() == QEvent::ToolTip) {
             auto help = static_cast<QHelpEvent*>(event);
-            const QStringList controls {tr("缩小纵向显示，显示更大数值范围"), tr("放大纵向显示，精细调节当前范围"), tr("数值视窗上移"), tr("数值视窗下移"), tr("匹配当前谱行选音；没有选音时匹配当前谱行数据"), tr("恢复此参数的完整合法范围")};
+            const QStringList controls {tr("缩小纵向显示，显示更大数值范围"), tr("放大纵向显示，精细调节当前范围"), _scoreFrame.width()<400?tr("更多操作：移动、匹配与恢复显示范围"):tr("数值视窗上移"), tr("数值视窗下移"), tr("匹配当前谱行选音；没有选音时匹配当前谱行数据"), tr("恢复此参数的完整合法范围")};
             for (int i = 0; i < 6; ++i) if (_scoreControls[i].contains(help->pos())) { QToolTip::showText(help->globalPos(), controls[i], _view); return true; }
             if (_scoreFrame.contains(help->pos()) && help->y() < _scoreLane.top()) { QToolTip::showText(help->globalPos(), tr("右键标题可切换谱行带位置与高度；自动位置放不下时回到视口底部。"), _view); return true; }
             if (_parameter->currentIndex() && _scoreLane.contains(help->pos())) { QToolTip::showText(help->globalPos(), parameterTooltip(help->pos(), true), _view); return true; }
@@ -183,15 +210,31 @@ QRectF PerformanceEditor::scoreBandLane() const
       const double left = qMax(56.0, matrix.map(first->canvasPos()).x());
       const double right = qMin(double(_view->width() - 12), matrix.map(last->canvasPos() + QPointF(last->width(), 0)).x());
       if (right <= left) return {};
-      double top = _view->height() - _bandHeight - 26;
+      if (_bandResizing)
+            return QRectF(left, _bandResizeDown?_bandResizeAnchor:_bandResizeAnchor-_bandHeight, right-left, _bandHeight);
+      double frameTop = _view->height() - _bandHeight - 52;
       if (_bandFollowsSystem && _systemBottom > 0) {
-            const double frameTop = matrix.map(QPointF(0, _systemBottom)).y() + 10;
-            const double frameBottom = frameTop + 26 + _bandHeight + 5;
-            const double nextTop = _nextSystemTop > 0 ? matrix.map(QPointF(0, _nextSystemTop)).y() - 8 : _view->height();
-            if (frameTop >= 4 && frameBottom <= qMin(double(_view->height() - 12), nextTop)) top = frameTop + 26;
-            else if(nextTop-frameTop>=_bandHeight+31)top=qBound(30.,frameTop+26,double(_view->height()-_bandHeight-12));
+            const double frameHeight = _bandHeight + 31;
+            const double rowTop = matrix.map(QPointF(0,_systemTop)).y();
+            const double rowBottom = matrix.map(QPointF(0,_systemBottom)).y();
+            if (rowBottom <= 0 || rowTop >= _view->height())
+                  return QRectF(left, frameTop+26, right-left, _bandHeight);
+            const double nextTop = _nextSystemTop>0 ? matrix.map(QPointF(0,_nextSystemTop)).y()-8 : _view->height()-12;
+            const double previousBottom = _previousSystemBottom>0 ? matrix.map(QPointF(0,_previousSystemBottom)).y()+8 : 4;
+            const double below = rowBottom+10, above = rowTop-10-frameHeight;
+            if (below>=4 && below+frameHeight<=qMin(double(_view->height()-12),nextTop))frameTop=below;
+            else if (above>=qMax(4.,previousBottom) && above+frameHeight<=_view->height()-12)frameTop=above;
+            else {
+                  const double topEdge=4, bottomEdge=qMax(4.,_view->height()-12-frameHeight);
+                  const auto distance = [rowTop,rowBottom,frameHeight](double top) {
+                        if(top>=rowBottom)return top-rowBottom;
+                        if(top+frameHeight<=rowTop)return rowTop-top-frameHeight;
+                        return 10000.+qAbs(top+frameHeight/2-(rowTop+rowBottom)/2);
+                        };
+                  frameTop=distance(topEdge)<distance(bottomEdge)?topEdge:bottomEdge;
+                  }
             }
-      return QRectF(left, top, right - left, _bandHeight);
+      return QRectF(left, frameTop+26, right-left, _bandHeight);
       }
 
 void PerformanceEditor::paintOverlay(QPainter& painter)
@@ -241,8 +284,10 @@ void PerformanceEditor::paintOverlay(QPainter& painter)
             painter.setPen(QColor("#4b514b"));
             int focus = _hover >= 0 && _notes[_hover].system == _system ? _hover : -1;
             if (focus < 0) for (int i : _selectedIndices) if (_notes[i].system == _system) { focus = i; break; }
-            QString label = tr("当前谱行 · %1").arg(_parameter->currentText());
-            if (focus >= 0) {
+            const int firstBar=_system->firstMeasure()->no()+1,lastBar=_system->lastMeasure()->no()+1;
+            QString label = firstBar==lastBar ? tr("第 %1 小节 · %2").arg(firstBar).arg(_parameter->currentText())
+                  : tr("第 %1–%2 小节 · %3").arg(firstBar).arg(lastBar).arg(_parameter->currentText());
+            if (focus >= 0 && frame.width()>=400) {
                   const auto& note = _notes[focus]; label += QString(" · %1").arg(note.name);
                   if (_parameter->currentIndex() == 0) label += QString(" · %1%2").arg(noteValue(focus)).arg(rangeKind()==1 ? "%" : " MIDI");
                   else if (_parameter->currentIndex() == 1) {
@@ -256,14 +301,16 @@ void PerformanceEditor::paintOverlay(QPainter& painter)
                   label += tr(" · %1 · 谱表 %2 / 声部 %3").arg(note.position).arg(note.track / VOICES + 1).arg(note.track % VOICES + 1);
                   }
             const QStringList controls {QString::fromUtf8("−"), "+", QString::fromUtf8("↑"), QString::fromUtf8("↓"), tr("匹配"), tr("全")};
-            const int controlWidth = frame.width() < 400 ? 22 : 30;
-            const double controlsLeft = frame.right() - 6 * controlWidth - 3;
+            const bool compact=frame.width()<400;
+            const int controlWidth=compact?24:30,controlCount=compact?3:6;
+            const double controlsLeft = frame.right() - controlCount * controlWidth - 3;
             const int titleWidth = qMax(0, int(controlsLeft - left - 8));
             painter.drawText(QRectF(left + 4, frame.top(), titleWidth, 22), Qt::AlignLeft | Qt::AlignVCenter, painter.fontMetrics().elidedText(label, Qt::ElideRight, titleWidth));
-            for (int i = 0; i < 6; ++i) {
+            _scoreControls.fill(QRectF());
+            for (int i = 0; i < controlCount; ++i) {
                   _scoreControls[i] = QRectF(controlsLeft + i * controlWidth, frame.top() + 2, controlWidth - 2, 20);
                   painter.setPen(QColor("#91978e")); painter.setBrush(QColor("#e5e8e2")); painter.drawRoundedRect(_scoreControls[i], 2, 2);
-                  painter.setPen(QColor("#454e43")); painter.drawText(_scoreControls[i], Qt::AlignCenter, i == 4 && controlWidth == 22 ? tr("适") : controls[i]);
+                  painter.setPen(QColor("#454e43")); painter.drawText(_scoreControls[i], Qt::AlignCenter, compact&&i==2?QString::fromUtf8("⋯"):controls[i]);
                   }
             const auto range = _scoreViewport.ranges[rangeKind()];
             painter.drawText(QRectF(frame.left() + 2, frame.top() + 4, 45, 16), Qt::AlignRight, rangeKind() == 2 ? "BPM" : (rangeKind() == 1 ? "%" : (rangeKind() == 3 ? "CC64" : "MIDI")));

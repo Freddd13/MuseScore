@@ -1,6 +1,6 @@
 # MuseScore Evolution 个人功能说明
 
-本文对应个人版本：**0.74.0** · Kumo branch / Freddd13。原曲与频谱的操作结果见[本批检查](docs/REFERENCE_SPECTRUM_074_CHECKS.md)，窗口、音源与表达记录见[此前检查](docs/WINDOWS_072_CHECKS.md)。
+本文对应个人版本：**0.75.0** · Kumo branch / Freddd13。谱面调节和和弦显示见[本批操作](docs/SCORE_HARMONY_075_GUIDE.md)，原曲与频谱见[此前检查](docs/REFERENCE_SPECTRUM_074_CHECKS.md)。
 
 本轮[完整使用检查与返工进度](docs/USABILITY_REWORK_20261019.md)按功能逐项记录。
 
@@ -13,6 +13,7 @@
 | 选择原曲音轨、删除恢复、拖滑块调速度 | [原曲音轨操作](docs/WORKSPACE_064_GUIDE.md#管理多条原曲音轨) |
 | 连接 Codex，让它读取或建议写法 | 视图 → AI 连接；[第一次连接的步骤](docs/WORKSPACE_063_GUIDE.md) |
 | 调整力度、速度、踏板 | 下文“演奏编辑器” |
+| 谱面滚轮调力度、谱行带跟随选音、保留上一和弦 | [谱面调节与和弦显示](docs/SCORE_HARMONY_075_GUIDE.md) |
 | 查看和弦、级数和构成音 | 下文“和弦助手” |
 | 听原曲和比较谱段 | [原曲参考](docs/REPAIR_056_GUIDE.md) |
 | 导入或录制演奏，再使用力度 | [录制、查看对应与采用力度](docs/EXPRESSION_073_GUIDE.md) |

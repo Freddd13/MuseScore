@@ -12,6 +12,34 @@ function atTick(regions, tick, part) {
     }
     return null;
 }
+function suppressionIndex(edits) {
+    var grouped={};
+    (edits||[]).forEach(function(edit){
+        if(edit.suppressed)(grouped[edit.part]||(grouped[edit.part]=[])).push({start:edit.start,end:edit.end});
+    });
+    for(var part in grouped) {
+        var rows=grouped[part].sort(function(a,b){return a.start-b.start;}),merged=[];
+        rows.forEach(function(row){
+            var last=merged.length?merged[merged.length-1]:null;
+            if(last && row.start<=last.end)last.end=Math.max(last.end,row.end);else merged.push(row);
+        });
+        grouped[part]=merged;
+    }
+    return grouped;
+}
+function isSuppressed(index,tick,part) {
+    var rows=index&&index[part]||[],lo=0,hi=rows.length;
+    while(lo<hi){var mid=(lo+hi)>>1;if(rows[mid].start<=tick)lo=mid+1;else hi=mid;}
+    return lo>0 && tick<rows[lo-1].end;
+}
+function displayAtTick(regions,tick,part,hold,blocked) {
+    var current=atTick(regions,tick,part);
+    if(current || !hold || isSuppressed(blocked,tick,part))return current;
+    var lo=0,hi=regions.length;
+    while(lo<hi){var mid=(lo+hi)>>1;if(regions[mid].start<=tick)lo=mid+1;else hi=mid;}
+    for(var i=lo-1;i>=0;--i)if(regions[i].part===part)return regions[i];
+    return null;
+}
 function bass(notes, tick) {
     var sounding=notes.filter(function(n){return n.end===undefined || n.end>tick;});
     // Expired pedal residue cannot outrank an actually held bass.
@@ -21,13 +49,14 @@ function bass(notes, tick) {
 function describe(result, notes, tick, tonic, minor, degreeMode, preferFlats) {
     var out=clone(result), b=bass(notes,tick), flats=typeof preferFlats==="boolean"?preferFlats:[1,3,5,8,10].indexOf(tonic)>=0;
     out.bass=b?Harmony.mod12(b.pitch):-1;out.bassTpc=b?b.tpc:-1;
+    out.bassName=b?Harmony.spelledName(b.tpc,b.pitch,flats):"";
     out.chord="";out.degree="";out.tonic=tonic;out.minor=minor;out.inversion="未指定和弦";
     if(out.root>=0) {
         var rootNote=null;
         for(var i=0;i<notes.length;++i)if(Harmony.mod12(notes[i].pitch)===out.root){rootNote=notes[i];break;}
         out.chord=(out.rootSpelling|| (rootNote?Harmony.spelledName(rootNote.tpc,rootNote.pitch,flats):Harmony.pcName(out.root,flats)))+Harmony.defs[out.definition].suffix;
         if(b && out.bass!==out.root)out.chord+="/"+Harmony.spelledName(b.tpc,b.pitch,flats);
-        out.degree=Harmony.roman(tonic,minor,out.root,out.definition,degreeMode,out.bass);
+        out.degree=Harmony.roman(tonic,minor,out.root,out.definition,degreeMode,out.bass,out.bassName);
         out.inversion=b?Harmony.inversion(Harmony.labelFor(out.bass,out.root,out.definition)):"低音未确定";
     }
     out.chromatic=Harmony.isChromatic(tonic,minor,out.root,out.definition);
@@ -248,6 +277,8 @@ function validEdits(edits) {
         var out={start:edit.start,end:edit.end,part:edit.part,root:edit.root,definition:edit.definition,
             suppressed:edit.suppressed===true,bass:NumberIsInteger(edit.bass,-1,11)?edit.bass:-1,
             tonic:NumberIsInteger(edit.tonic,0,11)?edit.tonic:0,minor:edit.minor===true};
+        if(NumberIsInteger(edit.bassTpc,-1,33))out.bassTpc=edit.bassTpc;
+        if(typeof edit.bassName==="string")out.bassName=edit.bassName.slice(0,12);
         out.chord=typeof edit.chord==="string"?edit.chord.slice(0,64):"";
         out.degree=typeof edit.degree==="string"?edit.degree.slice(0,24):"";
         out.chromatic=Harmony.isChromatic(out.tonic,out.minor,out.root,out.definition);

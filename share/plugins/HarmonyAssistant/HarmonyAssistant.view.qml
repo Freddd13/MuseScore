@@ -71,17 +71,25 @@ MuseScore {
     property string annotationSelectionKey: ""
     property int liveRoot: -1
     property int liveDefinition: -1
-    property string instantChordText: "—"
-    property string instantDegreeText: "—"
+    property var displayedLiveHarmony:null
+    property var lastLiveHarmony:null
+    property string instantChordText:displayedLiveHarmony?displayedLiveHarmony.chord:"—"
+    property string instantDegreeText:displayedLiveHarmony?displayedLiveHarmony.degree:"—"
     property int focusedPart: 0
-    property var ownedRegion: Timeline.atTick(analysisRegions,currentTick,focusedPart)
-    property var summaryRegion: configuration.summaryMode===1&&ownedRegion&&(!analysisDirty||ownedRegion.source==="manual")?ownedRegion:null
+    property var focusedRegions: {
+        var part=focusedPart
+        return analysisRegions.filter(function(region){return region.part===part})
+    }
+    property var ownedRegion: Timeline.atTick(focusedRegions,currentTick,focusedPart)
+    property var suppressedDisplayRanges:Timeline.suppressionIndex(manualOverrides)
+    property var displayRegion:Timeline.displayAtTick(focusedRegions,currentTick,focusedPart,configuration.holdLastHarmony,suppressedDisplayRanges)
+    property var summaryRegion:configuration.summaryMode===1&&displayRegion&&(!analysisDirty||displayRegion.source==="manual")?displayRegion:null
     property string summaryChordText: !summaryRegion ? instantChordText : summaryRegion.chord
     property string summaryDegreeText: !summaryRegion ? instantDegreeText : degreeForRegion(summaryRegion)
-    property int summaryRoot: !summaryRegion ? liveRoot : summaryRegion.root
-    property int summaryDefinition: !summaryRegion ? liveDefinition : summaryRegion.definition
+    property int summaryRoot: !summaryRegion ? displayedLiveHarmony?displayedLiveHarmony.root:-1 : summaryRegion.root
+    property int summaryDefinition: !summaryRegion ? displayedLiveHarmony?displayedLiveHarmony.definition:-1 : summaryRegion.definition
     property color summaryInk: configuration.chromaticAccent && Harmony.isChromatic(Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,summaryRoot,summaryDefinition) ? configuration.chromaticColor : ink
-    property var summaryToneRows: makeToneRows(summaryRoot,summaryDefinition,summaryRegion ? summaryRegion.notes : contextNotes.length ? contextNotes : currentNotes)
+    property var summaryToneRows:makeToneRows(summaryRoot,summaryDefinition,resultNotes(summaryRegion))
     property int analysisEnd: analysisRecords.length ? (analysisRecords[analysisRecords.length-1].scoreEnd || analysisRecords[analysisRecords.length-1].tick+480) : 1920
     property var pendingRecords: []
     property var importedRecords: []
@@ -646,6 +654,7 @@ MuseScore {
         buildTimer.stop()
         buildSegment = null
         ownerScore = curScore
+        lastLiveHarmony=null;displayedLiveHarmony=null
         if (observer) observer.score = curScore
         colorLedger = []
         activeColorKeys = ({})
@@ -867,34 +876,45 @@ MuseScore {
         if(!region)return "—"
         var tonic=manualKey||region.tonic===undefined?Harmony.rootPcs[keyTonic.currentIndex]:region.tonic
         var minor=manualKey||region.minor===undefined?keyMode.currentIndex===1:region.minor
-        return Harmony.roman(tonic,minor,region.root,region.definition,configuration.degreeMode,region.bass)
+        var bassName=region.bassName||Harmony.spelledName(region.bassTpc,region.bass,prefersFlats())
+        return Harmony.roman(tonic,minor,region.root,region.definition,configuration.degreeMode,region.bass,bassName)
+    }
+    function resultNotes(region) {
+        return region && currentTick<region.end ? region.notes : contextNotes.length?contextNotes:currentNotes
     }
     function updateTexts() {
         chordRoot=liveRoot;chordDefinition=liveDefinition
-        chordText = chordRoot < 0 ? (currentPitches.length === 1 ? noteName(currentNotes[0]) : "—") :
-                rootName() + Harmony.defs[chordDefinition].suffix
-        degreeText = Harmony.roman(Harmony.rootPcs[keyTonic.currentIndex], keyMode.currentIndex === 1,
-                                   chordRoot, chordDefinition,configuration.degreeMode,currentNotes.length?currentNotes[0].pitch:-1)
+        var liveNotes=resultNotes(null),tonic=Harmony.rootPcs[keyTonic.currentIndex],minor=keyMode.currentIndex===1
+        var live=Timeline.describe({root:liveRoot,definition:liveDefinition,rootSpelling:liveRoot>=0?rootName():""},liveNotes,currentTick,tonic,minor,configuration.degreeMode,prefersFlats())
+        if(lastLiveHarmony && (lastLiveHarmony.part!==focusedPart || currentTick<lastLiveHarmony.tick))lastLiveHarmony=null
+        var retained=false,canHold=configuration.holdLastHarmony&&!Timeline.isSuppressed(suppressedDisplayRanges,currentTick,focusedPart)&&!(ownedRegion&&ownedRegion.root<0&&ownedRegion.source!=="auto")
+        if(live.root>=0) {
+            lastLiveHarmony=Timeline.clone(live);lastLiveHarmony.tick=currentTick;lastLiveHarmony.part=focusedPart
+        } else if(canHold && lastLiveHarmony) {
+            live=Timeline.clone(lastLiveHarmony);live.degree=degreeForRegion(live);retained=true
+        }
+        live.chord=live.chord||(currentPitches.length===1?noteName(currentNotes[0]):"—")
+        live.degree=live.degree||"—";displayedLiveHarmony=live
+        chordRoot=live.root;chordDefinition=live.definition;chordText=live.chord;degreeText=live.degree
         var voicing = []
         for (var i = 0; i < currentNotes.length; ++i) voicing.push(noteName(currentNotes[i]))
         voicingText = voicing.length ? voicing.join(" · ") : "—"
         inversionText = "—"
-        if (currentNotes.length && chordRoot >= 0) {
-            var bass = currentNotes[0], label = Harmony.labelFor(bass.pitch, chordRoot, chordDefinition)
-            inversionText = Harmony.inversion(label) + " · 低音 " + noteName(bass)
-            if (Harmony.mod12(bass.pitch) !== chordRoot) chordText += "/" + Harmony.spelledName(bass.tpc, bass.pitch, prefersFlats())
+        if (chordRoot >= 0) {
+            var bass=Timeline.bass(liveNotes,currentTick)
+            inversionText=live.inversion+(live.bass>=0?" · 低音 "+(retained?live.bassName:bass?noteName(bass):live.bassName):"")
         }
-        instantChordText=chordText;instantDegreeText=degreeText
+        if(retained)matchText="保留上一和弦"
         if(configuration.detailMode===1 && summaryRegion) {
             chordRoot=summaryRegion.root;chordDefinition=summaryRegion.definition
             chordText=summaryRegion.chord;degreeText=degreeForRegion(summaryRegion)
-            matchText="所属和弦 · "+(summaryRegion.source==="manual"?"人工修正":summaryRegion.kind||"已识别")
+            matchText=(currentTick>=summaryRegion.end?"保留上一和弦 · ":"所属和弦 · ")+(summaryRegion.source==="manual"?"人工修正":summaryRegion.kind||"已识别")
             inversionText=(summaryRegion.inversion||Harmony.inversion(Harmony.labelFor(summaryRegion.bass,chordRoot,chordDefinition)))+(summaryRegion.bass>=0?" · 低音 "+Harmony.pcName(summaryRegion.bass,prefersFlats()):"")
             var candidates=summaryRegion.alternatives||[]
             alternativesText=candidates.length?"也可能是 "+candidates.map(function(a){return nameOf(a.root)+Harmony.defs[a.definition].suffix}).join(" / "):""
-            if(summaryRegion.harmonicBass!==undefined && summaryRegion.harmonicBass!==summaryRegion.bass)alternativesText+=(alternativesText.length?" · ":"")+"新伴奏低音 "+Harmony.pcName(summaryRegion.harmonicBass,prefersFlats())+"；较早低音仍在延续"
+            if(summaryRegion.harmonicBass!==undefined && summaryRegion.harmonicBass!==summaryRegion.bass)alternativesText+=(alternativesText.length?" · ":"")+"新弹音的最低音 "+Harmony.pcName(summaryRegion.harmonicBass,prefersFlats())+"；原有低音仍在持续"
         }
-        var roleNotes = configuration.detailMode===1 && summaryRegion ? summaryRegion.notes : contextNotes.length ? contextNotes : currentNotes
+        var roleNotes=resultNotes(configuration.detailMode===1?summaryRegion:null)
         toneRows = makeToneRows(chordRoot,chordDefinition,roleNotes)
     }
     function makeToneRows(toneRoot,toneDefinition,roleNotes) {
@@ -1409,6 +1429,7 @@ Flickable {
                         DeskButton {
                             font.family: theme.fontFamily;text:"读调号"; implicitHeight:28; font.pixelSize:11; onClicked:{manualKey=false; if(currentTick>=0)initializeKey(currentTick); updateTexts(); optionsChanged()}}
                     }
+                    DeskSwitch {objectName:"harmonyHoldLast";text:"空拍／未确定时保留上一和弦";font.pixelSize:11;checked:configuration.holdLastHarmony;onClicked:{root.changeSummary("holdLastHarmony",checked);root.analyze()}}
                     RowLayout {width:parent.width
                         UiLabel {text:"踏板内识别";color:muted;font.pixelSize:11}
                         DeskComboBox {model:["单个和弦","多个和弦"];currentIndex:configuration.pedalMode;Layout.fillWidth:true;onActivated:{var c=Timeline.clone(configuration);c.pedalMode=currentIndex;configuration=Preferences.clean(c);optionsChanged()}}
