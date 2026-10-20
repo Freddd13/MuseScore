@@ -48,6 +48,8 @@ class SpectrumPane : public QWidget {
     int _drawEdge = 1;
     QString _editingMark;
     QListWidget *_marks = nullptr;
+    QSplitter *_marksSplitter = nullptr;
+    QToolButton *_marksToggle = nullptr;
     SpectrumCanvas *_canvas = nullptr;
     ControlFlowLayout *_tools = nullptr;
     QVector<QWidget *> _controls;
@@ -74,6 +76,7 @@ class SpectrumPane : public QWidget {
     Q_SLOT void audioChanged();
     Q_SLOT void projectChanged();
     void refreshMarks();
+    void updateMarksVisibility();
     QVariantMap pitchMark() const;
     void markPitch();
     void finishDrawnMark();

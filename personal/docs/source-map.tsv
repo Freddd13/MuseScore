@@ -299,7 +299,7 @@ MIDI音长绘制	mscore/midicrop/gateroll.inc	class GateRoll final	2	原新轮�
 频谱分段计算	mscore/referenceaudio/spectrum.cpp	SpectrumTile spectrum(	39	Hann 窗、各声道能量、对数音高、分段读取	mtest/mscore/spectrum/tst_spectrum.cpp
 频谱任务与缓存	mscore/referenceaudio/spectrumsession.cpp	void ReferenceSpectrumSession::request(	129	取消旧任务、有界缓存、独立工作线程	mtest/mscore/spectrum/tst_spectrum.cpp
 扒谱交互	mscore/performanceeditor/spectrumpane.cpp	SpectrumPane::SpectrumPane(	111	原曲片段、取音、音符输入、上下与叠加	mtest/mscore/pluginhost/tst_pluginhost.cpp
-扒谱标注保存	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::saveMarks(	1561	频率与音名、原生撤销、MSCZ 元数据	mtest/mscore/pluginhost/tst_pluginhost.cpp
+扒谱标注保存	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::saveMarks(	1598	频率与音名、原生撤销、MSCZ 元数据	mtest/mscore/pluginhost/tst_pluginhost.cpp
 AI任务范围	mscore/workflow/arrangementreader.cpp	QVariantMap ScoreObserver::arrangementState(	134	内存谱、版本、准确选区和共同资料	mtest/mscore/pluginhost/tst_pluginhost.cpp
 AI分批读取	mscore/workflow/arrangementreader.cpp	QVariantMap ScoreObserver::arrangementRange(	170	声部、精确时值、连线和演奏数据	mtest/mscore/pluginhost/tst_pluginhost.cpp
 MCP关闭处理	mscore/workflow/arrangementreader.cpp	void ScoreObserver::prepareLocalBridge(	125	应用关闭时释放网络默认配置	mtest/mscore/pluginhost/tst_pluginhost.cpp
@@ -314,7 +314,7 @@ MIDI录音目录	mscore/workflow/midicapture.cpp	"const QString folder=QSettings
 原生AI连接	mscore/workflow/aiconnection.cpp	void initializeBuiltinAI()	440	私有桥接、窗口选择、Codex配置和帮助	mtest/mscore/pluginhost/tst_pluginhost.cpp
 工作视图	mscore/workflow/workspaceviews.cpp	class WorkspaceViews	30	四种布局、DAW谱面对照、共用动作工具栏及返回乐谱	mtest/mscore/pluginhost/tst_pluginhost.cpp
 独立编辑区域	mscore/workflow/editorareas.cpp	class EditorAreas	23	悬浮、右侧停靠、放回与各视图的区域保存	mtest/mscore/pluginhost/tst_pluginhost.cpp
-原曲滑块输入	share/workflow/panels/WorkflowCommon/SliderNumber.qml	RowLayout {	5	原生滑块与数值输入	mtest/mscore/pluginhost/tst_pluginhost.cpp
+原曲滑块输入	share/workflow/panels/WorkflowCommon/SliderNumber.qml	RowLayout {	6	原生滑块与数值输入	mtest/mscore/pluginhost/tst_pluginhost.cpp
 节拍音符字体兼容	libmscore/textbase.cpp	"if (family == ""Leland Text"")"	867	默认节拍字形采用3.6.2尺寸；其它符号和自选字体保留	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/P2/compare_fonts.py
 实时录制对应	mscore/workflow/realtimematcher.h	class RealtimeMatcher	11	音高集合与起音间隔的有限路径匹配	mtest/mscore/p1native/tst_p1native.cpp
 表达精确选区	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::expressionSelection	168	保留所选拍位与谱表范围	mtest/mscore/pluginhost/tst_pluginhost.cpp
@@ -351,3 +351,6 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	191	空列�
 演奏结果逐音列表	share/workflow/panels/PerformanceExpression/ExpressionResults.qml	ColumnLayout {	7	音名、拍位、前后力度、分类与定位；预览拖动保留列表位置	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/PerformanceExpression/tests/test-results.cjs
 演奏结果文字整理	share/workflow/panels/PerformanceExpression/ExpressionRows.js	function build(	25	同音不同声部、已采用、需核对、漏弹多弹与拼写	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/PerformanceExpression/tests/test-results.cjs
 内置音源释放	audio/midi/fluid/fluid.cpp	Fluid::~Fluid()	119	停止后释放声音资源，再解锁互斥量	mtest/mscore/pluginhost/tst_pluginhost.cpp
+频谱标注区开关与高度	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::updateMarksVisibility()	1588	空列表收起，分隔条调整频谱与标注高度，保存个人设置	mtest/mscore/pluginhost/tst_pluginhost.cpp
+原曲面板连续播放检查	mtest/mscore/performanceeditor/reference_panel_074_tests.inc	void referencePanelRepeatedTransport()	1	实际面板按钮与演奏器、音频位置核对	mtest/mscore/performanceeditor/reference_panel_074_tests.inc
+原曲音轨开关	share/workflow/panels/ReferencePlayer/ReferencePlayer.view.qml	function setTrackFlag(	109	统一音轨开关事件，避免列表重建后访问旧行	mtest/mscore/pluginhost/tst_pluginhost.cpp

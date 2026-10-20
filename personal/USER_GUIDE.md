@@ -1,6 +1,6 @@
 # MuseScore Evolution 个人功能说明
 
-本文对应正在检查的个人版本：**0.73.0** · Kumo branch / Freddd13。发布进度与操作结果见[本轮检查](docs/WINDOWS_072_CHECKS.md)。
+本文对应个人版本：**0.74.0** · Kumo branch / Freddd13。原曲与频谱的操作结果见[本批检查](docs/REFERENCE_SPECTRUM_074_CHECKS.md)，窗口、音源与表达记录见[此前检查](docs/WINDOWS_072_CHECKS.md)。
 
 本轮[完整使用检查与返工进度](docs/USABILITY_REWORK_20261019.md)按功能逐项记录。
 
@@ -17,6 +17,7 @@
 | 听原曲和比较谱段 | [原曲参考](docs/REPAIR_056_GUIDE.md) |
 | 导入或录制演奏，再使用力度 | [录制、查看对应与采用力度](docs/EXPRESSION_073_GUIDE.md) |
 | 对照频谱听音、标注与输入 | [频谱扒谱完整步骤](docs/WORKSPACE_066_GUIDE.md) |
+| 给频谱或标注列表多留一些空间 | [标注列表开关与高度](docs/REFERENCE_SPECTRUM_074_GUIDE.md) |
 | 在卷帘画音、移动或先试草稿 | [卷帘写音完整步骤](docs/WORKSPACE_067_GUIDE.md) |
 | 给已经写好的音高换节奏 | [写节奏](docs/P2_RHYTHM_062_GUIDE.md) |
 | 查看指法、分手、配音与对位建议 | [编配建议](docs/P2_SUGGESTIONS_061_GUIDE.md) |

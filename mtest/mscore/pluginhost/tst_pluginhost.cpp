@@ -240,10 +240,42 @@ class TestPluginHost : public QObject {
             main->resize(1280,960);main->show();auto action=getAction("reference-player");if(!action->isChecked())action->trigger();
             QmlPlugin* root=nullptr;for(auto window:QGuiApplication::allWindows())if(auto view=qobject_cast<QQuickView*>(window))if(auto candidate=qobject_cast<QmlPlugin*>(view->rootObject()))if(candidate->menuPath()=="Plugins.Reference Player")root=candidate;
             QVERIFY(root);
+            QVERIFY(QMetaObject::invokeMethod(root,"setPanelFloating",Q_ARG(bool,true)));
+            QVERIFY(QMetaObject::invokeMethod(root,"resizePanel",Q_ARG(int,1000),Q_ARG(int,720)));
+            QTest::qWait(150);
             const auto path=_settings.filePath("reference-track.wav");QFile file(path);QVERIFY(file.open(QIODevice::WriteOnly));QDataStream data(&file);data.setByteOrder(QDataStream::LittleEndian);data.writeRawData("RIFF",4);data<<quint32(36+88200);data.writeRawData("WAVEfmt ",8);data<<quint32(16)<<quint16(1)<<quint16(1)<<quint32(44100)<<quint32(88200)<<quint16(2)<<quint16(16);data.writeRawData("data",4);data<<quint32(88200);for(int i=0;i<44100;++i)data<<qint16(0);file.close();
-            for(int i=0;i<2;++i){root->setProperty("addingAudio",true);QVERIFY(QMetaObject::invokeMethod(root,"openAudio",Q_ARG(QVariant,QUrl::fromLocalFile(path).toString())));QTRY_VERIFY(root->property("usable").toBool());}
+            auto currentMedia=[root]{auto value=root->property("media");return value.canConvert<QJSValue>()?value.value<QJSValue>().toQObject():value.value<QObject*>();};
+            for(int i=0;i<2;++i){root->setProperty("addingAudio",true);QVERIFY(QMetaObject::invokeMethod(root,"openAudio",Q_ARG(QVariant,QUrl::fromLocalFile(path).toString())));QTRY_VERIFY(currentMedia()&&currentMedia()->property("duration").toDouble()>900);}
             auto list=[root](const char* name){auto value=root->property(name);return value.canConvert<QJSValue>()?value.value<QJSValue>().toVariant().toList():value.toList();};
             QCOMPARE(list("tracks").size(),2);QVERIFY(root->findChild<QQuickItem*>("referenceTrackRows"));
+            QTest::qWait(150);
+            auto rows=root->findChild<QQuickItem*>("referenceTrackRows");
+            std::function<QQuickItem*(QQuickItem*,const QString&)> findVisual=[&](QQuickItem* item,const QString& name)->QQuickItem*{if(item->objectName()==name)return item;for(auto child:item->childItems())if(auto found=findVisual(child,name))return found;return nullptr;};
+            QTRY_VERIFY(findVisual(rows,"referenceTrackRow"));QPointer<QQuickItem> trackRow=findVisual(rows,"referenceTrackRow");const int trackIndex=trackRow->property("trackIndex").toInt();
+            QTRY_VERIFY(trackRow->width()>100);QTest::qWait(100);
+            for(const char* name:{"referenceTrackMute","referenceTrackSolo","referenceTrackParticipate"}){
+                  auto button=findVisual(trackRow,name);QVERIFY(button);QVERIFY(button->height()<=trackRow->height());
+                  QVERIFY(QRectF(0,0,trackRow->width(),trackRow->height()).adjusted(-1,-1,1,1).contains(button->mapRectToItem(trackRow,QRectF(0,0,button->width(),button->height()))));
+                  }
+            QPointer<QQuickItem> mute=findVisual(trackRow,"referenceTrackMute");QVERIFY(mute);
+            QVERIFY(mute->isVisible()&&mute->isEnabled());
+            QVERIFY(QRectF(QPointF(),root->window()->size()).contains(mute->mapRectToScene(QRectF(0,0,mute->width(),mute->height()))));
+            QSignalSpy muteClicks(mute,SIGNAL(clicked()));
+            QTest::mouseClick(root->window(),Qt::LeftButton,Qt::NoModifier,mute->mapToScene(QPointF(mute->width()/2,mute->height()/2)).toPoint());QTRY_VERIFY(list("tracks")[trackIndex].toMap()["mute"].toBool());
+            QCOMPARE(muteClicks.count(),1);
+            QTest::qWait(100);
+            QTRY_VERIFY(findVisual(rows,"referenceTrackRow"));trackRow=findVisual(rows,"referenceTrackRow");mute=findVisual(trackRow,"referenceTrackMute");QVERIFY(mute);
+            QTest::mouseClick(root->window(),Qt::LeftButton,Qt::NoModifier,mute->mapToScene(QPointF(mute->width()/2,mute->height()/2)).toPoint());QTRY_VERIFY(!list("tracks")[trackIndex].toMap()["mute"].toBool());
+            for(const auto &option:QList<QPair<QString,QString>>{{"referenceTrackSolo","solo"},{"referenceTrackParticipate","participate"}}){
+                  const bool original=list("tracks")[trackIndex].toMap()[option.second].toBool();
+                  for(bool target:{!original,original}){
+                        QTest::qWait(100);trackRow=findVisual(rows,"referenceTrackRow");QVERIFY(trackRow);QCOMPARE(trackRow->property("trackIndex").toInt(),trackIndex);
+                        QPointer<QQuickItem> button=findVisual(trackRow,option.first);QVERIFY(button);
+                        QTest::mouseClick(root->window(),Qt::LeftButton,Qt::NoModifier,button->mapToScene(QPointF(button->width()/2,button->height()/2)).toPoint());
+                        QTRY_COMPARE(list("tracks")[trackIndex].toMap()[option.second].toBool(),target);
+                        }
+                  }
+            auto number=root->findChild<QQuickItem*>("referenceSpeedValue");auto play=root->findChild<QQuickItem*>("referenceJointPlay");QVERIFY(number&&play);QCOMPARE(number->height(),play->height());
             auto slider=root->findChild<QQuickItem*>("referenceVolumeSlider");QVERIFY(slider);QTRY_VERIFY(slider->width()>20);
             QTest::mouseClick(root->window(),Qt::LeftButton,Qt::NoModifier,slider->mapToScene(QPointF(slider->width()*.3,slider->height()/2)).toPoint());
             auto mediaValue=root->property("media");auto media=mediaValue.canConvert<QJSValue>()?mediaValue.value<QJSValue>().toQObject():mediaValue.value<QObject*>();QVERIFY(media);QVERIFY(media->property("volume").toDouble()<.6);
@@ -258,6 +290,16 @@ class TestPluginHost : public QObject {
             QMetaObject::invokeMethod(root,"resizePanel",Q_ARG(int,1000),Q_ARG(int,720));
             QTest::mouseMove(root->window(),QPoint(12,root->window()->height()-12));QTest::qWait(200);
             QVERIFY(root->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("reference-tracks-064.png")));
+            QVERIFY(QMetaObject::invokeMethod(root,"resizePanel",Q_ARG(int,420),Q_ARG(int,360)));QTest::qWait(180);
+            auto scroll=root->findChild<QQuickItem*>("referencePanelScroll");QVERIFY(scroll);QVERIFY(scroll->property("contentHeight").toDouble()>scroll->height());
+            auto content=scroll->property("contentItem").value<QQuickItem*>();QVERIFY(content);content->setProperty("contentY",0.);QTest::qWait(100);
+            auto vertical=root->findChild<QQuickItem*>("referencePanelVerticalScroll");QVERIFY(vertical);QVERIFY(vertical->height()>scroll->height()/2);
+            QVERIFY(QRectF(QPointF(),root->window()->size()).contains(vertical->mapRectToScene(QRectF(0,0,vertical->width(),vertical->height()))));
+            QVERIFY(root->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("reference-narrow-top-074.png")));
+            QTest::mouseClick(root->window(),Qt::LeftButton,Qt::NoModifier,vertical->mapToScene(QPointF(vertical->width()/2,vertical->height()-4)).toPoint());QTRY_VERIFY(content->property("contentY").toDouble()>0);
+            content->setProperty("contentY",scroll->property("contentHeight").toDouble()-scroll->property("availableHeight").toDouble());QTest::qWait(100);
+            auto associate=root->findChild<QQuickItem*>("referenceAssociate");QVERIFY(associate);QVERIFY(QRectF(QPointF(),root->window()->size()).contains(associate->mapRectToScene(QRectF(0,0,associate->width(),associate->height()))));
+            QVERIFY(root->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("reference-narrow-074.png")));
       }
       void featureDisabledStartup() {
             if (qEnvironmentVariable("P2_FEATURE_GATE_OFF").isEmpty()) QSKIP("Run with P2_FEATURE_GATE_OFF=1");
@@ -586,6 +628,9 @@ class TestPluginHost : public QObject {
                 QTest::mouseClick(playback,Qt::LeftButton);
             }QTRY_VERIFY(!media->property("playing").toBool());media->setProperty("volume",oldVolume);
             auto canvas=pane->findChild<QWidget*>("transcriptionSpectrumCanvas");QVERIFY(canvas);auto piano=canvas->grab().toImage();int white=0,black=0;for(int y=0;y<piano.height();++y){auto color=piano.pixelColor(20,y);if(color.lightness()>200)++white;if(color.lightness()<40)++black;}QVERIFY(white>piano.height()/8);QVERIFY(black>piano.height()/8);auto mark=pane->findChild<QToolButton*>("transcriptionMark");auto input=pane->findChild<QToolButton*>("transcriptionInput");QVERIFY(mark&&input);
+            auto marksToggle=pane->findChild<QToolButton*>("spectrumMarksToggle");QVERIFY(marksToggle);
+            auto markList=pane->findChild<QListWidget*>("transcriptionMarks");QVERIFY(markList);
+            QCOMPARE(markList->count(),0);QVERIFY(!markList->isVisible());QVERIFY(!marksToggle->isEnabled());
             auto sharedPlan=media->property("workflowPlaybackPlan").toMap();sharedPlan["owner"]="reference-panel";sharedPlan["volume"]=0.;QVERIFY(QMetaObject::invokeMethod(media,"start",Q_RETURN_ARG(QVariantMap,response),Q_ARG(QVariantMap,sharedPlan)));QVERIFY(!response.contains("error"));QTRY_VERIFY(playback->text().contains(QString::fromUtf8("暂停")));QTest::keyClick(canvas,Qt::Key_Space);QTRY_VERIFY(!media->property("playing").toBool());media->setProperty("volume",oldVolume);
             auto rest=score->findCR(Fraction(),0);QVERIFY(rest&&rest->isRest());score->select(rest);main->currentScoreView()->cmd("note-input");score->inputState().setDuration(TDuration(TDuration::DurationType::V_QUARTER));
             QTest::mouseClick(canvas,Qt::LeftButton,Qt::NoModifier,QPoint(gutterForTest()+100,qRound((108.5-69)/88.*canvas->height())));
@@ -593,13 +638,23 @@ class TestPluginHost : public QObject {
             const auto saved=QJsonDocument::fromJson(score->masterScore()->metaTag("kumo.transcription").toUtf8()).toVariant().toMap();QCOMPARE(saved.value("pitches").toList().size(),1);QCOMPARE(saved.value("pitches").toList().front().toMap().value("pitch").toInt(),69);
             auto marks=pane->findChild<QListWidget*>("transcriptionMarks");QVERIFY(marks&&marks->count()==1);marks->item(0)->setSelected(true);QTest::mouseClick(input,Qt::LeftButton);QTRY_COMPARE(score->undoStack()->getCurIdx(),before+2);auto chord=score->findCR(Fraction(),0);QVERIFY(chord&&chord->isChord());QCOMPARE(toChord(chord)->notes().front()->pitch(),69);
             Shortcut::load();for(const char* key:{"undo","redo"}){auto shortcut=Shortcut::getShortcut(key);shortcut->setStandardKey(shortcut->standardKey());}QVERIFY(!getAction("undo")->shortcut().isEmpty());main->activateWindow();
-            canvas->setFocus();QTest::keySequence(canvas,getAction("undo")->shortcut());QTRY_VERIFY(score->findCR(Fraction(),0)->isRest());QTest::keySequence(canvas,getAction("undo")->shortcut());QTRY_VERIFY(score->masterScore()->metaTag("kumo.transcription").isEmpty());QTRY_COMPARE(marks->count(),0);QTest::keySequence(canvas,getAction("redo")->shortcut());QTest::keySequence(canvas,getAction("redo")->shortcut());QTRY_VERIFY(score->findCR(Fraction(),0)->isChord());
+            QApplication::setActiveWindow(main);canvas->setFocus();QTRY_VERIFY(canvas->hasFocus());QTest::keySequence(canvas,getAction("undo")->shortcut());QTRY_VERIFY(score->findCR(Fraction(),0)->isRest());QTest::keySequence(canvas,getAction("undo")->shortcut());QTRY_VERIFY(score->masterScore()->metaTag("kumo.transcription").isEmpty());QTRY_COMPARE(marks->count(),0);QTest::keySequence(canvas,getAction("redo")->shortcut());QTest::keySequence(canvas,getAction("redo")->shortcut());QTRY_VERIFY(score->findCR(Fraction(),0)->isChord());
             QFileInfo info(_settings.filePath("spectral-mark.mscz"));QVERIFY(score->saveCompressedFile(info,false,false));std::unique_ptr<MasterScore> restored(main->readScore(info.absoluteFilePath()));QVERIFY(restored);QCOMPARE(restored->metaTag("kumo.transcription"),score->masterScore()->metaTag("kumo.transcription"));
             const auto out=QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path()));
             QFile savedInput(info.absoluteFilePath());QVERIFY(savedInput.open(QIODevice::ReadOnly));QFile savedOutput(out.filePath("transcription-compat-059.mscz"));QVERIFY(savedOutput.open(QIODevice::WriteOnly));QCOMPARE(savedOutput.write(savedInput.readAll()),savedInput.size());savedOutput.close();
             QVERIFY(pane->grab().save(out.filePath("transcription-separate-059.png")));
             auto display=pane->findChild<QComboBox*>("transcriptionDisplay");QVERIFY(display);display->setCurrentIndex(1);QTest::qWait(100);QVERIFY(editor->grab().save(out.filePath("transcription-overlay-059.png")));display->setCurrentIndex(0);
             editor->findChild<QAction*>("editorArea/float/transcriptionSpectrumPane")->trigger();auto separate=main->findChild<QDockWidget*>("kumoEditorArea/transcriptionSpectrumPane");QVERIFY(separate);separate->resize(920,700);QTest::qWait(180);
+            if(!marksToggle->isChecked())QTest::mouseClick(marksToggle,Qt::LeftButton);
+            QTRY_VERIFY(markList->isVisible());auto markSplit=pane->findChild<QSplitter*>("spectrumMarksSplitter");QVERIFY(markSplit);
+            const int oldMarkHeight=markList->height();auto handle=markSplit->handle(1);QVERIFY(handle&&handle->isVisible());
+            const auto center=handle->mapTo(handle->window(),handle->rect().center());auto window=handle->window()->windowHandle();
+            QTest::mousePress(window,Qt::LeftButton,Qt::NoModifier,center);QTest::mouseMove(window,center-QPoint(0,50),30);QTest::mouseRelease(window,Qt::LeftButton,Qt::NoModifier,center-QPoint(0,50));
+            QTRY_VERIFY(markList->height()>oldMarkHeight+20);QVERIFY(!QSettings().value("spectrum/marksSplitter").toByteArray().isEmpty());
+            const int shownCanvasHeight=canvas->height();QTest::mouseClick(marksToggle,Qt::LeftButton);QTRY_VERIFY(!markList->isVisible());QTRY_VERIFY(canvas->height()>shownCanvasHeight);
+            QTest::mouseClick(marksToggle,Qt::LeftButton);QTRY_VERIFY(markList->isVisible());QVERIFY(QSettings().value("spectrum/showMarks").toBool());QTest::qWait(150);
+            QVERIFY(!markList->visibleRegion().isEmpty());QVERIFY(markList->height()>=28);
+            QVERIFY(separate->grab().save(out.filePath("spectrum-mark-split-074.png")));
             auto timeScroll=pane->findChild<QScrollBar*>("spectrumTimeScroll"),pitchScroll=pane->findChild<QScrollBar*>("spectrumPitchScroll");QVERIFY(timeScroll&&pitchScroll);QVERIFY(timeScroll->isVisible());QVERIFY(pitchScroll->isVisible());
             auto optionsButton=pane->findChild<QToolButton*>("spectrumDisplaySettings");QVERIFY(optionsButton);QTest::mouseClick(optionsButton,Qt::LeftButton);QTest::qWait(150);QTRY_VERIFY(!session->property("busy").toBool());
             auto optionsScroll=pane->findChild<QScrollArea*>("spectrumOptionsScroll");QVERIFY(optionsScroll&&optionsScroll->isVisible());auto optionTabs=pane->findChild<QTabWidget*>("spectrumOptionsTabs");QVERIFY(optionTabs);

@@ -1,6 +1,7 @@
 import QtQuick 2.9
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.3
+import "../HarmonyAssistant" as Desk
 
 RowLayout {
     id: root
@@ -15,13 +16,15 @@ RowLayout {
     signal editingFinished()
     spacing: 5
     implicitWidth: 222
-    implicitHeight: Math.max(28, number.implicitHeight)
-    Label { text: root.caption; Layout.preferredWidth: 40; font: Qt.application.font }
+    implicitHeight: 28
+    Desk.UiTheme { id: theme }
+    Label { text: root.caption; Layout.preferredWidth: 40; color: theme.text; font.family: theme.fontFamily; font.pixelSize: 11 }
     Slider {
         id: slider
         objectName: root.objectName + "Slider"
         Layout.fillWidth: true
         Layout.minimumWidth: 48
+        Layout.preferredHeight: 28
         from: root.minimum; to: root.maximum; value: root.value; stepSize: root.step
         Accessible.name: root.caption
         onMoved: root.edited(value)
@@ -29,14 +32,13 @@ RowLayout {
         ToolTip.visible: hovered || pressed
         ToolTip.text: value.toFixed(root.decimals) + root.suffix
     }
-    TextField {
+    Desk.DeskTextField {
         id: number
         objectName: root.objectName + "Value"
         Layout.preferredWidth: 76
         horizontalAlignment: Text.AlignRight
         rightPadding: root.suffix.length ? 22 : 8
         text: root.value.toLocaleString(Qt.locale(), 'f', root.decimals)
-        font: Qt.application.font
         validator: DoubleValidator { bottom: root.minimum; top: root.maximum; decimals: root.decimals; locale: Qt.locale().name }
         onEditingFinished: {
             var parsed = Number.fromLocaleString(Qt.locale(), text)
@@ -44,7 +46,7 @@ RowLayout {
             text = root.value.toLocaleString(Qt.locale(), 'f', root.decimals)
             root.editingFinished()
         }
-        Label { anchors.right: parent.right; anchors.rightMargin: 7; anchors.verticalCenter: parent.verticalCenter; text: root.suffix; font: number.font }
+        Label { anchors.right: parent.right; anchors.rightMargin: 7; anchors.verticalCenter: parent.verticalCenter; text: root.suffix; font: number.font; color: theme.text }
         Accessible.name: root.caption + "数值"
     }
 }

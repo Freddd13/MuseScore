@@ -361,7 +361,11 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _timeScroll = new QScrollBar(Qt::Horizontal);
     _timeScroll->setObjectName("spectrumTimeScroll");
     canvasGrid->addWidget(_timeScroll, 1, 0);
-    layout->addWidget(canvasHost, 1);
+    _marksSplitter = new QSplitter(Qt::Vertical);
+    _marksSplitter->setObjectName("spectrumMarksSplitter");
+    _marksSplitter->setChildrenCollapsible(false);
+    _marksSplitter->addWidget(canvasHost);
+    layout->addWidget(_marksSplitter, 1);
     connect(_timeScroll, &QScrollBar::valueChanged, this, [this](int value) {
         if (_clip.isEmpty())
             _from = value;
@@ -380,12 +384,14 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _target->setMinimumWidth(0);
     _target->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     layout->addWidget(_target);
-    auto bottom = new QHBoxLayout;
+    auto bottomHost = new QWidget;
+    bottomHost->setObjectName("spectrumMarkTools");
+    auto bottom = new ControlFlowLayout(bottomHost);
     _status = new QLabel(tr("先在原曲参考中打开音频。"));
     _status->setObjectName("spectrumStatus");
     _status->setWordWrap(true);
     _status->setMaximumHeight(fontMetrics().lineSpacing() * 2 + 4);
-    bottom->addWidget(_status, 1);
+    layout->addWidget(_status);
     auto mark = new QToolButton;
     mark->setObjectName("transcriptionMark");
     mark->setText(tr("标注这个音"));
@@ -406,14 +412,34 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
         saveMarks();
     });
     bottom->addWidget(remove);
-    layout->addLayout(bottom);
+    _marksToggle = new QToolButton;
+    _marksToggle->setObjectName("spectrumMarksToggle");
+    _marksToggle->setCheckable(true);
+    _marksToggle->setChecked(QSettings().value("spectrum/showMarks", true).toBool());
+    _marksToggle->setToolTip(tr("展开或收起已经保存的音高标注。拖动频谱与列表之间的分隔条可调整高度。"));
+    connect(_marksToggle, &QToolButton::clicked, this, [this](bool checked) {
+        QSettings().setValue("spectrum/showMarks", checked);
+        updateMarksVisibility();
+    });
+    bottom->addWidget(_marksToggle);
+    layout->addWidget(bottomHost);
     _marks = new QListWidget;
     _marks->setObjectName("transcriptionMarks");
     _marks->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    _marks->setMaximumHeight(76);
     _marks->setMinimumHeight(28);
+    _marks->setMinimumWidth(0);
+    _marks->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Ignored);
     _marks->setToolTip(tr("点击标注可定位与试音，按住 Ctrl 选择多个音高后输入为和弦。"));
-    layout->addWidget(_marks);
+    _marksSplitter->addWidget(_marks);
+    _marksSplitter->setStretchFactor(0, 5);
+    _marksSplitter->setStretchFactor(1, 1);
+    _marksSplitter->setSizes({400, 80});
+    const auto markSizes = QSettings().value("spectrum/marksSplitter").toByteArray();
+    if (!markSizes.isEmpty())
+        _marksSplitter->restoreState(markSizes);
+    connect(_marksSplitter, &QSplitter::splitterMoved, this, [this] {
+        QSettings().setValue("spectrum/marksSplitter", _marksSplitter->saveState());
+    });
     connect(_marks, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
         auto m = item->data(Qt::UserRole + 1).toMap();
         _pickMs = m.value("ms").toDouble();
@@ -505,7 +531,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     });
     connect(_display, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int n) {
         QSettings().setValue("spectrum/display", n);
-        _canvas->parentWidget()->setVisible(n == 0);
+        updateMarksVisibility();
         recolor();
         setMinimumHeight(n == 1 ? 126 : 180);
         viewChanged();
@@ -538,7 +564,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     connect(_speed, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
             [this](double) { _listenTimer.start(); });
     connect(_editor->_scroll, &QScrollBar::valueChanged, this, [this] { viewChanged(); });
-    _canvas->parentWidget()->setVisible(_display->currentIndex() == 0);
+    updateMarksVisibility();
     setMinimumHeight(_display->currentIndex() == 1 ? 126 : 180);
     applyAppearance();
     installEventFilter(this);
@@ -1556,7 +1582,18 @@ void SpectrumPane::refreshMarks() {
         item->setData(Qt::UserRole + 1, m);
         item->setSelected(selected.contains(m.value("id").toString()));
     }
+    updateMarksVisibility();
     updateActions();
+}
+void SpectrumPane::updateMarksVisibility() {
+    const bool hasMarks = _marks->count() > 0;
+    const bool showMarks = hasMarks && _marksToggle->isChecked();
+    const bool showCanvas = _display->currentIndex() == 0;
+    _marksToggle->setText(tr("标注列表 · %1").arg(_marks->count()));
+    _marksToggle->setEnabled(hasMarks);
+    _marks->setVisible(showMarks);
+    _canvas->parentWidget()->setVisible(showCanvas);
+    _marksSplitter->setVisible(showCanvas || showMarks);
 }
 void SpectrumPane::saveMarks() {
     auto score = _editor->score();

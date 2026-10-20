@@ -14,7 +14,7 @@ MuseScore {
  id:root
  menuPath:"Plugins.Reference Player"
  description:"原曲参考：本地播放、波形循环、保调慢放及手动谱段关联。"
- version:"1.3.0"
+ version:"1.3.1"
  requiresScore:false
  pluginType:"dock"
  dockArea:"bottom"
@@ -106,6 +106,12 @@ MuseScore {
   viewportPeaks=[];media.volume=t.volume===undefined?.8:t.volume;media.speed=t.speed||1;switchingTrack=false;applyLoop();wave.requestPaint();status="已选音轨："+t.name;
  }
  function trackOption(name,value){if(selectedTrack<0)return;storeTrack();var list=Project.copy(tracks);list[selectedTrack][name]=value;tracks=list;if(audioProject&&!audioProject.playing)audioProject.setTracks(tracks);}
+ function setTrackFlag(index,name,value){
+  if(index<0||index>=tracks.length)return;
+  storeTrack();var list=Project.copy(tracks);list[index][name]=value;tracks=list;
+  if(name==="mute"&&value&&index===selectedTrack&&media)media.pause();
+  if(audioProject&&!audioProject.playing)audioProject.setTracks(tracks);
+ }
  function watchTrackFile(session,id) {
   session.fileReady.connect(function(info){
    var list=Project.copy(root.tracks),index=list.findIndex(function(t){return t.id===id});
@@ -384,17 +390,26 @@ MuseScore {
  function refreshWaveform(){wave.requestPaint();if(usable&&typeof media.requestWaveform==="function")media.requestWaveform(viewStart,viewEnd,Math.round(waveHost.width))}
  function fitSlice(){if(!usable)return;var padding=Math.max(150,(b-a)*.08);viewStart=Math.max(0,a-padding);viewEnd=Math.min(media.duration,b+padding);viewportPeaks=[];wave.requestPaint();if(typeof media.requestWaveform==="function")media.requestWaveform(viewStart,viewEnd,Math.round(waveHost.width))}
 
+ ScrollView {
+  id:panelScroll;objectName:"referencePanelScroll";anchors.fill:parent;clip:true;padding:8
+  rightPadding:8+(panelScroll.ScrollBar.vertical.size<1?panelScroll.ScrollBar.vertical.width:0)
+  contentWidth:availableWidth;contentHeight:panelContents.height
+  ScrollBar.vertical.objectName:"referencePanelVerticalScroll"
+  ScrollBar.vertical.policy:contentHeight>availableHeight?ScrollBar.AlwaysOn:ScrollBar.AlwaysOff
+  ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
  ColumnLayout {
-  anchors.fill:parent;anchors.margins:8;spacing:6
-  RowLayout {id:header;Layout.fillWidth:true
-   Label {text:"原曲参考";font.bold:true;color:theme.text}
-   Desk.DeskComboBox {objectName:"referenceTracks";Layout.fillWidth:true;Layout.minimumWidth:50;model:root.tracks.map(function(t){return t.name});currentIndex:root.selectedTrack;onActivated:root.selectTrack(currentIndex)}
-   Desk.DeskButton {text:"打开";enabled:root.usable;onClicked:{root.addingAudio=false;audioDialog.open()}}
-   Desk.DeskButton {text:"添加";visible:!root.compact;enabled:root.usable;onClicked:{root.addingAudio=true;audioDialog.open()}}
-   Desk.DeskButton {text:"项目";visible:!root.compact;enabled:root.usable;onClicked:projectMenu.open()}
-   Desk.DeskButton {text:"展开";visible:root.compact;onClicked:{root.setPanelFloating(true);root.resizePanel(840,650)}}
-   Desk.DeskButton {text:"×";visible:root.compact;implicitWidth:28;onClicked:root.hidePanel()}
-   Desk.DeskButton {text:typeof panelFloating==="boolean"&&panelFloating?"停靠":"悬浮";visible:!root.narrow;onClicked:{if(typeof root.setPanelFloating==="function")root.setPanelFloating(!root.panelFloating)}}
+  id:panelContents;width:panelScroll.availableWidth;height:implicitHeight;spacing:6
+  Flow {id:header;Layout.fillWidth:true;Layout.preferredHeight:implicitHeight;spacing:5
+   property var actions:[openAudioButton,addAudioButton,projectButton,expandButton,closeButton,floatButton]
+   property real actionWidth:actions.reduce(function(sum,item){return sum+(item.visible?item.width+header.spacing:0)},0)
+   Label {id:titleLabel;text:"原曲参考";height:28;verticalAlignment:Text.AlignVCenter;font.bold:true;color:theme.text}
+   Desk.DeskComboBox {objectName:"referenceTracks";width:Math.max(120,header.width-titleLabel.implicitWidth-header.spacing-header.actionWidth);model:root.tracks.map(function(t){return t.name});currentIndex:root.selectedTrack;onActivated:root.selectTrack(currentIndex)}
+   Desk.DeskButton {id:openAudioButton;text:"打开";enabled:root.usable;onClicked:{root.addingAudio=false;audioDialog.open()}}
+   Desk.DeskButton {id:addAudioButton;text:"添加";visible:!root.compact;enabled:root.usable;onClicked:{root.addingAudio=true;audioDialog.open()}}
+   Desk.DeskButton {id:projectButton;text:"项目";visible:!root.compact;enabled:root.usable;onClicked:projectMenu.open()}
+   Desk.DeskButton {id:expandButton;text:"展开";visible:root.compact;onClicked:{root.setPanelFloating(true);root.resizePanel(840,650)}}
+   Desk.DeskButton {id:closeButton;text:"×";visible:root.compact;implicitWidth:28;onClicked:root.hidePanel()}
+   Desk.DeskButton {id:floatButton;text:typeof panelFloating==="boolean"&&panelFloating?"停靠":"悬浮";visible:!root.narrow;onClicked:{if(typeof root.setPanelFloating==="function")root.setPanelFloating(!root.panelFloating)}}
   }
   Flow {id:transport;Layout.fillWidth:true;Layout.preferredHeight:implicitHeight;spacing:5
    Desk.DeskComboBox {objectName:"referenceTransportTarget";width:90;model:["原曲","乐谱","一起播放"];currentIndex:root.transportTarget;onActivated:root.transportTarget=currentIndex}
@@ -405,29 +420,28 @@ MuseScore {
    Desk.DeskButton {text:"循环";visible:!root.compact;checkable:true;checked:root.looping;onClicked:{root.looping=checked;if(root.audioProject&&typeof root.audioProject.repeatSelection==="boolean")root.audioProject.repeatSelection=checked;root.applyLoop()}}
   }
   ColumnLayout {Layout.fillWidth:true;visible:!root.compact&&root.tracks.length>0;spacing:2
-   RowLayout {Layout.fillWidth:true
+   RowLayout {Layout.fillWidth:true;spacing:4;Layout.leftMargin:2;Layout.rightMargin:2+(trackScroll.visible?trackScroll.width:0)
     Label {text:"音轨";Layout.fillWidth:true;color:theme.text}
     Label {text:"静音";Layout.preferredWidth:36;horizontalAlignment:Text.AlignHCenter;color:theme.muted}
     Label {text:"独听";Layout.preferredWidth:36;horizontalAlignment:Text.AlignHCenter;color:theme.muted}
     Label {text:"联合";Layout.preferredWidth:36;horizontalAlignment:Text.AlignHCenter;color:theme.muted}
-    Desk.DeskButton {text:"恢复删除";width:70;enabled:root.deletedTracks.length>0;onClicked:root.restoreDeletedTrack()}
+    Desk.DeskButton {text:"恢复删除";Layout.preferredWidth:70;enabled:root.deletedTracks.length>0;onClicked:root.restoreDeletedTrack()}
    }
    ListView {id:trackRows;objectName:"referenceTrackRows";Layout.fillWidth:true;Layout.preferredHeight:Math.min(3,root.tracks.length)*32;clip:true;model:root.tracks
-    ScrollBar.vertical:ScrollBar{}
-    delegate:Rectangle {width:trackRows.width;height:32;color:index===root.selectedTrack?theme.selected:theme.background
-     RowLayout {anchors.fill:parent;spacing:4
+    ScrollBar.vertical:ScrollBar{id:trackScroll;policy:trackRows.contentHeight>trackRows.height?ScrollBar.AlwaysOn:ScrollBar.AsNeeded}
+    delegate:Rectangle {objectName:"referenceTrackRow";property int trackIndex:index;width:trackRows.width-(trackScroll.visible?trackScroll.width:0);height:32;color:index===root.selectedTrack?theme.selected:theme.background
+     RowLayout {anchors.fill:parent;anchors.margins:2;spacing:4
       Desk.DeskButton {text:modelData.name;Layout.fillWidth:true;Layout.minimumWidth:50;checkable:true;checked:index===root.selectedTrack;onClicked:root.selectTrack(index)}
-      CheckBox {Layout.preferredWidth:36;enabled:!root.audioProject||!root.audioProject.playing;checked:!!modelData.mute;Accessible.name:"静音 "+modelData.name;onClicked:{var list=Project.copy(root.tracks);list[index].mute=checked;root.tracks=list;if(checked&&index===root.selectedTrack&&root.media)root.media.pause();root.storeTrack()}}
-      CheckBox {Layout.preferredWidth:36;enabled:!root.audioProject||!root.audioProject.playing;checked:!!modelData.solo;Accessible.name:"联合播放时独听 "+modelData.name;onClicked:{var list=Project.copy(root.tracks);list[index].solo=checked;root.tracks=list;root.storeTrack()}}
-      CheckBox {Layout.preferredWidth:36;enabled:!root.audioProject||!root.audioProject.playing;checked:modelData.participate!==false;Accessible.name:"参加联合播放 "+modelData.name;onClicked:{var list=Project.copy(root.tracks);list[index].participate=checked;root.tracks=list;root.storeTrack()}}
-      Desk.DeskButton {text:"删除";width:70;Accessible.name:"删除音轨 "+modelData.name;onClicked:root.removeTrack(index)}
+      Desk.DeskButton {objectName:"referenceTrackMute";text:"M";Layout.preferredWidth:36;checkable:true;enabled:!root.audioProject||!root.audioProject.playing;checked:!!modelData.mute;Accessible.name:"静音 "+modelData.name;ToolTip.visible:hovered;ToolTip.text:"静音这条音轨";onClicked:root.setTrackFlag(index,"mute",checked)}
+      Desk.DeskButton {objectName:"referenceTrackSolo";text:"S";Layout.preferredWidth:36;checkable:true;enabled:!root.audioProject||!root.audioProject.playing;checked:!!modelData.solo;Accessible.name:"联合播放时独听 "+modelData.name;ToolTip.visible:hovered;ToolTip.text:"联合播放时独听这条音轨";onClicked:root.setTrackFlag(index,"solo",checked)}
+      Desk.DeskButton {objectName:"referenceTrackParticipate";text:"联";Layout.preferredWidth:36;checkable:true;enabled:!root.audioProject||!root.audioProject.playing;checked:modelData.participate!==false;Accessible.name:"参加联合播放 "+modelData.name;ToolTip.visible:hovered;ToolTip.text:"让这条音轨参加一起播放";onClicked:root.setTrackFlag(index,"participate",checked)}
+      Desk.DeskButton {text:"删除";Layout.preferredWidth:70;Accessible.name:"删除音轨 "+modelData.name;onClicked:root.removeTrack(index)}
      }
     }
    }
   }
   Label {Layout.fillWidth:true;Layout.preferredHeight:28;visible:!root.compact;wrapMode:Text.Wrap;maximumLineCount:2;elide:Text.ElideRight;text:root.audioProject&&root.audioProject.playing?root.audioProject.status:root.status;color:theme.muted;font.pixelSize:11}
-  ScrollView {Layout.fillWidth:true;Layout.fillHeight:true;visible:!root.compact;clip:true
-   Column {width:root.width-32;spacing:6
+   Column {Layout.fillWidth:true;visible:!root.compact;spacing:6
     Common.SliderNumber {visible:root.transportTarget===2;width:Math.min(280,parent.width);value:root.jointVolume*100;caption:"总音量";onEdited:{root.jointVolume=newValue/100;if(root.audioProject)root.audioProject.volume=newValue/100}onEditingFinished:root.storeTrack()}
     RowLayout {width:parent.width;visible:root.transportTarget===2
      Desk.DeskComboBox {objectName:"referencePlaybackMode";enabled:!root.audioProject||!root.audioProject.playing;Layout.fillWidth:true;model:["开头对齐，各自播放","音频跟随乐谱","乐谱跟随选中音频"];currentIndex:root.playbackMode;onActivated:root.playbackMode=currentIndex}
@@ -483,10 +497,10 @@ MuseScore {
         position:root.usable&&root.media.duration>0?root.viewStart/root.media.duration:0
         onPositionChanged:if(pressed&&root.usable){var span=root.viewEnd-root.viewStart;root.viewStart=Math.max(0,Math.min(root.media.duration-span,position*root.media.duration));root.viewEnd=root.viewStart+span;root.refreshWaveform()}
     }
-    RowLayout {width:parent.width
+    Flow {width:parent.width;spacing:5
         Desk.DeskButton {text:"选择";checkable:true;checked:!root.handTool;onClicked:root.handTool=false}
         Desk.DeskButton {text:"手形平移";checkable:true;checked:root.handTool;onClicked:root.handTool=true;ToolTip.visible:hovered;ToolTip.text:"拖动波形平移时间轴；鼠标中键也可以平移"}
-        CheckBox {text:"联动编辑器定位";checked:root.linkEditor;onClicked:{root.linkEditor=checked;root.linkFromScore()}}
+        Desk.DeskSwitch {text:"联动编辑器定位";font.pixelSize:11;checked:root.linkEditor;onClicked:{root.linkEditor=checked;root.linkFromScore()}}
     }
     Flow {width:parent.width;spacing:5
      Common.DragNumber {hintHost:root;objectName:"referenceSliceStart";width:126;value:root.a;minimum:0;maximum:Math.max(0,root.b-1);sensitivity:10;caption:"开始 ";formatter:root.time;parser:root.readTime;onEditingStarted:root.beginSlice();onEdited:root.a=value;onEditingFinished:root.finishSlice()}
@@ -516,11 +530,11 @@ MuseScore {
         Desk.DeskButton {objectName:index===root.selectedAssociation?"referencePlayAssociation":"referencePlayAssociation"+index;text:"播放";implicitWidth:48;onClicked:{root.selectAssociation(index);root.playAssociation()}}
         Desk.DeskButton {text:"修改";implicitWidth:48;onClicked:{root.selectAssociation(index);associationDialog.open()}}
         Desk.DeskButton {text:"删除";implicitWidth:48;onClicked:root.deleteAssociation(index)}
-        CheckBox {height:26;text:"本次";checked:modelData.active!==false;onClicked:root.useAssociation(index,checked)}
+        Desk.DeskSwitch {height:28;font.pixelSize:11;text:"本次";checked:modelData.active!==false;onClicked:root.useAssociation(index,checked)}
        }
       }
      }
-     Label {visible:root.associations.length===0;anchors.centerIn:parent;text:"拖出音频片段，选中乐谱小节，再点“关联当前选段”。";color:theme.muted;font.pixelSize:11}
+     Label {visible:root.associations.length===0;anchors.centerIn:parent;width:parent.width-16;wrapMode:Text.Wrap;horizontalAlignment:Text.AlignHCenter;text:"拖出音频片段，选中乐谱小节，再点“关联当前选段”。";color:theme.muted;font.pixelSize:11}
     }
    }
   }

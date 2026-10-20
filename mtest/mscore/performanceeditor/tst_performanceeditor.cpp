@@ -9,6 +9,7 @@
 #include "audio/exports/exportmidi.h"
 #include "mscore/workflow/workflowcontext.h"
 #include "mscore/workflow/referencefactory.h"
+#include "mscore/workflow/referencepanel.h"
 #include "mscore/workflow/referencebus.h"
 #include "libmscore/handbracket.h"
 #include "mscore/handbracketsettings.h"
@@ -820,12 +821,14 @@ class TestPerformanceEditor : public QObject, public MTest {
 
             }
 #ifdef Q_MOC_RUN
+      void referencePanelRepeatedTransport();
       void expressionPlaybackKeepsScoreAndBeat();
       void gatePlaybackKeepsScoreAndBeat();
       void regionalPlaybackSwitchesSamePhrase();
       void expressionParameterDragAndApply();
       void expressionVelocityModesAndComparison();
 #else
+#include "reference_panel_074_tests.inc"
 #include "expression_playback_tests.inc"
 #include "gate_playback_tests.inc"
 #include "expression_compare_tests.inc"
