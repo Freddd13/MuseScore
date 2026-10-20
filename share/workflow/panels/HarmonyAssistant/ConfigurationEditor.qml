@@ -9,6 +9,9 @@ Column {
     UiTheme {id:theme}
     objectName:"harmonyConfiguration"
     property var configuration: Preferences.defaults()
+    property var observer: null
+    property string chord: "C/E"
+    property string degree: "I⁶"
     signal modified(var configuration)
     signal layoutModified(var configuration)
     function toggleDetails(key) {
@@ -30,12 +33,36 @@ Column {
         property string key
         onAccepted:editor.change(group,key,String(color))
     }
-    PanelCard {width:parent.width;heading:"记号外观";collapsed:editor.configuration.expandedSubsections.indexOf("appearance")<0;onToggleRequested:editor.toggleDetails("appearance")
+    PanelCard {
+        objectName:"harmonySummaryStyleCard";width:parent.width;heading:"顶部摘要外观"
+        collapsed:editor.configuration.expandedSubsections.indexOf("summaryStyle")<0;onToggleRequested:editor.toggleDetails("summaryStyle")
+        DeskSwitch {text:"同时显示顶部摘要与右侧详情";checked:configuration.dualPanel;onToggled:if(checked!==configuration.dualPanel)editor.change("","dualPanel",checked)}
+        RowLayout {width:parent.width
+            UiLabel {text:"摘要位置";color:theme.muted;Layout.preferredWidth:94}
+            DeskComboBox {Layout.fillWidth:true;Layout.minimumWidth:0;model:["靠左","居中","靠右","自定位置"];currentIndex:configuration.ribbonAlign;onActivated:editor.change("","ribbonAlign",currentIndex)}
+        }
+        RowLayout {width:parent.width;visible:configuration.ribbonAlign===3
+            UiLabel {text:"横向位置（%）";color:theme.muted;Layout.fillWidth:true}
+            DeskSpinBox {from:0;to:100;value:configuration.ribbonPosition;editable:true;onValueModified:editor.change("","ribbonPosition",value)}
+        }
+        HarmonyStyleEditor {width:parent.width;prefix:"summary";configuration:editor.configuration;observer:editor.observer;chord:editor.chord;degree:editor.degree;onModified:editor.modified(configuration);onChooseColor:editor.openColor("",key,color)}
+    }
+    PanelCard {
+        objectName:"harmonyDetailStyleCard";width:parent.width;heading:"右侧详情外观"
+        collapsed:editor.configuration.expandedSubsections.indexOf("detailStyle")<0;onToggleRequested:editor.toggleDetails("detailStyle")
+        HarmonyStyleEditor {width:parent.width;prefix:"detail";configuration:editor.configuration;observer:editor.observer;chord:editor.chord;degree:editor.degree;onModified:editor.modified(configuration);onChooseColor:editor.openColor("",key,color)}
+    }
+    PanelCard {objectName:"harmonyScoreStyleCard";width:parent.width;heading:"谱面和弦记号";collapsed:editor.configuration.expandedSubsections.indexOf("appearance")<0;onToggleRequested:editor.toggleDetails("appearance")
     AppearanceEditor {
         width:parent.width; configuration:editor.configuration
         onModified:editor.modified(configuration)
         onChooseColor:editor.openColor("",key,color)
     }
+    }
+    PanelCard {width:parent.width;heading:"离调和弦强调（所有位置）";collapsed:editor.configuration.expandedSubsections.indexOf("accent")<0;onToggleRequested:editor.toggleDetails("accent")
+        DeskSwitch {text:"强调含调外音的和弦";checked:configuration.chromaticAccent;onToggled:if(checked!==configuration.chromaticAccent)editor.change("","chromaticAccent",checked)}
+        ColorOption {width:parent.width;caption:"强调颜色";value:configuration.chromaticColor;onEdited:editor.change("","chromaticColor",color);onChooseRequested:editor.openColor("","chromaticColor",value)}
+        UiLabel {width:parent.width;text:"摘要、详情与谱面共用此强调色。小调的属和弦与导音和弦按和声小调处理。";wrapMode:Text.Wrap;color:theme.muted;font.pixelSize:11}
     }
     PanelCard {width:parent.width;heading:"功能色";collapsed:editor.configuration.expandedSubsections.indexOf("colors")<0;onToggleRequested:editor.toggleDetails("colors")
     Rectangle {width:parent.width; height:1; color:theme.subtleLine}

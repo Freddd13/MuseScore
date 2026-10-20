@@ -116,6 +116,9 @@ class TestPluginHost : public QObject {
       Q_OBJECT
       QTemporaryDir _settings;
    private slots:
+      void harmonyRangeWithoutSettings();
+      void harmonyManualSurvivesPitchEdit();
+      void harmonyStyleSurfacesAndRestore();
       void nearestWheelOnBandAxis();
       void scoreBandStaysNearSelectedSystem();
       void harmonyDisplayAndHold();
@@ -1026,6 +1029,9 @@ class TestPluginHost : public QObject {
             observer->setScorePreview(descriptors);
             score->doLayout(); // includes deletion of System / StaffLines, not just Notes
             observer->setScorePreview(descriptors);
+            // A user drop docks a floating window before changing its area.
+            // Earlier cases intentionally preserve floating window preferences.
+            dock->setFloating(false);
             main->addDockWidget(Qt::TopDockWidgetArea,dock);
             main->resizeDocks({dock},{70},Qt::Vertical);
             QTest::qWait(80);
@@ -1328,5 +1334,6 @@ class TestPluginHost : public QObject {
 #include "score_editing_075_tests.inc"
 #include "harmony_display_075_tests.inc"
 #include "variant_metadata_076_tests.inc"
+#include "harmony_panel_077_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

@@ -16,7 +16,7 @@ MuseScore {
     UiTheme {id:theme}
     menuPath: "Plugins.Harmony Assistant"
     description: "钢琴和声助手：持续音识别、级数、音程功能与可选谱面配色。"
-    version: "1.10.1"
+    version: "1.11.0"
     requiresScore: true
     pluginType: "dock"
     dockArea: "right"
@@ -49,7 +49,7 @@ MuseScore {
     property bool dualDetailActive:ribbon && configuration.dualPanel && typeof root.detailPanelVisible==="boolean" && root.detailPanelVisible
     property bool dualSummaryActive:!ribbon && configuration.dualPanel && typeof root.summaryPanelVisible==="boolean" && root.summaryPanelVisible
     property bool chromaticChord: Harmony.isChromatic(Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,chordRoot,chordDefinition)
-    property color chordInk:configuration.chromaticAccent && chromaticChord ? configuration.chromaticColor : ink
+    property color chordInk:configuration.chromaticAccent && chromaticChord ? configuration.chromaticColor : configuration.detailColor || ink
     property var contextNotes: []
     property var analysisRecords: []
     property var analysisRegions: []
@@ -63,9 +63,17 @@ MuseScore {
     property var unplacedMarkers: []
     property var unplacedIndex: ({})
     property var manualOverrides: []
+    property var correctionParts: []
+    function readCorrectionParts() {
+        var parts=[]
+        if(curScore)for(var i=0;i<curScore.parts.length;++i)if(curScore.parts[i].startTrack>=firstTrack&&curScore.parts[i].startTrack<endTrack)parts.push({startTrack:curScore.parts[i].startTrack,endTrack:curScore.parts[i].endTrack})
+        return parts
+    }
+    property var refreshedOverrides:Timeline.refreshNotes(manualOverrides,analysisRecords,correctionParts)
     property var editUndo: []
     property var editRedo: []
     property string loadedFingerprint: ""
+    property string loadedStructure: ""
     property bool manualNeedsReview: false
     property int annotationTick: -1
     property string annotationSelectionKey: ""
@@ -88,7 +96,7 @@ MuseScore {
     property string summaryDegreeText: !summaryRegion ? instantDegreeText : degreeForRegion(summaryRegion)
     property int summaryRoot: !summaryRegion ? displayedLiveHarmony?displayedLiveHarmony.root:-1 : summaryRegion.root
     property int summaryDefinition: !summaryRegion ? displayedLiveHarmony?displayedLiveHarmony.definition:-1 : summaryRegion.definition
-    property color summaryInk: configuration.chromaticAccent && Harmony.isChromatic(Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,summaryRoot,summaryDefinition) ? configuration.chromaticColor : ink
+    property color summaryInk: configuration.chromaticAccent && Harmony.isChromatic(Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,summaryRoot,summaryDefinition) ? configuration.chromaticColor : configuration.summaryColor || ink
     property var summaryToneRows:makeToneRows(summaryRoot,summaryDefinition,resultNotes(summaryRegion))
     property int analysisEnd: analysisRecords.length ? (analysisRecords[analysisRecords.length-1].scoreEnd || analysisRecords[analysisRecords.length-1].tick+480) : 1920
     property var pendingRecords: []
@@ -99,20 +107,21 @@ MuseScore {
     property bool analysisDirty: true
     property string pendingFileAction: ""
     property string pendingExport: ""
-    property int desiredSummaryHeight:Math.max(32,Math.ceil(configuration.summaryPixels*(configuration.summaryOrder>=2?1+configuration.summaryDegreeRatio/100:Math.max(1,configuration.summaryDegreeRatio/100))*1.3+(configuration.summaryOrder>=2?configuration.summaryGap:0)+6))
+    property int desiredSummaryHeight:Math.max(32,Math.ceil(configuration.summaryPixels*Preferences.labelHeightFactor(configuration.summaryContent,configuration.summaryOrder,configuration.summaryDegreeRatio)*1.3+(configuration.summaryContent===2&&configuration.summaryOrder>=2?configuration.summaryGap:0)+6))
     property int preferredRibbonHeight:desiredSummaryHeight
+    property int detailLabelHeight:Math.max(44,Math.ceil(configuration.detailPixels*Preferences.labelHeightFactor(configuration.detailContent,configuration.detailOrder,configuration.detailDegreeRatio)*1.6+(configuration.detailContent===2&&configuration.detailOrder>=2?configuration.detailGap:0)+8))
     property bool compactPanelTitle:true
     property int lastSummaryHeight:32
     onDesiredSummaryHeightChanged:resizeSummary(false)
     property bool independentPanelSurfaces:true
     property string summaryPanelTitle:"和弦摘要"
     property bool ribbonContentHeight: true
-    property string detailPanelTitle:"和声助手 · 详细面板"
+    property string detailPanelTitle:"和弦助手 · 详细面板"
     property color detailPanelBackground:theme.background
     property bool started: false
     property var observer: null
     property bool surfaceActive: (visible || dualSummaryActive || dualDetailActive || (showChords.checked && !!ownerScore)) && (!observer || observer.surfaceVisible)
-    property string analysisStatus: !ownerScore ? "打开乐谱后开始识别" : analysisTimer.running ? "正在读取 · "+pendingRecords.length+" 个位置" : regionJobToken || regionBuilder ? "正在分析前后和弦" : analysisDirty ? observer && observer.playing ? "正在识别当前位置 · 停播后整理全段" : "正在准备和弦分析" : "已更新 · "+analysisRegions.length+" 处和弦"
+    property string analysisStatus: !ownerScore ? "打开乐谱后开始识别" : analysisTimer.running ? "正在读取 · "+pendingRecords.length+" 个位置" : regionJobToken || regionBuilder ? "正在分析前后和弦" : analysisDirty ? observer && observer.playing ? "正在识别当前位置 · 停播后整理全段" : "正在准备和弦分析" : "已更新 · "+analysisRegions.length+" 处和弦"+(manualNeedsReview?" · 人工范围待核对":"")
     property bool nativeAvailable: observer !== null
     property var nativeSnapshot: ({})
     property bool internalChange: false
@@ -204,19 +213,38 @@ MuseScore {
     }
     function highlightedTick() {return lastPlaying && followPlayback.checked ? currentTick : annotationTick>=0 ? annotationTick : currentTick}
     function rebuildRegions() {
-        analysisRegions=Timeline.overlay(Timeline.overlay(automaticRegions,importedRegions),manualNeedsReview?[]:manualOverrides).map(function(region){region.degree=root.degreeForRegion(region);return region})
+        var edits=manualNeedsReview?[]:refreshedOverrides
+        analysisRegions=Timeline.overlay(Timeline.overlay(automaticRegions,importedRegions),edits).map(function(region){region.degree=root.degreeForRegion(region);return region})
         if(!analysisDirty && observer && typeof observer.publishHarmonyAnalysis==="function")
             observer.publishHarmonyAnalysis({snapshotId:observer.analysisContentRevision(),regions:analysisRegions,source:"HarmonyAssistant",schema:1})
     }
+    function correctionStructure() {
+        if(!observer || typeof observer.referenceStructureKey!=="function")return ""
+        var parts=[]
+        if(curScore)for(var i=0;i<curScore.parts.length;++i)parts.push([curScore.parts[i].startTrack,curScore.parts[i].endTrack])
+        return observer.referenceStructureKey()+":"+JSON.stringify(parts)
+    }
     function loadCorrections() {
-        if(!advancedNative || loadedFingerprint===analysisFingerprint)return
+        if(!advancedNative || (loadedFingerprint===analysisFingerprint&&!manualNeedsReview))return
+        var structure=correctionStructure()
         if((manualOverrides.length || manualPositions.length) && loadedFingerprint.length) {
-            manualNeedsReview=true;noticeText="谱面已变更；人工范围暂未应用，请复核后确认。";return
+            if(loadedStructure.length&&loadedStructure===structure) {
+                loadedFingerprint=analysisFingerprint
+                if(manualNeedsReview)noticeText="人工和弦范围已恢复。"
+                manualNeedsReview=false
+            } else {
+                manualNeedsReview=true;noticeText="小节或谱表结构已改变，请核对人工和弦的起止位置。"
+            }
+            return
         }
-        loadedFingerprint=analysisFingerprint
+        loadedFingerprint=analysisFingerprint;loadedStructure=structure
         if(observer&&typeof observer.workflowData==="function"){
             var embedded=observer.workflowData("harmony");nativeCorrectionsJSON=JSON.stringify(embedded)
-            if(embedded.schema===2){manualOverrides=Timeline.validEdits(embedded.overrides||[]);manualPositions=AnnotationEdits.positions(embedded.positions||[]);return}
+            if(embedded.schema===2){
+                manualOverrides=Timeline.validEdits(embedded.overrides||[]);manualPositions=AnnotationEdits.positions(embedded.positions||[])
+                if(embedded.structure&&structure&&embedded.structure!==structure){loadedStructure=embedded.structure;manualNeedsReview=true;noticeText="小节或谱表结构已改变，请核对人工和弦的起止位置。"}
+                return
+            }
         }
         var saved=observer.loadConfiguration("HarmonyAssistant-regions-"+analysisFingerprint)
         if(saved.schema===1 && saved.fingerprint===analysisFingerprint) {
@@ -227,13 +255,15 @@ MuseScore {
         if(nativeCorrectionWrite||!observer||typeof observer.workflowData!=="function")return
         var saved=observer.workflowData("harmony"),json=JSON.stringify(saved)
         if(!nativeCorrectionsJSON.length||json===nativeCorrectionsJSON)return
-        nativeCorrectionsJSON=json;manualOverrides=Timeline.validEdits(saved.overrides||[]);manualPositions=AnnotationEdits.positions(saved.positions||[]);manualNeedsReview=false
+        nativeCorrectionsJSON=json;manualOverrides=Timeline.validEdits(saved.overrides||[]);manualPositions=AnnotationEdits.positions(saved.positions||[])
+        loadedStructure=saved.structure||correctionStructure();manualNeedsReview=loadedStructure!==correctionStructure()
+        loadedFingerprint=analysisFingerprint
         rebuildRegions();applyScorePreview();syncScoreRangeEditor()
     }
     function saveCorrections(inScore) {
         if(!advancedNative || !loadedFingerprint.length || manualNeedsReview)return
         if(inScore&&typeof observer.setWorkflowData==="function"){
-            var data={schema:2,fingerprint:loadedFingerprint,overrides:manualOverrides,positions:manualPositions}
+            var data={schema:2,fingerprint:loadedFingerprint,structure:loadedStructure,overrides:manualOverrides,positions:manualPositions}
             nativeCorrectionWrite=true;var result=observer.setWorkflowData("harmony",data);nativeCorrectionWrite=false
             if(result.error){noticeText=result.error;return}nativeCorrectionsJSON=JSON.stringify(observer.workflowData("harmony"))
         }
@@ -243,7 +273,7 @@ MuseScore {
         if(analysisDirty){noticeText="正在更新和声区间，请稍候。";return}
         if(command==="select"){openAnnotation(start,focusedPart);return}
         if(command==="position" && ownedRegion){moveAnnotation(ownedRegion.start,ownedRegion.part,0,0);return}
-        if(command==="review"){loadedFingerprint=analysisFingerprint;manualNeedsReview=false;rebuildRegions();saveCorrections(true);applyScorePreview();return}
+        if(command==="review"){loadedFingerprint=analysisFingerprint;loadedStructure=correctionStructure();manualNeedsReview=false;rebuildRegions();saveCorrections(true);applyScorePreview();return}
         var next=Timeline.clone(manualOverrides),region=ownedRegion
         if((command==="undo"||command==="redo")&&typeof observer.workflowUndo==="function"){observer.workflowUndo(command==="redo");syncNativeCorrections();return}
         if(command==="undo" || command==="redo") {
@@ -292,7 +322,7 @@ MuseScore {
             editUndo=editUndo.concat([editSnapshot()]).slice(-100);editRedo=[]
             if(command==="range" && region && start!==region.start){var prior=positionIndex[region.part+":"+region.start];if(prior){manualPositions=AnnotationEdits.moved(manualPositions,region.start,region.part,0,0);manualPositions=AnnotationEdits.moved(manualPositions,start,region.part,prior.x,prior.y)}}
         }
-        manualOverrides=Timeline.validEdits(next);loadedFingerprint=analysisFingerprint
+        manualOverrides=Timeline.validEdits(next);loadedFingerprint=analysisFingerprint;loadedStructure=correctionStructure()
         rebuildRegions();saveCorrections(true);analyze();applyScorePreview()
     }
     function openAnnotation(tick,track) {
@@ -308,7 +338,7 @@ MuseScore {
         }
         if(typeof root.focusPanel==="function")root.focusPanel()
         if(root.ribbon)openDetails()
-        settingsExpanded=true;scoreRangeEditing=true
+        scoreRangeEditing=true
         if(configuration.collapsedSections.indexOf("range")>=0)toggleSection("range")
         syncScoreRangeEditor();Qt.callLater(function(){if(root.detailFlick)root.detailFlick.scrollRange()})
     }
@@ -467,7 +497,7 @@ MuseScore {
         for(var i=0;i<frames.length;++i)pendingRecords.push(frameResult(frames[i]))
         analysisNextTick=batch.nextTick
         if(analysisNextTick>=0) {analysisTimer.start(); return}
-        analysisRecords=pendingRecords;pendingRecords=[];loadCorrections()
+        analysisRecords=pendingRecords;pendingRecords=[];correctionParts=readCorrectionParts();loadCorrections()
         if(regionWorkerSource.length && typeof observer.startReadOnlyJob==="function") {
             regionFirstTrack=firstTrack;regionEndTrack=endTrack
             regionJobToken=observer.startReadOnlyJob(regionWorkerSource,{frames:analysisRecords,config:collectPreferences(),part:firstTrack})
@@ -559,7 +589,7 @@ MuseScore {
                     var context=observer.contextSnapshot(0,firstTrack,endTrack,pedalContext.checked,windowTicks(),false),fingerprint=context.fingerprint
                     if(imported.fingerprint!==fingerprint)throw Error("分析与当前乐谱 / 乐器范围不一致，未应用")
                     overrides.concat(regions).forEach(function(r){if((context.scoreEnd && r.end>context.scoreEnd) || r.part<firstTrack || r.part>=endTrack || partForTrack(r.part)!==r.part)throw Error("分析区间超出乐谱 / 乐器范围")})
-                    manualOverrides=overrides;manualPositions=AnnotationEdits.positions(imported.positions);loadedFingerprint=fingerprint;manualNeedsReview=false;editUndo=[];editRedo=[];saveCorrections(true)
+                    manualOverrides=overrides;manualPositions=AnnotationEdits.positions(imported.positions);loadedFingerprint=fingerprint;loadedStructure=correctionStructure();manualNeedsReview=false;editUndo=[];editRedo=[];saveCorrections(true)
                     importedRegions=regions;importedRegions.forEach(function(r){r.source="imported"})
                     importedRecords=importedRegions.length?[]:imported.frames; analysisDirty=true; scheduleAnalysis(); requestRefresh(false)
                     noticeText="已导入 "+imported.frames.length+" 个分析切片。"
@@ -661,7 +691,7 @@ MuseScore {
         undoPause = false
         timeline = []
         cancelRegionJob();analysisTimer.stop()
-        manualOverrides=[];manualPositions=[];scoreRangeEditing=false;editUndo=[];editRedo=[];analysisRegions=[];automaticRegions=[];regionBuilder=null;loadedFingerprint="";nativeCorrectionsJSON="";manualNeedsReview=false;annotationTick=-1
+        manualOverrides=[];manualPositions=[];scoreRangeEditing=false;editUndo=[];editRedo=[];analysisRegions=[];automaticRegions=[];regionBuilder=null;loadedFingerprint="";loadedStructure="";nativeCorrectionsJSON="";manualNeedsReview=false;annotationTick=-1
         unplacedMarkers=[];unplacedIndex=({});placementNotice=""
         importedRecords = []
         importedRegions = []
@@ -718,7 +748,7 @@ MuseScore {
         setScope()
         if (oldFirst !== firstTrack || oldEnd !== endTrack) {
             cancelRegionJob();analysisTimer.stop()
-            saveCorrections();manualOverrides=[];manualPositions=[];scoreRangeEditing=false;editUndo=[];editRedo=[];loadedFingerprint="";nativeCorrectionsJSON="";manualNeedsReview=false
+            saveCorrections();manualOverrides=[];manualPositions=[];scoreRangeEditing=false;editUndo=[];editRedo=[];loadedFingerprint="";loadedStructure="";nativeCorrectionsJSON="";manualNeedsReview=false
             analysisRegions=[];automaticRegions=[];regionBuilder=null;cacheDirty=true;analysisDirty=true;importedRecords=[];importedRegions=[];annotationTick=-1
             unplacedMarkers=[];unplacedIndex=({});placementNotice=""
             if(advancedNative)observer.setScorePreview([])
@@ -1153,7 +1183,7 @@ MuseScore {
     }
     Window {
         id:detailPopup; width:760; height:650; visible:false
-        title:"和声助手 · 详细面板"; flags:Qt.Tool
+        title:"和弦助手 · 详细面板"; flags:Qt.Tool
         property bool opened:visible
         property bool placed:false
         function open(){root.placeWindow(detailPopup,ribbonMenuWindow.anchorItem);visible=true;requestActivate()}
@@ -1190,29 +1220,25 @@ MuseScore {
         }
     }
     Window {
-        id:summarySettings;objectName:"harmonySummarySettings";title:"和弦摘要外观与调性";width:360;height:400;minimumWidth:320;flags:Qt.Tool;color:theme.background
+        id:summarySettings;objectName:"harmonySummarySettings";title:"和弦摘要外观与调性";width:380;height:570;minimumWidth:320;flags:Qt.Tool;color:theme.background
         property bool placed:false
+        ColorDialog {id:summaryColorPicker;title:"选择摘要文字颜色";showAlphaChannel:false;onAccepted:root.changeSummary("summaryColor",String(color))}
         ScrollView {anchors.fill:parent;anchors.margins:12;clip:true
-            Column {width:summarySettings.width-32;spacing:10
-                HarmonyLabel {observer:root.observer;chord:root.summaryChordText;degree:root.summaryDegreeText;color:root.summaryInk;pixels:configuration.summaryPixels;degreeRatio:configuration.summaryDegreeRatio/100;gap:configuration.summaryGap;order:configuration.summaryOrder;degreeFont:configuration.degreeFont;chordFont:["","Edwin","Arial"][configuration.chordFont];revision:root.analysisFingerprint}
+            Column {width:summarySettings.width-36;spacing:10
                 RowLayout {width:parent.width
                     UiLabel {text:"主音与调式";color:ink}
                     DeskComboBox {Layout.fillWidth:true;model:Harmony.rootNames;currentIndex:keyTonic.currentIndex;onActivated:{keyTonic.currentIndex=currentIndex;manualKey=true;root.updateTexts();root.optionsChanged()}}
                     DeskComboBox {model:["大调","小调"];currentIndex:keyMode.currentIndex;onActivated:{keyMode.currentIndex=currentIndex;root.updateTexts();root.optionsChanged()}}
                 }
-                Repeater {model:[{key:"summaryPixels",title:"字号",min:12,max:32},{key:"summaryDegreeRatio",title:"级数相对大小（%）",min:60,max:140},{key:"summaryGap",title:"和弦与级数间距",min:0,max:20}]
-                    RowLayout {width:parent.width
-                        UiLabel {text:modelData.title;color:ink;Layout.fillWidth:true}
-                        DeskSpinBox {from:modelData.min;to:modelData.max;value:configuration[modelData.key];onValueModified:root.changeSummary(modelData.key,value)}
-                    }
+                HarmonyStyleEditor {width:parent.width;prefix:"summary";configuration:root.configuration;observer:root.observer;chord:root.summaryChordText;degree:root.summaryDegreeText
+                    onModified:{root.configuration=configuration;configurationTimer.restart();root.resizeSummary(false)}
+                    onChooseColor:{summaryColorPicker.color=color;summaryColorPicker.open()}
                 }
-                DeskComboBox {width:parent.width;model:["和弦在左，级数在右","级数在左，和弦在右","和弦在上，级数在下","级数在上，和弦在下"];currentIndex:configuration.summaryOrder;onActivated:root.changeSummary("summaryOrder",currentIndex)}
-                UiLabel {width:parent.width;wrapMode:Text.Wrap;text:"摘要使用乐谱中的和弦字体和专用音乐符号。上下排列时，可拖动面板下边缘增加高度。";color:muted;font.pixelSize:11}
-                DeskButton {text:"恢复摘要默认外观";onClicked:{root.changeSummary("summaryPixels",20);root.changeSummary("summaryDegreeRatio",100);root.changeSummary("summaryGap",6);root.changeSummary("summaryOrder",0);root.resizeSummary(true)}}
                 DeskButton {text:"关闭";onClicked:summarySettings.hide()}
             }
         }
     }
+
     Timer {id:refreshTimer; interval:55; onTriggered:refreshSelection()}
     Timer {id:buildTimer; interval:10; repeat:true; onTriggered:buildChunk()}
     Timer {id:playbackTimer; interval:16; onTriggered:followNativePosition()}
@@ -1243,6 +1269,7 @@ MuseScore {
         Component {id:harmonyDetails
 Flickable {
             id: flick
+            objectName:"harmonyDetailScroll"
             function scrollRange(){contentY=Math.max(0,rangeCard.y-6)}
             anchors.fill: parent
             clip: true
@@ -1250,19 +1277,20 @@ Flickable {
             contentHeight: panel.height + 16
             boundsBehavior: Flickable.StopAtBounds
             visible:true
-            ScrollBar.vertical: ScrollBar { }
+            ScrollBar.vertical: ScrollBar { id:detailScroll;policy:flick.contentHeight>flick.height?ScrollBar.AlwaysOn:ScrollBar.AsNeeded }
             Flow {
                 id: panel
+                objectName:"harmonyDetailContent"
                 x: 8
                 y: 8
-                width: Math.max(160, flick.width - 16)
+                width: Math.max(160, flick.width - 16 - (detailScroll.visible?detailScroll.width:0))
                 spacing: 6
                 Column {
                     width: parent.width
                     spacing: 3
                     RowLayout {
                         width: parent.width
-                        UiLabel {text:"和声助手"; Layout.fillWidth:true; color:ink; font.pixelSize:14; font.bold:true}
+                        UiLabel {text:"和弦助手"; Layout.fillWidth:true; color:ink; font.pixelSize:14; font.bold:true}
                         DeskButton {
                             objectName:"harmonyPointButton";flat:true;text:root.unplacedMarkers.length ? "记号 !" : "记号"
                             implicitWidth:48;enabled:root.advancedNative
@@ -1278,20 +1306,20 @@ Flickable {
                         DeskButton {flat:true;
                             font.family: theme.fontFamily;text:"键盘"; checked:keyboardExpanded; checkable:true; font.pixelSize:11; onClicked:{keyboardExpanded=checked; configurationTimer.restart()}}
                         DeskButton {flat:true;
-                            font.family: theme.fontFamily;text:"设置"; checked:settingsExpanded; checkable:true; font.pixelSize:11; onClicked:{settingsExpanded=checked; configurationTimer.restart()}}
+                            objectName:"harmonySettingsButton";font.family: theme.fontFamily;text:"设置"; checked:settingsExpanded; checkable:true; font.pixelSize:11; onClicked:{settingsExpanded=checked; configurationTimer.restart()}}
                     }
                     UiLabel {width:parent.width; text:Harmony.rootNames[keyTonic.currentIndex]+(keyMode.currentIndex===0?" 大调":" 小调")+" · "+scopeText; color:muted; font.pixelSize:11; wrapMode:Text.Wrap}
                 }
                 PanelCard {
                     id:summaryCard; objectName:"harmonySummary"
                     width: root.expanded ? (panel.width-10)/2 : panel.width
-                    fixedBodyHeight:settingsExpanded ? 230 : 200
+                    fixedBodyHeight:root.detailLabelHeight+154+(settingsExpanded?36:0)
                     RowLayout {width:parent.width;height:28
                         UiLabel {Layout.fillWidth:true;text:positionText;color:muted;font.pixelSize:11;elide:Text.ElideRight}
                         DeskComboBox {objectName:"harmonyResultMode";Layout.preferredWidth:112;model:["实时结果","所属和弦"];currentIndex:configuration.resultMode;onActivated:{var c=Timeline.clone(configuration);c.resultMode=currentIndex;root.configuration=Preferences.clean(c);root.updateTexts();root.optionsChanged(false)}}
                     }
-                    Item {width:parent.width;height:44
-                        HarmonyLabel {anchors.left:parent.left;anchors.verticalCenter:parent.verticalCenter;width:Math.min(parent.width,implicitWidth);height:Math.min(44,implicitHeight);observer:root.observer;chord:root.chordText;degree:root.degreeText;color:root.chordInk;pixels:24;gap:8;chordFont:["","Edwin","Arial"][configuration.chordFont];degreeFont:configuration.degreeFont;revision:root.analysisFingerprint}
+                    Item {width:parent.width;height:root.detailLabelHeight;clip:true
+                        HarmonyLabel {objectName:"harmonyDetailLabel";anchors.left:parent.left;anchors.verticalCenter:parent.verticalCenter;width:Math.min(parent.width,implicitWidth);height:Math.min(parent.height,implicitHeight);observer:root.observer;chord:configuration.detailContent===1?"":root.chordText;degree:configuration.detailContent===0?"":root.degreeText;color:root.chordInk;pixels:configuration.detailPixels;degreeRatio:configuration.detailDegreeRatio/100;gap:configuration.detailGap;order:configuration.detailOrder;chordFont:["","Edwin","Arial"][configuration.detailFont];degreeFont:configuration.detailDegreeFont;revision:root.analysisFingerprint}
                     }
                     StableLabel {reservedLines:2; text:matchText+(configuration.chromaticAccent && chromaticChord?" · 含调外音":""); color:muted; font.pixelSize:12}
                     StableLabel {reservedLines:2; text:alternativesText; color:muted; font.pixelSize:11}
@@ -1300,9 +1328,9 @@ Flickable {
                     StableLabel {visible:settingsExpanded; reservedLines:2; text:voicingText; color:ink; font.pixelSize:12}
                 }
                 PanelCard {
-                    id:rangeCard;heading:"修改和弦与范围";collapsed:configuration.collapsedSections.indexOf("range")>=0;onToggleRequested:root.toggleSection("range")
+                    id:rangeCard;objectName:"harmonyRangeCard";heading:root.manualNeedsReview?"修改和弦与范围 · 需核对":"修改和弦与范围";collapsed:configuration.collapsedSections.indexOf("range")>=0;onToggleRequested:root.toggleSection("range")
                     width:root.expanded ? (panel.width-10)/2 : panel.width
-                    visible:settingsExpanded && advancedNative
+                    visible:advancedNative
                     RangeEditor {width:parent.width;observer:root.observer;handlesVisible:root.scoreRangeEditing;onEditingChanged:root.scoreRangeEditing=enabled;region:root.ownedRegion;regions:root.analysisRegions.filter(function(n){return n.part===root.focusedPart})
                         tick:Math.max(0,root.currentTick);scoreEnd:root.analysisEnd;canUndo:root.editUndo.length>0;canRedo:root.editRedo.length>0
                         roots:Harmony.rootNames;rootPcs:Harmony.rootPcs;qualities:root.qualityNames;onAction:root.editRange(command,start,end,rootIndex,qualityIndex,bassIndex)}
@@ -1487,24 +1515,22 @@ Flickable {
                         visible:scoreColoring.checked || settingsExpanded
                         text:observer?"仅屏幕预览，不改音符原色、撤销记录或保存 / 导出内容。":"开启会修改谱面颜色并产生撤销记录。保存 / 导出前请恢复原色；面板配色始终可用。"
                     }
-                    RowLayout {
-                        width:parent.width
-                        DeskButton {
-                            font.family: theme.fontFamily;text:"恢复原色"; Layout.fillWidth:true; implicitHeight:28; font.pixelSize:12; onClicked:stopColoring()}
-                        DeskButton {
-                            font.family: theme.fontFamily;text:"刷新"; Layout.fillWidth:true; implicitHeight:28; font.pixelSize:12; onClicked:requestRefresh(true)}
+                    Flow {
+                        width:parent.width;spacing:6
+                        DeskButton {text:"恢复原色";onClicked:stopColoring()}
+                        DeskButton {text:"刷新";onClicked:requestRefresh(true)}
                     }
                     StableLabel {reservedLines:2; text:placementNotice || noticeText; color:muted; font.pixelSize:10}
                 }
                 PanelCard {
-                    heading:"外观与功能色";collapsed:configuration.collapsedSections.indexOf("appearance")>=0;onToggleRequested:root.toggleSection("appearance")
+                    heading:"外观、功能色与文字";collapsed:configuration.collapsedSections.indexOf("appearance")>=0;onToggleRequested:root.toggleSection("appearance")
                     width:root.expanded ? (panel.width-10)/2 : panel.width
                     visible:settingsExpanded
-                    ConfigurationEditor {width:parent.width; configuration:root.configuration; onModified:{root.configuration=configuration; rebuildRegions();analyze();optionsChanged(false)}onLayoutModified:{root.configuration=configuration;configurationTimer.restart()}}
-                    RowLayout {
-                        width:parent.width
-                        DeskButton {text:"导入配置"; Layout.fillWidth:true; enabled:advancedNative; onClicked:chooseFile("import-config")}
-                        DeskButton {text:"导出配置"; Layout.fillWidth:true; enabled:advancedNative; onClicked:chooseFile("export-config")}
+                    ConfigurationEditor {width:parent.width;configuration:root.configuration;observer:root.observer;chord:root.chordText;degree:root.degreeText;onModified:{root.configuration=configuration;rebuildRegions();analyze();optionsChanged(false)}onLayoutModified:{root.configuration=configuration;configurationTimer.restart()}}
+                    Flow {
+                        width:parent.width;spacing:6
+                        DeskButton {text:"导入配置";enabled:advancedNative;onClicked:chooseFile("import-config")}
+                        DeskButton {text:"导出配置";enabled:advancedNative;onClicked:chooseFile("export-config")}
                     }
                     UiLabel {width:parent.width; text:"设置自动保存，下次启动自动读取。"; color:muted; font.pixelSize:10; wrapMode:Text.Wrap}
                 }
@@ -1544,7 +1570,7 @@ Item {
                         configuration.ribbonAlign===3 ? 12+(maximum-12)*configuration.ribbonPosition/100 : Math.max(12,Math.min(maximum,(parent.width-ribbonControls.width-width)/2))}
                 RowLayout {
                     id:ribbonRow;anchors.fill:parent;spacing:8
-                    HarmonyLabel {id:ribbonChord;objectName:"harmonyRibbonChord";observer:root.observer;chord:root.summaryChordText;degree:root.summaryDegreeText;color:root.summaryInk;pixels:configuration.summaryPixels;degreeRatio:configuration.summaryDegreeRatio/100;gap:configuration.summaryGap;order:configuration.summaryOrder;degreeFont:configuration.degreeFont;chordFont:["","Edwin","Arial"][configuration.chordFont];revision:root.analysisFingerprint;Layout.preferredWidth:implicitWidth;Layout.preferredHeight:implicitHeight;Layout.maximumHeight:ribbonGroup.height;Layout.maximumWidth:Math.max(50,ribbonGroup.width-90);Layout.alignment:Qt.AlignVCenter}
+                    HarmonyLabel {id:ribbonChord;objectName:"harmonyRibbonChord";observer:root.observer;chord:configuration.summaryContent===1?"":root.summaryChordText;degree:configuration.summaryContent===0?"":root.summaryDegreeText;color:root.summaryInk;pixels:configuration.summaryPixels;degreeRatio:configuration.summaryDegreeRatio/100;gap:configuration.summaryGap;order:configuration.summaryOrder;degreeFont:configuration.summaryDegreeFont;chordFont:["","Edwin","Arial"][configuration.summaryFont];revision:root.analysisFingerprint;Layout.preferredWidth:implicitWidth;Layout.preferredHeight:implicitHeight;Layout.maximumHeight:ribbonGroup.height;Layout.maximumWidth:Math.max(50,ribbonGroup.width-90);Layout.alignment:Qt.AlignVCenter}
                     UiLabel {id:ribbonStatus;text:(root.analysisStatus.indexOf("已更新")===0?"已更新":root.analysisStatus)+" · "+positionText.replace(/^当前位置[：:]\s*/,"")+" · "+(!root.summaryRegion?"实时":"所属");color:muted;font.pixelSize:11;visible:summarySurface.width>660;elide:Text.ElideRight;Layout.preferredWidth:Math.min(230,implicitWidth);Layout.fillWidth:true;Layout.alignment:Qt.AlignVCenter}
                     Row {
                         id:ribbonTones;visible:summarySurface.width>=1200;spacing:3;Layout.alignment:Qt.AlignVCenter

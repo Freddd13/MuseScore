@@ -19,7 +19,10 @@ function defaults() {
         ribbonAlign:1,ribbonPosition:50,chordContent:2,chordOrder:0,chordFont:0,chordScale:100,
         chordColor:"#343a3f",highlightColor:"#0043ce",highlightBackground:"#d0e2ff",
         chromaticAccent:true,chromaticColor:"#a2191f",respectExistingHarmony:true,avoidScoreContent:false,chordMask:true,dualPanel:true,
-        pedalMode:0,resultMode:1,summaryMode:1,detailMode:1,holdLastHarmony:false,repeatBars:false,degreeFont:"Edwin",degreeMode:1,summaryPixels:20,summaryDegreeRatio:100,summaryGap:6,summaryOrder:0,collapsedSections:[],expandedSubsections:[]};
+        pedalMode:0,resultMode:1,summaryMode:1,detailMode:1,holdLastHarmony:false,repeatBars:false,degreeFont:"Edwin",degreeMode:1,
+        summaryPixels:20,summaryDegreeRatio:100,summaryGap:6,summaryOrder:0,summaryContent:2,summaryFont:0,summaryDegreeFont:"Edwin",summaryColor:"",
+        detailPixels:24,detailDegreeRatio:100,detailGap:8,detailOrder:0,detailContent:2,detailFont:0,detailDegreeFont:"Edwin",detailColor:"",
+        collapsedSections:[],expandedSubsections:[]};
 }
 function clean(source) {
     if(!source || source.schema!==1) throw Error("配置版本应为 1");
@@ -49,10 +52,18 @@ function clean(source) {
         }
     }
     for(i=0;i<12;++i) if(source.noteLabels && typeof source.noteLabels[i]==="string" && source.noteLabels[i].length<=24) out.noteLabels[i]=source.noteLabels[i];
-    var summaryLimits={summaryPixels:[12,32],summaryDegreeRatio:[60,140],summaryGap:[0,20],summaryOrder:[0,3]};
+    var summaryLimits={summaryPixels:[12,32],summaryDegreeRatio:[60,140],summaryGap:[0,20],summaryOrder:[0,3],summaryContent:[0,2],summaryFont:[0,2],
+        detailPixels:[12,40],detailDegreeRatio:[60,140],detailGap:[0,24],detailOrder:[0,3],detailContent:[0,2],detailFont:[0,2]};
     for(var field in summaryLimits)if(typeof source[field]==="number" && isFinite(source[field]))out[field]=Math.round(Math.max(summaryLimits[field][0],Math.min(summaryLimits[field][1],source[field])));
     if(Array.isArray(source.collapsedSections))out.collapsedSections=source.collapsedSections.filter(function(key,index,all){return ["tones","pitches","key","display","appearance","range","exchange"].indexOf(key)>=0 && all.indexOf(key)===index;});
-    if(Array.isArray(source.expandedSubsections))out.expandedSubsections=source.expandedSubsections.filter(function(key,index,all){return ["appearance","colors","labels"].indexOf(key)>=0&&all.indexOf(key)===index;});
+    ["summary","detail"].forEach(function(prefix){
+        if(source[prefix+"Font"]===undefined)out[prefix+"Font"]=out.chordFont;
+        out[prefix+"DegreeFont"]=typeof source[prefix+"DegreeFont"]==="string"&&source[prefix+"DegreeFont"].length>0&&source[prefix+"DegreeFont"].length<=64?source[prefix+"DegreeFont"]:out.degreeFont;
+        var color=source[prefix+"Color"];
+        if(color!==undefined&&color!==""&&!/^#[0-9a-f]{6}$/i.test(color))throw Error("颜色需要 #RRGGBB："+prefix);
+        if(typeof color==="string")out[prefix+"Color"]=color;
+    });
+    if(Array.isArray(source.expandedSubsections))out.expandedSubsections=source.expandedSubsections.filter(function(key,index,all){return ["appearance","summaryStyle","detailStyle","accent","colors","labels"].indexOf(key)>=0&&all.indexOf(key)===index;});
     return out;
 }
 function preset(config, name) {
@@ -61,4 +72,11 @@ function preset(config, name) {
     out.palette=name;
     for(var i=0;i<roles.length;++i)out.colors[roles[i]]=palettes[name][i];
     return out;
+}
+
+function labelHeightFactor(content, order, ratio) {
+    var relative=ratio/100;
+    if(content===0)return 1;
+    if(content===1)return relative;
+    return order>=2?1+relative:Math.max(1,relative);
 }

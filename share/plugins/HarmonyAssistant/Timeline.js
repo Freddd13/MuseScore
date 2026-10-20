@@ -268,6 +268,40 @@ function overlay(regions, overrides) {
     }
     out.sort(function(a,b){return a.start-b.start||a.part-b.part;});return out;
 }
+function refreshNotes(edits, frames, parts) {
+    if(!edits.length)return [];
+    var byPart={}, byId={};
+    parts.forEach(function(part){byPart[part.startTrack]=[];});
+    function partOf(track) {
+        for(var p=0;p<parts.length;++p)if(track>=parts[p].startTrack&&track<parts[p].endTrack)return parts[p].startTrack;
+        return -1;
+    }
+    frames.forEach(function(frame){(frame.notes||[]).forEach(function(note){
+        var key=note.tick+":"+note.track+":"+note.index;
+        if(byId[key])return;
+        byId[key]=note;
+        var part=partOf(note.track);
+        (byPart[part]||(byPart[part]=[])).push(note);
+    });});
+    for(var part in byPart)byPart[part].sort(function(a,b){return a.tick-b.tick||a.track-b.track||a.index-b.index;});
+    return edits.map(function(edit){
+        var out=clone(edit), rows=byPart[edit.part];
+        if(!rows||edit.suppressed)return out;
+        var lo=0,hi=rows.length;
+        while(lo<hi){var mid=(lo+hi)>>1;if(rows[mid].tick<edit.start)lo=mid+1;else hi=mid;}
+        var notes=[],seen={};
+        function add(note){var key=note.tick+":"+note.track+":"+note.index;if(!seen[key]&&notes.length<512){seen[key]=true;notes.push(clone(note));}}
+        (edit.notes||[]).forEach(function(old){
+            var note=byId[old.tick+":"+old.track+":"+old.index];
+            if(note&&note.tick<edit.start&&note.end>edit.start)add(note);
+        });
+        for(var i=lo;i<rows.length&&rows[i].tick<edit.end&&notes.length<512;++i)add(rows[i]);
+        // A named rest uses the nearest written note as its drawing anchor.
+        if(!notes.length&&rows.length)add(rows[Math.min(lo,rows.length-1)]);
+        out.notes=notes;
+        return out;
+    });
+}
 function validEdits(edits) {
     if(!Array.isArray(edits)||edits.length>10000)throw Error("人工区间数量无效");
     return edits.map(function(edit){
