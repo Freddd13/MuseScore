@@ -82,7 +82,7 @@ MIDI左右手拆分	importexport/midiimport/importmidi_lrhand.h	void splitIntoLe
 踏板/琶音上下文	mscore/plugin/api/scoreobserver.cpp	QVariantMap ScoreObserver::contextSnapshot(	343	即时音/上下文分离，小节/休止/踏板边界	mtest/mscore/scoreobserver
 谱面屏幕标注	mscore/plugin/api/scoreobserver.cpp	void ScoreObserver::applyPreview(	423	独立和声变化标记、原谱优先与两层避让	mtest/mscore/pluginhost
 插件停靠状态	mscore/plugin/qmlplugin.cpp	void QmlPlugin::attachPanelDock(	64	实际区域/悬浮通知，可选横条高度	mtest/mscore/pluginhost
-插件菜单/析构回归	mtest/mscore/pluginhost/tst_pluginhost.cpp	class TestPluginHost	114	真实 Qt 主窗口、菜单、重排和停靠	mtest/mscore/pluginhost
+插件菜单/析构回归	mtest/mscore/pluginhost/tst_pluginhost.cpp	class TestPluginHost	115	真实 Qt 主窗口、菜单、重排和停靠	mtest/mscore/pluginhost
 plugin-preview	mscore/plugin/api/scoreobserver.cpp	ScoreObserver::setActiveScorePreview	628	固定区间高亮，不复制全谱色表	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-preview	mscore/scoreview.cpp	ScoreView::activateNotePreview	5785	固定记号点击命中与弱目标转发	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-preview	mscore/plugin/qmlplugin.cpp	QmlPlugin::focusPanel	100	聚焦已有插件窗口，保留停靠状态	mtest/mscore/pluginhost/tst_pluginhost.cpp
@@ -199,8 +199,8 @@ Tap 工作区迁移	mscore/workspace.cpp	if (uiVersion < 4)	1113	一次性添加
 工作流	mscore/workflow/midiinput.cpp	QVariantMap readPerformanceMidi	23	只读范围与值数据	mtest/mscore/p1native
 工作流	mscore/workflow/scoreworkflow.cpp	ScoreObserver::performanceRange	78	只读范围与值数据	mtest/mscore/p1native
 工作流	mscore/workflow/scoreworkflow.cpp	ScoreObserver::workflowInfo	71	只读范围与值数据	mtest/mscore/p1native
-工作流	mscore/workflow/workflowexpression.cpp	ScoreObserver::applyExpression	60	隔离副本／受保护写入	mtest/mscore/p1native
-工作流	mscore/workflow/workflowexpression.cpp	ScoreObserver::copyWorkflowScore	108	隔离副本／受保护写入	mtest/mscore/p1native
+工作流	mscore/workflow/workflowexpression.cpp	ScoreObserver::applyExpression	61	隔离副本／受保护写入	mtest/mscore/p1native
+工作流	mscore/workflow/workflowexpression.cpp	ScoreObserver::copyWorkflowScore	109	隔离副本／受保护写入	mtest/mscore/p1native
 工作流	mscore/workflow/tapwrite.cpp	showTapWriteDialog	20	隔离副本／受保护写入	mtest/mscore/p1native
 工作流	mscore/workflow/workflowvariants.cpp	ScoreObserver::workflowFingerprint	15	只读范围与值数据	mtest/mscore/p1native
 MIDI导出	audio/exports/midigate.h	QVector<MidiGateNote> process	114	范围／声部／旋律保护的导出副本	mtest/mscore/p1native
@@ -245,7 +245,7 @@ MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	191	�
 演奏快捷调整	mscore/events.cpp	ScoreView::wheelEvent	157	最近音力度入口	mscore/performanceeditor
 和弦独立摘要	mscore/plugin/qmlplugin.cpp	void QmlPlugin::showSummaryPanel(	209	顶部摘要与右侧面板独立显示	mtest/mscore/performanceeditor;mtest/mscore/p1native
 参考播放空格	mscore/plugin/qmlplugin.cpp	bool QmlPlugin::eventFilter(	141	只在参考面板获得焦点时处理空格，文字输入沿用原行为	mtest/mscore/p1native
-演奏直接试听	mscore/workflow/workflowexpression.cpp	QString ScoreObserver::temporaryWorkflowProject(	145	自动准备试听材料位置	mtest/mscore/p1native
+演奏直接试听	mscore/workflow/workflowexpression.cpp	QString ScoreObserver::temporaryWorkflowProject(	162	自动准备试听材料位置	mtest/mscore/p1native
 分手折线控制点	libmscore/symbol.cpp	void Symbol::editDrag(	176	端点调整长度，拐点移动整条折线	mtest/mscore/performanceeditor/handsymbol_tests.inc
 分手默认形状	mscore/handbracketsettings.cpp	static void refreshHandPaletteDefaults(	23	保存后更新所有默认符号面板	mtest/mscore/performanceeditor/handsymbol_tests.inc
 实时MIDI录制	mscore/workflow/midicapture.cpp	MidiCaptureSession::begin(	87	独立录制、时间、松手与自动结束	mtest/mscore/p1native
@@ -255,7 +255,7 @@ MIDI松手说明	mscore/midicrop/midicroppanel.cpp	QString reasonText(	33	原长
 和弦连续解释	share/plugins/HarmonyAssistant/Timeline.js	function scorePath(	185	候选解释、分批回查与区间输出	../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs
 方案连线	libmscore/regionalconnections.cpp	QVariantList capture(	111	按逻辑端点保存与恢复延音线和圆滑线	mtest/mscore/p1native
 谱面方案按钮	mscore/workflow/regionalcontrols.cpp	void updateRegionalControls(	263	可隐藏的写法切换、定位面板和视口更新	mtest/mscore/p1native
-打开演奏对比	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::showEditorComparison(	150	展开对应轨、分配空间并切换到当前结果	mtest/mscore/p1native
+打开演奏对比	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::showEditorComparison(	167	展开对应轨、分配空间并切换到当前结果	mtest/mscore/p1native
 对应轨筛选	mscore/performanceeditor/workflowlanes.cpp	bool WorkflowLanes::matchEnabled(	52	共用谱表声部筛选、直接应用和数值提示	mtest/mscore/p1native
 最近音滚轮	mscore/performanceeditor/performancewheel.cpp	bool PerformanceEditor::nearestWheelShortcut(	130	输入状态、横向滚轮和可选快捷键	mtest/mscore/performanceeditor/editor_usability_tests.inc
 谱行音符索引	mscore/performanceeditor/performanceux.cpp	void PerformanceEditor::rebuildScoreNoteRows(	219	缩放和平移只检查可见谱行	mtest/mscore/performanceeditor/editor_usability_tests.inc
@@ -264,7 +264,7 @@ MIDI松手说明	mscore/midicrop/midicroppanel.cpp	QString reasonText(	33	原长
 演奏力度恢复	libmscore/velocitybackup.cpp	void remember(	77	首次应用前力度、复制读写及撤销	mtest/mscore/p1native/velocity_history_tests.inc
 演奏对比	mscore/performanceeditor/expressioncompare.cpp	void PerformanceEditor::syncExpressionComparison()	69	原参数区前后对比、拖动和绘制	mtest/mscore/performanceeditor/expression_compare_tests.inc
 演奏试听	mscore/workflow/playbackpreview.cpp	QVariantMap startPlaybackPreview(	152	当前展开拍位切换与普通播放恢复	mtest/mscore/performanceeditor/expression_playback_tests.inc
-演奏应用	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::restoreExpressionVelocity(	284	选音、选段恢复与随谱保存	mtest/mscore/p1native/expression_application_tests.inc
+演奏应用	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::restoreExpressionVelocity(	301	选音、选段恢复与随谱保存	mtest/mscore/p1native/expression_application_tests.inc
 记号力度文字	mscore/performanceeditor/markvelocity.cpp	MarkVelocityText readMarkVelocityText(	10	动态文字与谱表作用范围	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
 乐谱分析身份	mscore/workflow/analysisidentity.cpp	ScoreObserver::analysisScoreId	28	跨面板的乐谱身份与内容变化	mtest/mscore/p1native/assistant_surface_tests.inc
 谱面位置提示	mscore/workflow/positionhint.cpp	void showWorkflowPositionHint	101	定位后短时强调谱段	mtest/mscore/p1native/assistant_surface_tests.inc
@@ -317,7 +317,7 @@ MIDI录音目录	mscore/workflow/midicapture.cpp	"const QString folder=QSettings
 原曲滑块输入	share/workflow/panels/WorkflowCommon/SliderNumber.qml	RowLayout {	6	原生滑块与数值输入	mtest/mscore/pluginhost/tst_pluginhost.cpp
 节拍音符字体兼容	libmscore/textbase.cpp	"if (family == ""Leland Text"")"	867	默认节拍字形采用3.6.2尺寸；其它符号和自选字体保留	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/P2/compare_fonts.py
 实时录制对应	mscore/workflow/realtimematcher.h	class RealtimeMatcher	11	音高集合与起音间隔的有限路径匹配	mtest/mscore/p1native/tst_p1native.cpp
-表达精确选区	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::expressionSelection	168	保留所选拍位与谱表范围	mtest/mscore/pluginhost/tst_pluginhost.cpp
+表达精确选区	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::expressionSelection	185	保留所选拍位与谱表范围	mtest/mscore/pluginhost/tst_pluginhost.cpp
 表达目标与输入	share/workflow/panels/PerformanceExpression/ExpressionScopeBar.qml	ColumnLayout {	6	目标谱段、设备开关与录制位置	mtest/mscore/pluginhost/tst_pluginhost.cpp
 频谱显示与颜色	mscore/performanceeditor/spectrumdisplay.cpp	QImage colorSpectrum(	108	颜色查表、显示增益、叠加透明度	mtest/mscore/pluginhost/tst_pluginhost.cpp
 频谱节拍操作	mscore/performanceeditor/spectrumbeat.cpp	SpectrumBeatControls::SpectrumBeatControls(	15	BPM、拍号、第一拍、候选和跟拍	mtest/mscore/pluginhost/tst_pluginhost.cpp
@@ -357,3 +357,6 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	191	空列�
 谱行带位置与操作	mscore/performanceeditor/performanceoverlay.cpp	QRectF PerformanceEditor::scoreBandLane() const	204	选中谱行附近的可见位置、固定底部与窄行菜单	mtest/mscore/pluginhost/score_editing_075_tests.inc;mtest/mscore/performanceeditor/performance_controls_tests.inc
 和弦范围手柄	mscore/workflow/chordeditor.cpp	QPointF pointFor(int tick) const	36	手柄固定到音乐范围，文字可独立拖动及避让	mtest/mscore/pluginhost/harmony_display_075_tests.inc
 和弦显示延续	share/workflow/panels/HarmonyAssistant/Timeline.js	function displayAtTick(	35	保留上一和弦的显示，遵守人工排除范围	../../muse3_plugins/HarmonyAssistant/tests/test-display-result.cjs
+完整谱试写保存	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::saveWorkflowScore(	129	保存当前项目副本，更新文件校验及原生已保存状态	mtest/mscore/pluginhost/variant_metadata_076_tests.inc
+插件控件识别	mscore/plugin/mscorePlugins.cpp	static bool personalSupportComponent(	534	元信息扫描跳过本项目公共界面控件，保留真实插件	mtest/mscore/pluginhost/variant_metadata_076_tests.inc
+完整谱工作区迁移	share/plugins/ArrangementVariants/ArrangementVariants_MS3.qml	function saveAt(url)	148	另存索引时保持已有材料路径，保存切换与删除恢复	mtest/mscore/pluginhost/variant_metadata_076_tests.inc

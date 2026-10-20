@@ -132,6 +132,7 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QVariantMap previewExpression(const QString& workspace,const QVariantMap& candidate,const QVariantMap& scope);
       Q_INVOKABLE QVariantMap openWorkflowScore(const QString& filename,bool baseline = false,const QString& expectedHash = QString());
       Q_INVOKABLE QVariantMap copyWorkflowScore(const QString& destination,const QString& expected,bool overwrite = false);
+      Q_INVOKABLE QVariantMap saveWorkflowScore(const QString& expected);
       Q_INVOKABLE QVariantMap applyExpression(const QVariantMap& candidate);
       Q_INVOKABLE QVariantMap expressionVelocityHistory(const QVariantMap& range);
       Q_INVOKABLE QVariantMap expressionSelection();

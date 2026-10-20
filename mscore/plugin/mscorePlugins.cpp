@@ -25,6 +25,8 @@
 #include "mscore/workflow/paneldock.h"
 #include "qmlpluginengine.h"
 #include "pluginManager.h"
+#include <QRegularExpression>
+#include <QSet>
 
 namespace Ms {
 
@@ -529,9 +531,26 @@ void MuseScore::pluginTriggered(QString pp)
 ///   description has failed
 //---------------------------------------------------------
 
+static bool personalSupportComponent(const QString& path)
+      {
+      static const QStringList folders{"HarmonyAssistant","PerformanceExpression","ReferencePlayer",
+                                       "WorkflowCommon","ArrangementAssistant","ArrangementVariants"};
+      if(!folders.contains(QFileInfo(path).dir().dirName()))return false;
+      QFile file(path);if(!file.open(QIODevice::ReadOnly))return false;
+      QString prefix=QString::fromUtf8(file.read(8192));
+      prefix.remove(QRegularExpression("/\\*.*?\\*/",QRegularExpression::DotMatchesEverythingOption));
+      prefix.remove(QRegularExpression("//[^\\n]*"));
+      static const QRegularExpression root("^\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*\\{",QRegularExpression::MultilineOption);
+      static const QSet<QString> controls{"Item","QtObject","Rectangle","Text","Label","Control","Button",
+          "ColumnLayout","RowLayout","GridLayout","Column","Row","Flow","Frame","Pane","ScrollView",
+          "ComboBox","SpinBox","TextField","CheckBox","Switch","ToolButton","Canvas","Dialog","Popup",
+          "UiLabel","FocusScope","PanelCard","Controls.Button","Controls.ComboBox",
+          "Controls.SpinBox","Controls.Switch","Controls.TextField"};
+      return controls.contains(root.match(prefix).captured(1));
+      }
 bool collectPluginMetaInformation(PluginDescription* d, QmlPluginEngine* metadataEngine)
       {
-      if(d->path.endsWith(".view.qml"))return false;
+      if(d->path.endsWith(".view.qml")||personalSupportComponent(d->path))return false;
       qDebug("Collect meta for <%s>", qPrintable(d->path));
 
       std::unique_ptr<QmlPluginEngine> owned;

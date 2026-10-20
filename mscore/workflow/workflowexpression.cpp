@@ -13,6 +13,7 @@
 #include "libmscore/velocitybackup.h"
 #include "libmscore/select.h"
 #include "mscore/musescore.h"
+#include "mscore/workflow/featuregate.h"
 #include "mscore/performanceeditor/parameteredit.h"
 #include "mscore/plugin/api/score.h"
 #include "mscore/plugin/api/scoreobserver.h"
@@ -124,6 +125,22 @@ QVariantMap ScoreObserver::copyWorkflowScore(const QString& destination,const QS
  if(!saved||master->state()!=state||master->fileInfo()->filePath()!=originalPath||master->dirty()!=dirty||master->undoStack()->getCurIdx()!=undoIndex)return {{"error","copy serialization failed isolation check"}};
  QSaveFile output(path);if(!output.open(QIODevice::WriteOnly)||output.write(buffer.data())!=buffer.size()||!output.commit())return {{"error","copy write failed; previous file preserved"}};
  return {{"ok",true},{"path",path},{"sha256",QString::fromLatin1(QCryptographicHash::hash(buffer.data(),QCryptographicHash::Sha256).toHex())},{"milliseconds",double(clock.nsecsElapsed())/1000000}};
+}
+QVariantMap ScoreObserver::saveWorkflowScore(const QString& expected){
+ if(!personalFeaturesEnabled())return {{"error",tr("在kumo.ini中开启个人工具后可保存试写。")}};
+ if(!_score||!mscore||!mscore->currentScore()||mscore->currentScore()->masterScore()!=_score->masterScore())
+  return {{"error",tr("先切到要保存的写法，再保存。")}};
+ if(seq&&seq->isPlaying()){seq->stopWait();seq->waitForStoppedRendering();}
+ if(!_score||!mscore||!idle())return {{"error",tr("结束播放后再保存当前写法。")}};
+ if(expected!=analysisRevision())return {{"error",tr("乐谱刚有变化，请重新保存当前写法。")}};
+ auto master=_score->masterScore();
+ if(!master->property("kumoWorkflowOwned").toBool()||master->created())return {{"needsCopy",true}};
+ if(master->readOnly())return {{"error",tr("选中一份可编辑写法后保存。")}};
+ if(master->dirty()&&!mscore->saveFile())return {{"error",tr("当前写法保存失败，请检查项目文件夹。")}};
+ const QString path=master->fileInfo()->absoluteFilePath();QFile file(path);
+ if(!file.open(QIODevice::ReadOnly))return {{"error",tr("无法读取刚保存的写法文件。")}};
+ return {{"ok",true},{"path",path},{"revision",analysisRevision()},
+         {"sha256",QString::fromLatin1(QCryptographicHash::hash(file.readAll(),QCryptographicHash::Sha256).toHex())}};
 }
 QVariantMap ScoreObserver::openWorkflowScore(const QString& filename,bool baseline,const QString& expectedHash){
  if(!mscore)return {{"error","no GUI host"}};
