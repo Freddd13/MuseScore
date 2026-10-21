@@ -15,6 +15,7 @@
 #include "mscore/musescore.h"
 #include "mscore/workflow/featuregate.h"
 #include "mscore/performanceeditor/parameteredit.h"
+#include "mscore/performanceeditor/performanceselection.h"
 #include "mscore/plugin/api/score.h"
 #include "mscore/plugin/api/scoreobserver.h"
 #include "mscore/scoretab.h"
@@ -181,6 +182,16 @@ QVariantMap ScoreObserver::showEditorCorrespondence(){
  if(auto toggle=mscore->findChild<QToolButton*>("performanceWorkflowToggle"))toggle->setChecked(true);
  if(auto dock=mscore->findChild<QDockWidget*>("performanceEditorDock")){auto area=mscore->dockWidgetArea(dock);if(area==Qt::BottomDockWidgetArea||area==Qt::TopDockWidgetArea)mscore->resizeDocks({dock},{qMin(mscore->height()-180,qMax(dock->height(),dock->widget()->minimumSizeHint().height()+100))},Qt::Vertical);}
  return shown;
+}
+QVariantMap ScoreObserver::selectExpressionNote(const QVariantMap& value) {
+ if(!personalFeaturesEnabled())return {{"error",tr("在kumo.ini中开启个人工具后，可以使用演奏对应选音。")}};
+ if(!_score||!mscore||mscore->currentScore()!=_score)return {{"error",tr("回到对应的乐谱后，可以选择这个音。")}};
+ if(value.value("revision").toString()!=analysisRevision())return {{"error",tr("乐谱刚有修改，重新对应后可以选择这个音。")}};
+ auto note=noteAt(_score,value);if(!note)return {{"error",tr("这个音的位置有变化，请重新对应。")}};
+ if(_score->noteEntryMode())return {{"error",tr("按 Esc 退出音符输入后，可以选择对应音。")}};
+ if(!PerformanceSelection::apply(_score,{note},note))return {{"error",tr("选择这个音失败，请重新对应后再选。")}};
+ if(!playing()&&mscore->currentScoreView())mscore->currentScoreView()->adjustCanvasPosition(note,false);
+ return {{"ok",true},{"tick",note->chord()->tick().ticks()},{"track",note->track()}};
 }
 QVariantMap ScoreObserver::expressionSelection(){
  QVariantList notes;if(_score)for(auto note:_score->selection().noteList()){auto value=describe(note,note->ppitch());if(note->chord()->isGrace()&&note->chord()->parent()&&note->chord()->parent()->isChord())value["graceIndex"]=toChord(note->chord()->parent())->graceNotes().indexOf(note->chord());notes.append(value);}

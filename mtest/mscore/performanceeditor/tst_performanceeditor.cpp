@@ -10,6 +10,9 @@
 #include "mscore/workflow/workflowcontext.h"
 #include "mscore/workflow/referencefactory.h"
 #include "mscore/workflow/referencepanel.h"
+#include "mscore/workflow/builtinpanels.h"
+#include "mscore/workflow/midicapture.h"
+#include "mscore/workflow/midiinput.h"
 #include "mscore/workflow/referencebus.h"
 #include "libmscore/handbracket.h"
 #include "mscore/handbracketsettings.h"
@@ -19,6 +22,7 @@
 #include <QtTest/QtTest>
 #include <QTemporaryDir>
 #include <QSettings>
+#include <QScreen>
 #include <QComboBox>
 #include <QTableWidget>
 #include <QAbstractItemView>
@@ -160,6 +164,7 @@ class PerformanceTestDriver : public Driver {
       int sampleRate() const override { return 44100; }
       void pulse(unsigned frames = 2048) { seq->process(frames, _buffer); }
 };
+#include "expression_080_fixtures.inc"
 class TestPerformanceEditor : public QObject, public MTest {
       Q_OBJECT
       QTemporaryDir _directory;
@@ -822,6 +827,8 @@ class TestPerformanceEditor : public QObject, public MTest {
             }
 #ifdef Q_MOC_RUN
       void referencePanelRepeatedTransport();
+      void expressionEmbeddedRecordingResults();
+      void expressionFullPhraseTransport();
       void expressionPlaybackKeepsScoreAndBeat();
       void gatePlaybackKeepsScoreAndBeat();
       void regionalPlaybackSwitchesSamePhrase();
@@ -829,6 +836,7 @@ class TestPerformanceEditor : public QObject, public MTest {
       void expressionVelocityModesAndComparison();
 #else
 #include "reference_panel_074_tests.inc"
+#include "expression_080_tests.inc"
 #include "expression_playback_tests.inc"
 #include "gate_playback_tests.inc"
 #include "expression_compare_tests.inc"

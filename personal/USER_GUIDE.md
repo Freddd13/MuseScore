@@ -1,6 +1,6 @@
 # MuseScore Evolution 个人功能说明
 
-本文对应个人版本：**0.79.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+本文对应个人版本：**0.80.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
 
 工作视图的尺寸与工具页返回见[窗口操作](docs/LAYOUT_079_GUIDE.md)。
 
@@ -19,7 +19,7 @@
 | 谱面滚轮调力度、谱行带跟随选音、保留上一和弦 | [谱面调节与和弦显示](docs/SCORE_HARMONY_075_GUIDE.md) |
 | 查看和弦、级数和构成音 | 下文“和弦助手” |
 | 听原曲和比较谱段 | [原曲参考](docs/REPAIR_056_GUIDE.md) |
-| 导入或录制演奏，再使用力度 | [录制、查看对应与采用力度](docs/EXPRESSION_073_GUIDE.md) |
+| 导入或录制演奏，再使用力度 | [录制、查看对应与采用力度](docs/EXPRESSION_080_GUIDE.md) |
 | 对照频谱听音、标注与输入 | [频谱扒谱完整步骤](docs/WORKSPACE_066_GUIDE.md) |
 | 查看整条录音、按谱对齐与缩放频谱 | [频谱范围与缩放](docs/SPECTRUM_078_GUIDE.md) |
 | 给频谱或标注列表多留一些空间 | [标注列表开关与高度](docs/REFERENCE_SPECTRUM_074_GUIDE.md) |
@@ -359,7 +359,7 @@ rit.可以分别用Tap设置起速或终速。a tempo和速度等式按它们的
 
 面板提供 MIDI 输入开关。录制从第一个音开始计时，谱面和卷帘显示正在对应的位置。停止后自动显示结果，继续试听和采用。
 
-完整的导入、录制、按钮、比例、固定／跟随、速度、保存及恢复例子见 [演奏表达操作说明](docs/WORKSPACE_065_GUIDE.md)。
+录制后会直接显示对应结果，试听和采用放在同一处。点结果会选中对应的谱音；播放中选择时保留播放位置。逐音采用、采用剩余结果和保存恢复见[演奏表达操作说明](docs/EXPRESSION_080_GUIDE.md)。
 
 ## 13. 分段试写：同一段保留A、B几种写法
 

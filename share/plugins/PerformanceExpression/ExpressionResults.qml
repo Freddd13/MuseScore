@@ -74,7 +74,7 @@ ColumnLayout {
                         Label {
                             visible: modelData.kind === "match"
                             text: modelData.kind !== "match" || modelData.original === null ? "" : resultRow.newVelocity === null ? "力度 " + modelData.original : modelData.original + " → " + resultRow.newVelocity
-                            color: resultRow.newVelocity === null ? theme.muted : theme.accent
+                            color: resultRow.newVelocity === null ? theme.muted : theme.text
                             font.family: Qt.application.font.family
                             font.pointSize: Qt.application.font.pointSize
                             font.bold: true
