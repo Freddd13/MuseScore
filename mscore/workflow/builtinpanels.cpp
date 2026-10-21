@@ -94,7 +94,7 @@ void installExpressionTools(QWidget* editor,QSplitter* splitter,QVBoxLayout* lay
  auto tabs=new QTabBar(editor);tabs->setObjectName("workflowExpressionTabs");tabs->setExpanding(false);
  tabs->addTab(QObject::tr("演奏编辑"));tabs->addTab(QObject::tr("演奏表达"));layout->insertWidget(0,tabs);
  QObject::connect(tabs,&QTabBar::currentChanged,splitter,[tabs,splitter]{const int previous=tabs->property("previousLayoutPage").toInt();QSettings().setValue("performanceEditor/modeLayout/"+QString::number(previous),splitter->saveState());});
- auto host=new QWidget(splitter);host->setObjectName("embeddedExpressionPage");host->setMinimumHeight(80);
+ auto host=new QWidget(splitter);host->setObjectName("embeddedExpressionPage");host->setMinimumHeight(180);
  auto box=new QVBoxLayout(host);box->setContentsMargins(0,0,0,0);splitter->addWidget(host);host->hide();
  QObject::connect(tabs,&QTabBar::currentChanged,host,[host,box,splitter](int page){
   const QSize previousWindow=mscore?mscore->size():QSize();
@@ -112,16 +112,19 @@ void installExpressionTools(QWidget* editor,QSplitter* splitter,QVBoxLayout* lay
   if(!root)root=qobject_cast<QmlPlugin*>(host->property("root").value<QObject*>());
   if(page==1&&showDetachedEditorArea(host))return;
   if(!host->property("kumoDetachedArea").toBool()){host->setVisible(page==1);if(root)root->setVisible(page==1);}
-  if(root&&page==1)QTimer::singleShot(0,root,[root]{root->focusPanel();});
+  if(root&&page==1){
+   auto owner=host->parentWidget();while(owner&&!qobject_cast<PerformanceEditor*>(owner))owner=owner->parentWidget();
+   if(!owner||!owner->property("kumoActivatingDetachedTool").toBool())
+    QTimer::singleShot(0,root,[root]{if(root->isVisible())root->focusPanel();});
+  }
   if(page==1){auto sizes=splitter->sizes();int at=splitter->indexOf(host);if(at>=0&&sizes[at]<100){sizes[at]=190;splitter->setSizes(sizes);}}
-  if(page==1&&mscore)QTimer::singleShot(0,host,[host,previousWindow]{
-   if(!mscore)return;
-   auto dock=host->parentWidget();while(dock&&!qobject_cast<QDockWidget*>(dock))dock=dock->parentWidget();
-   auto editorDock=qobject_cast<QDockWidget*>(dock);
-   if(editorDock&&!editorDock->isFloating()&&mscore->property("kumoWorkspaceView").toString()!="daw"&&mscore->currentScoreView()&&mscore->currentScoreView()->height()<160){
-    if(previousWindow.isValid())mscore->resize(previousWindow);
-    mscore->resizeDocks({editorDock},{qBound(260,mscore->height()/2,540)},Qt::Vertical);
-   }
+  const auto workspace=mscore?mscore->property("kumoWorkspaceView").toString():QString();
+  if(page==1&&mscore)QTimer::singleShot(0,host,[host,previousWindow,workspace]{
+   if(!mscore||!host->isVisible()||mscore->property("kumoWorkspaceView").toString()!=workspace)return;
+   if(previousWindow.isValid()&&mscore->size()!=previousWindow&&!mscore->isMaximized())mscore->resize(previousWindow);
+   auto owner=host->parentWidget();
+   while(owner&&!qobject_cast<PerformanceEditor*>(owner))owner=owner->parentWidget();
+   if(auto editor=qobject_cast<PerformanceEditor*>(owner))ensureEditorDockContent(editor);
   });
 
  });
@@ -129,11 +132,14 @@ void installExpressionTools(QWidget* editor,QSplitter* splitter,QVBoxLayout* lay
 void showExpressionPanel(){
  if(!mscore || !personalFeaturesEnabled())return;const QSize before=mscore->size();mscore->showPerformanceEditor(true);
  if(auto tabs=mscore->performanceEditor()->findChild<QTabBar*>("workflowExpressionTabs")){
-  if(openEditorArea(mscore->performanceEditor(),"embeddedExpressionPage"))return;
+  if(openEditorArea(mscore->performanceEditor(),"embeddedExpressionPage")){
+   ensureEditorDockContent(mscore->performanceEditor());
+   return;
+  }
   auto host=mscore->performanceEditor()->findChild<QWidget*>("embeddedExpressionPage");if(host&&!host->property("loaded").toBool()&&tabs->currentIndex()==1)tabs->setCurrentIndex(0);tabs->setCurrentIndex(1);
  }
  if(mscore->size()!=before)mscore->resize(before);
- if(auto dock=qobject_cast<QDockWidget*>(mscore->performanceEditor()->parentWidget()))if(!dock->isFloating()&&mscore->property("kumoWorkspaceView").toString()!="daw")mscore->resizeDocks({dock},{qBound(260,before.height()/2,540)},Qt::Vertical);
+ ensureEditorDockContent(mscore->performanceEditor());
 }
 void addBuiltinPanelActions(QMenu* menu){
  addSystemLockActions(menu);

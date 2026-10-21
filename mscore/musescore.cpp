@@ -14,6 +14,7 @@
 #include "workflow/workflowcontext.h"
 #include "workflow/featuregate.h"
 #include "workflow/workspaceviews.h"
+#include "workflow/editorareas.h"
 #include "workflow/systemlocks.h"
 #ifdef SCRIPT_INTERFACE
 #include "performanceeditor/rollwriting.h"
@@ -9709,6 +9710,7 @@ void MuseScore::showPerformanceEditor(bool visible)
                   if (!_performanceDock || !_performanceDock->isVisible()) return;
                   if (!isMaximized() && size()!=windowBeforeEditor) resize(windowBeforeEditor);
                   ensureEditorAreas(_performanceEditor->findChild<QSplitter*>("performanceMainSplitter"));
+                  settleEditorAreaLayout(_performanceEditor);
                   });
             }
       }

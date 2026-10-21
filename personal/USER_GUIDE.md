@@ -1,6 +1,8 @@
 # MuseScore Evolution 个人功能说明
 
-本文对应个人版本：**0.78.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+本文对应个人版本：**0.79.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+
+工作视图的尺寸与工具页返回见[窗口操作](docs/LAYOUT_079_GUIDE.md)。
 
 本轮[完整使用检查与返工进度](docs/USABILITY_REWORK_20261019.md)按功能逐项记录。
 
@@ -9,7 +11,8 @@
 | 想完成的事 | 从哪里开始 |
 |---|---|
 | 面板单独全屏、回到原位置、处理窗口跑到屏幕外 | [面板窗口与工具栏](docs/WINDOWS_072_GUIDE.md) |
-| 把编辑器铺满、把区域移到右侧或悬浮 | [工作视图与区域摆放](docs/WORKSPACE_064_GUIDE.md) |
+| 调整编辑器尺寸、切换工作视图和工具页 | [窗口操作与区域高度](docs/LAYOUT_079_GUIDE.md) |
+| 把区域移到右侧或悬浮 | [区域摆放](docs/WORKSPACE_064_GUIDE.md) |
 | 选择原曲音轨、删除恢复、拖滑块调速度 | [原曲音轨操作](docs/WORKSPACE_064_GUIDE.md#管理多条原曲音轨) |
 | 连接 Codex，让它读取或建议写法 | 视图 → AI 连接；[第一次连接的步骤](docs/WORKSPACE_063_GUIDE.md) |
 | 调整力度、速度、踏板 | 下文“演奏编辑器” |

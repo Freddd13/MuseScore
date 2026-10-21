@@ -72,7 +72,7 @@ int selectionTrack(Score* score, int fallback)
       }
 }
 QSize PerformanceEditor::minimumSizeHint() const {
-      return QSize(260,layout()?qMax(160,layout()->minimumSize().height()):240);
+      return QSize(260, layout() ? qMax(160, qMax(layout()->minimumSize().height(), layout()->minimumHeightForWidth(width()))) : 240);
       }
 
 PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
@@ -275,7 +275,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             headingLayout->addWidget(tabs, 1);
             headingLayout->addWidget(areas);
             layout->insertWidget(0, heading);
-            connect(tabs, &QTabBar::currentChanged, toolbar, [toolbar](int page) { toolbar->setVisible(page != 3); });
+            connect(tabs, &QTabBar::currentChanged, toolbar, [toolbar, tabs] { toolbar->setVisible(tabs->currentIndex() != 3); });
             toolbar->setVisible(tabs->currentIndex() != 3);
       }
 #endif

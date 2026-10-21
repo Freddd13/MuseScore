@@ -15,4 +15,5 @@ bool setEditorAreaVisible(PerformanceEditor *, const QString &, bool);
 bool openEditorArea(PerformanceEditor *, const QString &);
 void saveEditorAreaLayout(PerformanceEditor *);
 void settleEditorAreaLayout(PerformanceEditor *);
+void ensureEditorDockContent(PerformanceEditor *);
 } // namespace Ms

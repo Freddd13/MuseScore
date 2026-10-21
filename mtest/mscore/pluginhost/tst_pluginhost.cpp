@@ -1,6 +1,7 @@
 // GPL-2.0-or-later. Actual Qt Widgets / QML host regressions, isolated from user settings.
 #include <QtTest/QtTest>
 #include <QDockWidget>
+#include <QToolBar>
 #include <QMenuBar>
 #include <QMenu>
 #include <QTranslator>
@@ -116,6 +117,15 @@ class TestPluginHost : public QObject {
       Q_OBJECT
       QTemporaryDir _settings;
    private slots:
+      void existingEditorProfileFirstOpen();
+      void rhythmControlsFitNarrowPanel();
+      void detachedToolsKeepEditorWorking();
+      void editorAreaSizeRoundTrip();
+      void legacyEditorAreaStateStaysUsable();
+      void rhythmPageKeepsNavigationAndHeight();
+      void expressionOpeningKeepsDockHeight();
+      void rapidToolChangesKeepWindowSize();
+      void engravingFirstUseLeavesScoreSpace();
       void spectrumInitialSourceAndChoice();
       void spectrumLinkedZoomAndScroll();
       void harmonyRangeWithoutSettings();
@@ -378,6 +388,18 @@ class TestPluginHost : public QObject {
             QCoreApplication::setApplicationName("PluginHost");
             QSettings::setDefaultFormat(QSettings::IniFormat);
             QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,_settings.path());
+            const auto layoutProfile=qEnvironmentVariable("P2_LAYOUT_PROFILE");
+            if(!layoutProfile.isEmpty()){
+                  QVERIFY(QFileInfo::exists(layoutProfile));
+                  QSettings source(layoutProfile,QSettings::IniFormat),target;
+                  int copied=0;
+                  for(const auto& key:source.allKeys())
+                        if(key.startsWith("performanceEditor/")||key.startsWith("personalWorkspaceViews/")){
+                              target.setValue(key,source.value(key));++copied;
+                        }
+                  QCOMPARE(source.status(),QSettings::NoError);target.sync();
+                  qInfo("Copied %d editor/workspace settings into the isolated profile",copied);
+            }
             dataPath=_settings.path();
             MScore::noGui=true; noSeq=true; converterMode=true;
             initMuseScoreResources(); initPluginHostResources();
@@ -1338,5 +1360,6 @@ class TestPluginHost : public QObject {
 #include "variant_metadata_076_tests.inc"
 #include "harmony_panel_077_tests.inc"
 #include "spectrum_078_tests.inc"
+#include "layout_079_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

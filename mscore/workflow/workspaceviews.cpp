@@ -207,6 +207,12 @@ public:
           dock->hide();
       }
     }
+    if (state.isEmpty() && mode == "engrave")
+      if (auto dock = window->findChild<QDockWidget *>("performanceEditorDock"))
+        dock->hide();
+    if (state.isEmpty() && (mode == "daw" || mode == "engrave"))
+      if (auto input = window->findChild<QToolBar *>("entry-tools"))
+        input->hide();
     scoreComparison->setEnabled(mode == "daw");
     const bool visible =
         mode != "daw" ||

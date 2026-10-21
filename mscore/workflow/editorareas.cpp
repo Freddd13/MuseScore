@@ -34,7 +34,33 @@ class EditorAreas : public QObject {
   QSplitter *split;
   QTabBar *tabs;
   QList<Area> areas;
-  bool updating = false;
+  bool updating = false, fitQueued = false;
+  void queueFit() {
+    if (fitQueued)
+      return;
+    fitQueued = true;
+    QTimer::singleShot(0, this, [this] {
+      fitQueued = false;
+      ensureEditorDockContent(editor);
+    });
+  }
+  int inlinePage = 0;
+  bool isDetachedPage(int page) const {
+    for (const auto &area : areas)
+      if (area.page == page && page > 0 && area.widget &&
+          area.widget->property("kumoDetachedArea").toBool())
+        return true;
+    return false;
+  }
+  void keepInlinePage(int detachedPage) {
+    if (!tabs || tabs->currentIndex() != detachedPage)
+      return;
+    const int target = inlinePage != detachedPage && !isDetachedPage(inlinePage)
+                           ? inlinePage : 0;
+    editor->setProperty("kumoActivatingDetachedTool", true);
+    tabs->setCurrentIndex(target);
+    editor->setProperty("kumoActivatingDetachedTool", false);
+  }
   QString workspace() const {
     auto mode =
         mscore ? mscore->property("kumoWorkspaceView").toString() : QString();
@@ -82,6 +108,8 @@ class EditorAreas : public QObject {
       return;
     updating = true;
     const int page = tabs ? tabs->currentIndex() : 0;
+    if (!isDetachedPage(page))
+      inlinePage = page;
     const auto heights =
         QSettings()
             .value(heightKey(),
@@ -122,6 +150,7 @@ class EditorAreas : public QObject {
     split->setSizes(sizes);
     ensureEditorAreas(split);
     updating = false;
+    queueFit();
   }
   void restore(int index, bool remember = true, bool geometry = true) {
     auto &area = areas[index];
@@ -247,6 +276,7 @@ class EditorAreas : public QObject {
 public:
   EditorAreas(PerformanceEditor *owner, QSplitter *splitter, QMenu *menu)
       : QObject(owner), editor(owner), split(splitter) {
+    editor->installEventFilter(this);
     tabs = editor->findChild<QTabBar *>("workflowExpressionTabs");
     menu->clear();
     const QHash<QString, QPair<QString, int>> names{
@@ -363,7 +393,7 @@ public:
       }
     }
     if (tabs)
-      tabs->setCurrentIndex(qBound(0, page, tabs->count() - 1));
+      tabs->setCurrentIndex(isDetachedPage(page) ? 0 : qBound(0, page, tabs->count() - 1));
     updating = false;
     applyPage();
   }
@@ -439,6 +469,7 @@ public:
     for (int index = 0; index < areas.size(); ++index)
       if (areas[index].widget == widget) {
         if (widget->property("kumoDetachedArea").toBool()) {
+          keepInlinePage(areas[index].page);
           areas[index].dock->show();
           areas[index].dock->raise();
           widget->show();
@@ -455,6 +486,8 @@ public:
     return false;
   }
   bool eventFilter(QObject *watched, QEvent *event) override {
+    if (watched == editor && (event->type() == QEvent::Show || event->type() == QEvent::Resize))
+      queueFit();
     if (watched == mscore && event->type() == QEvent::DynamicPropertyChange &&
         static_cast<QDynamicPropertyChangeEvent *>(event)->propertyName() ==
             "kumoWorkspaceView") {
@@ -528,9 +561,29 @@ bool openEditorArea(PerformanceEditor *editor, const QString &name) {
   auto controller = controllers.value(editor);
   return controller && controller->openArea(name);
 }
+void ensureEditorDockContent(PerformanceEditor *editor) {
+  if (!editor || !editor->isVisible() || !editor->layout() || !mscore)
+    return;
+  editor->layout()->activate();
+  editor->updateGeometry();
+  QWidget *owner = editor->parentWidget();
+  while (owner && !qobject_cast<QDockWidget *>(owner))
+    owner = owner->parentWidget();
+  auto dock = qobject_cast<QDockWidget *>(owner);
+  if (!dock || dock->isFloating())
+    return;
+  const int frame = qMax(0, dock->height() - editor->height());
+  // Wrapped controls need their height at the restored width. The unwrapped
+  // minimum can leave the last splitter child below the visible editor.
+  const int minimum = qMax(editor->minimumSizeHint().height(),
+                          editor->layout()->minimumHeightForWidth(editor->width())) + frame;
+  if (dock->height() < minimum)
+    mscore->resizeDocks({dock}, {minimum}, Qt::Vertical);
+}
 void settleEditorAreaLayout(PerformanceEditor *editor) {
   if (auto controller = controllers.value(editor))
     controller->settleLayout();
+  ensureEditorDockContent(editor);
 }
 void saveEditorAreaLayout(PerformanceEditor *editor) {
   if (auto controller = controllers.value(editor))

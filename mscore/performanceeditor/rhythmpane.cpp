@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "rhythmpane.h"
 #include "../workflow/editorareas.h"
+#include "../workflow/controlflowlayout.h"
 #include "performanceeditor.h"
 #include "mscore/musescore.h"
 #include "mscore/plugin/api/score.h"
@@ -131,14 +132,14 @@ class RhythmCanvas : public QWidget {
                 QRectF box(x(row["start"].toInt()), y,
                            qMax(6., x(row["start"].toInt() + length) - x(row["start"].toInt())),
                            qMax(4., step - 1));
-                auto color = palette().highlight().color();
+                auto color = palette().color(QPalette::Active, QPalette::Highlight);
                 color.setAlpha(row["estimated"].toBool() ? 105 : 195);
                 p.setBrush(color);
-                p.setPen(palette().highlight().color());
+                p.setPen(palette().color(QPalette::Active, QPalette::Highlight));
                 p.drawRoundedRect(box, 2, 2);
                 _hits.append({box, i});
                 if (box.width() > 34 && box.height() >= 11) {
-                    p.setPen(palette().highlightedText().color());
+                    p.setPen(palette().color(QPalette::Active, QPalette::HighlightedText));
                     p.drawText(box, Qt::AlignCenter, QString::number(row["velocity"].toInt()));
                 }
                 p.setPen(palette().text().color());
@@ -236,21 +237,41 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     layout->setSpacing(3);
     auto top = new QHBoxLayout;
     _scopeLabel = new QLabel(tr("先选择一段有音高的乐谱"));
+    _scopeLabel->setWordWrap(true);
+    _scopeLabel->setMinimumWidth(0);
     top->addWidget(_scopeLabel, 1);
     auto scope = new QPushButton(tr("读取当前选段"));
     scope->setObjectName("rhythmReadScope");
     top->addWidget(scope);
     layout->addLayout(top);
-    auto settingsRow = new QHBoxLayout;
+    auto settingsHost = new QWidget;
+    settingsHost->setObjectName("rhythmSettingsTools");
+    auto settingsRow = new ControlFlowLayout(settingsHost);
     _tracks = new QComboBox;
     _tracks->setObjectName("rhythmVoice");
-    settingsRow->addWidget(_tracks, 1);
+    _tracks->setMinimumContentsLength(12);
+    _tracks->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    _tracks->setMinimumWidth(160);
+    _tracks->setMaximumWidth(280);
+    auto voiceGroup = new QWidget;
+    auto voiceLayout = new QHBoxLayout(voiceGroup);
+    voiceLayout->setContentsMargins(0, 0, 0, 0);
+    voiceLayout->setSpacing(4);
+    voiceLayout->addWidget(new QLabel(tr("谱表／声部")));
+    voiceLayout->addWidget(_tracks);
+    settingsRow->addWidget(voiceGroup);
     _grid = new QComboBox;
     _grid->setObjectName("rhythmGrid");
     _grid->addItem(tr("十六分音符"), 120);
     _grid->addItem(tr("八分音符"), 240);
     _grid->addItem(tr("八分三连音"), 160);
-    settingsRow->addWidget(_grid);
+    auto gridGroup = new QWidget;
+    auto gridLayout = new QHBoxLayout(gridGroup);
+    gridLayout->setContentsMargins(0, 0, 0, 0);
+    gridLayout->setSpacing(4);
+    gridLayout->addWidget(new QLabel(tr("节奏细分")));
+    gridLayout->addWidget(_grid);
+    settingsRow->addWidget(gridGroup);
     _releases = new QCheckBox(tr("按松键写休止"));
     _releases->setToolTip(
         tr("开启后，松键到下一次起音之间写休止；关闭时延续到下一次起音，最后沿用该音原时值。"));
@@ -267,8 +288,10 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
             if (auto notes = editor->findChild<QWidget *>("performanceNotesArea"))
                 notes->setVisible(on);
     });
-    layout->addLayout(settingsRow);
-    auto recording = new QHBoxLayout;
+    layout->addWidget(settingsHost);
+    auto recordingHost = new QWidget;
+    recordingHost->setObjectName("rhythmRecordingTools");
+    auto recording = new ControlFlowLayout(recordingHost);
     _record = new QToolButton;
     _record->setText(tr("录制"));
     _record->setObjectName("rhythmRecord");
@@ -289,8 +312,7 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     recording->addWidget(import);
     auto restore = new QPushButton(tr("重用上次录音"));
     recording->addWidget(restore);
-    recording->addStretch();
-    layout->addLayout(recording);
+    layout->addWidget(recordingHost);
     auto split = new QSplitter(Qt::Vertical);
     _canvas = new RhythmCanvas(this);
     split->addWidget(_canvas);
@@ -313,7 +335,9 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     connect(split, &QSplitter::splitterMoved, this,
             [split] { QSettings().setValue("performanceEditor/rhythmDraftLayout", split->saveState()); });
     layout->addWidget(split, 1);
-    auto actions = new QHBoxLayout;
+    auto actionHost = new QWidget;
+    actionHost->setObjectName("rhythmActionTools");
+    auto actions = new ControlFlowLayout(actionHost);
     for (auto pair : QList<QPair<QString, QString>>{{tr("看谱面草稿"), "preview"},
                                                     {tr("试听草稿"), "audition"},
                                                     {tr("听谱中写法"), "original"},
@@ -327,7 +351,7 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     _apply->setObjectName("rhythmApply");
     _apply->setEnabled(false);
     actions->addWidget(_apply);
-    layout->addLayout(actions);
+    layout->addWidget(actionHost);
     _status = new QLabel(tr("选择一条声部，用任意琴键敲它的节奏和力度。录完后可拖动草稿，再试听和采用。"));
     _status->setObjectName("rhythmStatus");
     _status->setWordWrap(true);
@@ -457,7 +481,10 @@ void RhythmPane::showEvent(QShowEvent *e) {
     theme.setColor(QPalette::Button, colors[PerformanceAppearance::Background].lighter(125));
     theme.setColor(QPalette::ButtonText, colors[PerformanceAppearance::Text]);
     theme.setColor(QPalette::Mid, colors[PerformanceAppearance::Grid]);
+    if (property("kumoDetachedArea").toBool())
+        theme = QApplication::palette();
     setPalette(theme);
+    setAutoFillBackground(true);
     _table->setPalette(theme);
     _table->setStyleSheet(QString("QTableWidget { background-color:%1; color:%2; gridline-color:%3; }"
                                   "QTableWidget::item { background-color:%1; color:%2; }"
@@ -857,9 +884,16 @@ void installRhythmPane(PerformanceEditor *editor, QSplitter *splitter) {
         QMap<QWidget *, bool> visible;
     };
     auto state = std::make_shared<LayoutState>();
-    QObject::connect(tabs, &QTabBar::currentChanged, pane, [pane, splitter, editor, state](int page) {
-        if(page==3&&showDetachedEditorArea(pane))return;
-        if(pane->property("kumoDetachedArea").toBool())return;
+    QObject::connect(tabs, &QTabBar::currentChanged, pane, [pane, splitter, editor, state, tabs](int page) {
+        auto restoreEditor = [state] {
+            if (state->active) {
+                for (auto it = state->visible.cbegin(); it != state->visible.cend(); ++it)
+                    it.key()->setVisible(it.value());
+                state->active = false;
+            }
+        };
+        if(page==3&&showDetachedEditorArea(pane)){restoreEditor();return;}
+        if(pane->property("kumoDetachedArea").toBool()){restoreEditor();return;}
         QSize before = mscore ? mscore->size() : QSize();
         if (mscore)
             if (auto screen = mscore->windowHandle() ? mscore->windowHandle()->screen()
@@ -877,7 +911,7 @@ void installRhythmPane(PerformanceEditor *editor, QSplitter *splitter) {
                         if (item->layout())
                             collect(item->layout());
                         else if (auto w = item->widget())
-                            if (w != splitter && !qobject_cast<QTabBar *>(w))
+                            if (w != splitter && w != tabs->parentWidget() && !qobject_cast<QTabBar *>(w))
                                 state->visible[w] = !w->isHidden();
                     }
                 };
@@ -901,8 +935,10 @@ void installRhythmPane(PerformanceEditor *editor, QSplitter *splitter) {
                     sizes[i] = splitter->widget(i) == pane ? 440 : splitter->widget(i)->isVisible() ? 160 : 0;
                 splitter->setSizes(sizes);
             }
-            QTimer::singleShot(25, pane, [editor, before] {
-                if (!mscore)
+            const auto workspace = mscore ? mscore->property("kumoWorkspaceView").toString() : QString();
+            QTimer::singleShot(25, pane, [editor, before, tabs, pane, workspace] {
+                if (!mscore || tabs->currentIndex() != 3 || !pane->isVisible() ||
+                    mscore->property("kumoWorkspaceView").toString() != workspace)
                     return;
                 if (editor->layout())
                     editor->layout()->activate();
@@ -910,20 +946,11 @@ void installRhythmPane(PerformanceEditor *editor, QSplitter *splitter) {
                     static_cast<QWidget *>(mscore)->layout()->activate();
                 if (before.isValid() && !mscore->isMaximized())
                     mscore->resize(before.boundedTo(mscore->size()));
-                QWidget *owner = editor;
-                while (owner && !qobject_cast<QDockWidget *>(owner))
-                    owner = owner->parentWidget();
-                if (auto dock = qobject_cast<QDockWidget *>(owner))
-                    if (!dock->isFloating() && mscore->property("kumoWorkspaceView").toString()!="daw")
-                        mscore->resizeDocks({dock}, {qBound(280, mscore->height() / 2, 520)}, Qt::Vertical);
+                ensureEditorDockContent(editor);
             });
         } else {
             pane->hide();
-            if (state->active) {
-                for (auto it = state->visible.cbegin(); it != state->visible.cend(); ++it)
-                    it.key()->setVisible(it.value());
-                state->active = false;
-            }
+            restoreEditor();
         }
     });
 }
