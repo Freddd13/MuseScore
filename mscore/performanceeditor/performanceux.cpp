@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performanceeditor.h"
+#include "editorsettings.h"
 #include "mscore/scoreview.h"
 #include "libmscore/select.h"
 #include "libmscore/part.h"
@@ -66,7 +67,7 @@ void PerformanceEditor::setupUsabilityControls()
       auto arrangement=new QComboBox(this);arrangement->setObjectName("performanceVelocityArrangement");arrangement->addItems({tr("力度同图"),tr("按谱表分区")});arrangement->setCurrentIndex(qBound(0,settings.value("performanceEditor/velocityArrangement",0).toInt(),1));_velocityArrangement=arrangement->currentIndex();
       connect(arrangement,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int i){finishWheel();cancelGesture();_velocityArrangement=i;QSettings().setValue("performanceEditor/velocityArrangement",i);invalidateVisual();});add(arrangement);
       auto together=new QComboBox(this);together->setObjectName("performanceGroupVelocity");together->addItems({tr("一起增减百分比"),tr("相同MIDI差值")});_groupRelative=settings.value("performanceEditor/groupRelative",true).toBool();together->setCurrentIndex(_groupRelative?0:1);
-      together->setToolTip(tr("百分比方式分别按各音的力度参考线换算；例如80和48同时增加10%，得到88和53。"));
+      together->setToolTip(tr("百分比方式分别按各音的力度参考线换算；例如80和40同时增加10%，得到88和44。"));
       connect(together,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int i){finishWheel();cancelGesture();_groupRelative=i==0;QSettings().setValue("performanceEditor/groupRelative",_groupRelative);});add(together);
       connect(_parameter,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[actual,arrangement,together](int i){actual->setVisible(i==0);arrangement->setVisible(i==0);together->setVisible(i==0);});
       auto sensitivity=new QComboBox(this);sensitivity->setObjectName("performanceDragSensitivity");
@@ -88,13 +89,10 @@ void PerformanceEditor::setupUsabilityControls()
             connect(_parameter,QOverload<int>::of(&QComboBox::currentIndexChanged),button,[button](int index){button->setEnabled(index!=2);});bar->addWidget(button,0,i);}
       add(tools);
       auto operations=new QToolButton(this);operations->setText(tr("操作设置…"));operations->setObjectName("performanceOperationSettings");
-      connect(operations,&QToolButton::clicked,this,[this]{QDialog dialog(this);dialog.setWindowTitle(tr("临时查看音旁力度"));auto layout=new QVBoxLayout(&dialog);
-            auto text=new QLabel(tr("按住快捷键：显示鼠标附近的力度；再按住 Shift：显示当前视口全部力度。松开恢复。文字输入、输入音符或编辑标记时不接管按键。"));text->setWordWrap(true);layout->addWidget(text);
-            auto key=new QKeySequenceEdit(QKeySequence(_peekKey));layout->addWidget(key);
-            layout->addWidget(new QLabel(tr("谱面最近音滚轮快捷键")));
-            auto wheelKey=new QComboBox;wheelKey->addItem("Alt+Shift",int(Qt::AltModifier|Qt::ShiftModifier));wheelKey->addItem("Ctrl+Alt",int(Qt::ControlModifier|Qt::AltModifier));wheelKey->addItem("Ctrl+Shift",int(Qt::ControlModifier|Qt::ShiftModifier));wheelKey->addItem(tr("关闭"),0);wheelKey->setCurrentIndex(qMax(0,wheelKey->findData(QSettings().value("performanceEditor/nearestWheelModifiers",int(Qt::AltModifier|Qt::ShiftModifier)))));layout->addWidget(wheelKey);auto box=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);layout->addWidget(box);
-            connect(box,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(box,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
-            if(dialog.exec()==QDialog::Accepted){QSettings().setValue("performanceEditor/nearestWheelModifiers",wheelKey->currentData());_peekKey=key->keySequence().isEmpty()?0:key->keySequence()[0];QSettings().setValue("performanceEditor/peekKey",QKeySequence(_peekKey).toString());}});add(operations);
+      connect(operations,&QToolButton::clicked,this,[this]{showPerformanceSettings(_score,this,[this]{
+            const auto key=QKeySequence(QSettings().value("performanceEditor/peekKey").toString());
+            _peekKey=key.isEmpty()?0:key[0];
+            });});add(operations);
       _wheelButton->setToolTip(tr("开启后指向音符滚轮调力度。Alt+Shift+滚轮临时选择视口内最近的音并细调 1；本次滚动中固定目标。普通 Shift 粗调 8，Ctrl 仍缩放。停转 300 ms 后写入，Esc 取消。"));
       _axis->setToolTip(tr("MIDI 力度：显示最终力度；相对 %：在力度记号和渐强渐弱给出的力度上增减百分比。切换显示不会转换音符的保存方式。"));
       }

@@ -79,6 +79,20 @@ MuseScore {
  property int selectedTrack:-1
  property bool addingAudio:false
  property bool switchingTrack:false
+ property int associationSequence:0
+ function newAssociationId(){return "reference-"+Date.now()+"-"+(++associationSequence)}
+ function identifiedAssociations(values,trackId){
+  var used={},list=Project.copy(values||[]);
+  list.forEach(function(item,index){
+   if(!item.id||used[item.id]){
+    var key="reference-"+trackId+"-"+index;
+    while(used[key])key+="-";
+    item.id=key;
+   }
+   used[item.id]=true;
+  });
+  return list;
+ }
  property int playbackMode:0
  property real jointVolume:.5
  property var lastJointPlan:null
@@ -101,7 +115,7 @@ MuseScore {
   associationUndo=[];sliceBefore=null;
   if(audioProject&&audioProject.playing&&observer)observer.stopReferencePlayback();
   if(index<0||index>=tracks.length)return;storeTrack();if(usable)media.pause();switchingTrack=true;selectedTrack=index;media=sessions[index];var t=tracks[index];
-  sourceIdentity=t.identity||null;a=t.a||0;b=t.b||media.duration;looping=!!t.loop;fade=t.fade!==false;bookmarks=t.bookmarks||[];associations=t.associations||[];selectedAssociation=Math.max(-1,Math.min(associations.length-1,t.selectedAssociation===undefined?(associations.length?0:-1):t.selectedAssociation));if(selectedAssociation>=0){a=associations[selectedAssociation].from;b=associations[selectedAssociation].until;}viewStart=0;viewEnd=media.duration;
+  sourceIdentity=t.identity||null;a=t.a||0;b=t.b||media.duration;looping=!!t.loop;fade=t.fade!==false;bookmarks=t.bookmarks||[];associations=identifiedAssociations(t.associations,t.id);selectedAssociation=Math.max(-1,Math.min(associations.length-1,t.selectedAssociation===undefined?(associations.length?0:-1):t.selectedAssociation));if(selectedAssociation>=0){a=associations[selectedAssociation].from;b=associations[selectedAssociation].until;}viewStart=0;viewEnd=media.duration;
   if(media.duration>0&&t.identity){var fresh=media.identity();if(fresh.size!==t.identity.size||fresh.modified!==t.identity.modified)associations=associations.map(function(v){var n=Project.copy(v);n.stale=true;return n});}
   viewportPeaks=[];media.volume=t.volume===undefined?.8:t.volume;media.speed=t.speed||1;switchingTrack=false;applyLoop();wave.requestPaint();status="已选音轨："+t.name;
  }
@@ -228,7 +242,7 @@ MuseScore {
    if(data.identity && (data.identity.size!==info.size || data.identity.modified!==info.modified))status="音频内容已变化 · 关联待核查";
    else status="已恢复项目";
    a=Math.max(0,Math.min(data.a||0,b));b=Math.max(a,Math.min(data.b||b,b));looping=!!data.loop;fade=data.fade!==false;
-   bookmarks=data.bookmarks||[];associations=data.associations||[];selectedAssociation=Math.max(-1,Math.min(associations.length-1,data.selectedAssociation===undefined?(associations.length?0:-1):data.selectedAssociation));if(selectedAssociation>=0){a=associations[selectedAssociation].from;b=associations[selectedAssociation].until;}
+   bookmarks=data.bookmarks||[];associations=identifiedAssociations(data.associations,selectedTrack>=0?tracks[selectedTrack].id:media.path);selectedAssociation=Math.max(-1,Math.min(associations.length-1,data.selectedAssociation===undefined?(associations.length?0:-1):data.selectedAssociation));if(selectedAssociation>=0){a=associations[selectedAssociation].from;b=associations[selectedAssociation].until;}
    if(data.identity && (data.identity.size!==info.size || data.identity.modified!==info.modified))associations=associations.map(function(v){v=Project.copy(v);v.stale=true;return v});
    if(data.score && curScore && (data.score.name!==curScore.scoreName || data.score.measures!==curScore.nmeasures))associations=associations.map(function(v){v=Project.copy(v);v.stale=true;return v});
   }else status="已载入原曲";
@@ -256,7 +270,7 @@ MuseScore {
   if(!observer || !curScore || b<=a){status="请选择谱段及原曲片段";return}
   observer.score=curScore;var scope=observer.expressionSelection(true).scope;
   if(!scope.end){status="当前没有可关联谱段";return}
-  var name=scoreRangeName(scope),list=Project.copy(associations);list.push({name:name,automaticName:true,start:scope.start,end:scope.end,firstTrack:scope.firstTrack,endTrack:scope.endTrack,from:a,until:b,occurrence:1,anchors:[],stale:false});
+  var name=scoreRangeName(scope),list=Project.copy(associations);list.push({id:newAssociationId(),name:name,automaticName:true,start:scope.start,end:scope.end,firstTrack:scope.firstTrack,endTrack:scope.endTrack,from:a,until:b,occurrence:1,anchors:[],stale:false});
   associations=list;selectedAssociation=list.length-1;status="已关联 "+name+" · "+time(a)+"–"+time(b);
  }
  function addAnchor() {

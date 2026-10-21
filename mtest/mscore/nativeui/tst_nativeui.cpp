@@ -25,6 +25,13 @@
 #include "libmscore/segment.h"
 #include "libmscore/undo.h"
 
+static int paintDeviceWarnings = 0;
+static QtMessageHandler previousUiMessageHandler = nullptr;
+static void checkUiMessage(QtMsgType type, const QMessageLogContext& context, const QString& message) {
+    if (message.startsWith("QPainter::begin:")) ++paintDeviceWarnings;
+    if (previousUiMessageHandler) previousUiMessageHandler(type, context, message);
+}
+
 static void initNativeUiFonts() { Q_INIT_RESOURCE(musescorefonts_Petaluma); }
 
 using namespace Ms;
@@ -67,6 +74,7 @@ class TestNativeUi : public QObject {
 private slots:
     void initTestCase() {
         QVERIFY(_files.isValid());
+        previousUiMessageHandler = qInstallMessageHandler(checkUiMessage);
         _files.setAutoRemove(false); // Keep the exact settings, saved score and screenshots for review.
         QCoreApplication::setOrganizationName("MuseScoreRegression");
         QCoreApplication::setApplicationName("NativeUi");
@@ -100,6 +108,14 @@ private slots:
         Ms::mscore->activateWindow();
         QTest::qWait(150);
         qInfo().noquote() << "Isolated main-window files:" << _files.path();
+    }
+    void initialPanelsRender() {
+        QCOMPARE(paintDeviceWarnings, 0);
+        QVERIFY(Ms::mscore->grab().save(_files.filePath("initial-main-window.png")));
+    }
+    void cleanupTestCase() {
+        qInstallMessageHandler(previousUiMessageHandler);
+        QCOMPARE(paintDeviceWarnings, 0);
     }
     void saveFromEmbeddedExpression() {
         auto main = Ms::mscore;
@@ -188,6 +204,8 @@ private slots:
 int main(int argc, char** argv) {
     QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
     QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     MuseScoreApplication app("kumo-nativeui-" + QString::number(QCoreApplication::applicationPid()), argc, argv);
     TestNativeUi test;
     return QTest::qExec(&test, argc, argv);

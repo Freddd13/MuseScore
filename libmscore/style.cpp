@@ -11,6 +11,8 @@
 //=============================================================================
 
 #include "articulation.h"
+#include <QJsonDocument>
+#include <QJsonObject>
 #include "chordlist.h"
 #include "clef.h"
 #include "harmony.h"
@@ -1450,7 +1452,8 @@ static const StyleType styleTypes[] {
 
       { Sid::autoplaceEnabled,              "autoplaceEnabled",              true },
       { Sid::usePre_3_6_defaults,           "usePre_3_6_defaults",           false},
-      { Sid::defaultsVersion,               "defaultsVersion",               Ms::MSCVERSION}
+      { Sid::defaultsVersion,               "defaultsVersion",               Ms::MSCVERSION},
+      { Sid::dynamicsPlaybackVelocities,    "dynamicsPlaybackVelocities",    QString() }
       };
 
 MStyle  MScore::_baseStyle;
@@ -2751,6 +2754,7 @@ MStyle* MStyle::resolveStyleDefaults(const int defaultsVersion)
 
 MStyle::MStyle()
       {
+      _dynamicVelocities.fill(-1);
       _defaultStyleVersion = MSCVERSION;
       _customChordList = false;
       for (const StyleType& st : styleTypes)
@@ -2834,6 +2838,15 @@ void MStyle::set(const Sid t, const QVariant& val)
       {
       const int idx = int(t);
       _values[idx] = val;
+      if (t == Sid::dynamicsPlaybackVelocities) {
+            static const char* tags[] = {"pppppp", "ppppp", "pppp", "ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "ffff", "fffff", "ffffff"};
+            _dynamicVelocities.fill(-1);
+            const auto values = QJsonDocument::fromJson(val.toString().toUtf8()).object();
+            for (size_t i = 0; i < _dynamicVelocities.size(); ++i) {
+                  const int velocity = values.value(QLatin1String(tags[i])).toInt(-1);
+                  if (velocity >= 1 && velocity <= 127) _dynamicVelocities[i] = velocity;
+                  }
+            }
       if (t == Sid::spatium)
             precomputeValues();
       else {

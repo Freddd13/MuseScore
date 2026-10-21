@@ -25,15 +25,19 @@
 #include <QScreen>
 #include <QComboBox>
 #include <QTableWidget>
+#include <QTabWidget>
 #include <QAbstractItemView>
 #include <QCheckBox>
 #include <QDoubleSpinBox>
 #include <QScrollBar>
+#include <QScrollArea>
 #include <QSpinBox>
 #include <QSplitter>
 #include <QWheelEvent>
 #include <QToolButton>
 #include <QDialog>
+#include <QDockWidget>
+#include "mscore/preferences.h"
 #include <QDialogButtonBox>
 #include <QPushButton>
 #include <QMenu>
@@ -88,6 +92,8 @@
 #include "libmscore/system.h"
 #include "libmscore/layoutbreak.h"
 #include "libmscore/dynamic.h"
+#include "libmscore/xml.h"
+#include "mscore/palette.h"
 #include "libmscore/tempotext.h"
 #include "libmscore/pedal.h"
 #include "libmscore/undo.h"
@@ -831,6 +837,12 @@ class TestPerformanceEditor : public QObject, public MTest {
       void referencePanelRepeatedTransport();
       void referenceEightTracksAndMidPhrase();
       void referenceRestoreEventSemantics();
+      void dynamicDefaultsRenderingAndRoundTrip();
+      void dynamicDefaultsSettingsMouseAndUndo();
+      void dynamicDefaultsRepeatedPlaybackAndUndo();
+      void dynamicDefaultsExistingChoiceAndFutureMarks();
+      void dynamicDefaultsThemeAndFloating();
+      void dynamicDefaultsOldPaletteAndDrag();
       void referenceHeldNotesAtRangeStart();
       void referencePanelExactSelection();
       void referencePanelSavesAfterTransport();
@@ -844,6 +856,7 @@ class TestPerformanceEditor : public QObject, public MTest {
 #else
 #include "reference_panel_074_tests.inc"
 #include "reference_081_tests.inc"
+#include "dynamic_defaults_082_tests.inc"
 #include "expression_080_tests.inc"
 #include "expression_playback_tests.inc"
 #include "gate_playback_tests.inc"

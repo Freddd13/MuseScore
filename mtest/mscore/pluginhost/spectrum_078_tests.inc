@@ -50,7 +50,46 @@ void TestPluginHost::spectrumInitialSourceAndChoice()
 {
     auto score=spectrumScore078();QVERIFY(score);
     const auto path=spectrumAudio078(_settings.filePath("spectrum-source-078.wav"));QVERIFY(!path.isEmpty());
-    QVERIFY(spectrumTracks078(score,path));
+    showReferencePanel(true);
+    QPointer<QmlPlugin> reference;
+    for(auto window:QGuiApplication::allWindows())
+        if(auto view=qobject_cast<QQuickView*>(window))
+            if(auto root=qobject_cast<QmlPlugin*>(view->rootObject()))
+                if(root->menuPath()=="Plugins.Reference Player")reference=root;
+    QVERIFY(reference);
+    const QVariant url=QUrl::fromLocalFile(path).toString();
+    QVERIFY(QMetaObject::invokeMethod(reference,"openAudio",Q_ARG(QVariant,url)));
+    auto fileSession=[&]() -> QObject* {
+        const auto value=reference->property("media");
+        return value.canConvert<QJSValue>()?value.value<QJSValue>().toQObject():value.value<QObject*>();
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(fileSession()&&fileSession()->property("duration").toDouble()>23990.,10000);
+    score->selection().setRangeTicks(Fraction::fromTicks(3840),Fraction::fromTicks(7680),0,score->nstaves());
+    score->selection().updateSelectedElements();
+    reference->setProperty("a",8000.);reference->setProperty("b",12000.);
+    QVERIFY(QMetaObject::invokeMethod(reference,"associate"));
+    QTRY_COMPARE(reference->property("selectedAssociation").toInt(),0);
+    QVERIFY(QMetaObject::invokeMethod(reference,"selectAssociation",Q_ARG(QVariant,QVariant(0))));
+    QCOMPARE(reference->property("a").toDouble(),8000.);
+    QCOMPARE(reference->property("b").toDouble(),12000.);
+    auto projectAssociation=[&] {
+        return referenceProject()->property("tracks").toList().value(0).toMap()
+            .value("associations").toList().value(0).toMap();
+    };
+    QVERIFY(!projectAssociation().value("id").toString().isEmpty());
+    // Restore a real older project, whose associations did not have IDs.
+    auto legacyTrack=referenceProject()->property("tracks").toList().front().toMap();
+    auto legacyAssociation=projectAssociation();legacyAssociation.remove("id");
+    legacyTrack["associations"]=QVariantList{legacyAssociation};
+    const QVariant legacyProject=QVariantMap{{"tracks",QVariantList{legacyTrack}},{"selectedTrack",0}};
+    const QVariant emptyUrl=QString();
+    QVERIFY(QMetaObject::invokeMethod(reference,"restoreTracks",Q_ARG(QVariant,legacyProject),Q_ARG(QVariant,emptyUrl)));
+    QTRY_VERIFY_WITH_TIMEOUT(fileSession()&&fileSession()->property("duration").toDouble()>23990.,10000);
+    const QString selectedClipId="reference-"+legacyTrack.value("id").toString()+"-0";
+    QTRY_COMPARE(projectAssociation().value("id").toString(),selectedClipId);
+    QCOMPARE(projectAssociation().value("from").toDouble(),8000.);
+    QCOMPARE(projectAssociation().value("until").toDouble(),12000.);
+    showReferencePanel(false);
     auto main=Ms::mscore;main->showPerformanceEditor(true);auto editor=main->performanceEditor();
     auto tabs=editor->findChild<QTabBar*>("workflowExpressionTabs");QVERIFY(tabs);tabs->setCurrentIndex(2);
     auto pane=editor->findChild<QWidget*>("transcriptionSpectrumPane");QVERIFY(pane);
@@ -67,7 +106,7 @@ void TestPluginHost::spectrumInitialSourceAndChoice()
     QTRY_VERIFY_WITH_TIMEOUT(session->property("info").toMap().value("until").toDouble()>=23990.,10000);
     QVERIFY(!qvariant_cast<QImage>(session->property("image")).isNull());
     choice->setCurrentIndex(1);QTest::qWait(100);
-    QCOMPARE(choice->currentData().toMap().value("id").toString(),QString("spectrum-range-078"));
+    QCOMPARE(choice->currentData().toMap().value("id").toString(),selectedClipId);
     tabs->setCurrentIndex(0);tabs->setCurrentIndex(2);QTest::qWait(150);
     QCOMPARE(choice->currentIndex(),1);
     choice->setCurrentIndex(0);QTest::qWait(100);
@@ -140,9 +179,15 @@ void TestPluginHost::spectrumLinkedZoomAndScroll()
     QTRY_VERIFY_WITH_TIMEOUT(!session->property("busy").toBool(),10000);
     auto roll=editor->findChild<QWidget*>("performanceNoteCanvas");QVERIFY(roll);
     const int rollStep=scroll->pageStep();
+    const auto beforeRollZoom=session->property("info").toMap();
     spectrumWheel078(roll,QPoint(center,roll->height()/2),120);QTest::qWait(150);
     QVERIFY(scroll->pageStep()<rollStep);
     QTRY_VERIFY_WITH_TIMEOUT(session->property("info").toMap().value("from").toDouble()>8000.,10000);
+    QTRY_VERIFY_WITH_TIMEOUT(session->property("info").toMap().value("until").toDouble()-
+        session->property("info").toMap().value("from").toDouble()<
+        beforeRollZoom.value("until").toDouble()-beforeRollZoom.value("from").toDouble()-100.,10000);
+    QCOMPARE(spectrumScroll->pageStep(),scroll->pageStep());
+    QVERIFY(dock->grab().save(output.filePath("spectrum-editor-zoom-split-082.png")));
     auto media=referenceProject();auto anchoredTracks=media->property("tracks").toList();
     auto anchoredTrack=anchoredTracks.front().toMap();auto associations=anchoredTrack.value("associations").toList();
     auto association=associations.front().toMap();association["anchors"]=QVariantList{QVariantMap{{"tick",5760},{"ms",11000.}}};

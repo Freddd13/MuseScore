@@ -117,7 +117,9 @@ Dynamic::Dynamic(const Dynamic& d)
 
 int Dynamic::velocity() const
       {
-      return _velocity <= 0 ? dynList[int(dynamicType())].velocity : _velocity;
+      if (_velocity > 0) return _velocity;
+      const int fallback = dynList[int(dynamicType())].velocity;
+      return score() ? score()->style().dynamicsVelocity(int(dynamicType()), fallback) : fallback;
       }
 
 //---------------------------------------------------------
@@ -179,7 +181,10 @@ void Dynamic::write(XmlWriter& xml) const
             return;
       xml.stag(this);
       writeProperty(xml, Pid::DYNAMIC_TYPE);
-      writeProperty(xml, Pid::VELOCITY);
+      if (_velocity <= 0 && int(dynamicType()) >= 1 && int(dynamicType()) <= 14)
+            xml.tag(score()->isPalette() ? "velocity kumoDefault=\"palette\"" : "velocity kumoDefault=\"1\"", velocity());
+      else
+            writeProperty(xml, Pid::VELOCITY);
       writeProperty(xml, Pid::DYNAMIC_RANGE);
       writeProperty(xml, Pid::VELO_CHANGE);
       writeProperty(xml, Pid::VELO_CHANGE_SPEED);
@@ -197,8 +202,16 @@ void Dynamic::read(XmlReader& e)
             const QStringRef& tag = e.name();
             if (tag == "subtype")
                   setDynamicType(e.readElementText());
-            else if (tag == "velocity")
-                  _velocity = e.readInt();
+            else if (tag == "velocity") {
+                  const QString source = e.attribute("kumoDefault");
+                  const int saved = e.readInt();
+                  const int type = int(dynamicType());
+                  const int inherited = score()->style().dynamicsVelocity(type, dynList[type].velocity);
+                  // Palette defaults adopt the destination; copied score marks retain their sound.
+                  const bool paletteDefault = type >= 1 && type <= 14 &&
+                        (source == "palette" || (score()->isPalette() && saved == dynList[type].velocity));
+                  _velocity = paletteDefault || (source == "1" && saved == inherited) ? -1 : saved;
+                  }
             else if (tag == "dynType")
                   _dynRange = Range(e.readInt());
             else if (tag == "veloChange")

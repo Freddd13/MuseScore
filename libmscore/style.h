@@ -1437,6 +1437,8 @@ enum class Sid : short {
       usePre_3_6_defaults,
       defaultsVersion,
 
+      dynamicsPlaybackVelocities,
+
       STYLES
       ///\}
       };
@@ -1458,6 +1460,7 @@ class MStyle {
       std::array<QVariant, int(Sid::STYLES)> _values;
       std::array<qreal, int(Sid::STYLES)> _precomputedValues;
 
+      std::array<int, 14> _dynamicVelocities;
       ChordList _chordList;
       bool _customChordList;        // if true, chordlist will be saved as part of score
       int _defaultStyleVersion = -1;
@@ -1469,6 +1472,10 @@ class MStyle {
       const QVariant& value(Sid idx) const;
       qreal pvalue(Sid idx) const    { return _precomputedValues[int(idx)]; }
       void set(Sid idx, const QVariant& v);
+      int dynamicsVelocity(int type, int fallback) const {
+            return type >= 1 && type <= int(_dynamicVelocities.size()) && _dynamicVelocities[type-1] > 0
+                  ? _dynamicVelocities[type-1] : fallback;
+            }
 
       bool isDefault(Sid idx) const;
       void setDefaultStyleVersion(const int defaultsVersion);

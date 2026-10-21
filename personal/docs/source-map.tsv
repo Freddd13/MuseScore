@@ -209,8 +209,8 @@ MIDI导出	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::voiceSelection	182	�
 使用修复	mscore/workflow/paneldock.cpp	bool arrangeWorkflowDock	41	面板标签组和位置保存	mtest/mscore/p1native
 使用修复	mscore/workflow/scoreworkflow.cpp	ScoreObserver::stopWorkflowPlayback	59	停止本次试听	mtest/mscore/p1native
 使用修复	mscore/workflow/scoreworkflow.cpp	ScoreObserver::navigateWorkflow	119	具体音符选择和定位	mtest/mscore/p1native
-演奏编辑	mscore/performanceeditor/performanceux.cpp	PerformanceEditor::setupUsabilityControls	41	演奏编辑器操作、显示及筛选入口	mtest/mscore/performanceeditor
-演奏编辑	mscore/performanceeditor/performanceux.cpp	PerformanceEditor::rebuildVisibleScoreNotes	144	视口力度显示与最近音滚轮	mtest/mscore/performanceeditor
+演奏编辑	mscore/performanceeditor/performanceux.cpp	PerformanceEditor::setupUsabilityControls	42	演奏编辑器操作、显示及筛选入口	mtest/mscore/performanceeditor
+演奏编辑	mscore/performanceeditor/performanceux.cpp	PerformanceEditor::rebuildVisibleScoreNotes	142	视口力度显示与最近音滚轮	mtest/mscore/performanceeditor
 和弦显示	mscore/workflow/chordoverlay.cpp	void ScoreView::paintTopChordPreview	7	最上层临时和弦；不进入打印	mtest/mscore/pluginhost;mtest/mscore/scoreobserver
 和弦显示	mscore/notepreview.h	inline QRectF stackVisiblePreviewChord	131	自己的和弦上下排列，保持拍位	mtest/mscore/pluginhost;mtest/mscore/scoreobserver
 速度与工作流	mscore/taptempo/tapmark.cpp	void showTapMarkDialog	222	选中速度标记的临时预览与一次保存	mtest/mscore/p1native;mtest/mscore/p0native
@@ -258,8 +258,8 @@ MIDI松手说明	mscore/midicrop/midicroppanel.cpp	QString reasonText(	33	原长
 打开演奏对比	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::showEditorComparison(	168	展开对应轨、分配空间并切换到当前结果	mtest/mscore/p1native
 对应轨筛选	mscore/performanceeditor/workflowlanes.cpp	bool WorkflowLanes::matchEnabled(	52	共用谱表声部筛选、直接应用和数值提示	mtest/mscore/p1native
 最近音滚轮	mscore/performanceeditor/performancewheel.cpp	bool PerformanceEditor::nearestWheelShortcut(	130	输入状态、横向滚轮和可选快捷键	mtest/mscore/performanceeditor/editor_usability_tests.inc
-谱行音符索引	mscore/performanceeditor/performanceux.cpp	void PerformanceEditor::rebuildScoreNoteRows(	219	缩放和平移只检查可见谱行	mtest/mscore/performanceeditor/editor_usability_tests.inc
-多谱表力度显示	mscore/performanceeditor/performanceux.cpp	QRectF PerformanceEditor::velocityLane(	226	同图、分区、记号力度和统一选音坐标	mtest/mscore/performanceeditor/editor_usability_tests.inc
+谱行音符索引	mscore/performanceeditor/performanceux.cpp	void PerformanceEditor::rebuildScoreNoteRows(	217	缩放和平移只检查可见谱行	mtest/mscore/performanceeditor/editor_usability_tests.inc
+多谱表力度显示	mscore/performanceeditor/performanceux.cpp	QRectF PerformanceEditor::velocityLane(	224	同图、分区、记号力度和统一选音坐标	mtest/mscore/performanceeditor/editor_usability_tests.inc
 滚轮浮标	mscore/performanceeditor/performancewheel.cpp	void PerformanceEditor::rememberWheelFeedback(	136	声部强调、播放力度、记号力度和短时提示	mtest/mscore/performanceeditor/editor_usability_tests.inc
 演奏力度恢复	libmscore/velocitybackup.cpp	void remember(	77	首次应用前力度、复制读写及撤销	mtest/mscore/p1native/velocity_history_tests.inc
 演奏对比	mscore/performanceeditor/expressioncompare.cpp	void PerformanceEditor::syncExpressionComparison()	69	原参数区前后对比、拖动和绘制	mtest/mscore/performanceeditor/expression_compare_tests.inc
@@ -353,7 +353,7 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	191	空列�
 内置音源释放	audio/midi/fluid/fluid.cpp	Fluid::~Fluid()	119	停止后释放声音资源，再解锁互斥量	mtest/mscore/pluginhost/tst_pluginhost.cpp
 频谱标注区开关与高度	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::updateMarksVisibility()	1682	空列表收起，分隔条调整频谱与标注高度，保存个人设置	mtest/mscore/pluginhost/tst_pluginhost.cpp
 原曲面板连续播放检查	mtest/mscore/performanceeditor/reference_panel_074_tests.inc	void referencePanelRepeatedTransport()	1	实际面板按钮与演奏器、音频位置核对	mtest/mscore/performanceeditor/reference_panel_074_tests.inc
-原曲音轨开关	share/workflow/panels/ReferencePlayer/ReferencePlayer.view.qml	function setTrackFlag(	109	统一音轨开关事件，避免列表重建后访问旧行	mtest/mscore/pluginhost/tst_pluginhost.cpp
+原曲音轨开关	share/workflow/panels/ReferencePlayer/ReferencePlayer.view.qml	function setTrackFlag(	123	统一音轨开关事件，避免列表重建后访问旧行	mtest/mscore/pluginhost/tst_pluginhost.cpp
 谱行带位置与操作	mscore/performanceeditor/performanceoverlay.cpp	QRectF PerformanceEditor::scoreBandLane() const	204	选中谱行附近的可见位置、固定底部与窄行菜单	mtest/mscore/pluginhost/score_editing_075_tests.inc;mtest/mscore/performanceeditor/performance_controls_tests.inc
 和弦范围手柄	mscore/workflow/chordeditor.cpp	QPointF pointFor(int tick) const	36	手柄固定到音乐范围，文字可独立拖动及避让	mtest/mscore/pluginhost/harmony_display_075_tests.inc
 和弦显示延续	share/workflow/panels/HarmonyAssistant/Timeline.js	function displayAtTick(	35	保留上一和弦的显示，遵守人工排除范围	../../muse3_plugins/HarmonyAssistant/tests/test-display-result.cjs
@@ -370,8 +370,13 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	191	空列�
 工作视图初始显示	mscore/workflow/workspaceviews.cpp	void activate(	181	首次雕版与DAW收起输入工具，保存布局继续恢复	mtest/mscore/pluginhost/layout_079_tests.inc
 表达结果选音	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::selectExpressionNote(	186	对应列表与原生选音同步，播放中保持拍位并更新采用数量	mtest/mscore/performanceeditor/expression_080_tests.inc
 录完直接看结果	share/workflow/panels/PerformanceExpression/PerformanceExpression.view.qml	 function revealResults()	52	录制与导入后显示试听、采用和逐音结果；保留手动浏览	mtest/mscore/performanceeditor/expression_080_tests.inc
-正常主窗口保存与关联范围	mtest/mscore/nativeui/tst_nativeui.cpp	class TestNativeUi	32	正常菜单及工作区初始化；内嵌／悬浮Ctrl+S与保存读回，八音轨关联的精确拍位	mtest/mscore/nativeui/tst_nativeui.cpp
+正常主窗口保存与关联范围	mtest/mscore/nativeui/tst_nativeui.cpp	class TestNativeUi	39	正常菜单及工作区初始化；内嵌／悬浮Ctrl+S与保存读回，八音轨关联的精确拍位	mtest/mscore/nativeui/tst_nativeui.cpp
 持续音恢复	mscore/workflow/playbackpreview.cpp	EventMap restoredPlaybackEvents(	122	共用起点处的按键与踏板恢复，核对边界控制器及原始事件	mtest/mscore/performanceeditor/reference_081_tests.inc
 联合播放准确起点	mscore/seq.cpp	void Seq::startAtUTick(	428	区分读取前文与实际输出位置，恢复持续音并回到普通播放	mtest/mscore/performanceeditor/reference_081_tests.inc
 逐音和休止符关联	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::expressionSelection(	196	按实际选中的音符与休止符确定关联范围，保留原查询默认行为	mtest/mscore/performanceeditor/reference_081_tests.inc
 原曲停播后保存	share/workflow/panels/ReferencePlayer/ReferencePlayer.view.qml	function saveScoreProject()	35	播放结束补存设置；关闭与换谱先停播再保存	mtest/mscore/performanceeditor/reference_081_tests.inc
+力度默认值缓存	libmscore/style.cpp	void MStyle::set(	2837	设置时读入14种力度，播放读取已有数值；新增样式编号追加在末尾	mtest/mscore/performanceeditor/dynamic_defaults_082_tests.inc;../../muse3_plugins/P2/check_dynamic_defaults.py
+力度继承与普通版保存	libmscore/dynamic.cpp	int Dynamic::velocity() const	118	采用乐谱默认值，保存普通版可读取的实际数值	mtest/mscore/performanceeditor/dynamic_defaults_082_tests.inc;../../muse3_plugins/P2/check_dynamic_defaults.py
+演奏编辑设置	mscore/performanceeditor/editorsettings.cpp	void showPerformanceSettings(	30	按键、默认力度、旧记号更新、一次撤销、原生主题与统一滚动	mtest/mscore/performanceeditor/dynamic_defaults_082_tests.inc;../../muse3_plugins/P2/check_dynamic_defaults.py
+正常窗口绘制检查	mtest/mscore/nativeui/tst_nativeui.cpp	    void initialPanelsRender()	112	按正常绘制方式检查首次画面、保存和绘图警告	mtest/mscore/nativeui/tst_nativeui.cpp;../../muse3_plugins/P2/test_existing.py
+原曲关联与扒谱选择	share/workflow/panels/ReferencePlayer/ReferencePlayer.view.qml	 function identifiedAssociations(	84	为新旧关联保留稳定身份，检查播放器选段、首次打开和卷帘共同缩放	mtest/mscore/pluginhost/spectrum_078_tests.inc
