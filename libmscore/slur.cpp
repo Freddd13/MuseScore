@@ -98,6 +98,7 @@ bool SlurSegment::edit(EditData& ed)
       {
       Slur* sl = slur();
 
+      if(freeEndpointGrip(ed.curGrip) && editFreeNode(ed)) return true;
       if(int(ed.curGrip)>=int(Grip::GRIPS)) {
             if(editFreeNode(ed)) return true;
             if(int(ed.curGrip)>=gripsCount()) ed.curGrip=Grip::DRAG;
@@ -399,7 +400,7 @@ void SlurSegment::layoutSegment(const QPointF& p1, const QPointF& p2)
 
       computeBezier();
 
-      if (autoplace() && system() && !(slur()->freeMode() && (slur()->freeAuto() || !slur()->freeNodes().isEmpty() || slur()->freeStartSide() || slur()->freeEndSide()))) {
+      if (autoplace() && system() && !(slur()->freeMode() && (slur()->freeAuto() || !slur()->freeNodes().isEmpty() || slur()->freeStartSide() || slur()->freeEndSide() || slur()->freeEndpointsEdited()))) {
             bool up = slur()->up();
             Segment* ls = system()->lastMeasure()->last();
             Segment* fs = system()->firstMeasure()->first();
@@ -468,7 +469,7 @@ void SlurSegment::layoutSegment(const QPointF& p1, const QPointF& p2)
 
 bool SlurSegment::isEdited() const
       {
-      if(slur()->freeMode() && !slur()->freeNodes().isEmpty()) return true;
+      if(slur()->freeMode() && (!slur()->freeNodes().isEmpty() || slur()->freeEndpointsEdited())) return true;
       for (int i = 0; i < int(Grip::GRIPS); ++i) {
             if (!_ups[i].off.isNull())
                   return true;
@@ -479,6 +480,7 @@ bool SlurSegment::isEdited() const
 Slur::Slur(const Slur& s)
    : SlurTie(s)
       {
+      _freeEndpoints=s._freeEndpoints;_freeEndpointData=s._freeEndpointData;
       _freeStartSide=s._freeStartSide;_freeEndSide=s._freeEndSide;
       _freeMode=s._freeMode; _freeAuto=s._freeAuto; _freeNodes=s._freeNodes; _freeData=s._freeData;
       }
@@ -981,6 +983,7 @@ void Slur::write(XmlWriter& xml) const
       writeProperty(xml,Pid::FREE_SLUR_AUTO);
       writeProperty(xml,Pid::FREE_SLUR_START_SIDE);
       writeProperty(xml,Pid::FREE_SLUR_END_SIDE);
+      writeProperty(xml,Pid::FREE_SLUR_ENDPOINTS);
       SlurTie::writeProperties(xml);
       xml.etag();
       }
@@ -993,7 +996,7 @@ bool Slur::readProperties(XmlReader& e)
       {
       if(e.name()==propertyName(Pid::FREE_SLUR_MODE)) {readProperty(e,Pid::FREE_SLUR_MODE);return true;}
       if(e.name()==propertyName(Pid::FREE_SLUR_NODES)) {readProperty(e,Pid::FREE_SLUR_NODES);return true;}
-      for(auto id:{Pid::FREE_SLUR_START_SIDE,Pid::FREE_SLUR_END_SIDE})if(e.name()==propertyName(id)){readProperty(e,id);return true;}
+      for(auto id:{Pid::FREE_SLUR_START_SIDE,Pid::FREE_SLUR_END_SIDE,Pid::FREE_SLUR_ENDPOINTS})if(e.name()==propertyName(id)){readProperty(e,id);return true;}
       if(e.name()==propertyName(Pid::FREE_SLUR_AUTO)) {readProperty(e,Pid::FREE_SLUR_AUTO);return true;}
       return SlurTie::readProperties(e);
       }

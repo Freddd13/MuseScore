@@ -951,6 +951,12 @@ class TestPerformanceEditor : public QObject, public MTest {
       void handSymbolPlacementAndDefaults();
       void restoredTempoLayout();
       void handSymbolInspectorAndGrips();
+      void freeSlurNodeFreezeKeepsShape();
+      void freeSlurSmoothingKeepsVisiblePoints();
+      void freeSlurSmoothingKeepsHandlesLocal();
+      void freeSlurMixedSidesMouseAndReopen();
+      void freeSlurNativeEndpointsAndEditing();
+      void freeSlurEndpointEditsAcrossSystems();
       void freeSlurRoutedGeometry();
       void freeSlurRoutedPersistenceAndControls();
       void handSymbolPlacementExamples();
@@ -1142,5 +1148,7 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "handsymbol_tests.inc"
 #include "notation_051_tests.inc"
 #include "rit_editor_tests.inc"
+#include "engraving_085_tests.inc"
+#include "endpoints_085_tests.inc"
 QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"

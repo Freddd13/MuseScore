@@ -5,6 +5,7 @@
 #include <QVector>
 #include <QString>
 #include <QRectF>
+#include <array>
 namespace Ms {
 class Slur;
 struct FreeSlurNode {
@@ -13,7 +14,13 @@ struct FreeSlurNode {
       bool locked = true; // legacy/manual nodes retain their position and tangent
       int before = 0, after = 0; // -1: above, 1: below; after belongs to the final node
       };
+struct FreeSlurEndpoint {
+      QPointF position, tangent; // offset and derivative adjustment, in staff spaces
+      bool manualPosition = false, manualTangent = false;
+      };
 namespace FreeSlur {
+bool decodeEndpoints(const QString&,std::array<FreeSlurEndpoint,2>*);
+QString encodeEndpoints(const std::array<FreeSlurEndpoint,2>&);
 constexpr int maximumNodes = 32; // 6 native grips + 3 * 32 fit the signed Grip enum
 bool decode(const QString&, QVector<FreeSlurNode>*);
 QString encode(const QVector<FreeSlurNode>&);
@@ -28,7 +35,7 @@ struct AvoidanceResult {
       bool limited = false;
       };
 // Pure bounded geometry; no score pointers, properties or undo commands.
-AvoidanceResult avoid(const QVector<CurvePoint>&,const QVector<QRectF>&,bool up,double spatium,const QVector<Route>& routes={},bool automatic=true);
+AvoidanceResult avoid(const QVector<CurvePoint>&,const QVector<QRectF>&,bool up,double spatium,const QVector<Route>& routes={},bool automatic=true,const QVector<QRectF>* routeShapes=nullptr);
 QPointF curvePosition(const QVector<CurvePoint>&,double t);
 CurvePoint curvePoint(const QVector<CurvePoint>&,double t);
 

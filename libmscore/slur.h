@@ -14,7 +14,9 @@
 #define __SLUR_H__
 
 #include "slurtie.h"
+#include "property.h"
 #include "freeslur.h"
+#include <array>
 
 namespace Ms {
 
@@ -34,8 +36,14 @@ class SlurSegment final : public SlurTieSegment {
       QVector<FreeSlur::CurvePoint> _freeCurvePoints;
       QString _freeDragOriginal;
       bool _freeDragging = false;
+      Pid _freeDragProperty = Pid::FREE_SLUR_NODES;
+      bool freeEndpointGrip(Grip) const;
+      QPointF freeAutoEndpoint(bool start) const;
+      double freeGripScale(bool start) const;
+      std::array<QPointF,4> freeDrawingControls(bool adjustments = true) const;
       int _freeCollisions = 0;
       bool _freeLimited = false;
+      int freeEndpointSide(bool start) const;
       bool computeFreeBezier(QPointF);
       bool editFreeNode(EditData&);
 
@@ -51,9 +59,11 @@ class SlurSegment final : public SlurTieSegment {
       void layoutSegment(const QPointF& p1, const QPointF& p2);
 
       bool isEdited() const;
+      const QVector<FreeSlur::CurvePoint>& freeCurvePoints() const { return _freeCurvePoints; }
       int freeCollisions() const { return _freeCollisions; }
       bool freeLimited() const { return _freeLimited; }
       bool edit(EditData&) override;
+      std::array<QPointF,4> freeBaseControls() const;
       bool displayedFreeNode(int index,FreeSlurNode*) const;
       bool displayedFreeNode(double position,FreeSlurNode*) const;
 
@@ -85,6 +95,8 @@ class Slur final : public SlurTie {
       int _freeStartSide=0,_freeEndSide=0;
       QVector<FreeSlurNode> _freeNodes;
       QString _freeData = "[]";
+      std::array<FreeSlurEndpoint,2> _freeEndpoints;
+      QString _freeEndpointData = "{}";
 
    public:
       Slur(Score* = 0);
@@ -99,6 +111,7 @@ class Slur final : public SlurTie {
       SpannerSegment* layoutSystem(System*) override;
       void setTrack(int val) override;
       void slurPos(SlurPos*) override;
+      SlurPos freeEndpointPositions(bool up);
 
       SlurSegment* frontSegment()               { return toSlurSegment(Spanner::frontSegment()); }
       const SlurSegment* frontSegment() const   { return toSlurSegment(Spanner::frontSegment()); }
@@ -109,6 +122,8 @@ class Slur final : public SlurTie {
 
       SlurTieSegment* newSlurTieSegment() override { return new SlurSegment(score()); }
       void reset() override;
+      const std::array<FreeSlurEndpoint,2>& freeEndpoints() const { return _freeEndpoints; }
+      bool freeEndpointsEdited() const { return _freeEndpointData != "{}"; }
       bool freeMode() const { return _freeMode; }
       bool freeAuto() const { return _freeAuto; }
       int freeStartSide()const{return _freeStartSide;}

@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2.
 #include "freeslur.h"
+#include "freeslurrouting.h"
 #include <QLineF>
 #include <QSet>
 #include <QCache>
@@ -79,8 +80,12 @@ Evaluation evaluate(const QVector<CurvePoint>& points,const ObstacleIndex& obsta
                   }
             // Penalize repeated changes of slope instead of rewarding arbitrary S curves.
             const auto before=at(points,previousT);
-            const double dx=qMax(sp*.05,std::abs(point.d.x()));
-            result.shapeCost+=std::abs(point.d.y()/dx-before.d.y()/qMax(sp*.05,std::abs(before.d.x())));
+            const double angle=std::atan2(point.d.y(),point.d.x()),oldAngle=std::atan2(before.d.y(),before.d.x());
+            const double turn=std::atan2(std::sin(angle-oldAngle),std::cos(angle-oldAngle));
+            const double dt=t-previousT;
+            const double baseline=points.front().p.y()+(points.back().p.y()-points.front().p.y())*t;
+            const double height=(point.p.y()-baseline)/sp;
+            result.shapeCost+=std::abs(turn)+.01*turn*turn/dt+.03*height*height*dt;
             previous=point.p;previousT=t;
             }
       result.collisions=collided.size();return result;
@@ -148,13 +153,13 @@ static AvoidanceResult autoAvoid(const QVector<CurvePoint>& original,const QVect
       }
 namespace {
 struct RoutedEvaluation {Evaluation geometry;int wrong=0;double depth=0;};
-RoutedEvaluation routedEvaluation(const QVector<CurvePoint>& points,const ObstacleIndex& obstacles,bool up,double sp,const QVector<Route>& routes)
+RoutedEvaluation routedEvaluation(const QVector<CurvePoint>& points,const ObstacleIndex& obstacles,bool up,double sp,const QVector<Route>& routes,const QVector<QRectF>& guides)
       {
       RoutedEvaluation result;result.geometry=evaluate(points,obstacles,up,sp);QSet<int> wrong;
       for(const auto& route:routes){
             const double left=at(points,route.from).p.x(),right=at(points,route.until).p.x();if(right<=left)continue;
-            for(int i=0;i<obstacles.rectangles.size();++i){
-                  const auto r=obstacles.rectangles[i];const double x=r.center().x();if(x<=left+.01*sp||x>=right-.01*sp)continue;
+            for(int i=0;i<guides.size();++i){
+                  const auto r=guides[i];const double x=r.center().x();if(x<=left+.01*sp||x>=right-.01*sp)continue;
                   double a=route.from,b=route.until;for(int n=0;n<10;++n){const double t=(a+b)/2;if(at(points,t).p.x()<x)a=t;else b=t;}
                   const double y=at(points,(a+b)/2).p.y(),depth=route.direction<0?y-r.top():r.bottom()-y;
                   if(depth>.01*sp){wrong.insert(i);result.depth+=depth/sp;}
@@ -177,21 +182,31 @@ int knot(QVector<CurvePoint>* points,double t)
       const auto p=at(*points,t);points->insert(index,p);return index;
       }
 }
-AvoidanceResult avoid(const QVector<CurvePoint>& original,const QVector<QRectF>& obstacles,bool up,double sp,const QVector<Route>& routes,bool automatic)
+AvoidanceResult avoid(const QVector<CurvePoint>& original,const QVector<QRectF>& obstacles,bool up,double sp,const QVector<Route>& routes,bool automatic,const QVector<QRectF>* routeShapes)
       {
       AvoidanceResult result;result.points=original;
       if(original.size()<2||original.size()>maximumNodes+2||obstacles.size()>2048||!std::isfinite(sp)||sp<=0){result.limited=true;return result;}
       for(const auto& route:routes)if(route.from<0||route.until>1||route.until<=route.from||(route.direction!=-1&&route.direction!=1)){result.limited=true;return result;}
+      const auto& guideShapes=routeShapes?*routeShapes:obstacles;
       QByteArray key;QDataStream stream(&key,QIODevice::WriteOnly);stream<<sp<<up<<automatic<<quint32(original.size());
       for(const auto& p:original)stream<<p.t<<p.p<<p.d<<p.locked;
       stream<<quint32(obstacles.size());for(const auto& r:obstacles)stream<<r;
       stream<<quint32(routes.size());for(const auto& route:routes)stream<<route.from<<route.until<<route.direction;
+      stream<<bool(routeShapes);if(routeShapes){stream<<quint32(guideShapes.size());for(const auto& r:guideShapes)stream<<r;}
       static thread_local QCache<QByteArray,AvoidanceResult> cache(24);
       if(auto found=cache.object(key))return *found;
       auto finish=[&](){cache.insert(key,new AvoidanceResult(result));return result;};
       if(routes.isEmpty()){if(automatic)result=autoAvoid(original,obstacles,up,sp);return finish();}
-      const ObstacleIndex index(obstacles);auto best=routedEvaluation(original,index,up,sp,routes);
-      if(automatic){auto candidate=autoAvoid(original,obstacles,up,sp);const auto score=routedEvaluation(candidate.points,index,up,sp,routes);result.candidates=candidate.candidates;if(betterRouted(score,best)){result.points=candidate.points;best=score;}}
+      const ObstacleIndex index(obstacles);auto best=routedEvaluation(original,index,up,sp,routes,guideShapes);
+      if(!automatic&&!best.wrong&&!best.geometry.collisions)return finish();
+      const auto smooth=smoothRouting(original,obstacles,guideShapes,routes,sp,automatic);
+      if(!smooth.points.isEmpty() && bounded(smooth.points,original,sp)) {
+            const auto score=routedEvaluation(smooth.points,index,up,sp,routes,guideShapes);++result.candidates;
+            if(betterRouted(score,best)){best=score;result.points=smooth.points;result.limited=smooth.limited;}
+            if(!best.wrong&&!best.geometry.collisions)return finish();
+            }
+
+      if(automatic){auto candidate=autoAvoid(original,obstacles,up,sp);const auto score=routedEvaluation(candidate.points,index,up,sp,routes,guideShapes);result.candidates+=candidate.candidates;if(betterRouted(score,best)){result.points=candidate.points;best=score;}}
       for(const auto& route:routes){
             if(!best.wrong&&!best.geometry.collisions)break;
             auto base=result.points;for(int i=0;i<=6;++i)knot(&base,route.from+(route.until-route.from)*i/6.);
@@ -204,7 +219,7 @@ AvoidanceResult avoid(const QVector<CurvePoint>& original,const QVector<QRectF>&
                         point.d.ry()+=route.direction*sp*height*32*u*(1-u)*(1-2*u)/span;
                         }
                   if(!bounded(candidate,original,sp))continue;++result.candidates;
-                  const auto score=routedEvaluation(candidate,index,up,sp,routes);if(betterRouted(score,best)){result.points=candidate;best=score;}
+                  const auto score=routedEvaluation(candidate,index,up,sp,routes,guideShapes);if(betterRouted(score,best)){result.points=candidate;best=score;}
                   }
             }
       for(int pass=0;pass<4&&best.geometry.collisions&&result.candidates<96;++pass){
@@ -212,7 +227,7 @@ AvoidanceResult avoid(const QVector<CurvePoint>& original,const QVector<QRectF>&
             int direction=up?-1:1;for(const auto& route:routes)if(t>=route.from&&t<=route.until)direction=route.direction;
             bool improved=false;for(double height:{.5,1.,2.,3.}){
                   auto candidate=base;candidate[atIndex].p.ry()+=direction*sp*height;if(!bounded(candidate,original,sp))continue;++result.candidates;
-                  const auto score=routedEvaluation(candidate,index,up,sp,routes);if(betterRouted(score,best)){best=score;result.points=candidate;improved=true;}
+                  const auto score=routedEvaluation(candidate,index,up,sp,routes,guideShapes);if(betterRouted(score,best)){best=score;result.points=candidate;improved=true;}
                   }if(!improved)break;
             }
       result.collisions=best.geometry.collisions+best.wrong;return finish();

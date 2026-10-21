@@ -165,8 +165,8 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 包络检视器	mscore/inspector/envelopeinspector.h	inline std::vector<InspectorItem> envelopeInspectorControls	17	数字／名称拖拽、单事务预设	mtest/mscore/performanceeditor/envelope_editor_tests.inc
 实际发声范围	mscore/performanceeditor/envelopepreview.cpp	void PerformanceEditor::cacheGeneratedVelocity	7	停播缓存、双音按源、范围和预览	mtest/mscore/performanceeditor/envelope_editor_tests.inc
 自由曲线校验	libmscore/freeslur.cpp	bool decode	22	有限参数／规范化节点	mtest/mscore/performanceeditor/freeslur_tests.inc
-分段自由圆滑线	libmscore/freeslur.cpp	bool SlurSegment::computeFreeBezier	179	相对时间分配／共同导数／原生渐尖路径	mtest/mscore/performanceeditor/freeslur_tests.inc
-自由曲线拖动	libmscore/freeslur.cpp	void SlurSegment::endEditDrag	363	根属性一次Undo／分谱传播	mtest/mscore/performanceeditor/freeslur_tests.inc
+分段自由圆滑线	libmscore/freeslur.cpp	bool SlurSegment::computeFreeBezier	220	相对时间分配／共同导数／原生渐尖路径	mtest/mscore/performanceeditor/freeslur_tests.inc
+自由曲线拖动	libmscore/freeslur.cpp	void SlurSegment::endEditDrag	441	根属性一次Undo／分谱传播	mtest/mscore/performanceeditor/freeslur_tests.inc
 自由曲线检视器	mscore/inspector/freeslurinspector.h	class FreeSlurInspector	15	数字／名称拖动／安全队列	mtest/mscore/performanceeditor/freeslur_tests.inc
 谱带鼠标隔离	mscore/performanceeditor/performanceoverlay.cpp	bool PerformanceEditor::overlayEvent	53	完整frame阻断／原生双向选音	mtest/mscore/performanceeditor
 谱带重叠回归	mtest/mscore/performanceeditor/performance_controls_tests.inc	void reaperStemsAndStripSelection	62	双谱行和弦／真实选择拖拽／一次Undo	mtest/mscore/performanceeditor
@@ -221,7 +221,7 @@ MIDI导出	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::voiceSelection	182	�
 输入净谱	mscore/inputnotationmenu.cpp	void addInputNotationMenu	14	工具菜单、设置记忆及停止播放后排版	mtest/libmscore/inputrhythm;mtest/libmscore/beam;mtest/mscore/p0native
 速度符号面板	mscore/temposymbols.cpp	bool applyPlayableTempoSymbol	78	双击的范围、播放与冲突检查	mtest/mscore/p1native
 速度符号面板	mscore/temposymbols.cpp	bool applyPlayableTempoDrop	86	拖放位置与小节末尾范围	mtest/mscore/p1native
-自由圆滑线	libmscore/freeslur.cpp	bool SlurSegment::displayedFreeNode(double	321	从当前显示位置添加和锁定节点	mtest/mscore/performanceeditor
+自由圆滑线	libmscore/freeslur.cpp	bool SlurSegment::displayedFreeNode(double	380	从当前显示位置添加和锁定节点	mtest/mscore/performanceeditor
 分手标记	mscore/handbracketsettings.cpp	void addHandBracketDefaultControls(	47	四种个人默认形状、设置读写与面板按钮	mtest/mscore/performanceeditor;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 分手标记	mscore/handbracketsettings.cpp	void completeHandBracketPalette(	69	四种格子补齐与缩小显示	mtest/mscore/performanceeditor;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 分手标记	mscore/plugin/api/arrangementsnapshot.cpp	auto handData	81	完整分手含义与附着音信息	mtest/mscore/performanceeditor;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
@@ -272,8 +272,8 @@ MIDI松手说明	mscore/midicrop/midicroppanel.cpp	QString reasonText(	33	原长
 谱面和弦编辑	mscore/workflow/chordeditor.cpp	ScoreObserver::setChordEditRegion	106	作用范围和显示位置拖动	mtest/mscore/p1native/assistant_surface_tests.inc
 原曲联合播放	mscore/workflow/referenceworkflow.cpp	ScoreObserver::startReferencePlayback	130	独立结束、循环与设置恢复	mtest/mscore/performanceeditor/expression_playback_tests.inc
 圆滑线区段走向	libmscore/freeslur.cpp	QVector<Route> routing	65	区段与跨谱行坐标	mtest/mscore/performanceeditor/notation_051_tests.inc
-圆滑线整理切线	libmscore/freeslur.cpp	bool FreeSlur::smoothNode	149	保持点位置整理共用切线	mtest/mscore/performanceeditor/notation_051_tests.inc
-圆滑线绕行	libmscore/freesluravoidance.cpp	AvoidanceResult avoid(	180	方向约束与形状复用	mtest/mscore/performanceeditor/notation_051_tests.inc
+圆滑线整理切线	libmscore/freeslur.cpp	bool FreeSlur::smoothNode	156	保持点位置整理共用切线	mtest/mscore/performanceeditor/notation_051_tests.inc
+圆滑线绕行	libmscore/freesluravoidance.cpp	AvoidanceResult avoid(	185	方向约束与形状复用	mtest/mscore/performanceeditor/notation_051_tests.inc
 分手折线位置	libmscore/handbracket.cpp	QPointF position(	63	谱间位置与音头符杠碰撞	mtest/mscore/performanceeditor/notation_051_tests.inc
 速度符号升级	mscore/temposymbols.cpp	void appendPlayableTempoSymbols	16	升级旧格子并保留自制符号	mtest/mscore/performanceeditor/notation_051_tests.inc
 写法组合切换	libmscore/regionalvarianttools.inc	QVariantMap selectMany(	2	整组选择和一次撤销	mtest/mscore/p1native/regional_comparison_tests.inc
@@ -285,7 +285,7 @@ MIDI音长试听	mscore/midicrop/gateaudition.cpp	GateAudition prepareGateAuditi
 MIDI音长绘制	mscore/midicrop/gateroll.inc	class GateRoll final	2	原新轮廓和松手点拖动	mtest/mscore/p1native/gate_comparison_tests.inc
 插件重载	mscore/plugin/pluginManager.cpp	void PluginManager::reloadPluginsClicked()	380	保存并恢复打开的插件面板	mtest/mscore/pluginhost/tst_pluginhost.cpp
 原曲结构	mscore/workflow/referenceworkflow.cpp	QString ScoreObserver::referenceStructureKey() const	51	关联所需的小节拍号信息	mtest/mscore/p1native/tst_p1native.cpp
-自由圆滑线端点	libmscore/freeslur.cpp	SlurSegment::computeFreeBezier	179	独立端点与跨谱表障碍	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
+自由圆滑线端点	libmscore/freeslur.cpp	SlurSegment::computeFreeBezier	220	独立端点与跨谱表障碍	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
 分手文字	libmscore/symbol.cpp	Symbol::handFont	121	表情文字样式与第四拖动点	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
 谱内工作流记录	mscore/workflow/workflowdocument.cpp	ScoreObserver::setWorkflowData	17	标准元数据保存与原生撤销	mtest/mscore/pluginhost/tst_pluginhost.cpp
 临时和弦排版	mscore/workflow/harmonytypography.h	alignTemporaryHarmonyBass	6	面板和谱面的斜杠低音对齐	mtest/mscore/pluginhost/tst_pluginhost.cpp
@@ -384,3 +384,7 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	191	空列�
 低音同音加倍	share/plugins/ArrangementAssistant/Rules.js	function lowVoicing(	11	一个物理音程只列一次说明，保留全部谱面音	mtest/mscore/pluginhost/arrangement_083_tests.inc;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 编配当前项目与说明	share/plugins/ArrangementAssistant/ArrangementAssistant_MS3.qml	    function finishResult(	202	更新后保留当前提示，筛选和谱旁说明使用同一组问题	mtest/mscore/pluginhost/arrangement_083_tests.inc;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 原曲时间叠加缩放	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::editorTimelineZoomed(	1164	全曲、选区、参数区与卷帘共用叠加缩放，保留浏览时刻	mtest/mscore/pluginhost/spectrum_078_tests.inc
+圆滑线共同参考曲线	libmscore/freeslur.cpp	std::array<QPointF,4> SlurSegment::freeBaseControls(	198	统一绘图、锁点与整理的端点和坐标	mtest/mscore/performanceeditor/engraving_085_tests.inc
+圆滑线切线整理	libmscore/freeslur.cpp	bool FreeSlur::smoothNode(	156	保持可见节点，按邻点间距整理切线	mtest/mscore/performanceeditor/engraving_085_tests.inc
+圆滑线连续绕行	libmscore/freeslurrouting.cpp	RoutingCandidate smoothRouting(	43	比较整段形状、避让边界与共同切线，固定人工节点	mtest/mscore/performanceeditor/engraving_085_tests.inc
+圆滑线独立端点	libmscore/freeslurendpoints.cpp	std::array<QPointF,4> SlurSegment::freeDrawingControls(	65	复用原生符干和符杠端点，独立保存位置和切线	mtest/mscore/performanceeditor/endpoints_085_tests.inc

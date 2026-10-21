@@ -398,6 +398,7 @@ enum class Pid : short {
       HAND_TEXT_FONT,
       HAND_TEXT_SIZE,
       HAND_TEXT_AUTO,
+      FREE_SLUR_ENDPOINTS,
       END
       };
 
