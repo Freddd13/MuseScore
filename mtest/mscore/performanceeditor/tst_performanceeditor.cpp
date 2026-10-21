@@ -4,6 +4,9 @@
 #include "mscore/plugin/api/score.h"
 #include "mscore/workflow/playbackpreview.h"
 #include "mscore/midicrop/gateaudition.h"
+#include "mscore/midicrop/midicroppanel.h"
+#include <QTableView>
+#include <QBuffer>
 #include "mscore/workflow/regionalcomparison.h"
 #include "libmscore/regionalvariants.h"
 #include "audio/exports/exportmidi.h"
@@ -957,6 +960,8 @@ class TestPerformanceEditor : public QObject, public MTest {
       void freeSlurMixedSidesMouseAndReopen();
       void freeSlurNativeEndpointsAndEditing();
       void freeSlurEndpointEditsAcrossSystems();
+      void midiGateHistoryAndLayout();
+      void midiGateAuditionTransport();
       void freeSlurRoutedGeometry();
       void freeSlurRoutedPersistenceAndControls();
       void handSymbolPlacementExamples();
@@ -1150,5 +1155,7 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "rit_editor_tests.inc"
 #include "engraving_085_tests.inc"
 #include "endpoints_085_tests.inc"
+#include "midi_gate_086_tests.inc"
+#include "midi_transport_086_tests.inc"
 QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"

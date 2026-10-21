@@ -6,6 +6,7 @@
 #include "audio/exports/midigate.h"
 #include "libmscore/score.h"
 class QCheckBox;
+class QUndoStack;
 namespace Ms {
 class Score;
 class MidiCropPanel : public QWidget {
@@ -20,16 +21,22 @@ class MidiCropPanel : public QWidget {
       QMap<Score*,ScoreContentState> _releaseStates;
       QMap<Score*,QSet<int>> _staves;
       QMap<Score*,QSet<int>> _tracks,_protectedTracks;
-      void settings();
+      QMap<Score*,QUndoStack*> _histories;
+      QUndoStack* editHistory(Score*);
+      void changeRelease(Score*,const QString&,int);
+      void toggleExclusion(Score*,const QString&);
+      bool settings();
       void compare();
-      void voiceSelection(Score*);
+      bool voiceSelection(Score*);
    public:
       MidiCropPanel(QWidget*,std::function<QList<Score*>()>);
       bool enabled() const;
       bool includeOriginal() const;
-      void clearSessions() { _exclusions.clear(); _releaseOverrides.clear(); _releaseStates.clear(); _staves.clear(); _tracks.clear(); _protectedTracks.clear(); }
+      void clearSessions();
       void savePreferences() const;
       MidiExportOptions options(Score*) const;
       bool write(Score*,const QString&,const QString& original);
+   signals:
+      void exportEditsChanged(Ms::Score*);
       };
 }
