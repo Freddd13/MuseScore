@@ -225,7 +225,42 @@ void TestPluginHost::spectrumLinkedZoomAndScroll()
     const double rawSpan=rawInfo.value("until").toDouble()-rawInfo.value("from").toDouble();
     spectrumWheel078(roll,QPoint(center,roll->height()/2),120);
     QTRY_VERIFY_WITH_TIMEOUT(session->property("info").toMap().value("until").toDouble()-session->property("info").toMap().value("from").toDouble()<rawSpan-100,10000);
+    QTRY_VERIFY_WITH_TIMEOUT(qAbs(session->property("info").toMap().value("until").toDouble()-
+        session->property("info").toMap().value("from").toDouble()-rawSpan/1.2)<50.,10000);
+    // A source overlay must follow the editor's other zoom controls too.
+    tabs->setCurrentIndex(0);QTest::qWait(150);
+    QVERIFY(pane->isVisible());
+    QTRY_VERIFY_WITH_TIMEOUT(!session->property("busy").toBool(),10000);
+    const auto beforeFit=session->property("info").toMap();
+    const double beforeFitSpan=beforeFit.value("until").toDouble()-beforeFit.value("from").toDouble();
+    QPushButton* whole=nullptr;
+    for(auto button:editor->findChildren<QPushButton*>())
+        if(button->text()==QString::fromUtf8("全曲"))whole=button;
+    QVERIFY(whole);
+    auto toolbar=editor->findChild<QScrollArea*>("performanceControlScroll");QVERIFY(toolbar);
+    toolbar->ensureWidgetVisible(whole);QTRY_VERIFY(whole->isVisible());
+    QTest::mouseClick(whole,Qt::LeftButton);
+    QTRY_VERIFY_WITH_TIMEOUT(session->property("info").toMap().value("until").toDouble()-
+        session->property("info").toMap().value("from").toDouble()>beforeFitSpan+100,10000);
+    QTRY_VERIFY_WITH_TIMEOUT(!session->property("busy").toBool(),10000);
+    QVERIFY(editor->grab().save(output.filePath("spectrum-editor-fit-overlay-084.png")));
+    QTest::mouseClick(fit,Qt::LeftButton);
+    QTRY_VERIFY_WITH_TIMEOUT(qAbs(session->property("info").toMap().value("until").toDouble()-24000.)<50.,10000);
+    auto parameter=editor->findChild<QWidget*>("performanceParameterCanvas");QVERIFY(parameter&&parameter->isVisible());
+    const int zoomUndo=score->undoStack()->getCurIdx();
+    spectrumWheel078(parameter,QPoint(PerformanceViewport::gutter,parameter->height()/2),120);
+    QTRY_VERIFY_WITH_TIMEOUT(qAbs(session->property("info").toMap().value("until").toDouble()-
+        session->property("info").toMap().value("from").toDouble()-20000.)<50.,10000);
+    QTRY_VERIFY_WITH_TIMEOUT(!session->property("busy").toBool(),10000);
+    QCOMPARE(score->undoStack()->getCurIdx(),zoomUndo);
+    QCOMPARE(session->property("info").toMap().value("computedBlocks").toInt(),0);
+    QVERIFY(editor->grab().save(output.filePath("spectrum-parameter-zoom-overlay-084.png")));
     display->setCurrentIndex(0);
+    QTest::qWait(150);
+    const auto independent=session->property("info").toMap();
+    QTest::mouseClick(whole,Qt::LeftButton);QTest::qWait(150);
+    QCOMPARE(session->property("info").toMap().value("from"),independent.value("from"));
+    QCOMPARE(session->property("info").toMap().value("until"),independent.value("until"));
     editor->findChild<QAction*>("editorArea/restore/transcriptionSpectrumPane")->trigger();
     tabs->setCurrentIndex(0);
 }

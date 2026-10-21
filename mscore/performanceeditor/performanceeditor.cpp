@@ -819,7 +819,13 @@ void PerformanceEditor::fit(bool selection)
             }
       const double width=qMax(100,_canvas->width()-PerformanceViewport::gutter-PerformanceViewport::rightMargin);
       const double units=comparisonTimeActive()?qMax(.001,2*(_score->tempomap()->tick2time(until)-_score->tempomap()->tick2time(from))):double(qMax(1,until-from))/DIVISION;
+      const double previousScale = _viewport.pixelsPerQuarter;
       _viewport.pixelsPerQuarter=qBound(.01,width/units,1000.);
+#ifdef SCRIPT_INTERFACE
+      if (_spectrum) _spectrum->editorTimelineZoomed(previousScale, PerformanceViewport::gutter);
+#else
+      Q_UNUSED(previousScale);
+#endif
       _scroll->setRange(0, qMax(0, (comparisonTimeActive()?qMax(_endTick,_comparisonEnd):_endTick) - (until - from))); _scroll->setPageStep(until - from); _scroll->setValue(from);
       pauseFollow(); invalidateVisual();
       }

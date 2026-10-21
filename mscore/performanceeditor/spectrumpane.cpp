@@ -622,7 +622,11 @@ void SpectrumPane::fitTimeRange() {
         _editor->_scroll->setValue(from);
         _editor->invalidateVisual();
     } else if (_audio && _audio->property("duration").toDouble() > 0) {
-        _span = qBound(250., _audio->property("duration").toDouble(), 120000.);
+        const double span = qBound(250., _audio->property("duration").toDouble(), 120000.);
+        if (_display->currentIndex() == 1)
+            _editor->zoomTimeline(_span / span, gutter);
+        else
+            _span = span;
         _from = qMax(0., _cursorMs - _span / 2);
     }
     viewChanged();
@@ -1157,6 +1161,16 @@ void SpectrumPane::viewChanged() {
     syncScrollBars();
     _canvas->update();
 }
+void SpectrumPane::editorTimelineZoomed(double previousScale, double anchorX) {
+    if (!isVisible() || !_clip.isEmpty() || _display->currentIndex() != 1 || previousScale <= 0)
+        return;
+    // Source-time overlays keep their own time origin, but share the editor's
+    // horizontal magnification. All editor zoom controls use this path.
+    const double anchor = timeAtX(anchorX);
+    const double ratio = (anchorX - gutter) / plotWidth();
+    _span = qBound(250., _span * previousScale / _editor->_viewport.pixelsPerQuarter, 120000.);
+    _from = qMax(0., anchor - ratio * _span);
+}
 double SpectrumPane::timeAtX(double x) const {
     return _clip.isEmpty() ? _from + (x - gutter) / plotWidth() * _span
                            : audioAt(_clip, _editor->tickForX(x, false));
@@ -1612,13 +1626,10 @@ void SpectrumPane::wheel(QWheelEvent *e) {
         _low = qBound(0., centre - span / 2, 128. - span);
         _high = _low + span;
     } else if (e->modifiers() & Qt::ControlModifier) {
-        if (_clip.isEmpty()) {
-            const double previousSpan = _span;
+        if (_clip.isEmpty() && _display->currentIndex() != 1) {
             double anchor = timeAtX(e->posF().x()), ratio = (anchor - _from) / _span;
             _span = qBound(250., _span / factor, 120000.);
             _from = qMax(0., anchor - ratio * _span);
-            if (_display->currentIndex() == 1)
-                _editor->zoomTimeline(previousSpan / _span, e->posF().x());
         } else {
             _editor->zoomTimeline(factor, e->posF().x());
         }

@@ -190,7 +190,13 @@ void PerformanceEditor::zoomTimeline(double factor, double x)
       {
       pauseFollow();
       const int tick = tickForX(x, false);
+      const double previousScale = _viewport.pixelsPerQuarter;
       _viewport.pixelsPerQuarter = qBound(0.01, _viewport.pixelsPerQuarter * factor, 1000.0);
+#ifdef SCRIPT_INTERFACE
+      if (_spectrum) _spectrum->editorTimelineZoomed(previousScale, x);
+#else
+      Q_UNUSED(previousScale);
+#endif
       surfaceResized(PerformanceSurface::Parameter);
       _scroll->setValue(qMax(0, leftTickForAnchor(tick, x)));
       invalidateVisual();

@@ -123,6 +123,7 @@ class SpectrumPane : public QWidget {
   public:
     explicit SpectrumPane(PerformanceEditor *);
     Q_SLOT void viewChanged();
+    void editorTimelineZoomed(double previousScale, double anchorX);
     void scoreChanged();
     void updateInputTarget();
     void applyAppearance();
