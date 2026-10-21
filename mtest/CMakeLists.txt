@@ -199,6 +199,7 @@ subdirs (
         mscore/p0native
         mscore/p1native
         mscore/pluginhost
+        mscore/nativeui
         mscore/fontengraving
         mscore/spectrum
         importmidi
