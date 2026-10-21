@@ -9,16 +9,21 @@ var lowIntervalLimits={"1":52,"2":51,"3":48,"4":46,"5":46,"6":46,"7":34,"8":43,"
 var lowIntervalNames={"1":"小二度","2":"大二度","3":"小三度","4":"大三度","5":"纯四度","6":"三全音","7":"纯五度","8":"小六度","9":"大六度","10":"小七度","11":"大七度","13":"小九度","14":"大九度","15":"小十度","16":"大十度"};
 function pitchLabel(n){return Harmony.spelledName(n.tpc,n.pitch,false)+(Math.floor(n.pitch/12)-1);}
 function lowVoicing(s,frame){
-    var held=frame.notes.filter(function(n){return !n.grace&&(n.soundingEnd===undefined?n.logicalEnd:n.soundingEnd)>frame.tick;}),notes=[],reasons=[];
+    var held=frame.notes.filter(function(n){return !n.grace&&n.piano!==false&&(n.soundingEnd===undefined?n.logicalEnd:n.soundingEnd)>frame.tick;}),notes=[],reasons=[],keys=[],byKey={};
+    held.forEach(function(n){
+        var part=n.partId===undefined?s.data.scope.firstTrack:n.partId,key=part+":"+n.pitch,group=byKey[key];
+        if(!group){group={part:part,pitch:n.pitch,notes:[],latest:n.attackTick};byKey[key]=group;keys.push(group);}
+        group.notes.push(n);group.latest=Math.max(group.latest,n.attackTick);
+    });
     var limits=s.config.lowIntervalLimits||lowIntervalLimits;
-    for(var i=0;i<held.length;++i)for(var j=i+1;j<held.length;++j){
-        var a=held[i],b=held[j];if(a.partId!==b.partId)continue;
+    for(var i=0;i<keys.length;++i)for(var j=i+1;j<keys.length;++j){
+        var a=keys[i],b=keys[j];if(a.part!==b.part)continue;
         var distance=Math.abs(a.pitch-b.pitch),limit=limits[String(distance)];
         if(limit===undefined||Math.min(a.pitch,b.pitch)>=limit)continue;
         var pair=a.pitch<b.pitch?[a,b]:[b,a];
-        var residual=pair.some(function(n){return n.logicalEnd<=frame.tick;}),arpeggio=pair[0].attackTick!==pair[1].attackTick;
-        reasons.push(pitchLabel(pair[0])+"–"+pitchLabel(pair[1])+"（"+lowIntervalNames[String(distance)]+"），低端音低于参考 "+Harmony.sharpNames[limit%12]+(Math.floor(limit/12)-1)+"。"+(residual?"其中有踏板保留的声音。":arpeggio?"两音来自先后起音，目前仍同时发声。":"两音同时按下。"));
-        pair.forEach(function(n){if(notes.indexOf(n)<0)notes.push(n);});
+        var residual=pair.some(function(group){return group.notes.every(function(n){return n.logicalEnd<=frame.tick;});}),arpeggio=pair[0].latest!==pair[1].latest;
+        reasons.push(pitchLabel(pair[0].notes[0])+"–"+pitchLabel(pair[1].notes[0])+"（"+lowIntervalNames[String(distance)]+"），低端音低于参考 "+Harmony.sharpNames[limit%12]+(Math.floor(limit/12)-1)+"。"+(residual?"其中有踏板保留的声音。":arpeggio?"两音来自先后起音，目前仍同时发声。":"两音同时按下。"));
+        pair.forEach(function(group){group.notes.forEach(function(n){if(notes.indexOf(n)<0)notes.push(n);});});
     }
     if(notes.length)issue(s,"harmony","low-cluster",frame.tick,notes,"低音排列可能较浑浊",reasons.join("\n")+"\n可试听这组音的清晰程度，再考虑拉开排列。参考表可在设置中调整。","提示");
 }
@@ -74,7 +79,7 @@ function indexHands(marks) {
 function issue(s,type,code,tick,notes,title,basis,severity) {
     if(tick<s.data.scope.start || tick>=s.data.scope.end)return;
     var ids=notes.map(function(n){return n.id || n.track+":"+n.tick+":"+n.index;}).sort();
-    var continuous=type==="harmony" || type==="playability" && /^(span|keys|comfort|hand)-/.test(code);
+    var continuous=type==="harmony" || type==="playability" && /^(span|keys|comfort|hand|fingering)-/.test(code);
     var anchor=continuous?notes.map(function(n){return n.track+":"+n.attackTick+":"+n.pitch;}).sort().join(","):tick;
     var id=type+":"+code+":"+anchor+":"+ids.join(",");
     if(s.seen[id] || s.config.ignored.indexOf(id)>=0)return;
@@ -117,7 +122,11 @@ function roleFor(s,track) {
     if(user) {
         for(var field in user)automatic[field]=user[field];
         var confirmed=user.role!==undefined || user.line!==undefined || typeof user.independent==="boolean";
-        automatic.source=confirmed?"用户指定":"自动推断（用户分手）";if(confirmed)automatic.uncertain=false;
+        automatic.source=confirmed?"用户指定":"自动推断（用户分手）";
+        if(confirmed) {
+            automatic.uncertain=false;
+            if(user.independent===undefined)automatic.independent=automatic.role!=="ignore";
+        }
     }
     return automatic;
 }
@@ -282,15 +291,19 @@ function physicalPlayability(s,frame) {
         if(attacked)lookahead.push({tick:upcoming.tick,seconds:futureSeconds,notes:futureNotes});
     }
     var report=PianoHands.analyse(notes,s.data.pedals||[],{tick:tick,seconds:seconds,left:s.config.left,right:s.config.right,minimumHoldMs:s.config.minimumHoldMs===undefined?120:s.config.minimumHoldMs,part:Number(part),lookahead:lookahead});
-    if(report.limited || report.uncertain) {
+    if(report.limited || report.uncertain && !Array.isArray(report.uncertainHands)) {
         onsetSpans(s,frame);
         issue(s,"playability","hand-uncertain",tick,notes,"这处按键关系需要确认",report.limited?"同时延续的按键太多，本次不自动安排松手。可先确认分手和踏板范围。":"同一个按键有相互冲突的分手或指法说明，请先确认。","提示");continue;
     }
+    if(report.uncertainHands && report.uncertainHands.length)
+        issue(s,"playability","hand-uncertain",tick,report.uncertainHands.map(function(index){return notes[index];}),"同一按键的分手需要确认","这几个同音音符分配给了两只手。可在“声部与左右手”中指定由哪只手弹；其余已明确分手的音继续检查。","提示");
+    if(report.uncertainFingerings && report.uncertainFingerings.length)
+        issue(s,"playability","fingering-uncertain",tick,report.uncertainFingerings.map(function(index){return notes[index];}),"同一按键记录了不同指法","这些音上记录了不同的手指编号。可核对或修改指法；按键数量、跨度和踏板下的松手仍按实际音高检查。","提示");
     for(var h=0;h<report.sides.length;++h) {
         var side=report.sides[h],label=side.hand==="left"?"左手":"右手",before=side.before,after=side.after;
         if(!before.count)continue;
         var involved=side.notes.map(function(index){return notes[index];}),released=side.released.map(function(index){return notes[index];});
-        var basis="按谱面一直保持时："+before.count+"个不同按键，跨度"+(before.high-before.low)+"半音。";
+        var basis=(side.partial?"按已明确分手的音检查，":"按谱面一直保持时：")+before.count+"个不同按键，跨度"+(before.high-before.low)+"半音。";
         basis+="检查的最短按键参考为"+(s.config.minimumHoldMs===undefined?120:s.config.minimumHoldMs)+" ms，可在设置中调整。";
         basis+=report.inferred?"其中部分分手来自自动建议，可校正。":"分手由用户或符号指定。";
         if(released.length) {
@@ -299,10 +312,16 @@ function physicalPlayability(s,frame) {
             issue(s,"playability","release-"+side.hand,tick,involved,label+"先松开"+names.slice(0,3).join("、")+(names.length>3?"等音":"")+"，再弹下一组音",basis,"注意");
         }
         if(!after.fits) {
-            basis+="松开允许释放的旧音后仍超过"+after.maximum+"半音或5个按键；这组新音需要进一步调整跨度、指法或分手。";
-            if(after.fingerConflicts)basis+="现有指法要求同一个手指同时保持不同按键，请确认指法或松手时机。";
+            var remaining=involved.filter(function(n){return released.indexOf(n)<0;}),distance=after.high-after.low;
+            function keyName(pitch){var found=remaining.filter(function(n){return n.pitch===pitch;})[0];return found?pitchLabel(found):Harmony.sharpNames[Harmony.mod12(pitch)]+(Math.floor(pitch/12)-1);}
+            var title;
+            if(after.count>5){title=label+"需要同时保持"+after.count+"个按键";basis+="这一时刻需保持"+after.count+"个不同按键。";}
+            else if(distance>after.maximum)title=label+"需同时保持 "+keyName(after.low)+"–"+keyName(after.high)+"（"+distance+"半音）";
+            else title=label+"的同一手指需要同时按不同音";
+            if(distance>after.maximum)basis+=keyName(after.low)+"–"+keyName(after.high)+" 相距"+distance+"半音，个人上限为"+after.maximum+"半音。可调整分手、排列或旧音的松手时机。";
+            if(after.fingerConflicts)basis+="现有指法要求同一个手指同时保持不同按键，可核对指法或松手时机。";
             if(side.rolled)basis+="已标记琶音，需要另外核查展开顺序。";
-            issue(s,"playability",(after.count>5?"keys-":"span-")+side.hand,tick,involved,label+"仍有按键或跨度困难",basis,report.inferred || side.rolled?"注意":"需核查");
+            issue(s,"playability",(after.count>5?"keys-":"span-")+side.hand,tick,involved,title,basis,report.inferred || side.rolled?"注意":"需核查");
         } else if(after.high-after.low>s.config[side.hand].comfort) {
             issue(s,"playability","comfort-"+side.hand,tick,involved,label+"超出舒适跨度",basis+"提前松手后的跨度仍超过个人舒适值；两端白键才采用白键十度上限。","提示");
         }

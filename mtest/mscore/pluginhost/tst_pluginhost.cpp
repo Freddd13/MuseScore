@@ -7,6 +7,8 @@
 #include <QTranslator>
 #include <QQuickView>
 #include <QJSValue>
+#include <QJSEngine>
+#include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QSettings>
 #include <functional>
@@ -128,6 +130,8 @@ class TestPluginHost : public QObject {
       void engravingFirstUseLeavesScoreSpace();
       void spectrumInitialSourceAndChoice();
       void spectrumLinkedZoomAndScroll();
+      void arrangementKnownHandWithOtherFingerConflict();
+      void arrangementCompletePanelFlow();
       void harmonyRangeWithoutSettings();
       void harmonyManualSurvivesPitchEdit();
       void harmonyStyleSurfacesAndRestore();
@@ -1361,5 +1365,6 @@ class TestPluginHost : public QObject {
 #include "harmony_panel_077_tests.inc"
 #include "spectrum_078_tests.inc"
 #include "layout_079_tests.inc"
+#include "arrangement_083_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

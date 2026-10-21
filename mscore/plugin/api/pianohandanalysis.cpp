@@ -45,6 +45,28 @@ QVariantMap PianoHandAnalysis::analyse(const QVariantList& notes,const QVariantL
             if(n.value("logicalEnd",n.value("end")).toInt()<=tick || n.value("grace").toBool() || state.released.contains(id))continue;
             inferred|=!n.value("handKnown").toBool();keys.append(keyFor(n,tick,seconds));rows.append(n);original.append(i);
             }
+      QHash<int,int> pitchHands,pitchFingers;
+      QSet<int> handConflicts,fingerConflicts;
+      for(const auto& key:keys) {
+            if(key.hand>=0) {
+                  if(pitchHands.contains(key.pitch) && pitchHands[key.pitch]!=key.hand)handConflicts.insert(key.pitch);
+                  else pitchHands[key.pitch]=key.hand;
+                  }
+            if(key.finger<0)fingerConflicts.insert(key.pitch);
+            else if(key.finger>0) {
+                  if(pitchFingers.contains(key.pitch) && pitchFingers[key.pitch]!=key.finger)fingerConflicts.insert(key.pitch);
+                  else pitchFingers[key.pitch]=key.finger;
+                  }
+            }
+      QVariantList uncertainHands,uncertainFingerings;
+      QSet<QString> uncertainIds;
+      for(int i=keys.size()-1;i>=0;--i) {
+            if(fingerConflicts.contains(keys[i].pitch))uncertainFingerings.prepend(original[i]);
+            if(handConflicts.contains(keys[i].pitch)) {
+                  uncertainHands.prepend(original[i]);uncertainIds.insert(rows[i].value("id").toString());
+                  keys.removeAt(i);rows.removeAt(i);original.removeAt(i);
+                  }
+            }
       QVector<PianoHands::Future> future;
       for(const auto& value:options.value("lookahead").toList()) {
             if(future.size()>=2)break;
@@ -52,7 +74,7 @@ QVariantMap PianoHandAnalysis::analyse(const QVariantList& notes,const QVariantL
             if(at<=tick || atSeconds<seconds)continue;
             PianoHands::Future next;next.seconds=atSeconds;
             for(const auto& note:frame.value("notes").toList()) {
-                  auto n=note.toMap();if(n.value("logicalEnd",n.value("end")).toInt()<=at || n.value("grace").toBool() || state.released.contains(n.value("id").toString()))continue;
+                  auto n=note.toMap();if(n.value("logicalEnd",n.value("end")).toInt()<=at || n.value("grace").toBool() || state.released.contains(n.value("id").toString()) || uncertainIds.contains(n.value("id").toString()))continue;
                   next.keys.append(keyFor(n,at,atSeconds));
                   }
             future.append(next);
@@ -71,9 +93,9 @@ QVariantMap PianoHandAnalysis::analyse(const QVariantList& notes,const QVariantL
                   travel=std::max({0,result.after[h].high-result.after[h].maximum-state.previous[h].low,state.previous[h].high-result.after[h].maximum-result.after[h].low});
                   available=std::max(0.,seconds-state.previous[h].seconds);
                   }
-            sides.append(QVariantMap{{"hand",h==0?"left":"right"},{"before",hand(result.before[h])},{"after",hand(result.after[h])},{"notes",involved},{"released",released},{"attacks",attacks},{"travel",travel},{"available",available},{"rolled",rolled}});
+            sides.append(QVariantMap{{"hand",h==0?"left":"right"},{"before",hand(result.before[h])},{"after",hand(result.after[h])},{"notes",involved},{"released",released},{"attacks",attacks},{"travel",travel},{"available",available},{"rolled",rolled},{"partial",!uncertainHands.isEmpty()}});
             if(!attacks.isEmpty() && result.after[h].count)state.previous[h]={true,result.after[h].low,result.after[h].high,seconds};
             }
-      return {{"sides",sides},{"assignments",assignments},{"possible",result.possible},{"inferred",inferred},{"uncertain",result.uncertain},{"limited",result.limited}};
+      return {{"sides",sides},{"assignments",assignments},{"possible",result.possible && uncertainHands.isEmpty() && uncertainFingerings.isEmpty()},{"inferred",inferred},{"uncertain",result.uncertain || !uncertainHands.isEmpty()},{"uncertainHands",uncertainHands},{"uncertainFingerings",uncertainFingerings},{"limited",result.limited}};
       }
 } }

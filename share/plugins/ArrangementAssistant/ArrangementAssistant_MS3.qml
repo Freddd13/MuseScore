@@ -15,7 +15,7 @@ MuseScore {
     id:root
     menuPath:"Plugins.Arrangement Check"
     description:"编配检查：和声疑点、基础对位与上下文可弹性；只读分析。"
-    version:"1.3.1"
+    version:"1.3.2"
     requiresScore:true
     pluginType:"dock"
     dockArea:"right"
@@ -97,7 +97,8 @@ MuseScore {
     }
     function positionProblemHint() {
         if(!current||!current.notes.length||!observer||typeof observer.scoreLocation!=="function")return
-        var note=current.notes[0],point=observer.scoreLocation(note.tick,note.track)
+        var note=Presentation.anchor(current);if(!note)return
+        var point=observer.scoreLocation(note.tick,note.track)
         if(point.x===undefined)return
         var left=point.screenX+8,top=point.screenY+8,right=point.screenX+point.screenWidth-8,bottom=point.screenY+point.screenHeight-8
         var box={x:point.measureX===undefined?point.x:point.measureX,y:point.measureY===undefined?point.y:point.measureY,w:point.measureWidth||point.width,h:point.measureHeight||point.height}
@@ -107,7 +108,8 @@ MuseScore {
         if(best){problemHint.x=best.x;problemHint.y=best.y}
     }
     function openProblemHint(tick) {
-        var index=issues.findIndex(function(issue){return issue.tick===tick})
+        var visibleIssue=filteredIssues.filter(function(issue){return issue.tick===tick})[0]
+        var index=visibleIssue?issues.findIndex(function(issue){return issue.id===visibleIssue.id}):-1
         if(index<0)return
         hintTick=tick
         if(!current||current.tick!==tick)root.currentIssueIndex=index
@@ -198,6 +200,7 @@ MuseScore {
         worstBatch=Math.max(worstBatch,Date.now()-began)
     }
     function finishResult(result) {
+            var selectedId=current?current.id:""
             var output=result.issues
             if(localRefresh && pendingData) {
                 var from=pendingData.scope.start,until=pendingData.scope.end
@@ -215,13 +218,14 @@ MuseScore {
             for(var i=0;i<output.length;++i)totals[output[i].type]++
             issues=output;counts=totals;roles=result.roles;analyzed=true;stale=false;running=false;task=null;snapshot=null
             status="已更新"+(localRefresh?" · 局部刷新":"")+(imported.length?" · 使用导入解释，请核对来源":"")+(scope.noncontiguous?" · 非连续选择按起止范围检查":"")
-            root.currentIssueIndex=filteredIssues.length?issues.findIndex(function(i){return i.id===root.filteredIssues[0].id}):-1;rangeChoice=2;work.stop();workerToken=0;contentRevision=typeof observer.analysisContentRevision==="function"?observer.analysisContentRevision():revision;publishMarkers()
+            var retained=filteredIssues.filter(function(issue){return issue.id===selectedId})[0]
+            root.currentIssueIndex=retained?issues.findIndex(function(i){return i.id===retained.id}):filteredIssues.length?issues.findIndex(function(i){return i.id===root.filteredIssues[0].id}):-1;rangeChoice=2;work.stop();workerToken=0;contentRevision=typeof observer.analysisContentRevision==="function"?observer.analysisContentRevision():revision;publishMarkers()
     }
     function locate(keepScoreFocus) {
         if(!current || !curScore)return
         if(observer && observer.playing) {pendingLocate=true;status="定位将在停播后执行";return}
         pendingLocate=false
-        var n=current.notes.filter(function(note){return (note.attackTick===undefined?note.tick:note.attackTick)===root.current.tick;})[0]||current.notes[0];if(!n)return
+        var n=Presentation.anchor(current);if(!n)return
         if(observer && typeof observer.navigateWorkflow==="function") {
             var target=Rules.clone(n);target.start=current.tick;target.firstTrack=n.track
             var result=observer.navigateWorkflow(target,false)
@@ -368,12 +372,16 @@ RowLayout {
     Loader {parent:root.summaryPanelHost;anchors.fill:parent;active:root.dualSummaryActive&&!!root.summaryPanelHost;sourceComponent:arrangementSummary}
 
     Component {id:arrangementDetails
-Item {
+Flickable {
         id:details
+        objectName:"arrangementDetailsScroll";clip:true
         anchors.fill:parent;anchors.margins:8
+        contentWidth:width;contentHeight:Math.max(height,detailColumn.childrenRect.y+detailColumn.childrenRect.height)
+        ScrollBar.vertical:ScrollBar {id:detailScrollBar;policy:details.contentHeight>details.height?ScrollBar.AlwaysOn:ScrollBar.AlwaysOff}
         visible:true
         ColumnLayout {
-            anchors.fill:parent;spacing:6
+            id:detailColumn
+            width:Math.max(0,details.width-detailScrollBar.implicitWidth-4);height:details.height;spacing:6
             RowLayout {
                 Layout.fillWidth:true
                 Label {text:"编配检查";font.bold:true;color:theme.text;Layout.fillWidth:true}
@@ -389,7 +397,7 @@ Item {
             }
             RowLayout {
                 Layout.fillWidth:true
-                Desk.DeskComboBox {id:rangeBox;model:["当前选区／小节","钢琴全谱","保留本次范围"];currentIndex:root.rangeChoice;Layout.fillWidth:true;onActivated:{root.rangeChoice=currentIndex;root.whole=currentIndex===1}}
+                Desk.DeskComboBox {id:rangeBox;objectName:"arrangementRangeChoice";model:["当前选区／小节","钢琴全谱","保留本次范围"];currentIndex:root.rangeChoice;Layout.fillWidth:true;onActivated:{root.rangeChoice=currentIndex;root.whole=currentIndex===1}}
                 Desk.DeskButton {text:"悬浮";visible:typeof root.setPanelFloating==="function" && !root.ribbon;onClicked:root.setPanelFloating(!root.panelFloating)}
                 Desk.DeskButton {text:"设置";visible:root.ribbon;onClicked:settings.open()}
             }
@@ -415,7 +423,7 @@ Item {
                 delegate:Rectangle {
                     width:list.width;height:58;color:ListView.isCurrentItem?theme.selected:theme.field
                     Column {anchors.fill:parent;anchors.margins:7;spacing:3
-                        Text {text:"第"+modelData.bar+"小节 · 第"+Number(modelData.beat).toFixed(2)+"拍 · "+modelData.severity;color:theme.muted;font.pixelSize:10}
+                        Text {text:"第"+modelData.bar+"小节 · 第"+Number(Number(modelData.beat).toFixed(2))+"拍 · "+modelData.severity;color:theme.muted;font.pixelSize:10}
                         Text {text:modelData.title;width:parent.width;elide:Text.ElideRight;color:theme.text;font.pixelSize:12}
                     }
                     MouseArea {anchors.fill:parent;hoverEnabled:true;ToolTip.visible:containsMouse;ToolTip.text:"单击定位，双击在谱旁查看";onClicked:{root.currentIssueIndex=root.issues.findIndex(function(i){return i.id===modelData.id});if(!root.observer || !root.observer.playing){root.locate();if(root.config.scoreHints)root.openProblemHint(modelData.tick)}} onDoubleClicked:root.openProblemHint(modelData.tick)}
@@ -425,7 +433,7 @@ Item {
             Label {text:"当前问题的依据";font.bold:true;color:theme.text}
             Flickable {
                 Layout.fillWidth:true;Layout.minimumHeight:90;Layout.preferredHeight:175;Layout.maximumHeight:220;clip:true;contentHeight:explanation.height
-                Text {id:explanation;width:parent.width;text:root.current?root.current.basis+"\n\n涉及音："+root.current.notes.map(function(n){return Harmony.spelledName(n.tpc,n.pitch,false)+" · 谱表"+(Math.floor(n.track/4)+1)+"声部"+(n.track%4+1)}).join("，"):"选择一条问题，查看相关音和建议。";wrapMode:Text.WordWrap;color:theme.text;font.pixelSize:12}
+                Text {id:explanation;width:parent.width;text:root.current?root.current.basis+"\n\n涉及音："+root.current.notes.map(function(n){return Rules.pitchLabel(n)+" · 谱表"+(Math.floor(n.track/4)+1)+"声部"+(n.track%4+1)}).join("，"):"选择一条问题，查看相关音和建议。";wrapMode:Text.WordWrap;color:theme.text;font.pixelSize:12}
                 ScrollBar.vertical:ScrollBar {}
             }
             RowLayout {
@@ -434,7 +442,7 @@ Item {
                 Desk.DeskButton {text:"下一条";enabled:!!root.current&&root.filteredIssues.findIndex(function(i){return i.id===root.current.id})+1<root.filteredIssues.length;onClicked:root.issueStep(1)}
                 Desk.DeskButton {text:"忽略此处";enabled:!!root.current;onClicked:root.ignore()}
             }
-            Desk.DeskButton {text:"声部与左右手";onClicked:roleDialog.open();ToolTip.visible:hovered;ToolTip.text:"指定旋律、低音和内声部，或为所选音校正左右手"}
+            Desk.DeskButton {objectName:"arrangementRoles";text:"声部与左右手";onClicked:roleDialog.open();ToolTip.visible:hovered;ToolTip.text:"指定旋律、低音和内声部，或为所选音校正左右手"}
         }
     }
 }
@@ -449,22 +457,23 @@ Item {
         MenuItem {text:"恢复已忽略的提示";enabled:root.config.ignored.length>0;onTriggered:{var c=Rules.clone(root.config);c.ignored=[];root.config=c;root.persist();root.markDirty()}}
     }
     Window {
-        id:problemHint;objectName:"arrangementProblemHint";title:"编配提示";width:350;height:300;flags:Qt.Tool;color:theme.background
+        id:problemHint;objectName:"arrangementProblemHint";title:"编配提示";width:350;height:300;minimumWidth:300;minimumHeight:250;flags:Qt.Tool;color:theme.background
         ColumnLayout {
-            anchors.fill:parent;anchors.margins:10;spacing:6
+            id:hintLayout;objectName:"arrangementProblemLayout"
+            x:10;y:10;width:Math.max(0,problemHint.width-20);height:Math.max(0,problemHint.height-20);spacing:6
             Label {Layout.fillWidth:true;wrapMode:Text.WordWrap;font.bold:true;color:theme.text;text:root.current?"第 "+root.current.bar+" 小节 · "+root.current.title:"编配提示"}
-            ListView {Layout.fillWidth:true;Layout.preferredHeight:Math.min(90,root.nearbyIssues.length*30);clip:true;model:root.nearbyIssues
+            ListView {visible:root.nearbyIssues.length>1;Layout.fillWidth:true;Layout.preferredHeight:Math.min(90,root.nearbyIssues.length*30);clip:true;model:root.nearbyIssues
                 ScrollBar.vertical:ScrollBar {}
                 delegate:ItemDelegate {width:parent.width;height:30;text:modelData.title;highlighted:root.current&&root.current.id===modelData.id;onClicked:{root.currentIssueIndex=root.issues.findIndex(function(issue){return issue.id===modelData.id});root.locate(true)}}
             }
-            ScrollView {Layout.fillWidth:true;Layout.fillHeight:true;clip:true
-                Text {width:problemHint.width-28;wrapMode:Text.WordWrap;color:theme.text;text:root.current?root.current.basis:""}
+            ScrollView {id:hintExplanation;objectName:"arrangementProblemExplanation";Layout.fillWidth:true;Layout.fillHeight:true;clip:true
+                Text {id:hintText;objectName:"arrangementProblemText";width:problemHint.width-28;wrapMode:Text.WordWrap;color:theme.text;text:root.current?root.current.basis:""}
             }
             RowLayout {Layout.fillWidth:true
                 Desk.DeskButton {text:"定位相关音";enabled:!!root.current;onClicked:root.locate(true)}
                 Desk.DeskButton {text:"忽略此处";enabled:!!root.current;onClicked:{root.ignore();problemHint.hide()}}
                 Item {Layout.fillWidth:true}
-                Desk.DeskButton {text:"关闭";onClicked:problemHint.hide()}
+                Desk.DeskButton {objectName:"arrangementProblemClose";text:"关闭";onClicked:problemHint.hide()}
             }
         }
     }
@@ -512,26 +521,34 @@ Item {
         }
     }
     Popup {
-        id:roleDialog;parent:details;modal:true;focus:true;width:Math.min(350,details.width);height:Math.min(550,details.height);y:0
+        id:roleDialog;objectName:"arrangementRolesPopup";parent:details;modal:true;focus:true;closePolicy:Popup.CloseOnEscape|Popup.CloseOnPressOutside;width:Math.min(350,details.width);height:Math.min(550,details.height);y:0
         background:Rectangle {color:theme.background;border.color:theme.line}
-        ScrollView {anchors.fill:parent;clip:true
-            ColumnLayout {width:roleDialog.availableWidth
-                Label {text:"声部与左右手";font.bold:true;color:theme.text}
-                Label {text:roles.length?"按谱表和声部设置。和弦内可指定最高音线或最低音线。":"点击更新结果后，这里会列出声部。";wrapMode:Text.WordWrap;Layout.fillWidth:true;color:theme.muted}
+        contentItem:ColumnLayout {
+            RowLayout {Layout.fillWidth:true
+                Label {text:"声部与左右手";font.bold:true;color:theme.text;Layout.fillWidth:true}
+                Desk.DeskButton {objectName:"arrangementRolesClose";text:"关闭";onClicked:roleDialog.close()}
+            }
+        ScrollView {id:rolesScroll;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:availableWidth
+            ScrollBar.vertical:ScrollBar {id:rolesScrollBar;policy:ScrollBar.AsNeeded}
+            ColumnLayout {width:Math.max(0,rolesScroll.availableWidth-rolesScrollBar.implicitWidth-4)
+                Label {text:roles.length?"按谱表和声部设置。选定旋律、低音或内声部后，检查所选音线的对位；加倍声部可关闭“独立声部”。":"点击更新结果后，这里会列出声部。";wrapMode:Text.WordWrap;Layout.fillWidth:true;color:theme.muted}
                 Repeater {model:root.roles
                     ColumnLayout {property int track:modelData.track;property var row:modelData
-                        Label {text:"谱表"+(Math.floor(track/4)+1)+" · 声部 "+(track%4+1)+" · "+row.source+(row.uncertain?" · 待确认":"");color:theme.text}
+                        Label {text:"谱表"+(Math.floor(track/4)+1)+" · 声部 "+(track%4+1)+" · "+row.source+(row.uncertain?" · 待确认":"");color:theme.text;Layout.fillWidth:true;wrapMode:Text.WordWrap}
                         Desk.DeskComboBox {model:["旋律","低音","内声部","不参与声部检查"];currentIndex:["melody","bass","inner","ignore"].indexOf(row.role);Layout.fillWidth:true;onActivated:root.roleChange(track,"role",["melody","bass","inner","ignore"][currentIndex])}
                         Desk.DeskComboBox {model:["自动分手／符号优先","左手","右手"];currentIndex:["auto","left","right"].indexOf(row.hand);Layout.fillWidth:true;onActivated:root.roleChange(track,"hand",["auto","left","right"][currentIndex])}
                         Desk.DeskComboBox {model:["单音线（复调待确认）","最高音线","最低音线"];currentIndex:["single","top","bottom"].indexOf(row.line);Layout.fillWidth:true;onActivated:root.roleChange(track,"line",["single","top","bottom"][currentIndex])}
                         Desk.DeskSwitch {text:"独立声部（加倍请关闭）";checked:row.independent;onClicked:root.roleChange(track,"independent",checked)}
                     }
                 }
-                RowLayout {Desk.DeskButton {text:"所选音／选区左手";onClicked:root.selectedHand("left")}Desk.DeskButton {text:"所选音／选区右手";onClicked:root.selectedHand("right")}}
+                Flow {Layout.fillWidth:true;Layout.preferredHeight:childrenRect.height;spacing:6
+                    Desk.DeskButton {text:"所选音／选区左手";onClicked:root.selectedHand("left")}
+                    Desk.DeskButton {text:"所选音／选区右手";onClicked:root.selectedHand("right")}
+                }
                 Desk.DeskButton {text:"清除范围分手";onClicked:{var c=Rules.clone(root.config);c.handOverrides=[];root.config=c;root.markDirty()}}
                 Desk.DeskButton {text:"恢复自动建议";onClicked:{var c=Rules.clone(root.config);c.roles={};root.config=c;root.markDirty()}}
-                Desk.DeskButton {text:"关闭";onClicked:roleDialog.close()}
             }
+        }
         }
     }
     Popup {
