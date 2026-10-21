@@ -193,7 +193,7 @@ QVariantMap ScoreObserver::selectExpressionNote(const QVariantMap& value) {
  if(!playing()&&mscore->currentScoreView())mscore->currentScoreView()->adjustCanvasPosition(note,false);
  return {{"ok",true},{"tick",note->chord()->tick().ticks()},{"track",note->track()}};
 }
-QVariantMap ScoreObserver::expressionSelection(){
+QVariantMap ScoreObserver::expressionSelection(bool exactElements){
  QVariantList notes;if(_score)for(auto note:_score->selection().noteList()){auto value=describe(note,note->ppitch());if(note->chord()->isGrace()&&note->chord()->parent()&&note->chord()->parent()->isChord())value["graceIndex"]=toChord(note->chord()->parent())->graceNotes().indexOf(note->chord());notes.append(value);}
  auto scope=analysisScope(false);
  if(_score&&_score->selection().isRange()) {
@@ -204,6 +204,25 @@ QVariantMap ScoreObserver::expressionSelection(){
   auto last=_score->tick2measure(Fraction::fromTicks(end));if(!last)last=_score->lastMeasure();
   if(last){scope["endMeasure"]=last->no()+1;scope["endBeat"]=1.+(end-last->tick().ticks())/(DIVISION*4./last->timesig().denominator());scope["endAtBar"]=end==last->endTick().ticks();}
 
+ }
+ if(_score&&exactElements){
+  int start=-1,end=-1;
+  if(_score->selection().isRange()){start=_score->selection().tickStart().ticks();end=_score->selection().tickEnd().ticks();}
+  else for(auto element:_score->selection().elements()){
+   auto chord=element->isNote()?toNote(element)->chord():element->isChordRest()?toChordRest(element):nullptr;
+   if(!chord)continue;
+   start=start<0?chord->tick().ticks():qMin(start,chord->tick().ticks());end=qMax(end,chord->endTick().ticks());
+  }
+  if(start>=0&&end>start){
+   auto first=_score->tick2measure(Fraction::fromTicks(start)),last=_score->tick2measure(Fraction::fromTicks(end-1));
+   scope["start"]=start;scope["end"]=end;scope["exact"]=true;
+   if(first&&last){
+    scope["firstMeasure"]=first->no()+1;scope["lastMeasure"]=last->no()+1;scope["endMeasure"]=last->no()+1;
+    scope["firstBeat"]=1.+(start-first->tick().ticks())/(DIVISION*4./first->timesig().denominator());
+    scope["endBeat"]=1.+(end-last->tick().ticks())/(DIVISION*4./last->timesig().denominator());
+    scope["endAtBar"]=end==last->endTick().ticks();scope["partial"]=start!=first->tick().ticks()||end!=last->endTick().ticks();
+   }
+  }
  }
  return {{"scope",scope},{"notes",notes},{"rangeSelected",_score&&_score->selection().isRange()}};
 }
@@ -250,7 +269,7 @@ QVariantMap ScoreObserver::auditionExpression(const QString& workspace,const QVa
   preparePlaybackPreview(_score,key,std::move(original),std::move(changed));
  }
  auto guard=QPointer<ScoreObserver>(this);setPlaybackPreviewRepeat(this,[guard,candidate,scope,proposed]{if(guard){auto again=scope;again["loop"]=playbackPreviewLoop();again["loopRestart"]=true;auto result=guard->auditionExpression(QString(),candidate,again,proposed);if(result.contains("error"))emit guard->workflowPlaybackError(result.value("error").toString());}});
- auto range=scope;range["deferStart"]=scope.contains("reference");auto started=startPlaybackPreview(_score,proposed,range);
+ auto range=scope;range["exactStart"]=true;range["deferStart"]=scope.contains("reference");auto started=startPlaybackPreview(_score,proposed,range);
  if(started.contains("error")||!scope.contains("reference"))return started;
  auto plan=playbackPreviewReferencePlan(_score,proposed,started.value("fromUtick").toInt());plan["revision"]=analysisRevision();plan["loop"]=scope.value("loop",false);auto audio=startReferencePlayback(plan);if(audio.contains("error")){stopPlaybackPreview(true);return audio;}
  started["preparing"]=true;return started;

@@ -61,10 +61,10 @@ MIDI左右手拆分	importexport/midiimport/importmidi_lrhand.h	void splitIntoLe
 生成播放事件	libmscore/rendermidi.cpp	void Score::createPlayEvents(Chord* chord)	2433	Auto/User事件策略	mtest/libmscore/midi
 播放MIDI渲染	libmscore/rendermidi.cpp	void MidiRenderer::renderScore(	2582	分块渲染	mtest/libmscore/midi
 踏板播放	libmscore/rendermidi.cpp	void MidiRenderer::renderSpanners(	1166	踏板控制器及跨时元素	mtest/libmscore/spanners
-播放事件收集	mscore/seq.cpp	void Seq::collectEvents(int utick)	1544	缓存与异步结果	-
-音频回调	mscore/seq.cpp	void Seq::process(unsigned framesPerPeriod, float* buffer)	1126	实时事件调度与合成	-
-播放界面心跳	mscore/seq.cpp	void Seq::heartBeatTimeout()	2625	输入消息与显示同步	-
-独立节拍器	mscore/seq.cpp	void Seq::independentMetronome(unsigned n, float* p)	933	练习节拍音频生成	-
+播放事件收集	mscore/seq.cpp	void Seq::collectEvents(int utick)	1568	缓存与异步结果	-
+音频回调	mscore/seq.cpp	void Seq::process(unsigned framesPerPeriod, float* buffer)	1150	实时事件调度与合成	-
+播放界面心跳	mscore/seq.cpp	void Seq::heartBeatTimeout()	2649	输入消息与显示同步	-
+独立节拍器	mscore/seq.cpp	void Seq::independentMetronome(unsigned n, float* p)	957	练习节拍音频生成	-
 主合成器	audio/midi/msynthesizer.cpp	void MasterSynthesizer::process(unsigned n, float* p)	280	合成与效果器	-
 音频Driver	audiodrivers/driver.h	class Driver {	33	设备接口	-
 插件属性写入	mscore/plugin/api/scoreelement.cpp	Ownership::SCORE	127	undo与插件对象所有权	mtest/scripting
@@ -263,14 +263,14 @@ MIDI松手说明	mscore/midicrop/midicroppanel.cpp	QString reasonText(	33	原长
 滚轮浮标	mscore/performanceeditor/performancewheel.cpp	void PerformanceEditor::rememberWheelFeedback(	136	声部强调、播放力度、记号力度和短时提示	mtest/mscore/performanceeditor/editor_usability_tests.inc
 演奏力度恢复	libmscore/velocitybackup.cpp	void remember(	77	首次应用前力度、复制读写及撤销	mtest/mscore/p1native/velocity_history_tests.inc
 演奏对比	mscore/performanceeditor/expressioncompare.cpp	void PerformanceEditor::syncExpressionComparison()	69	原参数区前后对比、拖动和绘制	mtest/mscore/performanceeditor/expression_compare_tests.inc
-演奏试听	mscore/workflow/playbackpreview.cpp	QVariantMap startPlaybackPreview(	152	当前展开拍位切换与普通播放恢复	mtest/mscore/performanceeditor/expression_playback_tests.inc
-演奏应用	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::restoreExpressionVelocity(	312	选音、选段恢复与随谱保存	mtest/mscore/p1native/expression_application_tests.inc
+演奏试听	mscore/workflow/playbackpreview.cpp	QVariantMap startPlaybackPreview(	177	当前展开拍位切换与普通播放恢复	mtest/mscore/performanceeditor/expression_playback_tests.inc
+演奏应用	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::restoreExpressionVelocity(	331	选音、选段恢复与随谱保存	mtest/mscore/p1native/expression_application_tests.inc
 记号力度文字	mscore/performanceeditor/markvelocity.cpp	MarkVelocityText readMarkVelocityText(	10	动态文字与谱表作用范围	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
 乐谱分析身份	mscore/workflow/analysisidentity.cpp	ScoreObserver::analysisScoreId	28	跨面板的乐谱身份与内容变化	mtest/mscore/p1native/assistant_surface_tests.inc
 谱面位置提示	mscore/workflow/positionhint.cpp	void showWorkflowPositionHint	101	定位后短时强调谱段	mtest/mscore/p1native/assistant_surface_tests.inc
 和弦摘要字体	mscore/workflow/harmonylabel.cpp	ScoreObserver::harmonyLabel	15	音乐字体和级数紧凑渲染	mtest/mscore/p1native/assistant_surface_tests.inc
 谱面和弦编辑	mscore/workflow/chordeditor.cpp	ScoreObserver::setChordEditRegion	106	作用范围和显示位置拖动	mtest/mscore/p1native/assistant_surface_tests.inc
-原曲联合播放	mscore/workflow/referenceworkflow.cpp	ScoreObserver::startReferencePlayback	118	独立结束、循环与设置恢复	mtest/mscore/performanceeditor/expression_playback_tests.inc
+原曲联合播放	mscore/workflow/referenceworkflow.cpp	ScoreObserver::startReferencePlayback	130	独立结束、循环与设置恢复	mtest/mscore/performanceeditor/expression_playback_tests.inc
 圆滑线区段走向	libmscore/freeslur.cpp	QVector<Route> routing	65	区段与跨谱行坐标	mtest/mscore/performanceeditor/notation_051_tests.inc
 圆滑线整理切线	libmscore/freeslur.cpp	bool FreeSlur::smoothNode	149	保持点位置整理共用切线	mtest/mscore/performanceeditor/notation_051_tests.inc
 圆滑线绕行	libmscore/freesluravoidance.cpp	AvoidanceResult avoid(	180	方向约束与形状复用	mtest/mscore/performanceeditor/notation_051_tests.inc
@@ -371,3 +371,7 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	191	空列�
 表达结果选音	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::selectExpressionNote(	186	对应列表与原生选音同步，播放中保持拍位并更新采用数量	mtest/mscore/performanceeditor/expression_080_tests.inc
 录完直接看结果	share/workflow/panels/PerformanceExpression/PerformanceExpression.view.qml	 function revealResults()	52	录制与导入后显示试听、采用和逐音结果；保留手动浏览	mtest/mscore/performanceeditor/expression_080_tests.inc
 正常主窗口保存与关联范围	mtest/mscore/nativeui/tst_nativeui.cpp	class TestNativeUi	32	正常菜单及工作区初始化；内嵌／悬浮Ctrl+S与保存读回，八音轨关联的精确拍位	mtest/mscore/nativeui/tst_nativeui.cpp
+持续音恢复	mscore/workflow/playbackpreview.cpp	EventMap restoredPlaybackEvents(	122	共用起点处的按键与踏板恢复，核对边界控制器及原始事件	mtest/mscore/performanceeditor/reference_081_tests.inc
+联合播放准确起点	mscore/seq.cpp	void Seq::startAtUTick(	428	区分读取前文与实际输出位置，恢复持续音并回到普通播放	mtest/mscore/performanceeditor/reference_081_tests.inc
+逐音和休止符关联	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::expressionSelection(	196	按实际选中的音符与休止符确定关联范围，保留原查询默认行为	mtest/mscore/performanceeditor/reference_081_tests.inc
+原曲停播后保存	share/workflow/panels/ReferencePlayer/ReferencePlayer.view.qml	function saveScoreProject()	35	播放结束补存设置；关闭与换谱先停播再保存	mtest/mscore/performanceeditor/reference_081_tests.inc

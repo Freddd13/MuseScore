@@ -14,7 +14,7 @@ MuseScore {
  id:root
  menuPath:"Plugins.Reference Player"
  description:"原曲参考：本地播放、波形循环、保调慢放及手动谱段关联。"
- version:"1.3.1"
+ version:"1.4.0"
  requiresScore:false
  pluginType:"dock"
  dockArea:"bottom"
@@ -34,7 +34,7 @@ MuseScore {
  function scheduleDocument(){if(documentReady&&!restoringDocument&&!writingDocument&&owner&&observer)documentTimer.restart()}
  function saveScoreProject(){
   if(!documentReady||restoringDocument||writingDocument||!owner||!observer||typeof observer.setWorkflowData!=="function")return
-  if(observer.playing)return
+  if(observer.playing||(audioProject&&audioProject.playing)){documentTimer.restart();return}
   if(!tracks.length&&!observer.workflowData("reference").schema)return
   var list=Project.copy(tracks);list.forEach(function(t){delete t.missing;var p=observer.referenceFileLocation(t.path);t.originalPath=p.path;t.relativePath=p.relative})
   var data={schema:2,structure:observer.referenceStructureKey(),tracks:list,selectedTrack:selectedTrack,playbackMode:playbackMode,volume:jointVolume,linked:linkEditor}
@@ -172,6 +172,7 @@ MuseScore {
   if(selectedAssociation<0){status="在下方选择一条片段关联，再点播放；也可选谱段后点“关联当前选段”。";return;}
   storeTrack();for(var i=0;i<sessions.length;++i)sessions[i].pause();
   for(var ti=0;ti<tracks.length;++ti){if(tracks[ti].participate===false||tracks[ti].mute)continue;if(!sessions[ti]||sessions[ti].duration<=0){status="音轨尚未读完或文件不能播放："+tracks[ti].name;return;}var identity=sessions[ti].identity();if(tracks[ti].identity&&(identity.size!==tracks[ti].identity.size||identity.modified!==tracks[ti].identity.modified)){status="音频已改变，请选择该音轨，重新核对关联："+tracks[ti].name;return;}}
+  documentTimer.stop();saveScoreProject();
   var item=associations[selectedAssociation];observer.score=curScore;
   var request={revision:observer.analysisRevision(),start:item.start,end:item.end,occurrence:item.occurrence||1,mode:playbackMode,leader:item,speed:media.speed,tracks:tracks,volume:jointVolume,fade:fade};
   var plan=observer.referencePlan(request);if(plan.error){error(plan.error);return;}
@@ -245,12 +246,18 @@ MuseScore {
   try {var data=Project.read(observer,url).reference;if(!data)throw new Error("该项目尚无原曲参考");workspace=String(url);if(data.tracks&&data.tracks.length){restoreTracks(data,url);persist();return;}restored=data;media.open(Project.fileUrl(Project.resolve(url,data.file)));persist();}
   catch(e){error(e)}
  }
+ function scoreRangeName(scope){
+  if(!scope.partial)return scope.firstMeasure===scope.lastMeasure?"第"+scope.firstMeasure+"小节":"第"+scope.firstMeasure+"–"+scope.lastMeasure+"小节";
+  var beat=function(value){return String(Math.round(value*1000)/1000)};
+  if(scope.firstMeasure===scope.lastMeasure)return "第"+scope.firstMeasure+"小节 · 第"+beat(scope.firstBeat)+"拍—"+(scope.endAtBar?"小节末":"第"+beat(scope.endBeat)+"拍");
+  return "第"+scope.firstMeasure+"小节第"+beat(scope.firstBeat)+"拍—第"+scope.lastMeasure+"小节"+(scope.endAtBar?"末":"第"+beat(scope.endBeat)+"拍");
+ }
  function associate() {
   if(!observer || !curScore || b<=a){status="请选择谱段及原曲片段";return}
-  observer.score=curScore;var scope=observer.analysisScope(false);
+  observer.score=curScore;var scope=observer.expressionSelection(true).scope;
   if(!scope.end){status="当前没有可关联谱段";return}
-  var list=Project.copy(associations);list.push({name:"第"+scope.firstMeasure+"–"+scope.lastMeasure+"小节",start:scope.start,end:scope.end,firstTrack:scope.firstTrack,endTrack:scope.endTrack,from:a,until:b,occurrence:1,anchors:[],stale:false});
-  associations=list;selectedAssociation=list.length-1;status="已建立手动关联 · 可设置内部对齐点";
+  var name=scoreRangeName(scope),list=Project.copy(associations);list.push({name:name,automaticName:true,start:scope.start,end:scope.end,firstTrack:scope.firstTrack,endTrack:scope.endTrack,from:a,until:b,occurrence:1,anchors:[],stale:false});
+  associations=list;selectedAssociation=list.length-1;status="已关联 "+name+" · "+time(a)+"–"+time(b);
  }
  function addAnchor() {
   var index=selectedAssociation;
@@ -269,14 +276,14 @@ MuseScore {
  function bindScore(){
   hasScore=!!curScore;if(!observer)return;
   var changed=!Project.sameScore(owner,curScore);
-  if(changed)saveScoreProject();owner=curScore;observer.score=curScore;
+  if(changed){if(observer.playing||(audioProject&&audioProject.playing))observer.stopReferencePlayback();documentTimer.stop();saveScoreProject();}owner=curScore;observer.score=curScore;
   if(changed){structureKey=typeof observer.referenceStructureKey==="function"?observer.referenceStructureKey():"";lastLinkedTick=-1;restoreScoreProject();}
  }
  function updateAssociationScore(){
-  if(selectedAssociation<0||!curScore||!observer)return;var scope=observer.analysisScope(false);if(scope.end<=scope.start)return;
+  if(selectedAssociation<0||!curScore||!observer)return;var scope=observer.expressionSelection(true).scope;if(scope.end<=scope.start)return;
   associationUndo=associationUndo.concat([{associations:Project.copy(associations),selected:selectedAssociation,a:a,b:b}]).slice(-30);var list=Project.copy(associations),item=list[selectedAssociation];
   if(item.start!==scope.start||item.end!==scope.end)item.anchors=[];
-  item.start=scope.start;item.end=scope.end;item.firstTrack=scope.firstTrack;item.endTrack=scope.endTrack;item.name="第"+scope.firstMeasure+"–"+scope.lastMeasure+"小节";item.stale=false;associations=list;status="已改为当前选中的乐谱范围。";
+  item.start=scope.start;item.end=scope.end;item.firstTrack=scope.firstTrack;item.endTrack=scope.endTrack;if(item.automaticName===true||/^第\d+[–-]\d+小节$/.test(item.name||"")){item.name=scoreRangeName(scope);item.automaticName=true;}item.stale=false;associations=list;status="已将这条关联改为 "+scoreRangeName(scope)+"。";
  }
  function locate() {
   if(selectedAssociation<0||!curScore)return;
@@ -330,7 +337,7 @@ MuseScore {
   if(documentReady&&observer&&typeof observer.workflowData==="function"&&documentJSON!==JSON.stringify(observer.workflowData("reference")))restoreScoreProject();
   linkFromScore();
  }
- Component.onDestruction:{storeTrack();saveScoreProject();if(audioProject&&audioProject.playing&&observer)observer.stopReferencePlayback();for(var i=0;i<sessions.length;++i)sessions[i].pause();if(usable)media.pause();persist()}
+ Component.onDestruction:{if(audioProject&&audioProject.playing&&observer)observer.stopReferencePlayback();for(var i=0;i<sessions.length;++i)sessions[i].pause();if(usable)media.pause();storeTrack();documentTimer.stop();saveScoreProject();persist()}
  onVisibleChanged:{if(!visible){spaceDown=false;spacePanned=false;if(usable&&pauseWhenHidden)media.pause();storeTrack();saveScoreProject();persist()}}
  Connections {target:observer;ignoreUnknownSignals:true;onWorkflowPlaybackError:root.status=message;onActiveScoreChanged:root.bindScore()}
  Connections {target:media;ignoreUnknownSignals:true;onFileReady:root.updateFile(info);onWaveformChanged:wave.requestPaint();onWaveformReady:{root.peaksFrom=from;root.peaksUntil=until;root.viewportPeaks=peaks;wave.requestPaint()}}
@@ -515,6 +522,7 @@ MuseScore {
     Flow {width:parent.width;spacing:5
      Desk.DeskButton {text:"重新定位音频";visible:root.selectedTrack>=0&&!!root.tracks[root.selectedTrack]&&root.tracks[root.selectedTrack].missing===true;onClicked:{root.relocating=true;audioDialog.open()}}
      Desk.DeskButton {objectName:"referenceAssociate";text:"关联当前选段";enabled:root.usable&&root.hasScore&&root.b>root.a;onClicked:root.associate()}
+     Desk.DeskButton {objectName:"referenceUpdateAssociationScore";text:"改为当前选段";enabled:root.hasScore&&root.selectedAssociation>=0;onClicked:root.updateAssociationScore()}
      Desk.DeskButton {objectName:"referenceLocate";text:"跳到乐谱";enabled:root.selectedAssociation>=0;onClicked:root.locate()}
      Desk.DeskButton {text:"从当前谱位定位音频";enabled:root.selectedAssociation>=0;onClicked:root.seekScore()}
      Desk.DeskButton {objectName:"referenceAlignmentPoints";text:"内部对齐点";enabled:root.selectedAssociation>=0;onClicked:associationDialog.open()}
@@ -534,7 +542,7 @@ MuseScore {
        }
       }
      }
-     Label {visible:root.associations.length===0;anchors.centerIn:parent;width:parent.width-16;wrapMode:Text.Wrap;horizontalAlignment:Text.AlignHCenter;text:"拖出音频片段，选中乐谱小节，再点“关联当前选段”。";color:theme.muted;font.pixelSize:11}
+     Label {visible:root.associations.length===0;anchors.centerIn:parent;width:parent.width-16;wrapMode:Text.Wrap;horizontalAlignment:Text.AlignHCenter;text:"拖选录音片段，选中乐谱中的音符或休止符，再点“关联当前选段”。";color:theme.muted;font.pixelSize:11}
     }
    }
   }
@@ -559,7 +567,7 @@ MuseScore {
   id:associationDialog;objectName:"referenceAssociationDetails";title:"片段与乐谱对应";flags:Qt.Tool;width:390;height:520;minimumWidth:340;minimumHeight:460;color:theme.background
   function open(){var area=root.panelScreen(root);x=Math.max(area.x,Math.min(root.mapToGlobal(0,0).x,area.x+area.width-width));y=Math.max(area.y,Math.min(root.mapToGlobal(0,0).y+40,area.y+area.height-height));show();raise();requestActivate()}
   ColumnLayout {anchors.fill:parent;anchors.margins:12
-   Desk.DeskTextField {Layout.fillWidth:true;placeholderText:"关联名称";text:root.selectedAssociation<0||root.selectedAssociation>=root.associations.length?"":root.associations[root.selectedAssociation].name;onEditingFinished:{if(root.selectedAssociation<0)return;var list=Project.copy(root.associations);list[root.selectedAssociation].name=text;root.associations=list}}
+   Desk.DeskTextField {Layout.fillWidth:true;placeholderText:"关联名称";text:root.selectedAssociation<0||root.selectedAssociation>=root.associations.length?"":root.associations[root.selectedAssociation].name;onEditingFinished:{if(root.selectedAssociation<0)return;var list=Project.copy(root.associations);if(list[root.selectedAssociation].name!==text){list[root.selectedAssociation].name=text;list[root.selectedAssociation].automaticName=false;root.associations=list}}}
    CheckBox {text:"这条关联参加联合播放";checked:root.selectedAssociation>=0&&root.selectedAssociation<root.associations.length&&root.associations[root.selectedAssociation].active!==false;onClicked:root.useAssociation(root.selectedAssociation,checked)}
    Desk.DeskButton {text:"改为当前选中的乐谱范围";enabled:root.hasScore;onClicked:root.updateAssociationScore()}
    Desk.DeskButton {text:"范围已核对";visible:root.selectedAssociation>=0&&root.selectedAssociation<root.associations.length&&!!root.associations[root.selectedAssociation].stale;onClicked:{var list=Project.copy(root.associations);list[root.selectedAssociation].stale=false;root.associations=list;root.status="这条关联已可用于一起播放。"}}

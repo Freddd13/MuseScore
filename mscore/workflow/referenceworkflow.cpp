@@ -95,6 +95,8 @@ QVariantMap ScoreObserver::referencePlan(const QVariantMap& request){
    std::sort(ticks.begin(),ticks.end());ticks.erase(std::unique(ticks.begin(),ticks.end()),ticks.end());
    for(int i=1;i<ticks.size();++i){int p=ticks[i-1],q=ticks[i];double audioFrom=audioAt(a,p),audioUntil=audioAt(a,q),at=mode==0?independentAt:(outputAt(p)-origin)*1000,duration=mode==0?(audioUntil-audioFrom)/trackSpeed:(outputAt(q)-outputAt(p))*1000;
     if(duration<=0)return {{"error",tr("对齐点顺序不正确。")}};
+    const double required=(audioUntil-audioFrom)/duration;
+    if(!std::isfinite(required)||required<.499999||required>1.500001)return {{"error",tr("“%1”的这段录音需要 %2% 速度。当前范围是 50–150%；调整片段或谱段长度后可再试，也可选“开头对齐，各自播放”。").arg(track.value("name").toString(),QString::number(required*100.,'f',1))},{"requiredSpeed",required},{"track",track.value("id")}};
     pieces.append(QVariantMap{{"from",audioFrom},{"until",audioUntil},{"at",at},{"duration",duration},{"fade",request.value("fade",true)}});
     previousOutputEnd=at+duration;
    }
@@ -109,19 +111,31 @@ QVariantMap ScoreObserver::referencePlan(const QVariantMap& request){
   if(!merged.isEmpty())clips.append(QVariantMap{{"id",track.value("id")},{"path",track.value("path")},{"identity",track.value("identity")},{"volume",track.value("volume",1.)},{"pieces",merged}});
  }
  if(clips.isEmpty())return {{"error",tr("这个谱段没有选中可播放的音频关联。")}};
- int context=start;auto measure=_score->tick2measure(Fraction::fromTicks(start));if(measure&&measure->prevMeasure())context=measure->prevMeasure()->tick().ticks();auto segment=_score->tick2segment(Fraction::fromTicks(start),false,SegmentType::ChordRest);
- if(segment)for(int track=0;track<_score->ntracks();++track){auto e=segment->element(track);if(!e||!e->isChord())continue;for(auto n:toChord(e)->notes()){QSet<Ms::Note*> visited;while(n->tieBack()&&n->tieBack()->startNote()&&!visited.contains(n)){visited.insert(n);n=n->tieBack()->startNote();context=qMin(context,n->chord()->tick().ticks());}}}
+ int context=start;auto measure=_score->tick2measure(Fraction::fromTicks(start));
+ if(measure&&measure->prevMeasure())context=measure->prevMeasure()->tick().ticks();
+ // A held voice can have no new chord at the selected segment in another staff.
+ for(int track=0;track<_score->ntracks();++track){
+  auto chord=_score->findCR(Fraction::fromTicks(start),track);
+  if(!chord||!chord->isChord()||chord->endTick().ticks()<=start)continue;
+  for(auto note:toChord(chord)->notes()){
+   QSet<Ms::Note*> visited;
+   while(note->tieBack()&&note->tieBack()->startNote()&&!visited.contains(note)){visited.insert(note);note=note->tieBack()->startNote();}
+   context=qMin(context,note->chord()->tick().ticks());
+  }
+ }
  for(auto pair:_score->spannerMap().map()){auto line=pair.second;if(line->isPedal()&&line->tick().ticks()<start&&line->tick2().ticks()>start)context=qMin(context,line->tick().ticks());}
  int launch=qMax(0,from-(start-context));
- return {{"ok",true},{"revision",analysisRevision()},{"clips",clips},{"clock",clockValues},{"joint",true},{"volume",request.value("volume",.8)},{"fromUtick",launch},{"startUtick",from},{"untilUtick",until},{"startFrame",int(origin*MScore::sampleRate)},{"actualStart",master->repeatList().utick2tick(launch)},{"start",start},{"end",end},{"mode",mode}};
+ return {{"ok",true},{"revision",analysisRevision()},{"clips",clips},{"clock",clockValues},{"joint",true},{"volume",request.value("volume",.8)},{"fromUtick",from},{"contextUtick",launch},{"startUtick",from},{"untilUtick",until},{"startFrame",int(origin*MScore::sampleRate)},{"actualStart",start},{"start",start},{"end",end},{"mode",mode}};
 }
 QVariantMap ScoreObserver::startReferencePlayback(const QVariantMap& plan){
  delete _workflowRepeat.data();_workflowRepeat.clear();
  if(!plan.value("usesPreview").toBool())stopPlaybackPreview();
  if(!_score||!mscore||mscore->currentScore()!=_score||plan.value("revision").toString()!=analysisRevision())return {{"error",tr("请回到关联的乐谱，重新准备播放。")}};
  if(!seq||!seq->driver()||seq->isPlaying()||!seq->backgroundRenderingIdle())return {{"error",tr("请停止播放并检查声音设备。")}};
- const int from=plan.value("fromUtick",-1).toInt(),end=plan.value("untilUtick",-1).toInt();
- if(from<0||end<=from||end>_score->masterScore()->repeatList().ticks())return {{"error",tr("谱段范围不正确，请重新准备播放。")}};
+ const bool preview=plan.value("usesPreview").toBool();
+ const int from=(preview?plan.value("fromUtick",-1):plan.value("startUtick",plan.value("fromUtick",-1))).toInt(),end=plan.value("untilUtick",-1).toInt();
+ const int context=preview?-1:plan.value("contextUtick",plan.value("fromUtick",from)).toInt();
+ if(from<0||end<=from||end>_score->masterScore()->repeatList().ticks()||context>from||context < -1)return {{"error",tr("谱段范围不正确，请重新准备播放。")}};
  QVector<QPair<double,double>> clock;for(auto v:plan.value("clock").toList()){auto p=v.toMap();double a=p.value("score").toDouble(),b=p.value("output").toDouble();if(!std::isfinite(a)||!std::isfinite(b)||(!clock.isEmpty()&&(a<=clock.back().first||b<=clock.back().second)))return {{"error",tr("时间对应不是连续向前的，请重新设置对齐点。")}};clock.append({a,b});}
  workflowContext()->finishPlaybackSession();seq->synchronizeStoppedGui();
  auto project=referenceProject();if(!project->property("available").toBool())return {{"error",project->property("status")}};
@@ -143,11 +157,11 @@ QVariantMap ScoreObserver::startReferencePlayback(const QVariantMap& plan){
   if(restart){auto pending=new QObject(this);_workflowRepeat=pending;QTimer::singleShot(40,pending,[this,pending,restart]{_workflowRepeat.clear();pending->deleteLater();restart();});}
  };
  auto position=[usesPreview,end](){if(referenceReachedTick()==end)return end;return usesPreview?workflowContext()->audition().value("tick",-1).toInt():(seq?seq->getCurTick():-1);};
- connect(task,&QTimer::timeout,this,[this,session,guarded,state,project,from,end,started,natural,finished,complete,position,heard,startWait]{
+ connect(task,&QTimer::timeout,this,[this,session,guarded,state,project,from,context,end,started,natural,finished,complete,position,heard,startWait]{
   if(*finished)return;
   if(!guarded||guarded->masterScore()->state()!=state||mscore->currentScore()!=guarded){session->deleteLater();return;}
   const bool audio=project->property("playing").toBool();
-  if(!*started){if(!audio){session->deleteLater();return;}if(project->property("prepared").toBool()){*started=true;startWait->start();seq->setScoreView(mscore->currentScoreView());if(auto play=getAction("play")){QSignalBlocker block(play);play->setChecked(true);}seq->startAtUTick(from);}return;}
+  if(!*started){if(!audio){session->deleteLater();return;}if(project->property("prepared").toBool()){*started=true;startWait->start();seq->setScoreView(mscore->currentScoreView());if(auto play=getAction("play")){QSignalBlocker block(play);play->setChecked(true);}seq->startAtUTick(from,context);}return;}
   const bool music=seq&&seq->isPlaying();if(music)*heard=true;
   if(!music&&!*heard){if(startWait->elapsed()>5000){emit workflowPlaybackError(tr("乐谱播放尚未开始，请检查声音设备后再试。"));session->deleteLater();}return;}
   if(music)project->setProperty("scoreTick",guarded->masterScore()->repeatList().utick2tick(seq->getCurTick()));

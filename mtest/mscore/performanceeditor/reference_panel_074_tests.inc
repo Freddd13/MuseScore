@@ -8,6 +8,7 @@
             auto main=Ms::mscore;QVERIFY(!Ms::seq);
             auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);
             main->setCurrentScoreView(main->appendScore(score));main->resize(1200,900);main->show();score->select(score->firstSegment(SegmentType::ChordRest)->element(0));
+            score->selection().setRangeTicks(Fraction(),score->lastMeasure()->endTick(),0,score->nstaves());score->selection().updateSelectedElements();QVERIFY(score->selection().isRange());
             MasterSynthesizer synth;MScore::sampleRate=44100;auto recording=new PerformanceRecordingSynth;
             synth.registerSynthesizer(recording);synth.setSampleRate(44100);synth.init();
             Ms::seq=new PerformanceAuditionSeq;auto sequence=Ms::seq;

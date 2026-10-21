@@ -15,6 +15,7 @@ struct PlaybackPreviewMaterial {
       QVariantMap reference;
 };
 PlaybackPreviewMaterial renderPlaybackPreview(Score* original, Score* rendered);
+EventMap restoredPlaybackEvents(const EventMap&,int tick);
 EventMap resumePlaybackPreview(const EventMap&,int tick);
 void alignPreviewReference(PlaybackPreviewMaterial&);
 QVariantMap playbackPreviewReferencePlan(Score*,bool proposed,int resumeTick);

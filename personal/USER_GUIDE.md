@@ -1,8 +1,10 @@
 # MuseScore Evolution 个人功能说明
 
-本文对应个人版本：**0.80.1** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+本文对应个人版本：**0.81.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
 
 工作视图的尺寸与工具页返回见[窗口操作](docs/LAYOUT_079_GUIDE.md)。
+
+原曲的精确选段、一起播放和修改关联见[从同一位置比较原曲与乐谱](docs/REFERENCE_081_GUIDE.md)。
 
 扒谱显示范围由时间下拉框选择：“整条录音 · 原曲时间”用于浏览整首；“按谱对齐”用于对照关联谱段，并与卷帘一起缩放。完整步骤见[频谱范围](docs/SPECTRUM_078_GUIDE.md)。乐谱保存与本次检查见[保存和范围检查](docs/SAVE_RANGE_0801_CHECKS.md)。
 
@@ -20,7 +22,7 @@
 | 调整力度、速度、踏板 | 下文“演奏编辑器” |
 | 谱面滚轮调力度、谱行带跟随选音、保留上一和弦 | [谱面调节与和弦显示](docs/SCORE_HARMONY_075_GUIDE.md) |
 | 查看和弦、级数和构成音 | 下文“和弦助手” |
-| 听原曲和比较谱段 | [原曲参考](docs/REPAIR_056_GUIDE.md) |
+| 听原曲和比较谱段 | [关联、一起播放与保存](docs/REFERENCE_081_GUIDE.md) |
 | 导入或录制演奏，再使用力度 | [录制、查看对应与采用力度](docs/EXPRESSION_080_GUIDE.md) |
 | 对照频谱听音、标注与输入 | [频谱扒谱完整步骤](docs/WORKSPACE_066_GUIDE.md) |
 | 查看整条录音、按谱对齐与缩放频谱 | [频谱范围与缩放](docs/SPECTRUM_078_GUIDE.md) |

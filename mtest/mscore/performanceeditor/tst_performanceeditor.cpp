@@ -163,8 +163,10 @@ class PerformanceTestDriver : public Driver {
       Transport getState() override { return _state; }
       int sampleRate() const override { return 44100; }
       void pulse(unsigned frames = 2048) { seq->process(frames, _buffer); }
+      const float* output() const { return _buffer; }
 };
 #include "expression_080_fixtures.inc"
+#include "reference_081_fixtures.inc"
 class TestPerformanceEditor : public QObject, public MTest {
       Q_OBJECT
       QTemporaryDir _directory;
@@ -827,6 +829,11 @@ class TestPerformanceEditor : public QObject, public MTest {
             }
 #ifdef Q_MOC_RUN
       void referencePanelRepeatedTransport();
+      void referenceEightTracksAndMidPhrase();
+      void referenceRestoreEventSemantics();
+      void referenceHeldNotesAtRangeStart();
+      void referencePanelExactSelection();
+      void referencePanelSavesAfterTransport();
       void expressionEmbeddedRecordingResults();
       void expressionFullPhraseTransport();
       void expressionPlaybackKeepsScoreAndBeat();
@@ -836,6 +843,7 @@ class TestPerformanceEditor : public QObject, public MTest {
       void expressionVelocityModesAndComparison();
 #else
 #include "reference_panel_074_tests.inc"
+#include "reference_081_tests.inc"
 #include "expression_080_tests.inc"
 #include "expression_playback_tests.inc"
 #include "gate_playback_tests.inc"

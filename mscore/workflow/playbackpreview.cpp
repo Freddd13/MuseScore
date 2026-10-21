@@ -119,22 +119,47 @@ QVariantMap playbackPreviewReferencePlan(Score* score,bool proposed,int resumeTi
 }
 bool playbackPreviewActive(Score* score,bool proposed){auto& s=session();return current(score)&&s.active&&s.candidate==proposed&&((seq&&seq->isPlaying())||workflowContext()->audition().value("preparing").toBool());}
 bool playbackPreviewPrepared(Score* score,const QString& key){return current(score)&&session().key==key;}
-EventMap resumePlaybackPreview(const EventMap& events,int tick){
+EventMap restoredPlaybackEvents(const EventMap& events,int tick){
       struct Key {NPlayEvent attack;bool pressed=true;};
-      QHash<int,Key> keys;QHash<int,bool> pedal;
-      for(auto it=events.cbegin();it!=events.lower_bound(tick);++it){const auto& e=it->second;const int key=e.channel()*128+e.pitch();
-            if(e.type()==ME_NOTEON&&e.velo())keys.insert(key,{e,true});
-            else if(e.type()==ME_NOTEOFF||(e.type()==ME_NOTEON&&!e.velo())){auto found=keys.find(key);if(found!=keys.end()){if(pedal.value(e.channel()))found->pressed=false;else keys.erase(found);}}
-            else if(e.type()==ME_CONTROLLER){
-                  if(e.controller()==64){pedal[e.channel()]=e.value()>=64;if(!pedal.value(e.channel()))for(auto n=keys.begin();n!=keys.end();)if(n->attack.channel()==e.channel()&&!n->pressed)n=keys.erase(n);else ++n;}
-                  else if(e.controller()==120||e.controller()==123||e.controller()==121)for(auto n=keys.begin();n!=keys.end();)if(n->attack.channel()==e.channel())n=keys.erase(n);else ++n;
-                  }
+      QHash<int,Key> keys;QHash<int,int> pedal;
+      auto controls=[&](const NPlayEvent& e){
+            const int channel=e.channel(),controller=e.controller();
+            if(controller!=64&&controller!=120&&controller!=121&&controller!=123)return;
+            if(controller==64)pedal[channel]=e.value();
+            else if(controller==121)pedal[channel]=0;
+            for(auto note=keys.begin();note!=keys.end();){
+                  if(note->attack.channel()!=channel){++note;continue;}
+                  if(controller==123)note->pressed=false;
+                  if(controller==120 || ((controller==64||controller==121||controller==123)&&pedal.value(channel)<64&&!note->pressed))note=keys.erase(note);
+                  else ++note;
             }
-      QSet<int> boundary;auto at=events.equal_range(tick);for(auto it=at.first;it!=at.second;++it)if(it->second.type()==ME_NOTEON||it->second.type()==ME_NOTEOFF)boundary.insert(it->second.channel()*128+it->second.pitch());
+      };
+      for(auto it=events.cbegin();it!=events.lower_bound(tick);++it){
+            const auto& e=it->second;const int key=e.channel()*128+e.pitch();
+            if(e.type()==ME_NOTEON&&e.velo())keys.insert(key,{e,true});
+            else if(e.type()==ME_NOTEOFF||(e.type()==ME_NOTEON&&!e.velo())){
+                  auto found=keys.find(key);if(found!=keys.end()){if(pedal.value(e.channel())>=64)found->pressed=false;else keys.erase(found);}
+            }else if(e.type()==ME_CONTROLLER)controls(e);
+      }
+      QSet<int> boundary;auto at=events.equal_range(tick);
+      for(auto it=at.first;it!=at.second;++it){
+            const auto& e=it->second;
+            if(e.type()==ME_NOTEON||e.type()==ME_NOTEOFF)boundary.insert(e.channel()*128+e.pitch());
+            else if(e.type()==ME_CONTROLLER)controls(e);
+      }
       EventMap result;
-      for(auto it=keys.cbegin();it!=keys.cend();++it){if(boundary.contains(it.key()))continue;auto attack=it->attack;if(attack.note()&&attack.note()->part()->instrument(attack.note()->tick())->useDrumset())continue;
-            attack.setNominalTick(tick);result.insert({tick,attack});if(!it->pressed){attack.setVelo(0);result.insert({tick,attack});}}
-      result.insert(events.cbegin(),events.cend());return result;
+      // Pedal state precedes restored note-on/off pairs at the same output frame.
+      for(auto it=pedal.cbegin();it!=pedal.cend();++it)if(it.value()>0)result.insert({tick,NPlayEvent(ME_CONTROLLER,it.key(),64,it.value())});
+      for(auto it=keys.cbegin();it!=keys.cend();++it){
+            if(boundary.contains(it.key()))continue;auto attack=it->attack;
+            if(attack.note()&&attack.note()->part()->instrument(attack.note()->tick())->useDrumset())continue;
+            attack.setNominalTick(tick);result.insert({tick,attack});
+            if(!it->pressed){attack.setVelo(0);result.insert({tick,attack});}
+      }
+      return result;
+}
+EventMap resumePlaybackPreview(const EventMap& events,int tick){
+      auto result=restoredPlaybackEvents(events,tick);result.insert(events.cbegin(),events.cend());return result;
 }
 void preparePlaybackPreview(Score* score,const QString& key,PlaybackPreviewMaterial original,PlaybackPreviewMaterial proposed){
       auto& s=session();const int resume=current(score)?(s.active&&seq&&seq->isPlaying()?seq->getCurTick():s.position):-1;stopPlaybackPreview();if(s.connections)delete s.connections;
@@ -163,7 +188,7 @@ QVariantMap startPlaybackPreview(Score* score,bool proposed,const QVariantMap& r
       int context=tick;auto measure=score->tick2measure(Fraction::fromTicks(tick));if(measure&&measure->prevMeasure())context=measure->prevMeasure()->tick().ticks();
       if(auto seg=score->tick2segment(Fraction::fromTicks(tick),false,SegmentType::ChordRest))for(int track=0;track<score->ntracks();++track){auto e=seg->element(track);if(!e||!e->isChord())continue;for(auto n:toChord(e)->notes()){QSet<Note*> visited;while(n->tieBack()&&n->tieBack()->startNote()&&!visited.contains(n)){visited.insert(n);n=n->tieBack()->startNote();context=qMin(context,n->chord()->tick().ticks());}}}
       for(auto item:score->spannerMap().map())if(item.second->isPedal()&&item.second->tick().ticks()<tick&&item.second->tick2().ticks()>tick)context=qMin(context,item.second->tick().ticks());
-      const int begin=range.value("loopRestart").toBool()?from:qMax(0,from-(tick-context));if(resume<begin||resume>=until)resume=begin;
+      const int begin=range.value("loopRestart").toBool()||range.value("exactStart").toBool()?from:qMax(0,from-(tick-context));if(resume<begin||resume>=until)resume=begin;
       s.activeEvents=resumePlaybackPreview(proposed?s.proposed.events:s.original.events,resume);
       NPlayEvent endpoint;endpoint.setType(ME_INVALID);s.activeEvents.insert({until,endpoint});
       s.begin=begin;s.end=until;s.position=resume;s.candidate=proposed;s.active=true;s.loopTouched=false;s.countTouched=false;s.joint=range.value("deferStart").toBool();s.repeating=range.value("loop",false).toBool();++s.generation;

@@ -425,9 +425,10 @@ bool Seq::canStart()
 
 void Seq::synchronizeStoppedGui() { Q_ASSERT(!isPlaying()); QCoreApplication::sendPostedEvents(this,QEvent::MetaCall); }
 
-void Seq::startAtUTick(int utick) {
+void Seq::startAtUTick(int utick, int context) {
       if(!cs || isPlaying() || utick<0 || utick>cs->repeatList().ticks())return;
-      _workflowStartUTick=utick;start();_workflowStartUTick=-1;
+      _workflowStartUTick=utick;_workflowStartContext=context>=0?qMin(context,utick):-1;
+      start();_workflowStartUTick=-1;_workflowStartContext=-1;
       }
 
 void Seq::start()
@@ -440,7 +441,30 @@ void Seq::start()
       mscore->moveControlCursor();
 
       allowBackgroundRendering = true;
-      collectEvents(getPlayStartUtick());
+      if (_workflowRestoredNotes) {
+            playlistChanged = true;
+            _workflowRestoredNotes = false;
+            }
+      const int target = getPlayStartUtick();
+      if (_workflowStartContext >= 0 && _workflowStartContext < target) {
+            collectEvents(_workflowStartContext);
+            int covered = renderEventsStatus.occupiedRangeEnd(_workflowStartContext);
+            while (covered < target) {
+                  collectEvents(covered);
+                  const int next = renderEventsStatus.occupiedRangeEnd(covered);
+                  if (next <= covered) break;
+                  covered = next;
+                  }
+            }
+      collectEvents(target);
+      if (_workflowStartContext >= 0) {
+            const auto held = restoredPlaybackEvents(events, target);
+            mutex.lock();
+            events.insert(held.cbegin(), held.cend());
+            _workflowRestoredNotes = !held.empty();
+            updateEventsEnd();
+            mutex.unlock();
+            }
       if (cs->playMode() == PlayMode::AUDIO) {
             if (!oggInit) {
                   vorbisData.pos  = 0;

@@ -135,7 +135,7 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QVariantMap saveWorkflowScore(const QString& expected);
       Q_INVOKABLE QVariantMap applyExpression(const QVariantMap& candidate);
       Q_INVOKABLE QVariantMap expressionVelocityHistory(const QVariantMap& range);
-      Q_INVOKABLE QVariantMap expressionSelection();
+      Q_INVOKABLE QVariantMap expressionSelection(bool exactElements = false);
       Q_INVOKABLE QVariantMap selectExpressionNote(const QVariantMap& note);
       Q_INVOKABLE QVariantMap auditionExpression(const QString& workspace,const QVariantMap& candidate,const QVariantMap& scope,bool proposed);
       Q_INVOKABLE QVariantMap finishExpressionAudition();
