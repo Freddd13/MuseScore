@@ -127,6 +127,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QVector<int> comparisonVisible(int,int)const;
       int comparisonPlayTick(int)const;
       int leftTickForAnchor(int,double)const;
+      void zoomTimeline(double factor, double x);
       QHash<int,QVariantMap> _comparisonValues;
       QVariantList _comparisonTempos;
       QString _comparisonVersion;

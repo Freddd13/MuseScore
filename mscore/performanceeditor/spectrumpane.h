@@ -40,7 +40,7 @@ class SpectrumPane : public QWidget {
               *_tool = nullptr;
     QDoubleSpinBox *_tuning = nullptr, *_speed = nullptr;
     QSpinBox *_transpose = nullptr;
-    QToolButton *_play = nullptr, *_loop = nullptr, *_harmonics = nullptr;
+    QToolButton *_play = nullptr, *_fitTime = nullptr, *_loop = nullptr, *_harmonics = nullptr;
     QLabel *_status = nullptr, *_target = nullptr;
     QCheckBox *_durationFromMark = nullptr;
     bool _drawingMark = false;
@@ -89,6 +89,9 @@ class SpectrumPane : public QWidget {
     void syncScrollBars();
     void setStatus(const QString &);
     int sourceWidth() const;
+    int plotWidth() const;
+    QString timeViewKey() const;
+    void fitTimeRange();
     bool eventFilter(QObject *, QEvent *) override;
     void updateActions();
     int inputPitch(const QVariantMap &) const;

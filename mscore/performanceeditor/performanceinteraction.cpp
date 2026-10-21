@@ -186,6 +186,15 @@ void PerformanceEditor::locateSelection()
       const auto selected = _score->selection().noteList();
       if (!selected.empty()) seek(selected.front()->tick().ticks());
       }
+void PerformanceEditor::zoomTimeline(double factor, double x)
+      {
+      pauseFollow();
+      const int tick = tickForX(x, false);
+      _viewport.pixelsPerQuarter = qBound(0.01, _viewport.pixelsPerQuarter * factor, 1000.0);
+      surfaceResized(PerformanceSurface::Parameter);
+      _scroll->setValue(qMax(0, leftTickForAnchor(tick, x)));
+      invalidateVisual();
+      }
 void PerformanceEditor::zoomVertical(bool notes, double factor)
       {
       pauseFollow(); cancelGesture();
@@ -395,10 +404,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
                         else _viewport.zoomRange(rangeKind(), factor, valueForY(wheel->position().y(), laneRect()));
                         }
                   else {
-                        const int tick = tickForX(wheel->position().x(), false);
-                        _viewport.pixelsPerQuarter = qBound(0.01, _viewport.pixelsPerQuarter * factor, 1000.0);
-                        surfaceResized(PerformanceSurface::Parameter);
-                        _scroll->setValue(qMax(0, leftTickForAnchor(tick,wheel->position().x())));
+                        zoomTimeline(factor, wheel->position().x());
                         }
                   }
             else if (wheel->modifiers() & Qt::ShiftModifier) _scroll->setValue(_scroll->value() - wheel->angleDelta().y() * DIVISION / 120);

@@ -20,6 +20,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCryptographicHash>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -148,13 +149,17 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     tools->addWidget(_tracks);
     _clips = new QComboBox;
     _clips->setObjectName("transcriptionClips");
-    _clips->setPlaceholderText(tr("原曲片段"));
-    _clips->addItem(tr("原曲时间"), QVariantMap());
+    _clips->setPlaceholderText(tr("时间范围"));
+    _clips->setToolTip(tr("整条录音：独立浏览原曲时间。按谱对齐：选择一个关联片段，与编辑器共用缩放和平移。"));
+    _clips->addItem(tr("整条录音 · 原曲时间"), QVariantMap());
     _clips->setCurrentIndex(0);
     _clips->setEnabled(false);
     _clips->setMinimumContentsLength(10);
     _clips->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     tools->addWidget(_clips);
+    _fitTime = button(tr("匹配视图"), 0, 0, [this] { fitTimeRange(); });
+    _fitTime->setObjectName("spectrumFitTime");
+    _fitTime->setEnabled(false);
     _display = new QComboBox;
     _display->setObjectName("transcriptionDisplay");
     _display->addItems({tr("上下对照"), tr("叠加对照")});
@@ -302,8 +307,14 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
         box->setMinimumWidth(140);
         box->setMaximumWidth(240);
     }
-    for (auto control : _controls)
+    _clips->setMinimumWidth(180);
+    _clips->setMaximumWidth(280);
+    tools->removeWidget(_fitTime);
+    for (auto control : _controls) {
         tools->addWidget(control);
+        if (control == _clips)
+            tools->addWidget(_fitTime);
+    }
 
     _displayPanel = new QScrollArea;
     _displayPanel->setObjectName("spectrumOptionsScroll");
@@ -495,12 +506,18 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
         }
         QSignalBlocker block(_clips);
         _clips->clear();
-        _clips->addItem(tr("原曲时间"), QVariantMap());
+        _clips->addItem(tr("整条录音 · 原曲时间"), QVariantMap());
         for (auto c : _track.value("associations").toList()) {
             auto a = c.toMap();
-            _clips->addItem(a.value("name", tr("对应片段")).toString(), a);
+            _clips->addItem(tr("按谱对齐 · %1").arg(a.value("name", tr("对应片段")).toString()), a);
         }
-        int selected = _clips->count() > 1 ? 1 : 0;
+        int selected = 0;
+        const auto savedView = QSettings().value(timeViewKey()).toString();
+        for (int i = 1; i < _clips->count(); ++i)
+            if (!savedView.isEmpty() && _clips->itemData(i).toMap().value("id").toString() == savedView) {
+                selected = i;
+                break;
+            }
         if (previousTrack == _track.value("id")) {
             if (previousClip.isEmpty())
                 selected = 0;
@@ -526,7 +543,10 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     });
     connect(_clips, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
         _clip = _clips->currentData().toMap();
+        QSettings().setValue(timeViewKey(), _clip.value("id").toString());
         _request.clear();
+        if (!_clip.isEmpty())
+            fitTimeRange();
         viewChanged();
     });
     connect(_display, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int n) {
@@ -577,6 +597,35 @@ void SpectrumPane::setStatus(const QString &text) {
 }
 int SpectrumPane::sourceWidth() const {
     return _display->currentIndex() == 1 ? _editor->_noteCanvas->width() : _canvas->width();
+}
+int SpectrumPane::plotWidth() const {
+    return qMax(1, sourceWidth() - gutter - PerformanceViewport::rightMargin);
+}
+QString SpectrumPane::timeViewKey() const {
+    const auto identity = (_track.value("id").toString() + "\n" + _path).toUtf8();
+    return "spectrum/timeView/" + QCryptographicHash::hash(identity, QCryptographicHash::Sha256).toHex();
+}
+void SpectrumPane::fitTimeRange() {
+    if (!_clip.isEmpty()) {
+        if (!_editor->score())
+            return;
+        const int from = _clip.value("start").toInt(), until = _clip.value("end").toInt();
+        const auto score = _editor->score();
+        const double units = _editor->comparisonTimeActive()
+            ? 2. * (score->tempomap()->tick2time(until) - score->tempomap()->tick2time(from))
+            : double(until - from) / DIVISION;
+        if (units <= 0)
+            return;
+        _editor->pauseFollow();
+        _editor->_viewport.pixelsPerQuarter = qBound(.01, plotWidth() / units, 1000.);
+        _editor->surfaceResized(PerformanceSurface::Parameter);
+        _editor->_scroll->setValue(from);
+        _editor->invalidateVisual();
+    } else if (_audio && _audio->property("duration").toDouble() > 0) {
+        _span = qBound(250., _audio->property("duration").toDouble(), 120000.);
+        _from = qMax(0., _cursorMs - _span / 2);
+    }
+    viewChanged();
 }
 bool SpectrumPane::showRollNotes() const {
     return !isVisible() || _display->currentIndex() != 1 ||
@@ -1109,11 +1158,11 @@ void SpectrumPane::viewChanged() {
     _canvas->update();
 }
 double SpectrumPane::timeAtX(double x) const {
-    return _clip.isEmpty() ? _from + (x - gutter) / qMax(1, sourceWidth() - gutter) * _span
+    return _clip.isEmpty() ? _from + (x - gutter) / plotWidth() * _span
                            : audioAt(_clip, _editor->tickForX(x, false));
 }
 double SpectrumPane::xAtTime(double ms) const {
-    return _clip.isEmpty() ? gutter + (ms - _from) / _span * qMax(1, sourceWidth() - gutter)
+    return _clip.isEmpty() ? gutter + (ms - _from) / _span * plotWidth()
                            : _editor->xForTick(qRound(tickAt(_clip, ms)), false);
 }
 double SpectrumPane::pitchAtY(double y, bool overlay) const {
@@ -1232,7 +1281,21 @@ void SpectrumPane::paint(QPainter &p, const QRectF &bounds, bool overlay) {
     p.setClipRect(bounds.adjusted(gutter, 0, -PerformanceViewport::rightMargin, 0));
     if (!overlay)
         p.fillRect(bounds, QColor("#181c20"));
+    const bool outsideClip = !_clip.isEmpty() &&
+        (_editor->tickForX(bounds.right() - PerformanceViewport::rightMargin, false) <= _clip.value("start").toInt() ||
+         _editor->tickForX(gutter, false) >= _clip.value("end").toInt());
+    if (outsideClip) {
+        p.setPen(QColor("#cbd1d7"));
+        p.drawText(bounds.adjusted(gutter + 12, 8, -24, -8), Qt::AlignCenter | Qt::TextWordWrap,
+                   tr("当前视口在所选关联片段之外\n点击“匹配片段”回到这一段，或切换到“整条录音”。"));
+    }
     if (!_image.isNull()) {
+        p.save();
+        if (!_clip.isEmpty()) {
+            const double left = _editor->xForTick(_clip.value("start").toInt(), false);
+            const double right = _editor->xForTick(_clip.value("end").toInt(), false);
+            p.setClipRect(QRectF(left, bounds.top(), right - left, bounds.height()), Qt::IntersectClip);
+        }
         // Draw each linear alignment interval as one image piece; reuse the
         // same pitch mapping as compressed keyboards in overlay mode.
         QVector<double> cuts{_info.value("from").toDouble()};
@@ -1272,6 +1335,7 @@ void SpectrumPane::paint(QPainter &p, const QRectF &bounds, bool overlay) {
                             QRectF(sx, 0, sw, _image.height()));
             }
         }
+        p.restore();
     }
     p.setOpacity(1);
     paintGrid(p, bounds);
@@ -1332,10 +1396,16 @@ void SpectrumPane::paint(QPainter &p, const QRectF &bounds, bool overlay) {
     }
     if (!overlay) {
         p.setPen(QColor("#d9dfe5"));
-        for (int i = 0; i <= 4; ++i) {
-            double x = gutter + (bounds.width() - gutter) * i / 4.;
-            p.drawText(QPointF(x + 3, _beatControls->values().value("visible").toBool() ? 26 : 13),
-                       QString::number(timeAtX(x) / 1000., 'f', 2) + tr("秒"));
+        const int divisions = qBound(1, plotWidth() / 160, 6);
+        for (int i = 0; i <= divisions; ++i) {
+            const double x = gutter + double(plotWidth()) * i / divisions;
+            if (!_clip.isEmpty() &&
+                (x < _editor->xForTick(_clip.value("start").toInt(), false) - .5 ||
+                 x > _editor->xForTick(_clip.value("end").toInt(), false) + .5))
+                continue;
+            const auto text = QString::number(timeAtX(x) / 1000., 'f', 2) + tr("秒");
+            const double left = qMin(x + 3, double(sourceWidth() - PerformanceViewport::rightMargin - p.fontMetrics().horizontalAdvance(text) - 3));
+            p.drawText(QPointF(left, _beatControls->values().value("visible").toBool() ? 26 : 13), text);
         }
     }
     p.restore();
@@ -1365,6 +1435,18 @@ void SpectrumPane::pointer(QMouseEvent *e, bool release) {
         return;
     }
     const bool overlay = _display->currentIndex() == 1;
+    if (!_clip.isEmpty() && e->type() == QEvent::MouseButtonPress &&
+        e->button() == Qt::LeftButton && _tool->currentIndex() != 2 &&
+        (e->x() < _editor->xForTick(_clip.value("start").toInt(), false) ||
+         e->x() > _editor->xForTick(_clip.value("end").toInt(), false))) {
+        _hasPick = false;
+        updateActions();
+        setStatus(tr("此处在当前关联片段之外。点击“匹配片段”返回，或切换到“整条录音”。"));
+        _canvas->update();
+        _editor->_noteCanvas->update();
+        e->accept();
+        return;
+    }
     const double ms = qMax(0., timeAtX(e->x())), pitch = pitchAtY(e->y(), overlay),
                  frequency = _tuning->value() * std::pow(2., (pitch - 69.) / 12.);
     if (_tool->currentIndex() == 3 && e->button() != Qt::RightButton) {
@@ -1446,7 +1528,7 @@ void SpectrumPane::pointer(QMouseEvent *e, bool release) {
         }
     }
     if (_panning && _dragging) {
-        const double delta = (e->x() - _press.x()) / qMax(1, sourceWidth() - gutter) * _span;
+        const double delta = (e->x() - _press.x()) / plotWidth() * _span;
         if (_clip.isEmpty())
             _from = qMax(0., _pressFrom - delta);
         else
@@ -1505,6 +1587,13 @@ bool SpectrumPane::overlayEvent(QEvent *event) {
             return true;
         }
     }
+    if (event->type() == QEvent::Wheel) {
+        auto e = static_cast<QWheelEvent *>(event);
+        if ((e->modifiers() & Qt::ControlModifier) && !(e->modifiers() & Qt::ShiftModifier) && e->posF().x() >= gutter) {
+            wheel(e);
+            return true;
+        }
+    }
     // Alt keeps ordinary roll selection available while the transcription page is open.
     if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseMove ||
         event->type() == QEvent::MouseButtonRelease) {
@@ -1524,13 +1613,14 @@ void SpectrumPane::wheel(QWheelEvent *e) {
         _high = _low + span;
     } else if (e->modifiers() & Qt::ControlModifier) {
         if (_clip.isEmpty()) {
+            const double previousSpan = _span;
             double anchor = timeAtX(e->posF().x()), ratio = (anchor - _from) / _span;
             _span = qBound(250., _span / factor, 120000.);
             _from = qMax(0., anchor - ratio * _span);
+            if (_display->currentIndex() == 1)
+                _editor->zoomTimeline(previousSpan / _span, e->posF().x());
         } else {
-            _editor->_viewport.pixelsPerQuarter =
-                qBound(8., _editor->_viewport.pixelsPerQuarter * factor, 2000.);
-            _editor->invalidateVisual();
+            _editor->zoomTimeline(factor, e->posF().x());
         }
     } else {
         if (_clip.isEmpty())
@@ -1546,6 +1636,10 @@ int SpectrumPane::inputPitch(const QVariantMap &mark) const {
 }
 void SpectrumPane::updateActions() {
     updateInputTarget();
+    _fitTime->setEnabled(!_path.isEmpty() && _audio && _audio->property("duration").toDouble() > 0);
+    _fitTime->setText(_clip.isEmpty() ? tr("匹配音频") : tr("匹配片段"));
+    _fitTime->setToolTip(_clip.isEmpty() ? tr("扩大可见原曲范围；用底部滚动条浏览整条录音。")
+                                     : tr("将当前关联片段放到视口内，卷帘与频谱一起调整。"));
     if (auto remove = findChild<QToolButton *>("spectrumDeleteMarks"))
         remove->setEnabled(_marks && !_marks->selectedItems().isEmpty());
     const bool editable =

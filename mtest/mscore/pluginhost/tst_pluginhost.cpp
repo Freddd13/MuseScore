@@ -116,6 +116,8 @@ class TestPluginHost : public QObject {
       Q_OBJECT
       QTemporaryDir _settings;
    private slots:
+      void spectrumInitialSourceAndChoice();
+      void spectrumLinkedZoomAndScroll();
       void harmonyRangeWithoutSettings();
       void harmonyManualSurvivesPitchEdit();
       void harmonyStyleSurfacesAndRestore();
@@ -679,7 +681,7 @@ class TestPluginHost : public QObject {
             QVERIFY(separate->grab().save(out.filePath("spectrum-grid-066.png")));EditData gridEdit;score->undoRedo(true,&gridEdit);QTest::qWait(50);QVERIFY(!QJsonDocument::fromJson(score->metaTag("kumo.transcription").toUtf8()).toVariant().toMap()["grids"].toMap().contains("spectral-test"));
             auto drawTool=pane->findChild<QComboBox*>("transcriptionTool");QVERIFY(drawTool);drawTool->setCurrentIndex(3);optionTabs->setCurrentIndex(3);QTest::qWait(50);
             const int drawUndo=score->undoStack()->getCurIdx();auto range=pane->findChild<QComboBox*>("transcriptionClips");QVERIFY(range);range->setCurrentIndex(0);QTest::qWait(100);
-            const int width=canvas->width()-gutterForTest();const QPoint start(gutterForTest()+qRound(width*.10),qRound((108.5-60)/88.*canvas->height())),end(start.x()+qRound(width*.375),start.y());
+            const int width=canvas->width()-gutterForTest()-PerformanceViewport::rightMargin;const QPoint start(gutterForTest()+qRound(width*.10),qRound((108.5-60)/88.*canvas->height())),end(start.x()+qRound(width*.375),start.y());
             QTest::mousePress(canvas,Qt::LeftButton,Qt::NoModifier,start);QTest::mouseMove(canvas,end,20);QTest::mouseRelease(canvas,Qt::LeftButton,Qt::NoModifier,end);QTRY_COMPARE(score->undoStack()->getCurIdx(),drawUndo+1);QCOMPARE(marks->count(),2);
             auto drawn=marks->selectedItems();QCOMPARE(drawn.size(),1);const auto drawnMark=drawn.front()->data(Qt::UserRole+1).toMap();QVERIFY(qAbs(drawnMark["until"].toDouble()-drawnMark["ms"].toDouble()-750)<10);
             const QPoint extended(end.x()+qRound(width*.1),start.y());QTest::mousePress(canvas,Qt::LeftButton,Qt::NoModifier,end);QTest::mouseMove(canvas,extended,20);QTest::mouseRelease(canvas,Qt::LeftButton,Qt::NoModifier,extended);QTRY_COMPARE(score->undoStack()->getCurIdx(),drawUndo+2);QCOMPARE(marks->count(),2);
@@ -1335,5 +1337,6 @@ class TestPluginHost : public QObject {
 #include "harmony_display_075_tests.inc"
 #include "variant_metadata_076_tests.inc"
 #include "harmony_panel_077_tests.inc"
+#include "spectrum_078_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

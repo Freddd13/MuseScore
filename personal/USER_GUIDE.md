@@ -1,6 +1,6 @@
 # MuseScore Evolution 个人功能说明
 
-本文对应个人版本：**0.77.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，原曲与频谱见[此前检查](docs/REFERENCE_SPECTRUM_074_CHECKS.md)。
+本文对应个人版本：**0.78.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
 
 本轮[完整使用检查与返工进度](docs/USABILITY_REWORK_20261019.md)按功能逐项记录。
 
@@ -18,6 +18,7 @@
 | 听原曲和比较谱段 | [原曲参考](docs/REPAIR_056_GUIDE.md) |
 | 导入或录制演奏，再使用力度 | [录制、查看对应与采用力度](docs/EXPRESSION_073_GUIDE.md) |
 | 对照频谱听音、标注与输入 | [频谱扒谱完整步骤](docs/WORKSPACE_066_GUIDE.md) |
+| 查看整条录音、按谱对齐与缩放频谱 | [频谱范围与缩放](docs/SPECTRUM_078_GUIDE.md) |
 | 给频谱或标注列表多留一些空间 | [标注列表开关与高度](docs/REFERENCE_SPECTRUM_074_GUIDE.md) |
 | 在卷帘画音、移动或先试草稿 | [卷帘写音完整步骤](docs/WORKSPACE_067_GUIDE.md) |
 | 给已经写好的音高换节奏 | [写节奏](docs/P2_RHYTHM_062_GUIDE.md) |
