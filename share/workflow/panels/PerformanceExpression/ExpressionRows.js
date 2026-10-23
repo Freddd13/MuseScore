@@ -41,7 +41,7 @@ function build(result, progress, candidate, filter) {
             pitch:pitchName(note.writtenPitch === undefined ? match.pitch : note.writtenPitch, note.writtenTpc), place:position(note),
             original:typeof old === "number" ? old : null,
             proposed:proposed ? proposed.target : null,
-            detail:applied ? "已使用演奏力度" : pending ? "请核对这两个音的对应" : kept[note.id] || "演奏 " + Number(match.seconds || 0).toFixed(3) + " 秒 · 力度 " + match.velocity});
+            detail:applied ? "已使用演奏力度" : pending ? match.uncertainty || "请核对这两个音的对应" : kept[note.id] || "演奏 " + Number(match.seconds || 0).toFixed(3) + " 秒 · 力度 " + match.velocity});
     });
     return rows;
 }

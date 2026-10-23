@@ -1,6 +1,7 @@
       void expressionEmbeddedRecordingResults()
             {
             expressionHost080(_directory.path());auto main=Ms::mscore;QVERIFY(main);QVERIFY(!Ms::seq);
+            QSettings().setValue("workflow/recordingDirectory",_directory.filePath("recordings"));
             auto score=expressionScore080(main,_directory.filePath("expression-recording-080.mscx"));QVERIFY(score);
             expressionShowMain080(main);auto root=expressionRoot080(main);QVERIFY(root);
             auto editor=main->performanceEditor();auto splitter=editor->findChild<QSplitter*>("performanceMainSplitter");QVERIFY(splitter);
@@ -17,7 +18,10 @@
                 captureMidiInput(NPlayEvent(ME_NOTEON,0,pitch,105),midiInputTime());QTest::qWait(20);captureMidiInput(NPlayEvent(ME_NOTEOFF,0,pitch,0),midiInputTime());
             }
             QVERIFY(expressionClick080(root,"expressionRecord"));
-            QTRY_VERIFY_WITH_TIMEOUT(!root->property("busy").toBool()&&!expressionMap080(root,"candidate").isEmpty(),15000);
+            const bool ready=QTest::qWaitFor([&]{return !root->property("busy").toBool()&&!expressionMap080(root,"candidate").isEmpty();},15000);
+            qInfo()<<"recorded result"<<root->property("status")<<"busy / stale"<<root->property("busy")<<root->property("stale")
+                <<"MIDI / matches"<<expressionMap080(root,"midi").value("notes").toList().size()<<expressionMap080(root,"result").value("matches").toList().size();
+            QVERIFY(ready);
             QCOMPARE(expressionMap080(root,"result").value("matches").toList().size(),16);
             QTest::qWait(100);auto list=root->findChild<QQuickItem*>("embeddedExpressionResults");QVERIFY(list);
             const auto output=QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_directory.path()));

@@ -419,3 +419,5 @@ QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this
 密集力度数字	mscore/performanceeditor/performancelabels.h	class PerformanceValueLayout	54	按可见内容避让数字，保留选择优先与稳定重绘	mtest/mscore/pluginhost/values_094_tests.inc
 谱面可见符号轮廓	mscore/performanceeditor/performanceux.cpp	void PerformanceEditor::rebuildVisibleScoreNotes()	142	按需缓存符干、符杠和变音记号，随布局及视口更新	mtest/mscore/pluginhost/values_094_tests.inc
 常显力度准备	mscore/performanceeditor/performanceeditor.cpp	connect(values, &QAction::toggled	207	开启常显时补齐当前谱的数据读取	mtest/mscore/pluginhost/values_094_tests.inc
+演奏分组与连续对应	share/workflow/panels/PerformanceExpression/Alignment.js	function align(input)	167	琶音、局部时间、固定点、疑问对应及按时间选择片段	mtest/mscore/performanceeditor/expression_095_tests.inc
+演奏片段选择	share/workflow/panels/PerformanceExpression/ExpressionPassageChoice.qml	Item	5	内置页面和独立页面共用候选时间选择	mtest/mscore/performanceeditor/expression_095_tests.inc

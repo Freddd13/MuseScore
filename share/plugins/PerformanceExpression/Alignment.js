@@ -5,7 +5,7 @@ function median(values) {
     return a.length ? a[Math.floor(a.length/2)] : 0;
 }
 function clone(value) {return JSON.parse(JSON.stringify(value))}
-function groups(notes,score,tap) {
+function groups(notes,score,tap,window) {
     var a=notes.filter(function(n){return !score || !n.tieBack}).slice();
     a.sort(function(x,y){return (score?((x.alignmentTick===undefined?x.tick:x.alignmentTick)-(y.alignmentTick===undefined?y.tick:y.alignmentTick)):x.seconds-y.seconds)||x.pitch-y.pitch});
     var out=[],seen={};
@@ -14,12 +14,36 @@ function groups(notes,score,tap) {
         if(score&&seen[id])continue;seen[id]=true;
         var time=score?(n.alignmentTick===undefined?n.tick:n.alignmentTick):n.seconds,last=out[out.length-1];
         // Rolling is only a coarse aid; preserve every original event below.
-        if(!last || (score?time!==last.time:time-last.time>.035)){
+        var gap=window?window.gap:.035,span=window?window.span:.035;
+        var retrigger=last&&!score&&window&&time-last.lastTime>.008&&last.notes.filter(function(v){return v.pitch===n.pitch}).length>=(window.repeats[n.pitch]||1);
+        if(!last || (score?time!==last.time:time-last.lastTime>gap||time-last.time>span||retrigger)){
             last={time:time,notes:[],pitches:[],id:id};out.push(last);
         }
         last.notes.push(n);if(last.pitches.indexOf(n.pitch)<0)last.pitches.push(n.pitch);
+        last.lastTime=time;
     }
     return out;
+}
+// Estimate the small within-chord gaps separately from the gaps between
+// attacks. Every note remains an individual event for the fine match below.
+function performanceWindow(scoreGroups,notes,tap) {
+    var window={gap:.035,span:.035,repeats:{},adaptive:false},sizes=[];
+    scoreGroups.forEach(function(g){sizes.push(g.pitches.length);var counts={};g.notes.forEach(function(n){counts[n.pitch]=(counts[n.pitch]||0)+1;window.repeats[n.pitch]=Math.max(window.repeats[n.pitch]||1,counts[n.pitch]);});});
+    if(tap||median(sizes)<2)return window;
+    var times=notes.map(function(n){return n.seconds}).sort(function(a,b){return a-b}),gaps=[];
+    for(var i=1;i<times.length;++i)if(times[i]-times[i-1]>.001)gaps.push(times[i]-times[i-1]);
+    gaps.sort(function(a,b){return a-b});if(gaps.length<6)return window;
+    var low=gaps[Math.floor(gaps.length*.2)],high=gaps[Math.floor(gaps.length*.85)];
+    for(var pass=0;pass<6;++pass){
+        var boundary=Math.sqrt(low*high),short=[],long=[];
+        gaps.forEach(function(gap){(gap<=boundary?short:long).push(gap)});
+        if(short.length<3||long.length<3)return window;
+        low=median(short);high=median(long);
+    }
+    if(high/low<2.5||low>.085)return window;
+    window.gap=Math.max(.012,Math.min(.085,Math.sqrt(low*high)));
+    window.span=Math.max(.035,Math.min(.18,high*.85));window.adaptive=true;
+    return window;
 }
 function pitchCost(a,b) {
     var hits=0;
@@ -38,33 +62,65 @@ function onsetCost(s,p,i,j,tap,si,pi) {
         time=Math.min(1.5,Math.abs(Math.log(Math.max(.03,x)/Math.max(.03,y))))*.35;
     }
     var phase=Math.abs((a.time-s[0].time)/si-(b.time-p[0].time)/pi);
-    return pitch*1.8+time+Math.min(1.2,phase*.25);
+    // Rubato can move a long performance far from one global tempo. Pitch-mode
+    // alignment therefore follows local intervals; tap mode still needs its
+    // sequence phase when no pitch evidence is available.
+    return pitch*1.8+time+(tap?Math.min(1.2,phase*.25):0);
 }
 function path(s,p,tap) {
+    if(!s.length||!p.length)return [];
     var n=s.length,m=p.length,band=Math.min(Math.max(48,Math.abs(n-m)+24,Math.ceil(Math.max(n,m)*.08)),384);
-    if(Math.abs(n-m)>band)throw new Error("长度差过大；请选取对应演奏片段或设锚点");
-    var width=2*band+1,trace=new Uint8Array((n+1)*width),previous=new Float64Array(m+1),current=new Float64Array(m+1),si=typicalIOI(s),pi=typicalIOI(p),gap=.95;
+    if(Math.abs(n-m)>band)throw new Error("演奏与目标段落的起音数量相差较多。请选择演奏时间片段，或在对应区固定一对音。");
+    var width=2*band+1,trace=new Uint8Array((n+1)*width),forward=new Float64Array((n+1)*width),previous=new Float64Array(m+1),current=new Float64Array(m+1),si=typicalIOI(s),pi=typicalIOI(p),gap=.95;
+    forward.fill(Infinity);
+    for(var j=0;j<=Math.min(m,band);++j)forward[j+band]=j*gap;
     for(var j=0;j<=m;++j)previous[j]=j*gap;
     for(var i=1;i<=n;++i){
         for(j=0;j<=m;++j)current[j]=Infinity;
         current[0]=i*gap;
+        if(i<=band)forward[i*width-i+band]=current[0];
         var lo=Math.max(1,i-band),hi=Math.min(m,i+band);
         for(j=lo;j<=hi;++j){
             var diagonal=previous[j-1]+onsetCost(s,p,i-1,j-1,tap,si,pi);
             var deletion=previous[j]+gap,insertion=current[j-1]+gap,kind=1,value=diagonal;
             if(deletion<value){value=deletion;kind=2}if(insertion<value){value=insertion;kind=3}
-            current[j]=value;trace[i*width+j-i+band]=kind;
+            current[j]=value;trace[i*width+j-i+band]=kind;forward[i*width+j-i+band]=value;
         }
         var tmp=previous;previous=current;current=tmp;
     }
-    if(!isFinite(previous[m]))throw new Error("匹配超出窗口；请设锚点分段");
+    if(!isFinite(previous[m]))throw new Error("这段暂时没有找到连续对应。请在对应区固定一对音后重新对应。");
     var pairs=[],i=n,j=m;
     while(i>0&&j>0){
         var kind=trace[i*width+j-i+band];
         if(kind===1){pairs.push({s:i-1,p:j-1});--i;--j}
         else if(kind===2)--i;else if(kind===3)--j;else break;
     }
-    return pairs.reverse();
+    pairs.reverse();
+    // Compare other complete paths, including skipped notes, at each matched
+    // attack. Repeated figures with missing attacks can have several equally
+    // plausible positions even when their pitches agree.
+    var optimum=previous[m],matchedRows={};
+    pairs.forEach(function(pair){matchedRows[pair.s+1]=pair});
+    var below=new Float64Array(m+2),back=new Float64Array(m+2);
+    below.fill(Infinity);
+    for(i=n;i>=0;--i){
+        back.fill(Infinity);
+        var lo=Math.max(0,i-band),hi=Math.min(m,i+band),pair=matchedRows[i];
+        for(j=hi;j>=lo;--j){
+            var remaining=i===n&&j===m?0:Math.min(
+                i<n?below[j]+gap:Infinity,
+                j<m?back[j+1]+gap:Infinity,
+                i<n&&j<m?below[j+1]+onsetCost(s,p,i,j,tap,si,pi):Infinity);
+            back[j]=remaining;
+            if(pair&&j>0&&j!==pair.p+1){
+                var total=forward[(i-1)*width+(j-1)-(i-1)+band]+
+                    onsetCost(s,p,i-1,j-1,tap,si,pi)+remaining;
+                if(total<=optimum+.08)pair.ambiguous=true;
+            }
+        }
+        var swap=below;below=back;back=swap;
+    }
+    return pairs;
 }
 // Locate a score passage anywhere in a longer performance. Prefix/suffix are
 // free; insertions and missing notes inside the passage still have a cost.
@@ -121,49 +177,97 @@ function align(input) {
             });
         });score=expanded;
     }
+    var contextGroups=groups(score,true,input.mode==="tap");
     if(input.role===1){var highest={};score.forEach(function(n){highest[n.tick]=Math.max(highest[n.tick]||0,n.pitch)});score=score.filter(function(n){return n.pitch===highest[n.tick]})}
     else if(input.role===2)score=score.filter(function(n){return n.track===input.track});
     var performance=(input.performance||[]).filter(function(n){return n.seconds>=(input.from||0)&&n.seconds<=(input.until===undefined?Infinity:input.until)}),tap=input.mode==="tap";
-    var s=groups(score,true,tap),p=groups(performance,false,tap),anchors=input.anchors||[],links=input.links||[];
+    var window=performanceWindow(contextGroups,performance,tap);
+    var s=groups(score,true,tap),p=groups(performance,false,tap,window),anchors=input.anchors||[],links=input.links||[];
     if(!s.length||!p.length)return {matches:[],missing:score,extra:performance,pending:0};
+    var scoreIds={},midiIds={};s.forEach(function(g){g.notes.forEach(function(n){scoreIds[n.id]=true})});performance.forEach(function(n){midiIds[n.id]=true});
+    anchors=anchors.filter(function(a){return scoreIds[a.scoreId]&&midiIds[a.midiId]});
+    if(anchors.length) {
+        var positions=anchors.map(function(a){return {s:s.findIndex(function(g){return g.notes.some(function(n){return n.id===a.scoreId})}),p:p.findIndex(function(g){return g.notes.some(function(n){return n.id===a.midiId})})}}).sort(function(a,b){return a.s-b.s});
+        for(var at=1;at<positions.length;++at)if(positions[at].s!==positions[at-1].s||positions[at].p!==positions[at-1].p)if(positions[at].s<=positions[at-1].s||positions[at].p<=positions[at-1].p)throw new Error("固定对应的先后顺序交叉了，请调整其中一对音。");
+        var first=positions[0],last=positions[positions.length-1],si=typicalIOI(s),pi=typicalIOI(p);
+        var from=p[first.p].time-((s[first.s].time-s[0].time)/si*2+4)*pi;
+        var until=p[last.p].lastTime+((s[s.length-1].time-s[last.s].time)/si*2+4)*pi;
+        performance=performance.filter(function(n){return n.seconds>=from&&n.seconds<=until});p=groups(performance,false,tap,window);
+    }
     var passage=null;
     if(!anchors.length && p.length>s.length*1.2 && input.findPassage!==false) {
         passage=locatePassage(s,p,tap);
         var wholeGroups=p;
-        passage.candidates=[{from:p[passage.start].time,until:p[Math.max(passage.start,passage.end-1)].time+.035,cost:passage.cost}].concat(passage.alternatives.map(function(v){return {from:wholeGroups[v.start].time,until:wholeGroups[Math.max(v.start,v.end-1)].time+.035,cost:v.cost};}));
-        var choice=input.passageChoice||0;
+        passage.candidates=[{from:p[passage.start].time,until:p[Math.max(passage.start,passage.end-1)].lastTime+.001,cost:passage.cost}].concat(passage.alternatives.map(function(v){return {from:wholeGroups[v.start].time,until:wholeGroups[Math.max(v.start,v.end-1)].lastTime+.001,cost:v.cost};}));
+        var choice=input.passageChoice||0,choiceValid=typeof input.passageChoice==="number"&&input.passageChoice>=0&&input.passageChoice<passage.candidates.length;
+        if(typeof input.passageFrom==="number"&&input.passageFrom>=0){
+            var distance=Infinity;
+            passage.candidates.forEach(function(v,index){var delta=Math.abs(v.from-input.passageFrom);if(delta<distance){distance=delta;choice=index}});
+            choiceValid=distance<=Math.max(.35,typicalIOI(p)*2);
+        }
         var chosen=choice>0&&passage.alternatives[choice-1]?passage.alternatives[choice-1]:passage;
-        var begin=p[chosen.start].time,end=p[Math.max(chosen.start,chosen.end-1)].time+.035;
+        var begin=p[chosen.start].time,end=p[Math.max(chosen.start,chosen.end-1)].lastTime+.001;
         performance=performance.filter(function(v){return v.seconds>=begin&&v.seconds<=end});
-        p=groups(performance,false,tap);
+        p=groups(performance,false,tap,window);
         passage.from=begin;passage.until=end;
         passage.alternatives=passage.candidates.slice(1);
+        passage.ambiguous=passage.alternatives.some(function(v){return v.cost-passage.candidates[0].cost<=.03});
+        passage.chosen=choiceValid;passage.chosenIndex=choiceValid?choice:-1;
     }
     var cuts=[{s:-1,p:-1}],fixed=[];
     anchors.forEach(function(a){
         var x=s.findIndex(function(g){return g.notes.some(function(n){return n.id===a.scoreId})});
         var y=p.findIndex(function(g){return g.notes.some(function(n){return n.id===a.midiId})});
-        if(x<0||y<0)throw new Error("锚点来源已变化");
+        if(x<0||y<0)throw new Error("固定对应的音已变化，请重新选择这一对音。");
         fixed.push({s:x,p:y});
     });
     fixed.sort(function(a,b){return a.s-b.s});
-    fixed.forEach(function(a){var last=cuts[cuts.length-1];if(a.s<=last.s||a.p<=last.p)throw new Error("锚点必须单调，不能交叉");cuts.push(a)});
+    fixed.forEach(function(a){var last=cuts[cuts.length-1];if(a.s===last.s&&a.p===last.p)return;if(a.s<=last.s||a.p<=last.p)throw new Error("固定对应的先后顺序交叉了，请调整其中一对音。");cuts.push(a)});
     cuts.push({s:s.length,p:p.length});
-    var coarse=[],matches=[],usedScore={},usedMidi={},segments={},cached=input.cacheKey===input.previousKey?(input.segments||{}):{};
+    var cacheKey=(input.cacheKey||"")+":"+p[0].id+":"+p[p.length-1].id+":"+window.gap+":"+window.span;
+    var coarse=[],matches=[],usedScore={},usedMidi={},segments={},cached=cacheKey===input.previousKey?(input.segments||{}):{};
     for(var c=1;c<cuts.length;++c){
         var a=cuts[c-1],b=cuts[c],key=[a.s,a.p,b.s,b.p].join(":"),local=cached[key]||path(s.slice(a.s+1,b.s),p.slice(a.p+1,b.p),tap);segments[key]=local;
-        local.forEach(function(v){coarse.push({s:v.s+a.s+1,p:v.p+a.p+1})});
+        local.forEach(function(v){coarse.push({s:v.s+a.s+1,p:v.p+a.p+1,ambiguous:v.ambiguous})});
         if(b.s<s.length)coarse.push({s:b.s,p:b.p,anchor:true});
     }
-    var scale=typicalIOI(p)/typicalIOI(s);
+    var scale=typicalIOI(p)/typicalIOI(s),reserved={},coarseByScore={},uncertainNotes={};
+    coarse.forEach(function(pair){
+        coarseByScore[pair.s]=pair;
+        p[pair.p].notes.forEach(function(n){
+            if(s[pair.s].pitches.indexOf(n.pitch)>=0)reserved[n.id]=pair.s;
+        });
+    });
+    // In a rapid two-note figure, one lost attack can leave several following
+    // positions possible. Keep the affected figure together for correction.
+    var run=[],runPitches=[];
+    function finishRun(){
+        if(run.length>=4){
+            var affected=run.some(function(index){var pair=coarseByScore[index];return !pair||pair.ambiguous||pitchCost(s[index],p[pair.p])>.34});
+            [run[0]-1,run[run.length-1]+1].forEach(function(index){
+                var pair=coarseByScore[index];if(pair&&pitchCost(s[index],p[pair.p])>.34)affected=true;
+            });
+            if(affected)run.forEach(function(index){s[index].notes.forEach(function(n){uncertainNotes[n.id]=true})});
+        }
+        run=[];runPitches=[];
+    }
+    s.forEach(function(group,index){
+        if(group.pitches.length!==1){finishRun();return;}
+        var pitch=group.pitches[0],previous=run.length?s[run[run.length-1]]:null;
+        if(previous&&(group.time-previous.time>240||(runPitches.length===2&&runPitches.indexOf(pitch)<0)))finishRun();
+        run.push(index);if(runPitches.indexOf(pitch)<0)runPitches.push(pitch);
+    });
+    finishRun();
     coarse.forEach(function(pair,index){
         var sg=s[pair.s],pg=p[pair.p],cost=tap?0:pitchCost(sg,pg);
-            var repeated=false;
+        var repeated=!!pair.ambiguous;
         var candidates=[];
         // Adjacent rolling events remain separate and can match this onset.
         for(var k=Math.max(0,pair.p-2);k<Math.min(p.length,pair.p+3);++k){
             if(Math.abs(p[k].time-pg.time)>.18)continue;
-            p[k].notes.forEach(function(n){if(!usedMidi[n.id])candidates.push(n)});
+            p[k].notes.forEach(function(n){
+                if(!usedMidi[n.id]&&(reserved[n.id]===undefined||reserved[n.id]===pair.s))candidates.push(n);
+            });
         }
         sg.notes.slice().sort(function(x,y){return x.pitch-y.pitch}).forEach(function(n){
             var best=null,bestCost=Infinity;
@@ -174,9 +278,21 @@ function align(input) {
             });
             if(!best||(!tap&&Math.abs(best.pitch-n.pitch)>2))return;
             var exact=tap||n.pitch===best.pitch,confirmed=!!pair.anchor&&exact;
-            var confidence=confirmed?1:(!exact||cost>.34||repeated?.55:.88);
-            if(best.ambiguous||n.grace)confidence=Math.min(confidence,.5);
-            var row={scoreId:n.id,midiId:best.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,seconds:best.seconds,velocity:best.velocity,confidence:confidence,confirmed:confirmed,status:exact?"匹配":"错音待确认",source:"measured",original:n};
+            var confidence=confirmed?1:(!exact||cost>.34||repeated?.55:.88),uncertainty="";
+            if(repeated)uncertainty="附近有几种相近的对应，请核对音名和演奏时间。";
+            var nearbySame=[];
+            for(var adjacent=Math.max(0,pair.p-3);adjacent<Math.min(p.length,pair.p+4);++adjacent){
+                if(Math.abs(p[adjacent].time-pg.time)>.3)continue;
+                p[adjacent].notes.forEach(function(m){
+                    if(m.pitch===n.pitch&&!usedMidi[m.id]&&(reserved[m.id]===undefined||reserved[m.id]===pair.s))nearbySame.push(m);
+                });
+            }
+            var sameScore=sg.notes.filter(function(v){return v.pitch===n.pitch}).length;
+            if(!confirmed&&uncertainNotes[n.id]){confidence=Math.min(confidence,.55);uncertainty="这段快速反复音有漏弹或错位，请在对应区核对。";}
+            if(!confirmed&&nearbySame.length>sameScore){confidence=Math.min(confidence,.55);uncertainty="附近弹了几次同音，请选择这个谱音对应的那一次。";}
+            if(passage&&passage.ambiguous&&!passage.chosen&&!confirmed){confidence=Math.min(confidence,.55);uncertainty="演奏中有相似段落，请先选择演奏片段的时间。";}
+            if(!confirmed&&(best.ambiguous||n.grace)){confidence=Math.min(confidence,.5);uncertainty="装饰音或重叠同音需要核对具体起音。";}
+            var row={scoreId:n.id,midiId:best.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,seconds:best.seconds,velocity:best.velocity,confidence:confidence,confirmed:confirmed,status:exact?"匹配":"错音待确认",uncertainty:uncertainty,source:"measured",original:n};
             matches.push(row);usedScore[n.id]=true;usedMidi[best.id]=true;
         });
     });
@@ -187,8 +303,32 @@ function align(input) {
         if(!link.disabled)matches.push({scoreId:n.id,midiId:m.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,seconds:m.seconds,velocity:m.velocity,confidence:1,confirmed:true,status:"人工对应",source:"measured",original:n});
     });
     usedScore={};usedMidi={};matches.forEach(function(v){usedScore[v.scoreId]=true;usedMidi[v.midiId]=true});
+    var matchedById={},pitchNotes={};
+    matches.forEach(function(m){matchedById[m.scoreId]=m});
+    s.forEach(function(group,index){group.notes.forEach(function(n){
+        var key=n.track+":"+n.pitch;if(!pitchNotes[key])pitchNotes[key]=[];
+        pitchNotes[key].push({note:n,group:index});
+    })});
+    Object.keys(pitchNotes).forEach(function(key){
+        var line=pitchNotes[key];
+        line.forEach(function(value,index){
+            if(usedScore[value.note.id])return;
+            for(var step=-1;step<=1;step+=2){
+                var neighbor=line[index+step];if(!neighbor)continue;
+                var m=matchedById[neighbor.note.id];
+                if(m&&!m.confirmed&&Math.abs(s[value.group].time-s[neighbor.group].time)<=480&&pitchCost(s[value.group],s[neighbor.group])===0){
+                    m.confidence=Math.min(m.confidence,.55);m.status="同音待核对";m.uncertainty="相邻位置有未对应的同音，请核对这次起音属于哪个谱音。";
+                }
+            }
+        });
+    });
+    if(anchors.length&&coarse.length) {
+        var begin=p[coarse[0].p].time,end=p[coarse[coarse.length-1].p].lastTime+.001;
+        performance=performance.filter(function(n){return n.seconds>=begin&&n.seconds<=end});
+        passage={from:begin,until:end,candidates:[],alternatives:[],anchored:true};
+    }
     matches.sort(function(a,b){return (a.original.alignmentTick||a.tick)-(b.original.alignmentTick||b.tick)||a.track-b.track||a.index-b.index});
-    return {matches:matches,displayMatches:matches.slice().sort(function(a,b){return a.tick-b.tick||a.track-b.track||a.index-b.index}),missing:score.filter(function(n){return !n.tieBack&&!usedScore[n.id]}),extra:performance.filter(function(n){return !usedMidi[n.id]}),segments:segments,cacheKey:input.cacheKey||"",pending:matches.filter(function(v){return !v.confirmed&&v.confidence<.8}).length,scale:scale,passage:passage};
+    return {matches:matches,displayMatches:matches.slice().sort(function(a,b){return a.tick-b.tick||a.track-b.track||a.index-b.index}),missing:score.filter(function(n){return !n.tieBack&&!usedScore[n.id]}),extra:performance.filter(function(n){return !usedMidi[n.id]}),segments:segments,cacheKey:cacheKey,pending:matches.filter(function(v){return !v.confirmed&&v.confidence<.8}).length,scale:scale,passage:passage};
 }
 function candidates(input) {
     var result=clone(input.result),config=input.config||{},strength=(config.strength===undefined?50:config.strength)/100,velocity=[],tempos=[],kept=[],confirmed=result.matches.filter(function(m){return m.confirmed||m.confidence>=.8}),unlock=config.unlocked||[];
@@ -226,7 +366,7 @@ function candidates(input) {
             if(span<=0)throw new Error("演奏时间映射必须严格单调");
             var factor=config.keepDuration!==false?originalSpan/span:1,previous=points[0].seconds;
             for(var i=1;i<points.length;++i){
-                if(points[i].seconds<=previous)throw new Error("可靠对应交叉；请校正锚点");previous=points[i].seconds;
+                if(points[i].seconds<=previous)throw new Error("这几处对应的演奏时间前后交叉了。调整对应后再使用速度。");previous=points[i].seconds;
             }
             // Piecewise beat velocities, median-smoothed; boundary points retain score tempo.
             var rates=[];
