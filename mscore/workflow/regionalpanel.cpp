@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2.
 #include "regionalpanel.h"
+#include "toolicons.h"
 #include "featuregate.h"
 #include "libmscore/chord.h"
 #include "libmscore/measure.h"
@@ -709,6 +710,10 @@ class RegionalPanel : public QWidget {
             auto button = [&](QHBoxLayout *row, const QString &text, const char *id, auto call) {
                   auto b = new QPushButton(text, this);
                   b->setObjectName(id);
+                  const QHash<QString,QString> iconKeys{{"regionalCreateButton","save"},{"regionalCopy","add"},
+                      {"regionalDelete","delete"},{"regionalSaveCombination","save"},
+                      {"regionalDeleteCombination","delete"},{"regionalSwitch","refresh"},{"regionalAudition","audition"}};
+                  if(iconKeys.contains(id))setComponentToolIcon(b,iconKeys.value(id));
                   row->addWidget(b);
                   connect(b, &QPushButton::clicked, this, call);
                   return b;

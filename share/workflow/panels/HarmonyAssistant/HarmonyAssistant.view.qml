@@ -1234,7 +1234,7 @@ MuseScore {
                     onModified:{root.configuration=configuration;configurationTimer.restart();root.resizeSummary(false)}
                     onChooseColor:{summaryColorPicker.color=color;summaryColorPicker.open()}
                 }
-                DeskButton {text:"关闭";onClicked:summarySettings.hide()}
+                DeskButton {iconName:"close";text:"关闭";onClicked:summarySettings.hide()}
             }
         }
     }
@@ -1517,8 +1517,8 @@ Flickable {
                     }
                     Flow {
                         width:parent.width;spacing:6
-                        DeskButton {text:"恢复原色";onClicked:stopColoring()}
-                        DeskButton {text:"刷新";onClicked:requestRefresh(true)}
+                        DeskButton {iconName:"reset";text:"恢复原色";onClicked:stopColoring()}
+                        DeskButton {iconName:"refresh";text:"刷新";onClicked:requestRefresh(true)}
                     }
                     StableLabel {reservedLines:2; text:placementNotice || noticeText; color:muted; font.pixelSize:10}
                 }
@@ -1529,8 +1529,8 @@ Flickable {
                     ConfigurationEditor {width:parent.width;configuration:root.configuration;observer:root.observer;chord:root.chordText;degree:root.degreeText;onModified:{root.configuration=configuration;rebuildRegions();analyze();optionsChanged(false)}onLayoutModified:{root.configuration=configuration;configurationTimer.restart()}}
                     Flow {
                         width:parent.width;spacing:6
-                        DeskButton {text:"导入配置";enabled:advancedNative;onClicked:chooseFile("import-config")}
-                        DeskButton {text:"导出配置";enabled:advancedNative;onClicked:chooseFile("export-config")}
+                        DeskButton {iconName:"open";text:"导入配置";enabled:advancedNative;onClicked:chooseFile("import-config")}
+                        DeskButton {iconName:"save";text:"导出配置";enabled:advancedNative;onClicked:chooseFile("export-config")}
                     }
                     UiLabel {width:parent.width; text:"设置自动保存，下次启动自动读取。"; color:muted; font.pixelSize:10; wrapMode:Text.Wrap}
                 }
@@ -1542,7 +1542,7 @@ Flickable {
 
                     Flow {
                         width:parent.width; spacing:6
-                        DeskButton {text:"导出 JSON"; enabled:advancedNative; onClicked:prepareExport("json")}
+                        DeskButton {iconName:"save";text:"导出 JSON"; enabled:advancedNative; onClicked:prepareExport("json")}
                         DeskButton {text:"导出 CSV"; enabled:advancedNative; onClicked:prepareExport("csv")}
                         DeskButton {text:"导入 JSON"; enabled:advancedNative; onClicked:chooseFile("import-analysis")}
                         DeskButton {text:"重新检测"; enabled:advancedNative; onClicked:{importedRecords=[];importedRegions=[]; optionsChanged()}}

@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performanceeditor.h"
+#include "mscore/workflow/toolicons.h"
 #ifdef SCRIPT_INTERFACE
 #include "rollwriting.h"
 #endif
@@ -310,7 +311,8 @@ void PerformanceEditor::syncTransport()
       const bool playing = surfacesActive() && _score && seq && seq->isPlaying() && seq->score() == _score->masterScore();
       if (playing) { if (!_playTimer.isActive()) _playTimer.start(); }
       else { _playTimer.stop(); if (!_playingNotes.isEmpty()) { _playingNotes.clear(); updateSurfaces(); } }
-      _playButton->setText(playing ? tr("■ 停止") : tr("▶ 播放"));
+      _playButton->setText(playing ? tr("停止") : tr("播放"));
+      setComponentToolIcon(_playButton, playing ? "stop" : "play");
       updatePlayhead();
       }
 void PerformanceEditor::updatePlayhead()

@@ -211,9 +211,9 @@ MuseScore {
   ScrollView {id:legacyBody;objectName:"legacyVariantBody";ScrollBar.vertical.active:true;ScrollBar.vertical.objectName:"legacyVariantScrollBar";ScrollBar.horizontal.policy:ScrollBar.AlwaysOff;Layout.fillWidth:true;Layout.fillHeight:true;Layout.minimumHeight:48;contentWidth:availableWidth;clip:true
    ColumnLayout {objectName:"legacyVariantContent";width:Math.max(0,legacyBody.availableWidth-(legacyBody.contentHeight>legacyBody.availableHeight?legacyBody.ScrollBar.vertical.width+4:0));spacing:6
   Flow {visible:!root.compact;Layout.fillWidth:true;spacing:6
-   Desk.DeskButton {text:"新建组";enabled:!root.busy;onClicked:root.newGroup()}
-   Desk.DeskButton {text:"复制新写法";enabled:root.active&&!root.busy;onClicked:root.duplicate()}
-   Desk.DeskButton {text:"保存工作区";enabled:!root.busy;onClicked:root.workspace?root.saveActive():saveDialog.open()}
+   Desk.DeskButton {iconName:"add";text:"新建组";enabled:!root.busy;onClicked:root.newGroup()}
+   Desk.DeskButton {iconName:"copy";text:"复制新写法";enabled:root.active&&!root.busy;onClicked:root.duplicate()}
+   Desk.DeskButton {iconName:"save";text:"保存工作区";enabled:!root.busy;onClicked:root.workspace?root.saveActive():saveDialog.open()}
   }
   Desk.DeskComboBox {visible:!root.compact&&root.groups.length>0;Layout.fillWidth:true;enabled:!root.busy;model:root.groups.map(function(g){return g.name});currentIndex:root.groupIndex;onActivated:{var next=currentIndex;root.refresh();if(root.currentOwner&&!root.currentOwner.entry.baseline&&!root.saveActive())return;root.groupIndex=next;root.selected=0;root.refresh();root.switchTo(0,false)}}
   RowLayout {visible:!root.compact;Layout.fillWidth:true
@@ -231,17 +231,17 @@ MuseScore {
    }
   }
   Flow {Layout.fillWidth:true;spacing:6
-   Desk.DeskButton {text:"切换并定位";enabled:root.group&&!root.busy;onClicked:root.switchTo(root.selected,false)}
-   Desk.DeskButton {text:"从同处试听";enabled:root.group&&!root.busy;onClicked:root.switchTo(root.selected,true)}
+   Desk.DeskButton {iconName:"locate";text:"切换并定位";enabled:root.group&&!root.busy;onClicked:root.switchTo(root.selected,false)}
+   Desk.DeskButton {iconName:"audition";text:"从同处试听";enabled:root.group&&!root.busy;onClicked:root.switchTo(root.selected,true)}
   }
   Flow {visible:!root.compact;Layout.fillWidth:true;spacing:6
    Desk.DeskButton {text:"检查差异";enabled:root.active&&!root.busy;onClicked:root.readFingerprint("compare")}
-   Desk.DeskButton {text:"重命名";enabled:root.group&&!root.busy;onClicked:{nameEdit.text=root.group.entries[root.selected].name;rename.open()}}
-   Desk.DeskButton {objectName:"legacyDeleteWriting";text:"删除写法";enabled:root.group&&!root.busy;onClicked:root.removeWriting()}
+   Desk.DeskButton {iconName:"edit";text:"重命名";enabled:root.group&&!root.busy;onClicked:{nameEdit.text=root.group.entries[root.selected].name;rename.open()}}
+   Desk.DeskButton {objectName:"legacyDeleteWriting";iconName:"delete";text:"删除写法";enabled:root.group&&!root.busy;onClicked:root.removeWriting()}
   }
   Flow {visible:!root.compact;Layout.fillWidth:true;spacing:6
-   Desk.DeskButton {objectName:"legacyRestoreWriting";text:"恢复删除";enabled:root.removedState&&!root.busy;onClicked:root.restoreRemoval()}
-   Desk.DeskButton {text:"另存为成果谱";enabled:root.active&&!root.active.baseline;onClicked:resultDialog.open()}
+   Desk.DeskButton {objectName:"legacyRestoreWriting";iconName:"undo";text:"恢复删除";enabled:root.removedState&&!root.busy;onClicked:root.restoreRemoval()}
+   Desk.DeskButton {iconName:"save";text:"另存为成果谱";enabled:root.active&&!root.active.baseline;onClicked:resultDialog.open()}
   }
   Label {objectName:"legacyVariantHelp";visible:!root.compact;Layout.fillWidth:true;wrapMode:Text.Wrap;color:theme.muted;text:"点一份写法直接切换。切换前自动保存当前修改；JSON工作区与谱文件放在一起。"}
    }

@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "rhythmpane.h"
+#include "mscore/workflow/toolicons.h"
 #include "../workflow/editorareas.h"
 #include "../workflow/controlflowlayout.h"
 #include "performanceeditor.h"
@@ -292,6 +293,7 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     _scopeLabel->setMinimumWidth(0);
     top->addWidget(_scopeLabel, 1);
     auto scope = new QPushButton(tr("读取当前选段"));
+    setComponentToolIcon(scope, "score");
     scope->setObjectName("rhythmReadScope");
     top->addWidget(scope);
     layout->addLayout(top);
@@ -346,6 +348,7 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     _record = new QToolButton;
     _record->setText(tr("录制"));
     _record->setObjectName("rhythmRecord");
+    setComponentToolIcon(_record, "record");
     recording->addWidget(_record);
     auto midiInput = new QToolButton;
     midiInput->setObjectName("rhythmMidiInput");
@@ -353,6 +356,7 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     midiInput->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     recording->addWidget(midiInput);
     auto devices = new QPushButton(tr("MIDI设备…"));
+    setComponentToolIcon(devices, "settings");
     devices->setObjectName("rhythmMidiDevices");
     connect(devices, &QPushButton::clicked, this, [] { getAction("pref")->trigger(); });
     recording->addWidget(devices);
@@ -368,9 +372,11 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     _duration->setVisible(false);
     recording->addWidget(_duration);
     auto import = new QPushButton(tr("导入节奏MIDI"));
+    setComponentToolIcon(import, "open");
     import->setObjectName("rhythmImportMidi");
     recording->addWidget(import);
     auto restore = new QPushButton(tr("重用上次录音"));
+    setComponentToolIcon(restore, "reset");
     restore->setObjectName("rhythmRestoreRecording");
     recording->addWidget(restore);
     layout->addWidget(recordingHost);
@@ -405,12 +411,14 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
                                                     {tr("停止试听"), "stop"}}) {
         auto button = new QPushButton(pair.first);
         button->setObjectName("rhythm-" + pair.second);
+        setComponentToolIcon(button, pair.second == "stop" ? "stop" : pair.second == "preview" ? "score" : "audition");
         button->setCheckable(pair.second == "audition" || pair.second == "original");
         actions->addWidget(button);
         connect(button, &QPushButton::clicked, this, [this, pair] { operate(pair.second); });
     }
     _apply = new QPushButton(tr("使用草稿"));
     _apply->setObjectName("rhythmApply");
+    setComponentToolIcon(_apply, "apply");
     _apply->setEnabled(false);
     actions->addWidget(_apply);
     layout->addWidget(actionHost);
@@ -867,6 +875,7 @@ void RhythmPane::recordingChanged() {
     auto state = _capture.state();
     bool recording = state["recording"].toBool();
     _record->setText(recording ? tr("停止录制") : tr("录制"));
+    setComponentToolIcon(_record, recording ? "stop" : "record");
     _record->setEnabled(!state["stopping"].toBool() && !state["saving"].toBool());
     updateActions();
     _canvas->update();

@@ -425,20 +425,20 @@ MuseScore {
    property real actionWidth:actions.reduce(function(sum,item){return sum+(item.visible?item.width+header.spacing:0)},0)
    Label {id:titleLabel;text:"原曲参考";height:28;verticalAlignment:Text.AlignVCenter;font.bold:true;color:theme.text}
    Desk.DeskComboBox {objectName:"referenceTracks";width:Math.max(120,header.width-titleLabel.implicitWidth-header.spacing-header.actionWidth);model:root.tracks.map(function(t){return t.name});currentIndex:root.selectedTrack;onActivated:root.selectTrack(currentIndex)}
-   Desk.DeskButton {id:openAudioButton;text:"打开";enabled:root.usable;onClicked:{root.addingAudio=false;audioDialog.open()}}
-   Desk.DeskButton {id:addAudioButton;text:"添加";visible:!root.compact;enabled:root.usable;onClicked:{root.addingAudio=true;audioDialog.open()}}
-   Desk.DeskButton {id:projectButton;text:"项目";visible:!root.compact;enabled:root.usable;onClicked:projectMenu.open()}
+   Desk.DeskButton {id:openAudioButton;iconName:"open";text:"打开";enabled:root.usable;onClicked:{root.addingAudio=false;audioDialog.open()}}
+   Desk.DeskButton {id:addAudioButton;iconName:"add";text:"添加";visible:!root.compact;enabled:root.usable;onClicked:{root.addingAudio=true;audioDialog.open()}}
+   Desk.DeskButton {id:projectButton;iconName:"panel";text:"项目";visible:!root.compact;enabled:root.usable;onClicked:projectMenu.open()}
    Desk.DeskButton {id:expandButton;text:"展开";visible:root.compact;onClicked:{root.setPanelFloating(true);root.resizePanel(840,650)}}
    Desk.DeskButton {id:closeButton;text:"×";visible:root.compact;implicitWidth:28;onClicked:root.hidePanel()}
    Desk.DeskButton {id:floatButton;text:typeof panelFloating==="boolean"&&panelFloating?"停靠":"悬浮";visible:!root.narrow;onClicked:{if(typeof root.setPanelFloating==="function")root.setPanelFloating(!root.panelFloating)}}
   }
   Flow {id:transport;Layout.fillWidth:true;Layout.preferredHeight:implicitHeight;spacing:5
    Desk.DeskComboBox {objectName:"referenceTransportTarget";width:90;model:["原曲","乐谱","一起播放"];currentIndex:root.transportTarget;onActivated:root.transportTarget=currentIndex}
-   Desk.DeskButton {objectName:"referenceJointPlay";width:82;text:root.audioProject&&root.audioProject.playing||root.transportTarget===1&&root.observer&&root.observer.playing?"停止":root.media&&root.media.playing?"暂停":"播放";enabled:root.usable;onClicked:root.toggleReferencePlayback()}
+   Desk.DeskButton {objectName:"referenceJointPlay";width:82;iconName:root.audioProject&&root.audioProject.playing||root.transportTarget===1&&root.observer&&root.observer.playing?"stop":root.media&&root.media.playing?"pause":"play";text:root.audioProject&&root.audioProject.playing||root.transportTarget===1&&root.observer&&root.observer.playing?"停止":root.media&&root.media.playing?"暂停":"播放";enabled:root.usable;onClicked:root.toggleReferencePlayback()}
    Label {width:82;height:28;text:root.usable?root.time(root.shownPosition):"0:00.000";verticalAlignment:Text.AlignVCenter;color:theme.text}
    Common.SliderNumber {objectName:"referenceSpeed";width:222;value:root.usable?root.media.speed*100:100;minimum:50;maximum:150;step:.5;decimals:1;caption:"速度";enabled:root.usable&&(!root.audioProject||!root.audioProject.playing);onEdited:root.media.speed=newValue/100;onEditingFinished:{root.storeTrack();root.persist()}}
    Common.SliderNumber {objectName:"referenceVolume";width:222;value:root.usable?root.media.volume*100:80;caption:"音量";enabled:root.usable&&(!root.audioProject||!root.audioProject.playing);onEdited:root.media.volume=newValue/100;onEditingFinished:{root.storeTrack();root.persist()}}
-   Desk.DeskButton {text:"循环";visible:!root.compact;checkable:true;checked:root.looping;onClicked:{root.looping=checked;if(root.audioProject&&typeof root.audioProject.repeatSelection==="boolean")root.audioProject.repeatSelection=checked;root.applyLoop()}}
+   Desk.DeskButton {iconName:"loop";text:"循环";visible:!root.compact;checkable:true;checked:root.looping;onClicked:{root.looping=checked;if(root.audioProject&&typeof root.audioProject.repeatSelection==="boolean")root.audioProject.repeatSelection=checked;root.applyLoop()}}
   }
   ColumnLayout {Layout.fillWidth:true;visible:!root.compact&&root.tracks.length>0;spacing:2
    RowLayout {Layout.fillWidth:true;spacing:4;Layout.leftMargin:2;Layout.rightMargin:2+(trackScroll.visible?trackScroll.width:0)
@@ -446,17 +446,17 @@ MuseScore {
     Label {text:"静音";Layout.preferredWidth:36;horizontalAlignment:Text.AlignHCenter;color:theme.muted}
     Label {text:"独听";Layout.preferredWidth:36;horizontalAlignment:Text.AlignHCenter;color:theme.muted}
     Label {text:"联合";Layout.preferredWidth:36;horizontalAlignment:Text.AlignHCenter;color:theme.muted}
-    Desk.DeskButton {text:"恢复删除";Layout.preferredWidth:70;enabled:root.deletedTracks.length>0;onClicked:root.restoreDeletedTrack()}
+    Desk.DeskButton {iconName:"undo";text:"恢复删除";Layout.preferredWidth:implicitWidth;enabled:root.deletedTracks.length>0;onClicked:root.restoreDeletedTrack()}
    }
    ListView {id:trackRows;objectName:"referenceTrackRows";Layout.fillWidth:true;Layout.preferredHeight:Math.min(3,root.tracks.length)*32;clip:true;model:root.tracks
     ScrollBar.vertical:ScrollBar{id:trackScroll;policy:trackRows.contentHeight>trackRows.height?ScrollBar.AlwaysOn:ScrollBar.AsNeeded}
     delegate:Rectangle {objectName:"referenceTrackRow";property int trackIndex:index;width:trackRows.width-(trackScroll.visible?trackScroll.width:0);height:32;color:index===root.selectedTrack?theme.selected:theme.background
      RowLayout {anchors.fill:parent;anchors.margins:2;spacing:4
       Desk.DeskButton {text:modelData.name;Layout.fillWidth:true;Layout.minimumWidth:50;checkable:true;checked:index===root.selectedTrack;onClicked:root.selectTrack(index)}
-      Desk.DeskButton {objectName:"referenceTrackMute";text:"M";Layout.preferredWidth:36;checkable:true;enabled:!root.audioProject||!root.audioProject.playing;checked:!!modelData.mute;Accessible.name:"静音 "+modelData.name;ToolTip.visible:hovered;ToolTip.text:"静音这条音轨";onClicked:root.setTrackFlag(index,"mute",checked)}
-      Desk.DeskButton {objectName:"referenceTrackSolo";text:"S";Layout.preferredWidth:36;checkable:true;enabled:!root.audioProject||!root.audioProject.playing;checked:!!modelData.solo;Accessible.name:"联合播放时独听 "+modelData.name;ToolTip.visible:hovered;ToolTip.text:"联合播放时独听这条音轨";onClicked:root.setTrackFlag(index,"solo",checked)}
-      Desk.DeskButton {objectName:"referenceTrackParticipate";text:"联";Layout.preferredWidth:36;checkable:true;enabled:!root.audioProject||!root.audioProject.playing;checked:modelData.participate!==false;Accessible.name:"参加联合播放 "+modelData.name;ToolTip.visible:hovered;ToolTip.text:"让这条音轨参加一起播放";onClicked:root.setTrackFlag(index,"participate",checked)}
-      Desk.DeskButton {text:"删除";Layout.preferredWidth:70;Accessible.name:"删除音轨 "+modelData.name;onClicked:root.removeTrack(index)}
+      Desk.DeskButton {objectName:"referenceTrackMute";iconName:"mute";text:"";Layout.preferredWidth:36;checkable:true;enabled:!root.audioProject||!root.audioProject.playing;checked:!!modelData.mute;Accessible.name:"静音 "+modelData.name;ToolTip.visible:hovered;ToolTip.text:"静音这条音轨";onClicked:root.setTrackFlag(index,"mute",checked)}
+      Desk.DeskButton {objectName:"referenceTrackSolo";iconName:"solo";text:"";Layout.preferredWidth:36;checkable:true;enabled:!root.audioProject||!root.audioProject.playing;checked:!!modelData.solo;Accessible.name:"联合播放时独听 "+modelData.name;ToolTip.visible:hovered;ToolTip.text:"联合播放时独听这条音轨";onClicked:root.setTrackFlag(index,"solo",checked)}
+      Desk.DeskButton {objectName:"referenceTrackParticipate";iconName:"link";text:"";Layout.preferredWidth:36;checkable:true;enabled:!root.audioProject||!root.audioProject.playing;checked:modelData.participate!==false;Accessible.name:"参加联合播放 "+modelData.name;ToolTip.visible:hovered;ToolTip.text:"让这条音轨参加一起播放";onClicked:root.setTrackFlag(index,"participate",checked)}
+      Desk.DeskButton {iconName:"delete";text:"删除";Layout.preferredWidth:70;Accessible.name:"删除音轨 "+modelData.name;onClicked:root.removeTrack(index)}
      }
     }
    }
@@ -519,28 +519,28 @@ MuseScore {
         onPositionChanged:if(pressed&&root.usable){var span=root.viewEnd-root.viewStart;root.viewStart=Math.max(0,Math.min(root.media.duration-span,position*root.media.duration));root.viewEnd=root.viewStart+span;root.refreshWaveform()}
     }
     Flow {width:parent.width;spacing:5
-        Desk.DeskButton {text:"选择";checkable:true;checked:!root.handTool;onClicked:root.handTool=false}
-        Desk.DeskButton {text:"手形平移";checkable:true;checked:root.handTool;onClicked:root.handTool=true;ToolTip.visible:hovered;ToolTip.text:"拖动波形平移时间轴；鼠标中键也可以平移"}
+        Desk.DeskButton {iconName:"select";text:"选择";checkable:true;checked:!root.handTool;onClicked:root.handTool=false}
+        Desk.DeskButton {iconName:"hand";text:"手形平移";checkable:true;checked:root.handTool;onClicked:root.handTool=true;ToolTip.visible:hovered;ToolTip.text:"拖动波形平移时间轴；鼠标中键也可以平移"}
         Desk.DeskSwitch {text:"联动编辑器定位";font.pixelSize:11;checked:root.linkEditor;onClicked:{root.linkEditor=checked;root.linkFromScore()}}
     }
     Flow {width:parent.width;spacing:5
      Common.DragNumber {hintHost:root;objectName:"referenceSliceStart";width:126;value:root.a;minimum:0;maximum:Math.max(0,root.b-1);sensitivity:10;caption:"开始 ";formatter:root.time;parser:root.readTime;onEditingStarted:root.beginSlice();onEdited:root.a=value;onEditingFinished:root.finishSlice()}
      Common.DragNumber {hintHost:root;objectName:"referenceSliceEnd";width:126;value:root.b;minimum:root.a+1;maximum:root.usable?root.media.duration:1;sensitivity:10;caption:"结束 ";formatter:root.time;parser:root.readTime;onEditingStarted:root.beginSlice();onEdited:root.b=value;onEditingFinished:root.finishSlice()}
-     Desk.DeskButton {text:"片段视图";onClicked:root.fitSlice()}
-     Desk.DeskButton {text:"全曲视图";enabled:root.usable;onClicked:{root.viewStart=0;root.viewEnd=root.media.duration;root.viewportPeaks=[];wave.requestPaint()}}
-     Desk.DeskButton {text:"播放头设为开始";onClicked:{root.beginSlice();root.a=Math.min(root.b-1,root.shownPosition);root.finishSlice()}}
-     Desk.DeskButton {text:"播放头设为结束";onClicked:{root.beginSlice();root.b=Math.max(root.a+1,root.shownPosition);root.finishSlice()}}
+     Desk.DeskButton {iconName:"fit";text:"片段视图";onClicked:root.fitSlice()}
+     Desk.DeskButton {iconName:"fit";text:"全曲视图";enabled:root.usable;onClicked:{root.viewStart=0;root.viewEnd=root.media.duration;root.viewportPeaks=[];wave.requestPaint()}}
+     Desk.DeskButton {iconName:"loop-in";text:"播放头设为开始";onClicked:{root.beginSlice();root.a=Math.min(root.b-1,root.shownPosition);root.finishSlice()}}
+     Desk.DeskButton {iconName:"loop-out";text:"播放头设为结束";onClicked:{root.beginSlice();root.b=Math.max(root.a+1,root.shownPosition);root.finishSlice()}}
      Desk.DeskButton {text:"书签";enabled:root.usable;onClicked:{var list=Project.copy(root.bookmarks);list.push({ms:root.shownPosition,name:root.time(root.shownPosition)});root.bookmarks=list}}
      Desk.DeskButton {text:"边界淡入淡出";checkable:true;checked:root.fade;onClicked:{root.fade=checked;root.applyLoop()}}
     }
     Flow {width:parent.width;spacing:5
      Desk.DeskButton {text:"重新定位音频";visible:root.selectedTrack>=0&&!!root.tracks[root.selectedTrack]&&root.tracks[root.selectedTrack].missing===true;onClicked:{root.relocating=true;audioDialog.open()}}
-     Desk.DeskButton {objectName:"referenceAssociate";text:"关联当前选段";enabled:root.usable&&root.hasScore&&root.b>root.a;onClicked:root.associate()}
-     Desk.DeskButton {objectName:"referenceUpdateAssociationScore";text:"改为当前选段";enabled:root.hasScore&&root.selectedAssociation>=0;onClicked:root.updateAssociationScore()}
-     Desk.DeskButton {objectName:"referenceLocate";text:"跳到乐谱";enabled:root.selectedAssociation>=0;onClicked:root.locate()}
+     Desk.DeskButton {objectName:"referenceAssociate";iconName:"link";text:"关联当前选段";enabled:root.usable&&root.hasScore&&root.b>root.a;onClicked:root.associate()}
+     Desk.DeskButton {objectName:"referenceUpdateAssociationScore";iconName:"score";text:"改为当前选段";enabled:root.hasScore&&root.selectedAssociation>=0;onClicked:root.updateAssociationScore()}
+     Desk.DeskButton {objectName:"referenceLocate";iconName:"locate";text:"跳到乐谱";enabled:root.selectedAssociation>=0;onClicked:root.locate()}
      Desk.DeskButton {text:"从当前谱位定位音频";enabled:root.selectedAssociation>=0;onClicked:root.seekScore()}
-     Desk.DeskButton {objectName:"referenceAlignmentPoints";text:"内部对齐点";enabled:root.selectedAssociation>=0;onClicked:associationDialog.open()}
-     Desk.DeskButton {text:"撤销片段修改";enabled:root.associationUndo.length>0;onClicked:root.undoAssociation()}
+     Desk.DeskButton {objectName:"referenceAlignmentPoints";iconName:"link";text:"内部对齐点";enabled:root.selectedAssociation>=0;onClicked:associationDialog.open()}
+     Desk.DeskButton {iconName:"undo";text:"撤销片段修改";enabled:root.associationUndo.length>0;onClicked:root.undoAssociation()}
     }
     ListView {objectName:"referenceAssociations";width:parent.width;height:root.associations.length?Math.min(150,root.associations.length*(root.narrow?84:56)):30;clip:true;model:root.associations;currentIndex:root.selectedAssociation;ScrollBar.vertical:ScrollBar{}
      delegate:Rectangle {width:ListView.view.width;height:root.narrow?84:56;color:index===root.selectedAssociation?theme.selected:theme.field;border.color:theme.subtleLine
@@ -549,9 +549,9 @@ MuseScore {
        Label {width:parent.width;text:(modelData.name||"已关联片段")+" · "+root.time(modelData.from)+"–"+root.time(modelData.until);elide:Text.ElideRight;color:theme.text}
        Row {spacing:4
         Label {height:26;width:root.narrow?90:160;verticalAlignment:Text.AlignVCenter;text:"第 "+(modelData.occurrence||1)+" 遍"+(modelData.stale?" · 待核对":"")+(modelData.active===false?" · 未参加":"");color:theme.muted;font.pixelSize:11}
-        Desk.DeskButton {objectName:index===root.selectedAssociation?"referencePlayAssociation":"referencePlayAssociation"+index;text:"播放";implicitWidth:48;onClicked:{root.selectAssociation(index);root.playAssociation()}}
-        Desk.DeskButton {text:"修改";implicitWidth:48;onClicked:{root.selectAssociation(index);associationDialog.open()}}
-        Desk.DeskButton {text:"删除";implicitWidth:48;onClicked:root.deleteAssociation(index)}
+        Desk.DeskButton {objectName:index===root.selectedAssociation?"referencePlayAssociation":"referencePlayAssociation"+index;iconName:"play";text:"播放";implicitWidth:48;onClicked:{root.selectAssociation(index);root.playAssociation()}}
+        Desk.DeskButton {iconName:"edit";text:"修改";implicitWidth:48;onClicked:{root.selectAssociation(index);associationDialog.open()}}
+        Desk.DeskButton {iconName:"delete";text:"删除";implicitWidth:48;onClicked:root.deleteAssociation(index)}
         Desk.DeskSwitch {height:28;font.pixelSize:11;text:"本次";checked:modelData.active!==false;onClicked:root.useAssociation(index,checked)}
        }
       }
@@ -593,10 +593,10 @@ MuseScore {
     delegate:RowLayout {width:ListView.view.width;height:36;property int pointIndex:index
      Label {text:"对齐点 "+(index+1);color:theme.text}
      Common.DragNumber {hintHost:root;property real pendingMs:modelData.ms;width:126;value:pendingMs;onEdited:pendingMs=value;minimum:root.a+1;maximum:root.b-1;sensitivity:10;formatter:root.time;parser:root.readTime;onEditingFinished:root.editAnchor(pointIndex,pendingMs)}
-     Desk.DeskButton {objectName:"referenceDeleteAlignmentPoint"+index;text:"删除";onClicked:root.editAnchor(pointIndex,null)}
+     Desk.DeskButton {objectName:"referenceDeleteAlignmentPoint"+index;iconName:"delete";text:"删除";onClicked:root.editAnchor(pointIndex,null)}
     }
    }
-   RowLayout {Desk.DeskButton {text:"移除此关联";onClicked:{root.deleteAssociation(root.selectedAssociation);associationDialog.close()}} Desk.DeskButton {text:"关闭";onClicked:associationDialog.close()}}
+   RowLayout {Desk.DeskButton {text:"移除此关联";onClicked:{root.deleteAssociation(root.selectedAssociation);associationDialog.close()}} Desk.DeskButton {iconName:"close";text:"关闭";onClicked:associationDialog.close()}}
   }
  }
  Files.FileDialog {id:audioDialog;title:"打开原曲";nameFilters:["音频 (*.wav *.mp3 *.flac)"];onAccepted:root.openAudio(String(fileUrl));onRejected:root.relocating=false}

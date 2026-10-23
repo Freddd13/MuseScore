@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "aiconnection.h"
+#include "toolicons.h"
 #include "featuregate.h"
 #include "libmscore/score.h"
 #include "mscore/musescore.h"
@@ -356,6 +357,7 @@ public:
     windows->setObjectName("aiConnectionWindows");
     layout->addWidget(windows, 1);
     auto use = new QPushButton(tr("使用选中的窗口"));
+    setComponentToolIcon(use, "panel");
     layout->addWidget(use);
     connect(use, &QPushButton::clicked, this, [this] {
       auto item = windows->currentItem();
@@ -368,12 +370,15 @@ public:
     auto row = new QHBoxLayout;
     layout->addLayout(row);
     auto configure = new QPushButton(tr("配置 Codex"));
+    setComponentToolIcon(configure, "settings");
     configure->setObjectName("aiConfigureCodex");
     row->addWidget(configure);
     auto check = new QPushButton(tr("检查连接"));
+    setComponentToolIcon(check, "refresh");
     check->setObjectName("aiCheckConnection");
     row->addWidget(check);
     auto copy = new QPushButton(tr("复制配置"));
+    setComponentToolIcon(copy, "copy");
     row->addWidget(copy);
     operations = {configure, check, copy, use};
     connect(configure, &QPushButton::clicked, this,

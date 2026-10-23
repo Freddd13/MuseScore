@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "arrangement.h"
+#include "toolicons.h"
 #include "featuregate.h"
 #include "localsuggestions.h"
 #include "paneldock.h"
@@ -155,11 +156,14 @@ class SuggestionPanel : public QWidget {
         _kind->addItem(tr("对位"), "counterpoint");
         analysis->addWidget(_kind, 1);
         auto generate = new QPushButton(tr("分析选段"));
+        setComponentToolIcon(generate,"refresh");
         generate->setObjectName("localSuggestionStart");
         analysis->addWidget(generate);
         auto cancel = new QPushButton(tr("取消"));
+        setComponentToolIcon(cancel,"stop");
         analysis->addWidget(cancel);
         auto settings = new QPushButton(tr("参数…"));
+        setComponentToolIcon(settings,"settings");
         analysis->addWidget(settings);
         layout->addLayout(analysis);
         auto choices = new QHBoxLayout;
@@ -270,6 +274,7 @@ class SuggestionPanel : public QWidget {
         auto button = [&](const QString &label, const QString &action, QHBoxLayout *row) {
             auto b = new QPushButton(label);
             b->setObjectName("arrangement-" + action);
+            setComponentToolIcon(b, action=="stop"?"stop":action=="apply"?"apply":action=="variant"?"copy":"audition");
             row->addWidget(b);
             connect(b, &QPushButton::clicked, this, [this, action] { operate(action); });
         };

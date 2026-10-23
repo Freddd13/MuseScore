@@ -21,6 +21,7 @@
 #include "api/qmlpluginapi.h"
 #include "libmscore/score.h"
 #include "musescore.h"
+#include "mscore/workflow/toolicons.h"
 
 namespace Ms {
 
@@ -34,6 +35,7 @@ QmlPluginEngine::QmlPluginEngine(QObject* parent)
    : MsQmlEngine(parent)
       {
       PluginAPI::PluginAPI::registerQmlTypes();
+      installComponentToolIcons(this);
       }
 
 //---------------------------------------------------------

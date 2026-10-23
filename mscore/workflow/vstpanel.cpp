@@ -16,6 +16,7 @@
 #include "mscore/shortcut.h"
 #include "mscore/workspace.h"
 #include "workspaceviews.h"
+#include "toolicons.h"
 #include "controlflowlayout.h"
 #include <QJsonDocument>
 #include <QProcess>
@@ -251,7 +252,7 @@ class Panel final : public QDockWidget {
     }
     for (const auto &v : known) {
       auto d = v.toMap();
-      catalog->addItem(d["name"].toString() + " · " +
+      catalog->addItem(componentToolIcon(d["instrument"].toBool() ? "keyboard" : "settings"), d["name"].toString() + " · " +
                        (d["instrument"].toBool() ? tr("音源") : tr("效果")) +
                        " · " + d["format"].toString(),
                        identity(d));
@@ -473,18 +474,13 @@ class Panel final : public QDockWidget {
     auto c = selected();
     const int id = selectedSlot();
     auto engine = backend();
-    current->setText(
-        c ? (c->synti() == "KumoVST"
-                 ? tr("当前：%1")
-                       .arg(synti->getPatchInfo(c->synti(), c->bank(),
-                                                c->program())
-                                ? synti
-                                      ->getPatchInfo(c->synti(), c->bank(),
-                                                     c->program())
-                                      ->name
-                                : tr("音源文件待重新定位"))
-                 : tr("当前：SF2／%1").arg(c->synti()))
-          : tr("打开乐谱后选择乐器。"));
+    const auto patch = c && synti ? synti->getPatchInfo(c->synti(), c->bank(), c->program()) : nullptr;
+    const bool externalSource = c && c->synti() == "KumoVST" &&
+        unit(id, -1)["plugin"].toMap()["format"].toString() != "SF2";
+    current->setText(c ? tr("当前音源：%1\n音色：%2")
+                          .arg(externalSource ? tr("VST") : tr("内置 SF2／SF3"),
+                               patch ? patch->name : externalSource ? tr("音源文件待重新定位") : tr("乐谱中的内置音色"))
+                        : tr("打开乐谱后选择乐器。"));
     choose->setEnabled(c && !picked().isEmpty() &&
                        picked()["instrument"].toBool());
     const bool loaded = id && engine && engine->rack().plugin(id);
@@ -565,16 +561,26 @@ public:
         QComboBox::AdjustToMinimumContentsLengthWithIcon);
     row->addWidget(parts, 1);
     layout->addLayout(row);
+    auto sourceGroup = new QGroupBox(tr("正在使用的音源"), body);
+    sourceGroup->setObjectName("kumoVstCurrentSourceGroup");
+    auto sourceLayout = new QVBoxLayout(sourceGroup);
+    sourceLayout->setSpacing(6);
     current = new QLabel(body);
+    current->setObjectName("kumoVstCurrentSource");
     current->setWordWrap(true);
     current->setFixedHeight(fontMetrics().lineSpacing() * 2);
-    layout->addWidget(current);
+    sourceLayout->addWidget(current);
+    layout->addWidget(sourceGroup);
+    auto libraryGroup = new QGroupBox(tr("添加或更换插件"), body);
+    libraryGroup->setObjectName("kumoVstLibraryGroup");
+    auto libraryLayout = new QVBoxLayout(libraryGroup);
+    libraryLayout->setSpacing(6);
     catalog = new QComboBox(body);
     catalog->setObjectName("kumoVstCatalog");
     catalog->setSizeAdjustPolicy(
         QComboBox::AdjustToMinimumContentsLengthWithIcon);
-    layout->addWidget(new QLabel(tr("VST 音源与效果列表"), body));
-    layout->addWidget(catalog);
+    catalog->setToolTip(tr("选择已添加的音源或效果器，再使用下方对应操作。"));
+    libraryLayout->addWidget(catalog);
     row = new QHBoxLayout;
     scan = new QPushButton(tr("添加插件…"), body);
     scan->setObjectName("kumoVstScan");
@@ -583,31 +589,31 @@ public:
     forget->setObjectName("kumoVstForget");
     row->addWidget(forget);
     row->addStretch();
-    layout->addLayout(row);
+    libraryLayout->addLayout(row);
     isolate = new QCheckBox(tr("新添加的插件使用独立进程"), body);
     isolate->setChecked(QSettings().value("kumo/vst/isolated", false).toBool());
     connect(isolate, &QCheckBox::toggled, this,
             [](bool value) { QSettings().setValue("kumo/vst/isolated", value); });
     isolate->setToolTip(tr("将这个插件放在单独进程，额外增加约两个 256 "
                            "样本块的播放延迟。直接运行适合低延迟弹奏。"));
-    layout->addWidget(isolate);
+    libraryLayout->addWidget(isolate);
     auto sourceActions = new ControlFlowLayout;
     choose = new QPushButton(tr("用作此乐器音源"), body);
     choose->setObjectName("kumoVstChoose");
     openSource = new QPushButton(tr("打开音源"), body);
     openSource->setObjectName("kumoVstOpenSource");
     sourceActions->addWidget(choose);
-    sourceActions->addWidget(openSource);
-    layout->addLayout(sourceActions);
+    libraryLayout->addLayout(sourceActions);
     auto restoreActions = new ControlFlowLayout;
-    removeSource = new QPushButton(tr("切回原音源"), body);
+    removeSource = new QPushButton(tr("使用原内置音源"), body);
     removeSource->setObjectName("kumoVstRemoveSource");
     removeSource->setToolTip(tr("恢复选用 VST 之前的音源与音色，例如 SF2 钢琴。"));
     restoreSource = new QPushButton(tr("恢复刚才音源"), body);
     restoreSource->setObjectName("kumoVstRestoreSource");
+    restoreActions->addWidget(openSource);
     restoreActions->addWidget(removeSource);
     restoreActions->addWidget(restoreSource);
-    layout->addLayout(restoreActions);
+    sourceLayout->addLayout(restoreActions);
     auto presets = new ControlFlowLayout;
     auto import = new QPushButton(tr("载入预设…"), body);
     auto save = new QPushButton(tr("保存预设…"), body);
@@ -617,14 +623,16 @@ public:
     save->setObjectName("kumoVstSourceSavePreset");
     presets->addWidget(import);
     presets->addWidget(save);
-    layout->addLayout(presets);
-    auto line = new QFrame(body);
-    line->setFrameShape(QFrame::HLine);
-    layout->addWidget(line);
+    sourceLayout->addLayout(presets);
+    layout->addWidget(libraryGroup);
+    auto effectsGroup = new QGroupBox(tr("效果链"), body);
+    effectsGroup->setObjectName("kumoVstEffectsGroup");
+    auto effectsLayout = new QVBoxLayout(effectsGroup);
+    effectsLayout->setSpacing(6);
     effectTarget = new QComboBox(body);
     effectTarget->setObjectName("kumoVstEffectTarget");
     effectTarget->addItems({tr("此乐器效果"), tr("主输出效果")});
-    layout->addWidget(effectTarget);
+    effectsLayout->addWidget(effectTarget);
     chainArea = new QStackedWidget(body);
     chainArea->setMinimumHeight(100);
     chain = new QListWidget(chainArea);
@@ -639,7 +647,7 @@ public:
     chainHint->setPalette(hintPalette);
     chainArea->addWidget(chain);
     chainArea->addWidget(chainHint);
-    layout->addWidget(chainArea, 1);
+    effectsLayout->addWidget(chainArea, 1);
     auto effectActions = new ControlFlowLayout;
     addEffect = new QPushButton(tr("加效果"), body);
     addEffect->setObjectName("kumoVstAddEffect");
@@ -653,11 +661,11 @@ public:
     down->setObjectName("kumoVstEffectDown");
     for (auto b : {addEffect, openEffect, removeEffect})
       effectActions->addWidget(b);
-    layout->addLayout(effectActions);
+    effectsLayout->addLayout(effectActions);
     auto effectOrder = new ControlFlowLayout;
     effectOrder->addWidget(up);
     effectOrder->addWidget(down);
-    layout->addLayout(effectOrder);
+    effectsLayout->addLayout(effectOrder);
     auto effectPresets = new ControlFlowLayout;
     effectLoadPreset = new QPushButton(tr("载入效果预设…"), body);
     effectLoadPreset->setObjectName("kumoVstEffectLoadPreset");
@@ -665,7 +673,14 @@ public:
     effectSavePreset->setObjectName("kumoVstEffectSavePreset");
     effectPresets->addWidget(effectLoadPreset);
     effectPresets->addWidget(effectSavePreset);
-    layout->addLayout(effectPresets);
+    effectsLayout->addLayout(effectPresets);
+    layout->addWidget(effectsGroup, 1);
+    for (const auto& item : QList<QPair<QAbstractButton*, QString>>{
+             {scan,"add"},{forget,"delete"},{choose,"keyboard"},{openSource,"panel"},
+             {removeSource,"keyboard"},{restoreSource,"undo"},{import,"open"},{save,"save"},
+             {addEffect,"add"},{openEffect,"panel"},{removeEffect,"delete"},{up,"up"},{down,"down"},
+             {effectLoadPreset,"open"},{effectSavePreset,"save"}})
+      setComponentToolIcon(item.first, item.second);
     connect(effectLoadPreset, &QPushButton::clicked, this,
             [this] { preset(false, targetSlot(), chain->currentRow()); });
     connect(effectSavePreset, &QPushButton::clicked, this,

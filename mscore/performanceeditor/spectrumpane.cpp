@@ -9,6 +9,7 @@
 #include "../workflow/referencefactory.h"
 #include "../workflow/referencepanel.h"
 #include "../workflow/workflowcontext.h"
+#include "../workflow/toolicons.h"
 #include "libmscore/input.h"
 #include "libmscore/note.h"
 #include "libmscore/undo.h"
@@ -138,6 +139,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
         return b;
     };
     auto referenceButton = button(tr("原曲参考"), 0, 0, [] { showReferencePanel(true); });
+    setComponentToolIcon(referenceButton, "waveform");
     _tracks = new QComboBox;
     _tracks->setObjectName("transcriptionTracks");
     _tracks->setPlaceholderText(tr("选择原曲音轨"));
@@ -159,6 +161,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     tools->addWidget(_clips);
     _fitTime = button(tr("匹配视图"), 0, 0, [this] { fitTimeRange(); });
     _fitTime->setObjectName("spectrumFitTime");
+    setComponentToolIcon(_fitTime, "fit");
     _fitTime->setEnabled(false);
     _display = new QComboBox;
     _display->setObjectName("transcriptionDisplay");
@@ -175,8 +178,10 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _tool->addItems({tr("取音／试音"), tr("选择循环"), tr("手形平移"), tr("画／调整标注")});
     tools->addWidget(_tool);
     auto cacheButton = button(tr("缓存设置"), 0, 6, [this] { cacheSettings(); });
+    setComponentToolIcon(cacheButton, "settings");
     _play = button(tr("播放原曲"), 1, 0, [this] { playSource(); });
     _play->setObjectName("transcriptionPlay");
+    setComponentToolIcon(_play, "play");
     _play->setEnabled(false);
     _loop = button(tr("循环"), 1, 1, [this] {
         if (_a < 0 || _b <= _a) {
@@ -192,6 +197,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
         }
     });
     _loop->setCheckable(true);
+    setComponentToolIcon(_loop, "loop");
     _speed = new QDoubleSpinBox;
     _speed->setRange(50, 150);
     _speed->setSuffix("%");
@@ -239,6 +245,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _harmonics->setChecked(true);
     auto inputButton = button(tr("输入乐谱"), 1, 6, [this] { insertPitches(); });
     inputButton->setObjectName("transcriptionInput");
+    setComponentToolIcon(inputButton, "score");
     inputButton->setEnabled(false);
     inputButton->setToolTip(
         tr("把选中的音高按当前输入位置、声部和时值写入；多个音高组成和弦。Ctrl+Z 撤销。"));
@@ -250,6 +257,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
         QSettings().setValue("spectrum/displayControls", _displayPanel->isVisible());
     });
     displayButton->setObjectName("spectrumDisplaySettings");
+    setComponentToolIcon(displayButton, "settings");
     _controls.append(displayButton);
     auto rebuild = button(tr("重新分析"), 2, 1, [this] {
         _forceSpectrum = true;
@@ -257,12 +265,14 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
         viewChanged();
     });
     _controls.append(rebuild);
+    setComponentToolIcon(rebuild, "refresh");
     auto cancel = button(tr("停止分析"), 2, 2, [this] {
         if (_session)
             QMetaObject::invokeMethod(_session, "cancel");
         setStatus(tr("已请求停止分析，已有频谱继续保留。"));
     });
     _controls.append(cancel);
+    setComponentToolIcon(cancel, "stop");
     _displayControls = new SpectrumDisplayControls(this);
     auto options = new QTabWidget;
     options->setObjectName("spectrumOptionsTabs");
@@ -406,12 +416,14 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     auto mark = new QToolButton;
     mark->setObjectName("transcriptionMark");
     mark->setText(tr("标注这个音"));
+    setComponentToolIcon(mark, "pencil");
     mark->setEnabled(false);
     mark->setToolTip(tr("保存点击选中的音高和时间；鼠标移动后仍保留刚才的选择。"));
     connect(mark, &QToolButton::clicked, this, &SpectrumPane::markPitch);
     bottom->addWidget(mark);
     auto remove = new QToolButton;
     remove->setText(tr("删除选中标注"));
+    setComponentToolIcon(remove, "delete");
     remove->setObjectName("spectrumDeleteMarks");
     connect(remove, &QToolButton::clicked, this, [this] {
         QSet<QString> ids;
@@ -1061,6 +1073,7 @@ void SpectrumPane::seekSource(double ms) {
 void SpectrumPane::projectChanged() {
     const bool playing = _media->property("playing").toBool();
     _play->setText(playing ? tr("暂停原曲") : tr("播放原曲"));
+    setComponentToolIcon(_play, playing ? "pause" : "play");
     if (playing)
         _lastAudioMs = sourcePosition();
     else {

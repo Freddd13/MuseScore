@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "midicroppanel.h"
+#include "mscore/workflow/toolicons.h"
 #include "mscore/workflow/featuregate.h"
 #include "gateaudition.h"
 #include "mscore/shortcut.h"
@@ -327,6 +328,11 @@ void MidiCropPanel::compare() {
       undoButton->setToolButtonStyle(Qt::ToolButtonIconOnly);redoButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
       historyButtons->insertWidget(0,undoButton);historyButtons->insertWidget(1,redoButton);
       exclude->setObjectName("midiCropExclude");
+      for (const auto& item : QList<QPair<QAbstractButton*,QString>>{
+                  {fit,"fit"},{editorMode,"panel"},{listToggle,"list"},
+                  {originalPlay,"audition"},{proposedPlay,"audition"},{stopPlay,"pause"},
+                  {exclude,"delete"},{recompute,"refresh"},{reset,"reset"},{close,"back"}})
+            setComponentToolIcon(item.first,item.second);
       std::function<void(bool)> audition;std::function<void()> updateTransport;
 
       QFutureWatcher<QVector<MidiGateNote>> watcher;

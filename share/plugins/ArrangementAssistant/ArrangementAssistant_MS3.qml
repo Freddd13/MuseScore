@@ -363,7 +363,7 @@ RowLayout {
         Label {text:"和声 "+root.counts.harmony+" · 对位 "+root.counts.counterpoint+" · 可弹性 "+root.counts.playability;color:theme.text;visible:true}
         Label {text:root.stale?"待更新":root.running?"分析中":"";color:theme.muted;visible:summary.width>880}
         Item {Layout.fillWidth:true;visible:root.config.alignment<2}
-        Desk.DeskButton {text:"更新";enabled:!root.running && (!root.observer || !root.observer.playing);onClicked:{root.whole=root.rangeChoice===1;root.start(root.rangeChoice===2&&root.requested)}}
+        Desk.DeskButton {iconName:"refresh";text:"更新";enabled:!root.running && (!root.observer || !root.observer.playing);onClicked:{root.whole=root.rangeChoice===1;root.start(root.rangeChoice===2&&root.requested)}}
         Desk.DeskButton {text:"详情";onClicked:root.openDetails()}
         Desk.DeskButton {id:summaryClose;objectName:"arrangementSummaryClose";text:"×";flat:true;Layout.preferredWidth:28;implicitWidth:28;onHoveredChanged:{if(typeof root.showPanelHint==="function")root.showPanelHint(hovered?"隐藏摘要，详情继续保留":"",summaryClose)} onClicked:root.hideSummary()}
     }
@@ -386,20 +386,20 @@ Flickable {
                 Layout.fillWidth:true
                 Label {text:"编配检查";font.bold:true;color:theme.text;Layout.fillWidth:true}
                 Desk.DeskButton {text:"顶部摘要";onClicked:{var c=Rules.clone(root.config);c.dualPanel=true;root.config=c;root.persist();if(root.ribbon)root.focusPanel();else root.showSummaryPanel(true)}}
-                Desk.DeskButton {text:"设置";onClicked:settings.open()}
+                Desk.DeskButton {iconName:"settings";text:"设置";onClicked:settings.open()}
                 Desk.DeskButton {id:moreButton;objectName:"arrangementMore";text:"更多";onClicked:{var point=moreButton.mapToItem(details,0,moreButton.height);moreMenu.x=Math.max(0,Math.min(details.width-moreMenu.width,point.x));moreMenu.y=point.y;moreMenu.open()}}
             }
             Label {Layout.fillWidth:true;elide:Text.ElideRight;color:theme.text;text:root.requested?"检查范围：第 "+root.scope.firstMeasure+"–"+root.scope.lastMeasure+" 小节 · "+(root.scope.part||"钢琴"):"选择要检查的小节"}
             RowLayout {
                 Layout.fillWidth:true
-                Desk.DeskButton {objectName:"arrangementUpdate";text:"更新结果";Layout.fillWidth:true;enabled:!root.running&&(!root.observer||!root.observer.playing);onClicked:{root.whole=root.rangeChoice===1;root.start(root.rangeChoice===2&&root.requested)}}
-                Desk.DeskButton {objectName:"arrangementNewScope";text:"检查当前选区";Layout.fillWidth:true;enabled:!root.running&&(!root.observer||!root.observer.playing);onClicked:{root.rangeChoice=0;root.whole=false;root.start(false)}}
+                Desk.DeskButton {objectName:"arrangementUpdate";iconName:"refresh";text:"更新结果";Layout.fillWidth:true;enabled:!root.running&&(!root.observer||!root.observer.playing);onClicked:{root.whole=root.rangeChoice===1;root.start(root.rangeChoice===2&&root.requested)}}
+                Desk.DeskButton {objectName:"arrangementNewScope";iconName:"score";text:"检查当前选区";Layout.fillWidth:true;enabled:!root.running&&(!root.observer||!root.observer.playing);onClicked:{root.rangeChoice=0;root.whole=false;root.start(false)}}
             }
             RowLayout {
                 Layout.fillWidth:true
                 Desk.DeskComboBox {id:rangeBox;objectName:"arrangementRangeChoice";model:["当前选区／小节","钢琴全谱","保留本次范围"];currentIndex:root.rangeChoice;Layout.fillWidth:true;onActivated:{root.rangeChoice=currentIndex;root.whole=currentIndex===1}}
                 Desk.DeskButton {text:"悬浮";visible:typeof root.setPanelFloating==="function" && !root.ribbon;onClicked:root.setPanelFloating(!root.panelFloating)}
-                Desk.DeskButton {text:"设置";visible:root.ribbon;onClicked:settings.open()}
+                Desk.DeskButton {iconName:"settings";text:"设置";visible:root.ribbon;onClicked:settings.open()}
             }
             Label {text:"和声 "+root.counts.harmony+" · 对位 "+root.counts.counterpoint+" · 可弹性 "+root.counts.playability;color:theme.text;Layout.fillWidth:true}
             Desk.DeskComboBox {id:styleBox;model:["调性钢琴／流行","严格对位","爵士"];currentIndex:root.config.style;Layout.fillWidth:true;onActivated:{var c=Rules.clone(root.config);c.style=currentIndex;root.config=c;root.persist();root.markDirty()}}
@@ -437,10 +437,10 @@ Flickable {
                 ScrollBar.vertical:ScrollBar {}
             }
             RowLayout {
-                Desk.DeskButton {text:"定位相关音";enabled:!!root.current;onClicked:root.locate();ToolTip.visible:hovered;ToolTip.text:"选中涉及的音，并在谱面短暂标出所在小节"}
+                Desk.DeskButton {iconName:"locate";text:"定位相关音";enabled:!!root.current;onClicked:root.locate();ToolTip.visible:hovered;ToolTip.text:"选中涉及的音，并在谱面短暂标出所在小节"}
                 Desk.DeskButton {text:"上一条";enabled:root.filteredIssues.findIndex(function(i){return root.current&&i.id===root.current.id})>0;onClicked:root.issueStep(-1)}
                 Desk.DeskButton {text:"下一条";enabled:!!root.current&&root.filteredIssues.findIndex(function(i){return i.id===root.current.id})+1<root.filteredIssues.length;onClicked:root.issueStep(1)}
-                Desk.DeskButton {text:"忽略此处";enabled:!!root.current;onClicked:root.ignore()}
+                Desk.DeskButton {iconName:"delete";text:"忽略此处";enabled:!!root.current;onClicked:root.ignore()}
             }
             Desk.DeskButton {objectName:"arrangementRoles";text:"声部与左右手";onClicked:roleDialog.open();ToolTip.visible:hovered;ToolTip.text:"指定旋律、低音和内声部，或为所选音校正左右手"}
         }
@@ -470,10 +470,10 @@ Flickable {
                 Text {id:hintText;objectName:"arrangementProblemText";width:problemHint.width-28;wrapMode:Text.WordWrap;color:theme.text;text:root.current?root.current.basis:""}
             }
             RowLayout {Layout.fillWidth:true
-                Desk.DeskButton {text:"定位相关音";enabled:!!root.current;onClicked:root.locate(true)}
-                Desk.DeskButton {text:"忽略此处";enabled:!!root.current;onClicked:{root.ignore();problemHint.hide()}}
+                Desk.DeskButton {iconName:"locate";text:"定位相关音";enabled:!!root.current;onClicked:root.locate(true)}
+                Desk.DeskButton {iconName:"delete";text:"忽略此处";enabled:!!root.current;onClicked:{root.ignore();problemHint.hide()}}
                 Item {Layout.fillWidth:true}
-                Desk.DeskButton {objectName:"arrangementProblemClose";text:"关闭";onClicked:problemHint.hide()}
+                Desk.DeskButton {objectName:"arrangementProblemClose";iconName:"close";text:"关闭";onClicked:problemHint.hide()}
             }
         }
     }
@@ -516,7 +516,7 @@ Flickable {
                         }
                     }
                 }
-                Desk.DeskButton {text:"关闭";onClicked:settings.close()}
+                Desk.DeskButton {iconName:"close";text:"关闭";onClicked:settings.close()}
             }
         }
     }
@@ -526,7 +526,7 @@ Flickable {
         contentItem:ColumnLayout {
             RowLayout {Layout.fillWidth:true
                 Label {text:"声部与左右手";font.bold:true;color:theme.text;Layout.fillWidth:true}
-                Desk.DeskButton {objectName:"arrangementRolesClose";text:"关闭";onClicked:roleDialog.close()}
+                Desk.DeskButton {objectName:"arrangementRolesClose";iconName:"close";text:"关闭";onClicked:roleDialog.close()}
             }
         ScrollView {id:rolesScroll;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:availableWidth
             ScrollBar.vertical:ScrollBar {id:rolesScrollBar;policy:ScrollBar.AsNeeded}
@@ -566,7 +566,7 @@ Flickable {
             Desk.DeskComboBox {id:chordQuality;model:Harmony.defs.map(function(d){return d.name});Layout.fillWidth:true}
             Desk.DeskButton {text:"使用这个和弦解释";enabled:chordEnd.value>chordStart.value;onClicked:{var c=Rules.clone(root.config);c.chords.push({start:chordStart.value,end:chordEnd.value,part:root.scope.firstTrack,root:Harmony.rootPcs[chordRoot.currentIndex],definition:chordQuality.currentIndex,source:"局部指定"});root.config=c;root.start(true);chordDialog.close()}}
             Desk.DeskButton {text:"恢复自动和弦解释";onClicked:{var c=Rules.clone(root.config);c.chords=[];root.config=c;root.markDirty()}}
-            Desk.DeskButton {objectName:"arrangementChordClose";text:"关闭";onClicked:chordDialog.close()}
+            Desk.DeskButton {objectName:"arrangementChordClose";iconName:"close";text:"关闭";onClicked:chordDialog.close()}
         }
     }
     }
@@ -595,7 +595,7 @@ Flickable {
                     }
                 }
                 Label {text:'参考：<a href="https://nicechord.com/post/low-interval-limit/">好和弦·低音程限制</a>';textFormat:Text.RichText;onLinkActivated:Qt.openUrlExternally(link);color:theme.muted}
-                RowLayout {Desk.DeskButton {text:"恢复参考表";onClicked:{var c=Rules.clone(root.config);c.lowIntervalLimits=Rules.clone(Rules.lowIntervalLimits);root.config=c;root.persist();root.markDirty()}}Desk.DeskButton {text:"关闭";onClicked:intervalLimits.close()}}
+                RowLayout {Desk.DeskButton {text:"恢复参考表";onClicked:{var c=Rules.clone(root.config);c.lowIntervalLimits=Rules.clone(Rules.lowIntervalLimits);root.config=c;root.persist();root.markDirty()}}Desk.DeskButton {iconName:"close";text:"关闭";onClicked:intervalLimits.close()}}
             }
         }
     }

@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performanceeditor.h"
+#include "mscore/workflow/toolicons.h"
 #include "editorsettings.h"
 #include "mscore/scoreview.h"
 #include "libmscore/select.h"
@@ -78,17 +79,14 @@ void PerformanceEditor::setupUsabilityControls()
       auto tools=new QWidget(this);auto bar=new QGridLayout(tools);bar->setContentsMargins(0,0,0,0);bar->setSpacing(1);
       const QStringList labels{tr("选择"),tr("铅笔"),tr("直线")};
       for(int i=0;i<3;++i){auto button=new QToolButton(tools);button->setText(labels[i]);
-            QPixmap icon(16,16);icon.fill(Qt::transparent);QPainter ink(&icon);ink.setRenderHint(QPainter::Antialiasing);ink.setPen(QPen(_appearance.colors[PerformanceAppearance::Text],1.4));
-            if(i==0){QPolygonF arrow;arrow<<QPointF(3,1)<<QPointF(3,13)<<QPointF(6,10)<<QPointF(9,15)<<QPointF(11,14)<<QPointF(8,9)<<QPointF(13,9);ink.drawPolygon(arrow);}
-            else if(i==1){ink.drawLine(QPointF(4,11),QPointF(12,3));ink.drawLine(QPointF(6,13),QPointF(14,5));ink.drawLine(QPointF(12,3),QPointF(14,5));ink.drawLine(QPointF(4,11),QPointF(3,14));ink.drawLine(QPointF(3,14),QPointF(6,13));}
-            else {ink.drawLine(QPointF(3,13),QPointF(13,3));ink.drawRect(QRectF(1,11,4,4));ink.drawRect(QRectF(11,1,4,4));}ink.end();button->setIcon(QIcon(icon));button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+            setComponentToolIcon(button,QStringList{"select","pencil","line"}[i]);
             button->setCheckable(true);button->setChecked(i==_tool->currentIndex());button->setObjectName(QString("performanceDrawTool%1").arg(i));
             button->setToolTip(i==0?tr("拖动已选音；速度模式下点按添加速度节点。"):(i==1?tr("拖过一段力度柱进行绘制；有选音时只改选音，没有选音时只改筛选允许的音。松开后可一次撤销。速度模式绘制速度。") : tr("从起点到终点画一条直线，调整经过的力度或速度。")));
             connect(button,&QToolButton::clicked,this,[this,i]{_tool->setCurrentIndex(i);});
             connect(_tool,QOverload<int>::of(&QComboBox::currentIndexChanged),button,[button,i](int index){button->setChecked(index==i);});
             connect(_parameter,QOverload<int>::of(&QComboBox::currentIndexChanged),button,[button](int index){button->setEnabled(index!=2);});bar->addWidget(button,0,i);}
       add(tools);
-      auto operations=new QToolButton(this);operations->setText(tr("操作设置…"));operations->setObjectName("performanceOperationSettings");
+      auto operations=new QToolButton(this);operations->setText(tr("操作设置…"));operations->setObjectName("performanceOperationSettings");setComponentToolIcon(operations,"settings");
       connect(operations,&QToolButton::clicked,this,[this]{showPerformanceSettings(_score,this,[this]{
             const auto key=QKeySequence(QSettings().value("performanceEditor/peekKey").toString());
             _peekKey=key.isEmpty()?0:key[0];

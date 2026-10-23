@@ -410,3 +410,6 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	241	空列�
 写法会话标识	mscore/workflow/workflowcontext.cpp	QString workflowScoreSession(	10	另存与标签切换持续识别当前完整谱写法	mtest/mscore/pluginhost/variants_091_tests.inc
 另存文件通知	mscore/file.cpp	notifyWorkflowScoreFileChanged(cs_);	1978	成功另存后同步工作区路径，保存副本沿用原路径	mtest/mscore/pluginhost/variants_091_tests.inc
 写法范围说明	mscore/workflow/regionalpanel.cpp	QString scopeSummary(	70	相同声部按谱表范围合并，保留当前写法	mtest/mscore/p1native/regional_091_tests.inc
+组件动作图标	mscore/workflow/toolicons.cpp	QIcon componentToolIcon(	63	按真实动作复用原图形与独立图形，支持面板主题	mtest/mscore/pluginhost/components_092_tests.inc
+QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this);	38	在实际插件引擎注册共用图标，颜色由页面给出	mtest/mscore/pluginhost/components_092_tests.inc
+音源操作分组	mscore/workflow/vstpanel.cpp	auto sourceGroup = new QGroupBox	564	当前音源、插件选择、效果链分别操作，SF2返回直接可见	mtest/mscore/pluginhost/components_092_tests.inc

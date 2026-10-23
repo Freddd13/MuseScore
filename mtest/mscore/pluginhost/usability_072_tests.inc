@@ -117,7 +117,8 @@ void TestPluginHost::vstFirstUseControls() {
         QTest::qWait(80);
         QVERIFY(choose->width() <= choose->sizeHint().width() + 1);
         QVERIFY(original->width() <= original->sizeHint().width() + 1);
-        QVERIFY(!choose->geometry().intersects(open->geometry()));
+        QVERIFY(!QRect(choose->mapTo(dock, QPoint()), choose->size()).intersects(
+                      QRect(open->mapTo(dock, QPoint()), open->size())));
     }
     dock->close();
 #else

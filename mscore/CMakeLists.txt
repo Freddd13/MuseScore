@@ -258,7 +258,7 @@ add_library(mscoreapp STATIC
       timeline.cpp
       parteditbase.cpp playpanel.cpp selectionwindow.cpp
       measureproperties.cpp
-      seq.cpp workflow/referencebus.cpp workflow/referencebus.h workflow/workflowcontext.cpp workflow/workflowcontext.h textpalette.cpp
+      seq.cpp workflow/referencebus.cpp workflow/referencebus.h workflow/workflowcontext.cpp workflow/workflowcontext.h workflow/toolicons.cpp textpalette.cpp
       timedialog.cpp symboldialog.cpp shortcutcapturedialog.cpp
       radiobuttongroupbox.cpp simplebutton.cpp
       openfilelocation.cpp

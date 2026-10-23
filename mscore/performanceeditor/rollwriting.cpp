@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "rollwriting.h"
+#include "mscore/workflow/toolicons.h"
 #include "libmscore/chord.h"
 #include "libmscore/input.h"
 #include "libmscore/note.h"
@@ -118,6 +119,11 @@ RollWritingBar::RollWritingBar(PerformanceEditor *editor, QToolButton *toggle,
     auto b = new QToolButton;
     b->setObjectName(name);
     b->setText(text);
+    const QHash<QString,QString> iconKeys{{"rollWriteScope","score"},{"rollWriteLocks","filter"},
+        {"rollWriteOptions","settings"},{"rollWriteQuantize","fit"},{"rollWriteOriginal","score"},
+        {"rollWriteProposed","audition"},{"rollWriteStop","stop"},{"rollWriteApply","apply"},
+        {"rollWriteSaved","save"},{"rollWriteReset","reset"}};
+    if(iconKeys.contains(name))setComponentToolIcon(b,iconKeys.value(name));
     connect(b, &QToolButton::clicked, this, action);
     _controls.append(b);
     return b;

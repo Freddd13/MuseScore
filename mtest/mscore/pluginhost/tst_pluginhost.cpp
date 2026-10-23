@@ -152,6 +152,7 @@ class TestPluginHost : public QObject {
       void chordHandlesStayAtMusicRange();
       void legacyVariantsSaveBeforeSwitch();
       void legacyVariantsFollowSaveAs();
+      void componentToolIconsAndSourceGroups();
       void metadataSkipsSupportComponents();
       void contentWidthControlsWrapWithoutOverlap();
       void restoredWorkspaceKeepsPersonalTools();
@@ -293,6 +294,7 @@ class TestPluginHost : public QObject {
             QTRY_VERIFY(trackRow->width()>100);QTest::qWait(100);
             for(const char* name:{"referenceTrackMute","referenceTrackSolo","referenceTrackParticipate"}){
                   auto button=findVisual(trackRow,name);QVERIFY(button);QVERIFY(button->height()<=trackRow->height());
+                  QCOMPARE(button->property("iconName").toString(),QString(name==QString("referenceTrackMute")?"mute":name==QString("referenceTrackSolo")?"solo":"link"));
                   QVERIFY(QRectF(0,0,trackRow->width(),trackRow->height()).adjusted(-1,-1,1,1).contains(button->mapRectToItem(trackRow,QRectF(0,0,button->width(),button->height()))));
                   }
             QPointer<QQuickItem> mute=findVisual(trackRow,"referenceTrackMute");QVERIFY(mute);
@@ -1382,5 +1384,6 @@ class TestPluginHost : public QObject {
 #include "arrangement_083_tests.inc"
 #include "vst_088_tests.inc"
 #include "layout_089_tests.inc"
+#include "components_092_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

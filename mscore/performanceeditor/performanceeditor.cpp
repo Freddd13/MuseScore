@@ -1,4 +1,5 @@
 #include "performanceeditor.h"
+#include "mscore/workflow/toolicons.h"
 #include "../workflow/featuregate.h"
 #include "../workflow/workspaceviews.h"
 #include "../workflow/editorareas.h"
@@ -132,11 +133,14 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       connect(_pedalGrid, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int value) { cancelGesture(); QSettings().setValue("performanceEditor/pedalGrid", value); });
       row->setAlignment(Qt::AlignLeft);
       toolLayout->addLayout(row);
-      _playButton = new QToolButton(this); _playButton->setObjectName("performancePlay"); _playButton->setText(tr("▶ 播放"));
+      _playButton = new QToolButton(this); _playButton->setObjectName("performancePlay"); _playButton->setText(tr("播放"));
+      setComponentToolIcon(_playButton, "play");
       _playButton->setToolTip(tr("从当前播放光标开始／停止（空格）")); connect(_playButton, &QToolButton::clicked, this, [this] { togglePlayback(); }); row->addWidget(_playButton);
       auto locate = new QToolButton(this); locate->setObjectName("performanceLocateSelection"); locate->setText(tr("移至选音"));
+      setComponentToolIcon(locate, "locate");
       locate->setToolTip(tr("把播放光标移到最近选中的音；双击音符可从该处播放。")); connect(locate, &QToolButton::clicked, this, &PerformanceEditor::locateSelection); row->addWidget(locate);
       _auditionButton = new QToolButton(this); _auditionButton->setObjectName("performanceAudition"); _auditionButton->setText(tr("试听")); _auditionButton->setCheckable(true);
+      setComponentToolIcon(_auditionButton, "audition");
       _auditionButton->setChecked(QSettings().value("performanceEditor/audition", true).toBool()); _auditionButton->setToolTip(tr("停播时点选音符／力度端点发声，不移动播放位置。"));
       connect(_auditionButton, &QToolButton::toggled, this, [](bool on) { QSettings().setValue("performanceEditor/audition", on); }); row->addWidget(_auditionButton);
       _wheelButton = new QToolButton(this); _wheelButton->setObjectName("performanceWheelVelocity");

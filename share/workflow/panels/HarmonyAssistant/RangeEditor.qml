@@ -68,15 +68,15 @@ Column {
         DeskComboBox {id:bass;model:["实际低音"].concat(editor.roots);Layout.fillWidth:true}
     }
     Flow {width:parent.width;spacing:5
-        DeskButton {text:"应用范围";enabled:!!editor.region;onClicked:editor.action("range",start.value,end.value,root.currentIndex,quality.currentIndex,0)}
-        DeskButton {text:"指定和弦";onClicked:editor.action("assign",start.value,end.value,root.currentIndex,quality.currentIndex,bass.currentIndex)}
+        DeskButton {iconName:"apply";text:"应用范围";enabled:!!editor.region;onClicked:editor.action("range",start.value,end.value,root.currentIndex,quality.currentIndex,0)}
+        DeskButton {iconName:"chord";text:"指定和弦";onClicked:editor.action("assign",start.value,end.value,root.currentIndex,quality.currentIndex,bass.currentIndex)}
         DeskButton {text:"在当前位置拆分";enabled:!!editor.region && editor.tick>editor.region.start && editor.tick<editor.region.end;onClicked:editor.action("split",editor.tick,end.value,0,0,0)}
         DeskButton {text:"合并前一段";enabled:!!editor.region;onClicked:editor.action("merge",start.value,end.value,0,0,0)}
         DeskButton {text:"排除此范围";onClicked:editor.action("suppress",start.value,end.value,0,0,0)}
         DeskButton {text:"恢复记号自动位置";enabled:!!editor.region;onClicked:editor.action("position",start.value,end.value,0,0,0)}
         DeskButton {text:"恢复自动";onClicked:editor.action("restore",start.value,end.value,0,0,0)}
-        DeskButton {text:"撤销修正";enabled:editor.canUndo;onClicked:editor.action("undo",0,0,0,0,0)}
-        DeskButton {text:"重做修正";enabled:editor.canRedo;onClicked:editor.action("redo",0,0,0,0,0)}
+        DeskButton {iconName:"undo";text:"撤销修正";enabled:editor.canUndo;onClicked:editor.action("undo",0,0,0,0,0)}
+        DeskButton {iconName:"redo";text:"重做修正";enabled:editor.canRedo;onClicked:editor.action("redo",0,0,0,0,0)}
     }
     UiLabel {width:parent.width;text:"拖两端手柄调整和弦作用范围；拖谱面记号本身调整位置。面板和谱面同步更新，撤销修正可退回上一步。手柄每格为四分音符的八分之一。";wrapMode:Text.Wrap;color:theme.muted;font.pixelSize:10}
 }
