@@ -42,7 +42,6 @@ class MixerDetails : public QWidget, public Ui::MixerDetails, public ChannelList
       Q_OBJECT
 
       MixerTrackItemPtr _mti;
-      QPushButton* vstButton = nullptr;
       QWidget* mutePerVoiceHolder;
       QGridLayout* mutePerVoiceGrid;
       QList<QPushButton*> voiceButtons;

@@ -34,6 +34,7 @@
 #include "synthcontrol.h"
 #include "audio/midi/msynthesizer.h"
 #include "preferences.h"
+#include "mscore/workflow/featuregate.h"
 
 #include "mixerdetails.h"
 #include "mixertrack.h"
@@ -85,6 +86,17 @@ Mixer::Mixer(QWidget* parent)
       enablePlay = new EnablePlayForWidget(this);
 
       setupUi(this);
+      if (personalFeaturesEnabled()) {
+            // Keep the existing mixer form intact; scrolling lets bottom tools
+            // expand without the form's minimum height enlarging the window.
+            auto scroll = new QScrollArea(this);
+            scroll->setObjectName("mixerContentScroll");
+            scroll->setWidgetResizable(true);
+            scroll->setFrameShape(QFrame::NoFrame);
+            scroll->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
+            scroll->setWidget(dockWidgetContents);
+            setWidget(scroll);
+            }
       setAllowedAreas(Qt::DockWidgetAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea));
 
       trackAreaLayout = new QHBoxLayout;

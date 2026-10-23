@@ -58,7 +58,7 @@ QAction *rollWritingAction() {
   action->setIconText(QObject::tr("写音"));
   action->setObjectName("kumo-roll-writing");
   action->setCheckable(true);
-  action->setIcon(personalToolIcon("kumo-rhythm"));
+  action->setIcon(personalToolIcon("kumo-roll-writing"));
   action->setToolTip(
       QObject::tr("在钢琴卷帘中画音、移动和改长度；可直接写谱或先试草稿。"));
   markPersonalAction(action);

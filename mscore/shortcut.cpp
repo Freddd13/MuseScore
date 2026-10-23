@@ -13,6 +13,7 @@
 #include "globals.h"
 #include "icons.h"
 #include "shortcut.h"
+#include "mscore/workflow/workspaceviews.h"
 
 #include "libmscore/xml.h"
 
@@ -4511,7 +4512,10 @@ QAction* Shortcut::action() const
       _action->setShortcutContext(_context);
       translateAction(_action);
 
-      if (_icon != Icons::Invalid_ICON)
+      const auto personalIcon = personalToolIcon(QString::fromUtf8(_key));
+      if (!personalIcon.isNull())
+            _action->setIcon(personalIcon);
+      else if (_icon != Icons::Invalid_ICON)
             _action->setIcon(*icons[int(_icon)]);
 
       return _action;
@@ -4645,7 +4649,10 @@ void Shortcut::refreshIcons()
       {
       for (Shortcut* s : qAsConst(_shortcuts)) {
             QAction* a = s->action();
-            if (a && s->icon() != Icons::Invalid_ICON) {
+            const auto personalIcon = personalToolIcon(QString::fromUtf8(s->_key));
+            if (a && !personalIcon.isNull())
+                  a->setIcon(personalIcon);
+            else if (a && s->icon() != Icons::Invalid_ICON) {
                   a->setIcon(*icons[int(s->icon())]);
                   }
             }

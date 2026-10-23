@@ -31,7 +31,6 @@
 #include "synthcontrol.h"
 #include "audio/midi/msynthesizer.h"
 #include "mscore/workflow/vstpanel.h"
-#include "mscore/workflow/featuregate.h"
 #include "preferences.h"
 
 namespace Ms {
@@ -46,14 +45,6 @@ MixerDetails::MixerDetails(QWidget *parent) :
       mutePerVoiceHolder(nullptr)
       {
       setupUi(this);
-#ifdef KUMO_VST_HOST
-      if (personalFeaturesEnabled()) {
-            vstButton=new QPushButton(tr("音源与效果…"),this);
-            vstButton->setToolTip(tr("为当前乐器选择 VST 音源，或设置串联效果。"));
-            gridLayout_4->addWidget(vstButton,1,0,1,2);
-            connect(vstButton,&QPushButton::clicked,this,[this]{showVstPanel(_mti?_mti->focusedChan():nullptr);});
-            }
-#endif
 
       connect(partNameLineEdit,    SIGNAL(editingFinished()),              SLOT(partNameChanged()));
       connect(trackColorLabel,     SIGNAL(colorChanged(QColor)),           SLOT(trackColorChanged(QColor)));
@@ -91,7 +82,6 @@ void MixerDetails::setTrack(MixerTrackItemPtr track)
 
 void MixerDetails::updateFromTrack()
       {
-      if(vstButton)vstButton->setEnabled(bool(_mti));
       if (mutePerVoiceHolder) {
             mutePerVoiceHolder->deleteLater();
             mutePerVoiceHolder = nullptr;

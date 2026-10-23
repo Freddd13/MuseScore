@@ -46,7 +46,49 @@ class WorkspaceViews : public QObject {
       saveEditorAreaLayout(editor);
     QSettings settings;
     settings.setValue(key(current + "/layout"), window->saveState(1));
+    if (auto dock = window->findChild<QDockWidget *>("performanceEditorDock"))
+      if (!dock->isHidden() && !dock->isFloating()) {
+        // Tabbed docks can retain the size of their inactive page. Save the
+        // visible peer's extent so returning to this view restores the group.
+        auto visible = dock;
+        for (auto peer : window->tabifiedDockWidgets(dock))
+          if (!peer->visibleRegion().isEmpty())
+            visible = peer;
+        settings.setValue(key(current + "/editorExtent"),
+                          QVariantMap{{"width", visible->width()},
+                                      {"height", visible->height()},
+                                      {"windowWidth", window->width()},
+                                      {"windowHeight", window->height()}});
+      }
     settings.setValue(key("current"), current);
+  }
+  void restoreEditorExtent(const QString &mode) {
+    if (!window || current != mode)
+      return;
+    auto dock = window->findChild<QDockWidget *>("performanceEditorDock");
+    if (!dock || dock->isHidden() || dock->isFloating())
+      return;
+    const auto extent = QSettings().value(key(mode + "/editorExtent")).toMap();
+    const auto area = window->dockWidgetArea(dock);
+    const bool side = area == Qt::LeftDockWidgetArea || area == Qt::RightDockWidgetArea;
+    const int savedWindow = extent.value(side ? "windowWidth" : "windowHeight").toInt();
+    const int savedSize = extent.value(side ? "width" : "height").toInt();
+    if (savedWindow <= 0 || savedSize <= 0)
+      return;
+    const int available = side ? window->width() : window->height();
+    const int wanted = qBound(1, qRound(double(savedSize) * available / savedWindow), available);
+    const auto orientation = side ? Qt::Horizontal : Qt::Vertical;
+    window->resizeDocks({dock}, {wanted}, orientation);
+    if (window->QWidget::layout())
+      window->QWidget::layout()->activate();
+    if (!window->tabifiedDockWidgets(dock).isEmpty()) {
+      // resizeDocks sizes the whole tab group. Measure its tab-bar overhead
+      // rather than subtracting a fixed pixel size from the editor on return.
+      const int actual = side ? dock->width() : dock->height();
+      const int groupSize = qBound(1, wanted + (wanted - actual), available);
+      if (actual > 0 && actual != wanted)
+        window->resizeDocks({dock}, {groupSize}, orientation);
+    }
   }
   void updateButtons() {
     auto action = choices->checkedAction();
@@ -224,9 +266,11 @@ public:
     showScore(visible, state.isEmpty());
     // Restore internal heights after the main window has restored dock sizes.
     QTimer::singleShot(0, this, [this, mode] {
-      if (window && current == mode)
+      if (window && current == mode) {
         if (auto editor = window->findChild<PerformanceEditor*>())
           settleEditorAreaLayout(editor);
+        restoreEditorExtent(mode);
+      }
     });
     selected->setChecked(true);
     updateButtons();
@@ -292,6 +336,12 @@ void ensureEditorAreas(QSplitter *splitter) {
     splitter->setSizes(sizes);
 }
 QIcon personalToolIcon(const QString &key) {
+  static const QStringList supported{
+      "kumo-system-lock", "kumo-vst", "harmony-assistant", "reference-player",
+      "performance-expression", "kumo-spectrum", "arrangement-suggestions", "kumo-rhythm",
+      "kumo-roll-writing", "kumo-ai-connection"};
+  if (!supported.contains(key))
+    return QIcon();
   QPixmap image(96, 96);
   image.setDevicePixelRatio(4);
   image.fill(Qt::transparent);
@@ -307,8 +357,17 @@ QIcon personalToolIcon(const QString &key) {
     p.setPen(QPen(accent, 1.5));
     p.drawRoundedRect(QRectF(11, 13, 9, 8), 1, 1);
     p.drawArc(QRectF(13, 8, 5, 9), 0, 180 * 16);
-  } else if (key=="kumo-vst") {
-    for(int x:{6,12,18}){p.drawLine(x,4,x,20);p.fillRect(QRectF(x-2,x==12?6:13,4,4),x==12?accent:ink);}
+  } else if (key == "kumo-vst") {
+    p.drawRoundedRect(QRectF(3, 11, 18, 10), 1, 1);
+    for (int x : {7, 11, 15, 19})
+      p.drawLine(x, 16, x, 21);
+    for (int x : {5, 9, 15})
+      p.fillRect(QRectF(x, 11, 2, 5), ink);
+    p.setPen(QPen(accent, 1.5, Qt::SolidLine, Qt::RoundCap));
+    p.drawLine(14, 2, 14, 5);
+    p.drawLine(18, 2, 18, 5);
+    p.drawRoundedRect(QRectF(13, 5, 6, 3), 1, 1);
+    p.drawLine(16, 8, 16, 10);
   } else if (key == "harmony-assistant") {
     for (int y : {8, 12, 16}) {
       p.setBrush(ink);
@@ -329,12 +388,36 @@ QIcon personalToolIcon(const QString &key) {
                  i == 2 ? accent : ink);
     }
   } else if (key == "kumo-spectrum") {
-    for (int x = 0; x < 5; ++x)
-      for (int y = 0; y < 5; ++y) {
-        auto color = ((x + y) % 4 == 0) ? accent : ink;
-        color.setAlpha(65 + ((x * 3 + y) % 4) * 60);
-        p.fillRect(QRectF(3 + x * 4, 3 + y * 4, 3, 3), color);
-      }
+    p.drawLine(3, 3, 3, 21);
+    for (int row = 0; row < 4; ++row) {
+      auto color = row == 2 ? accent : ink;
+      color.setAlpha(220 - row * 30);
+      p.fillRect(QRectF(6, 4 + row * 4, 15 - row * 2, 2), color);
+    }
+  } else if (key == "kumo-rhythm") {
+    p.setBrush(ink);
+    p.drawEllipse(QRectF(3, 13, 5, 3));
+    p.drawEllipse(QRectF(14, 13, 5, 3));
+    p.drawLine(8, 14, 8, 4);
+    p.drawLine(19, 14, 19, 4);
+    p.drawLine(8, 4, 19, 4);
+    p.setPen(QPen(accent, 1.5));
+    for (int x : {5, 11, 17})
+      p.drawLine(x, 19, x, 21);
+  } else if (key == "kumo-roll-writing") {
+    p.fillRect(QRectF(3, 5, 9, 3), ink);
+    p.fillRect(QRectF(3, 11, 5, 3), ink);
+    p.setPen(QPen(accent, 2.5, Qt::SolidLine, Qt::SquareCap));
+    p.drawLine(10, 18, 19, 9);
+    p.setPen(QPen(ink, 1.5, Qt::SolidLine, Qt::RoundCap));
+    p.drawLine(8, 20, 10, 18);
+  } else if (key == "kumo-ai-connection") {
+    p.drawRoundedRect(QRectF(3, 4, 18, 13), 3, 3);
+    p.drawLine(7, 17, 7, 21);
+    p.drawLine(7, 21, 12, 17);
+    p.setPen(QPen(accent, 2.5, Qt::SolidLine, Qt::RoundCap));
+    for (int x : {7, 12, 17})
+      p.drawPoint(x, 10);
   } else {
     p.setBrush(Qt::NoBrush);
     p.drawEllipse(QRectF(6, 3, 12, 12));

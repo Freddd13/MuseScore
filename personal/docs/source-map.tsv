@@ -4,7 +4,7 @@ topic	path	symbol	line	role	tests
 主应用初始化	mscore/musescore.cpp	int runApplication(	9012	应用初始化与CLI	-
 命令分发	mscore/musescore.cpp	void MuseScore::cmd(QAction* a)	7000	状态检查与事务	-
 主窗口更新	mscore/musescore.cpp	void MuseScore::endCmd(bool undoRedo)	7085	UI与插件结束通知	-
-快捷键	mscore/shortcut.cpp	Shortcut::getShortcut(	4464	命令注册与查询	-
+快捷键	mscore/shortcut.cpp	Shortcut::getShortcut(	4465	命令注册与查询	-
 视图命令	mscore/scoreview.cpp	void ScoreView::cmd(const char* s)	2261	视图本地命令表	-
 事件与输入模式	mscore/events.cpp	void ScoreView::changeState(ViewState s)	1166	交互状态切换	-
 核心命令	libmscore/cmd.cpp	void Score::cmd(const QAction* a, EditData& ed)	4501	核心命令分发	mtest/libmscore/tools
@@ -82,7 +82,7 @@ MIDI左右手拆分	importexport/midiimport/importmidi_lrhand.h	void splitIntoLe
 踏板/琶音上下文	mscore/plugin/api/scoreobserver.cpp	QVariantMap ScoreObserver::contextSnapshot(	343	即时音/上下文分离，小节/休止/踏板边界	mtest/mscore/scoreobserver
 谱面屏幕标注	mscore/plugin/api/scoreobserver.cpp	void ScoreObserver::applyPreview(	423	独立和声变化标记、原谱优先与两层避让	mtest/mscore/pluginhost
 插件停靠状态	mscore/plugin/qmlplugin.cpp	void QmlPlugin::attachPanelDock(	64	实际区域/悬浮通知，可选横条高度	mtest/mscore/pluginhost
-插件菜单/析构回归	mtest/mscore/pluginhost/tst_pluginhost.cpp	class TestPluginHost	119	真实 Qt 主窗口、菜单、重排和停靠	mtest/mscore/pluginhost
+插件菜单/析构回归	mtest/mscore/pluginhost/tst_pluginhost.cpp	class TestPluginHost	121	真实 Qt 主窗口、菜单、重排和停靠	mtest/mscore/pluginhost
 plugin-preview	mscore/plugin/api/scoreobserver.cpp	ScoreObserver::setActiveScorePreview	628	固定区间高亮，不复制全谱色表	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-preview	mscore/scoreview.cpp	ScoreView::activateNotePreview	5785	固定记号点击命中与弱目标转发	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-preview	mscore/plugin/qmlplugin.cpp	QmlPlugin::focusPanel	100	聚焦已有插件窗口，保留停靠状态	mtest/mscore/pluginhost/tst_pluginhost.cpp
@@ -313,7 +313,7 @@ MIDI录音目录	mscore/workflow/midicapture.cpp	"const QString folder=QSettings
 个人扩展开关	mscore/workflow/featuregate.cpp	bool personalFeaturesEnabled()	56	程序旁配置、入口和后台能力统一控制	mtest/mscore/pluginhost/tst_pluginhost.cpp
 原生AI连接	mscore/workflow/aiconnection.cpp	void initializeBuiltinAI()	440	私有桥接、窗口选择、Codex配置和帮助	mtest/mscore/pluginhost/tst_pluginhost.cpp
 工作视图	mscore/workflow/workspaceviews.cpp	class WorkspaceViews	30	四种布局、DAW谱面对照、共用动作工具栏及返回乐谱	mtest/mscore/pluginhost/tst_pluginhost.cpp
-独立编辑区域	mscore/workflow/editorareas.cpp	class EditorAreas	23	悬浮、右侧停靠、放回与各视图的区域保存	mtest/mscore/pluginhost/tst_pluginhost.cpp
+独立编辑区域	mscore/workflow/editorareas.cpp	class EditorAreas	24	悬浮、右侧停靠、放回与各视图的区域保存	mtest/mscore/pluginhost/tst_pluginhost.cpp
 原曲滑块输入	share/workflow/panels/WorkflowCommon/SliderNumber.qml	RowLayout {	6	原生滑块与数值输入	mtest/mscore/pluginhost/tst_pluginhost.cpp
 节拍音符字体兼容	libmscore/textbase.cpp	"if (family == ""Leland Text"")"	867	默认节拍字形采用3.6.2尺寸；其它符号和自选字体保留	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/P2/compare_fonts.py
 实时录制对应	mscore/workflow/realtimematcher.h	class RealtimeMatcher	11	音高集合与起音间隔的有限路径匹配	mtest/mscore/p1native/tst_p1native.cpp
@@ -342,7 +342,7 @@ SF2 单乐器效果	audio/vst/fluidsource.cpp	class FluidSource	12	按需创建�
 分段写法列表操作	mscore/workflow/regionalpanel.cpp	void removeSelected(	431	单击切换、明确当前写法、删除与恢复入口	mtest/mscore/p1native/regional_070_tests.inc
 工具窗口全屏与位置	mscore/workflow/panelwindowcontrols.h	class PanelWindowControls	20	浮动窗口可见范围、独立全屏、退出及原位置恢复	mtest/mscore/pluginhost/usability_072_tests.inc
 紧凑控件换行	mscore/workflow/controlflowlayout.h	class ControlFlowLayout	13	实际控件宽度、换行及工具栏占高	mtest/mscore/pluginhost/usability_072_tests.inc
-工作视图恢复顺序	mscore/workflow/editorareas.cpp	void settleEditorAreaLayout	583	在主窗口恢复停靠后恢复内部高度	mtest/mscore/pluginhost/usability_072_tests.inc
+工作视图恢复顺序	mscore/workflow/editorareas.cpp	void settleEditorAreaLayout	597	在主窗口恢复停靠后恢复内部高度	mtest/mscore/pluginhost/usability_072_tests.inc
 工作流面板位置保存	mscore/workflow/paneldock.cpp	class PanelPosition	11	独立开关和全屏入口、临时全屏期间保留原位置	mtest/mscore/pluginhost/usability_072_tests.inc
 VST 当前参数保存	mscore/workflow/vstpanel.cpp	void saveVstEdits(	1146	保存当前参数时保留已载入音源及其窗口，撤销恢复保存状态	mtest/mscore/pluginhost/usability_072_tests.inc
 CFX 状态比较	audio/vst/plugin.cpp	bool sameConfiguration(	83	保留完整音源状态，识别 ARIA 读取计数和真正参数变化	../../muse3_plugins/P2/tests/vst/checks.cpp;mtest/mscore/pluginhost/usability_072_tests.inc
@@ -365,9 +365,9 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	241	空列�
 人工和弦当前音符	share/workflow/panels/HarmonyAssistant/Timeline.js	function refreshNotes(	271	按范围与声部读取当前音符，保留用户指定的和弦	mtest/mscore/pluginhost/harmony_panel_077_tests.inc
 频谱时间范围	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::fitTimeRange(	608	完整音频与按谱片段、匹配显示、逐音轨选择保存	mtest/mscore/pluginhost/spectrum_078_tests.inc
 共同时间缩放	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::zoomTimeline(	189	卷帘和频谱共用缩放中心与时间滚动范围	mtest/mscore/pluginhost/spectrum_078_tests.inc
-独立工具与当前页	mscore/workflow/editorareas.cpp	void keepInlinePage(	55	唤回独立工具时保留当前编辑器页，恢复导航和时间滚动	mtest/mscore/pluginhost/layout_079_tests.inc
-工具内容高度	mscore/workflow/editorareas.cpp	void ensureEditorDockContent(	564	根据当前内容补足最小空间，保留用户调整的较大编辑器	mtest/mscore/pluginhost/layout_079_tests.inc
-工作视图初始显示	mscore/workflow/workspaceviews.cpp	void activate(	181	首次雕版与DAW收起输入工具，保存布局继续恢复	mtest/mscore/pluginhost/layout_079_tests.inc
+独立工具与当前页	mscore/workflow/editorareas.cpp	void keepInlinePage(	56	唤回独立工具时保留当前编辑器页，恢复导航和时间滚动	mtest/mscore/pluginhost/layout_079_tests.inc
+工具内容高度	mscore/workflow/editorareas.cpp	void ensureEditorDockContent(	578	根据当前内容补足最小空间，保留用户调整的较大编辑器	mtest/mscore/pluginhost/layout_079_tests.inc
+工作视图初始显示	mscore/workflow/workspaceviews.cpp	void activate(	223	首次雕版与DAW收起输入工具，保存布局继续恢复	mtest/mscore/pluginhost/layout_079_tests.inc
 表达结果选音	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::selectExpressionNote(	186	对应列表与原生选音同步，播放中保持拍位并更新采用数量	mtest/mscore/performanceeditor/expression_080_tests.inc
 录完直接看结果	share/workflow/panels/PerformanceExpression/PerformanceExpression.view.qml	 function revealResults()	52	录制与导入后显示试听、采用和逐音结果；保留手动浏览	mtest/mscore/performanceeditor/expression_080_tests.inc
 正常主窗口保存与关联范围	mtest/mscore/nativeui/tst_nativeui.cpp	class TestNativeUi	39	正常菜单及工作区初始化；内嵌／悬浮Ctrl+S与保存读回，八音轨关联的精确拍位	mtest/mscore/nativeui/tst_nativeui.cpp
@@ -399,3 +399,7 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	241	空列�
 换谱恢复音源	mscore/workflow/vstpanel.cpp	void restoreVstForScore(	1013	按当前谱读取音源配置并恢复路由；共用与保留设计见SOUND_PEDAL_PLAN.md	-
 音源实例复用	audio/vst/rack.cpp	bool Rack::load(	292	复用当前配置中相同实例，换谱保留的实现位置	-
 踏板编辑取点	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::beginGesture(	921	参数区与谱行带的踏板端点取点	-
+组合面板空间	mscore/mixer/mixer.cpp	if (personalFeaturesEnabled())	89	混音器按需滚动，移除新增整行按钮后保留原控制内容	mtest/mscore/pluginhost/layout_089_tests.inc
+编辑器标签组尺寸	mscore/workflow/workspaceviews.cpp	void restoreEditorExtent(	65	保存可见标签组，恢复工作视图时计入标签栏尺寸，保留内部比例	mtest/mscore/pluginhost/layout_089_tests.inc
+个人工具图标	mscore/workflow/workspaceviews.cpp	QIcon personalToolIcon(	338	按工具用途绘制图标，菜单、工具栏与工具页共用	mtest/mscore/pluginhost/layout_089_tests.inc
+主题刷新图标	mscore/shortcut.cpp	void Shortcut::refreshIcons()	4648	动作创建与主题刷新使用各工具自己的图标	mtest/mscore/pluginhost/layout_089_tests.inc

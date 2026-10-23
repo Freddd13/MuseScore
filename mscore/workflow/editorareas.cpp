@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "editorareas.h"
 #include "mscore/musescore.h"
+#include <QApplication>
 #include "mscore/performanceeditor/performanceeditor.h"
 #include "mscore/performanceeditor/performanceview.h"
 #include "workspaceviews.h"
@@ -278,6 +279,19 @@ public:
       : QObject(owner), editor(owner), split(splitter) {
     editor->installEventFilter(this);
     tabs = editor->findChild<QTabBar *>("workflowExpressionTabs");
+    if (tabs) {
+      const auto tabBar = tabs;
+      const auto updateIcons = [tabBar] {
+        if (tabBar->count() > 0)
+          tabBar->setTabIcon(0, QIcon(":/data/icons/performance-editor.svg"));
+        const QStringList keys{"performance-expression", "kumo-spectrum", "kumo-rhythm"};
+        for (int index = 1; index < tabBar->count() && index <= keys.size(); ++index)
+          tabBar->setTabIcon(index, personalToolIcon(keys[index - 1]));
+      };
+      updateIcons();
+      connect(qApp, &QGuiApplication::paletteChanged, tabs,
+              [updateIcons](const QPalette &) { updateIcons(); });
+    }
     menu->clear();
     const QHash<QString, QPair<QString, int>> names{
         {"performanceNotesArea", {tr("钢琴卷帘"), 0}},

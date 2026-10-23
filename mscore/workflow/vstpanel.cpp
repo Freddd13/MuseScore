@@ -1196,7 +1196,7 @@ void addVstPanelAction(QMenu *menu) {
     action = new QAction(QObject::tr("音源与效果（VST）"), mscore);
     action->setObjectName("kumo-vst");
     action->setCheckable(true);
-    action->setIcon(personalToolIcon("mixer"));
+    action->setIcon(personalToolIcon("kumo-vst"));
     markPersonalAction(action);
     Workspace::addActionAndString(action, "kumo-vst");
     QObject::connect(action, &QAction::triggered, mscore, [action](bool shown) {

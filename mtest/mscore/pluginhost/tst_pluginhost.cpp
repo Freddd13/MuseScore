@@ -11,6 +11,7 @@
 #include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QSettings>
+#include <QPainter>
 #include <functional>
 #include <QLabel>
 #include <QMessageBox>
@@ -27,6 +28,8 @@
 #include "audio/midi/msynthesizer.h"
 #include "audio/midi/fluid/fluid.h"
 #include "mscore/synthcontrol.h"
+#include "mscore/mixer/mixer.h"
+#include "mscore/mixer/mixerdetails.h"
 #ifdef KUMO_VST_HOST
 #include "audio/vst/vstsynth.h"
 #endif
@@ -120,6 +123,7 @@ class TestPluginHost : public QObject {
       Q_OBJECT
       QTemporaryDir _settings;
    private slots:
+      void combinedToolsKeepWorkspaceAndScreenBounds();
       void vstRestoreFollowsSelectedInstrument();
       void vstEffectsHaveOwnPresets();
       void vstParameterStartsWithReadableValue();
@@ -1375,5 +1379,6 @@ class TestPluginHost : public QObject {
 #include "layout_079_tests.inc"
 #include "arrangement_083_tests.inc"
 #include "vst_088_tests.inc"
+#include "layout_089_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"
