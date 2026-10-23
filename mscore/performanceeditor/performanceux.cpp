@@ -163,7 +163,11 @@ bool PerformanceEditor::peekKeyEvent(QObject* object,QEvent* event)
       if(_peekHeld&&event->type()==QEvent::KeyRelease&&(key->key()==mainKey||key->key()==Qt::Key_Control||key->key()==Qt::Key_Alt)){
             _peekHeld=false;invalidateOverlay();updateSurfaces();syncOverlayTracking();event->accept();return true;}
       auto widget=qobject_cast<QWidget*>(object);
-      if(!widget||(!(widget==_view)&&!isAncestorOf(widget))||!_score||!_view||_view->noteEntryMode()||_view->editMode()||_view->fotoMode())return false;
+      const auto ownsArea = [widget](QWidget* canvas) {
+            auto area = canvas ? canvas->parentWidget() : nullptr;
+            return area && (area == widget || area->isAncestorOf(widget));
+            };
+      if(!widget||(!(widget==_view)&&!isAncestorOf(widget)&&!ownsArea(_noteCanvas)&&!ownsArea(_canvas))||!_score||!_view||_view->noteEntryMode()||_view->editMode()||_view->fotoMode())return false;
       if(qobject_cast<QLineEdit*>(widget)||qobject_cast<QAbstractSpinBox*>(widget)||qobject_cast<QTextEdit*>(widget)||qobject_cast<QPlainTextEdit*>(widget))return false;
       const int required=_peekKey&int(Qt::KeyboardModifierMask);
       if(key->key()!=mainKey||(int(key->modifiers())&required)!=required||(int(key->modifiers())&~int(Qt::ShiftModifier))!=(required&~int(Qt::ShiftModifier)))return false;
@@ -172,47 +176,78 @@ bool PerformanceEditor::peekKeyEvent(QObject* object,QEvent* event)
             _peekHeld=true;_peekAll=bool(key->modifiers()&Qt::ShiftModifier);_overlayPointer=_view->mapFromGlobal(QCursor::pos());
             if(_dirty)refresh();syncOverlayTracking();updateSurfaces();_view->update();}return true;
       }
-void PerformanceEditor::paintOriginalVelocity(QPainter& painter,const QRectF& rect,bool onScore)
+void PerformanceEditor::paintOriginalVelocity(QPainter& painter, const QRectF& rect, bool onScore)
       {
-      if(rangeKind()!=0)return;
-      QHash<int,QPointF> previous;QHash<int,QColor> lineColors;
-      QSet<QString> labelled;
+      if (rangeKind() != 0 || _velocityReferences.isEmpty()) return;
+      const int from = qBound(0, tickForX(rect.left(), onScore), _endTick);
+      const int until = qBound(from, tickForX(rect.right(), onScore), _endTick);
+      if (from >= until) return;
       QVector<QRectF> labels;
-      const int from=tickForX(rect.left(),onScore),until=tickForX(rect.right(),onScore);
-      auto candidates=onScore?_systemIndices:_intervals.query(from,until);
-      std::sort(candidates.begin(),candidates.end());
-      for(int i:candidates){
-            const auto& n=_notes[i];
-            if(!n.inScope||(!n.enabled&&!_ghostVoices)||n.base<0)continue;
-            const double x=xForNote(i,onScore);
-            if(x<rect.left()||x>rect.right())continue;
-            const auto lane=velocityLane(i,rect,onScore);if(lane.isEmpty())continue;
-            const int reference=n.markBase>=0?n.markBase:n.base;
-            const QPointF point(x,yForValue(reference,lane,onScore));
-            const int staff=n.track/VOICES,line=n.track;
-            QColor color=_appearance.staves[staff%8];if(!n.enabled)color.setAlpha(45);
-            painter.setPen(QPen(color,1,Qt::DashLine));
-            lineColors[line]=color;
-            if(previous.contains(line)){auto old=previous.value(line);if(qAbs(old.y()-point.y())>.001){painter.drawLine(old,QPointF(point.x(),old.y()));painter.drawLine(QPointF(point.x(),old.y()),point);previous[line]=point;}}
-            else previous[line]=point;
-            const QString key=QString("%1:%2:%3").arg(staff).arg(reference).arg(n.dynamicText);
-            if(labelled.contains(key))continue;
-            const QString text=tr("谱表 %1 · %2 %3").arg(staff+1).arg(n.dynamicText.isEmpty()?tr("默认"):n.dynamicText).arg(reference);
-            const double width=painter.fontMetrics().horizontalAdvance(text)+8,height=painter.fontMetrics().height()+2;
-            const double offsets[4]={-height-3,3,-2*height-5,height+5};
-            for(int attempt=0;attempt<12;++attempt){
-                  const double left=qBound(lane.left(),point.x()+4+(attempt/4)*(width+6),qMax(lane.left(),lane.right()-width));
-                  QRectF box(left,point.y()+offsets[attempt%4],width,height);
-                  if(!lane.contains(box))continue;
-                  bool overlaps=false;for(const auto& used:labels)if(box.intersects(used)){overlaps=true;break;}
-                  if(overlaps)continue;
-                  painter.setPen(QPen(onScore?color.darker(160):color,1));
-                  painter.fillRect(box,onScore?QColor("#f1f2ef"):_appearance.colors[PerformanceAppearance::Background]);
-                  painter.drawText(box.adjusted(4,0,-4,0),Qt::AlignVCenter,text);
-                  labels.append(box);labelled.insert(key);break;
+      for (int staff : _velocityStaves) {
+            const int index = _velocityStaffNote.value(staff, -1);
+            if (index < 0 || staff >= _velocityReferences.size()) continue;
+            const auto& note = _notes[index];
+            const auto lane = velocityLane(index, rect, onScore);
+            if (lane.isEmpty()) continue;
+            auto& reference = _velocityReferences[staff];
+            QSet<int> boundaries{from, until};
+            for (const auto& change : reference.values.changesInRange(Fraction::fromTicks(from), Fraction::fromTicks(until))) {
+                  boundaries.insert(qBound(from, change.first.ticks(), until));
+                  boundaries.insert(qBound(from, change.second.ticks(), until));
+                  }
+            for (auto mark = reference.names.lowerBound(from); mark != reference.names.cend() && mark.key() < until; ++mark)
+                  boundaries.insert(mark.key());
+            auto ticks = boundaries.values();
+            std::sort(ticks.begin(), ticks.end());
+            QColor color = _appearance.staves[staff % 8];
+            if (!note.enabled) color.setAlpha(45);
+            QPolygonF points;
+            auto append = [&](double x, int tick) {
+                  points.append(QPointF(x, yForValue(reference.values.val(Fraction::fromTicks(tick)), lane, onScore)));
+                  };
+            append(xForTick(from, onScore), from);
+            for (int part = 1; part < ticks.size(); ++part) {
+                  const int begin = ticks[part - 1], end = ticks[part];
+                  const double left = xForTick(begin, onScore), right = xForTick(end, onScore);
+                  const int beginValue = reference.values.val(Fraction::fromTicks(begin));
+                  const int endValue = reference.values.val(Fraction::fromTicks(qMax(begin, end - 1)));
+                  // Constant stretches use two points. Curves are sampled only
+                  // across the visible width, irrespective of score length.
+                  if (beginValue != endValue)
+                        for (double x = left + 6; x < right; x += 6)
+                              append(x, qBound(begin, tickForX(x, onScore), end - 1));
+                  append(right, qMax(begin, end - 1));
+                  append(right, end);
+                  }
+            painter.setPen(QPen(color, 1, Qt::DashLine));
+            painter.drawPolyline(points);
+            QSet<QString> labelled;
+            for (int tick : ticks) {
+                  if (tick >= until) continue;
+                  const int value = reference.values.val(Fraction::fromTicks(tick));
+                  auto nameAt = reference.names.upperBound(tick);
+                  const QString name = nameAt == reference.names.cbegin() ? tr("默认") : (--nameAt).value();
+                  const QString identity = name + QLatin1Char(':') + QString::number(value);
+                  if (labelled.contains(identity)) continue;
+                  const QPointF point(xForTick(tick, onScore), yForValue(value, lane, onScore));
+                  const QString text = tr("谱表 %1 · %2 %3").arg(staff + 1).arg(name).arg(value);
+                  const double width = painter.fontMetrics().horizontalAdvance(text) + 8;
+                  const double height = painter.fontMetrics().height() + 2;
+                  const double offsets[4]{-height - 3, 3, -2 * height - 5, height + 5};
+                  for (int attempt = 0; attempt < 12; ++attempt) {
+                        const double left = qBound(lane.left(), point.x() + 4 + (attempt / 4) * (width + 6), qMax(lane.left(), lane.right() - width));
+                        const QRectF box(left, point.y() + offsets[attempt % 4], width, height);
+                        if (!lane.contains(box)) continue;
+                        if (std::any_of(labels.cbegin(), labels.cend(), [&](const QRectF& used) { return box.intersects(used); })) continue;
+                        painter.setPen(QPen(onScore ? color.darker(160) : color, 1));
+                        painter.fillRect(box, onScore ? QColor("#f1f2ef") : _appearance.colors[PerformanceAppearance::Background]);
+                        painter.drawText(box.adjusted(4, 0, -4, 0), Qt::AlignVCenter, text);
+                        labels.append(box);
+                        labelled.insert(identity);
+                        break;
+                        }
                   }
             }
-      for(auto it=previous.cbegin();it!=previous.cend();++it){painter.setPen(QPen(lineColors.value(it.key()),1,Qt::DashLine));painter.drawLine(it.value(),QPointF(rect.right(),it.value().y()));}
       }
 void PerformanceEditor::rebuildScoreNoteRows()
       {

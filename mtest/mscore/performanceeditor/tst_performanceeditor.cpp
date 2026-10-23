@@ -941,6 +941,10 @@ class TestPerformanceEditor : public QObject, public MTest {
       }
       void editorUsabilityRepairs();
       void editorVelocitySectionsAndInputWheel();
+      void velocityReferencesAcrossRestsAndFilters();
+      void velocityGroupEditingKeepsStaffValues();
+      void nearestVelocityThroughWindowsInput();
+      void detachedRollVelocityValues();
 #ifdef Q_MOC_RUN
       void keyboardContoursAndCompactParameterLayout();
       void reaperStemsAndStripSelection();
@@ -1155,6 +1159,7 @@ class TestPerformanceEditor : public QObject, public MTest {
             }
       };
 #include "editor_usability_tests.inc"
+#include "dynamics_090_tests.inc"
 #include "grace_playback_tests.inc"
 #include "accent_inspector_tests.inc"
 #include "envelope_editor_tests.inc"

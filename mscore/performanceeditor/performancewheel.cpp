@@ -141,8 +141,11 @@ void PerformanceEditor::rememberWheelFeedback()
       _wheelFeedbackHead=_wheelSurface==_view?n.bounds:QRectF();
       _wheelFeedbackColor=MScore::selectColor[n.track%VOICES];
       _wheelFeedbackName=tr("谱表%1 · 声部%2 · %3").arg(n.track/VOICES+1).arg(n.track%VOICES+1).arg(n.name);
-      const int value=n.base<0?e.raw:NoteVelocity::effective(n.base,e.type,e.raw);
-      _wheelFeedbackValue=tr("力度 %1    %2%3    力度参考线 %4").arg(value).arg(n.base>0?NoteVelocity::offsetFor(n.base,value):0).arg("%").arg(n.base<0?tr("读取中"):QString::number(n.markBase>=0?n.markBase:n.base));
+      const QString value=n.base<0&&e.type==Note::ValueType::OFFSET_VAL ? tr("读取中")
+            : QString::number(n.base<0?e.raw:NoteVelocity::effective(n.base,e.type,e.raw));
+      const QString stored=e.type==Note::ValueType::USER_VAL ? tr("固定")
+            : (e.raw>0?QString("+%1%").arg(e.raw):QString("%1%").arg(e.raw));
+      _wheelFeedbackValue=tr("力度 %1    %2    参考 %3").arg(value,stored,n.base<0?tr("读取中"):QString::number(n.markBase>=0?n.markBase:n.base));
       }
 
 }

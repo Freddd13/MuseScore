@@ -11,6 +11,7 @@
 #include "libmscore/mscoreview.h"
 #include "libmscore/score.h"
 #include "libmscore/tempo.h"
+#include "libmscore/changeMap.h"
 #include "parameteredit.h"
 #include "performanceview.h"
 #include "performancesettings.h"
@@ -112,6 +113,11 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QSet<int> _collapsedVelocityStaves;
       QVector<int> _velocityStaves;
       QHash<int,int> _velocityStaffNote;
+      struct VelocityReference {
+            ChangeMap values;
+            QMap<int, QString> names;
+            };
+      QVector<VelocityReference> _velocityReferences;
       QRectF velocityLane(int, const QRectF&, bool) const;
       double velocityY(int, const QRectF&, bool) const;
       bool velocityHeaderClick(QPointF);

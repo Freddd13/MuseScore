@@ -49,7 +49,20 @@ void PerformanceEditor::rebuildFilter()
             note.enabled = note.inScope && staffEnabled(note.track) && !_disabledTracks.contains(note.track) && (_voiceMask & (1 << (note.track % VOICES))) && (!_voice->currentIndex() || note.track % VOICES == _voice->currentIndex() - 1);
             changed |= oldScope != note.inScope || oldEnabled != note.enabled;
             }
-      _velocityStaves.clear();_velocityStaffNote.clear();for(const auto& n:_notes)if(n.enabled&&!_velocityStaves.contains(n.track/VOICES)){_velocityStaves.append(n.track/VOICES);_velocityStaffNote.insert(n.track/VOICES,int(&n-_notes.constData()));}std::sort(_velocityStaves.begin(),_velocityStaves.end());
+      _velocityStaves.clear();
+      _velocityStaffNote.clear();
+      for (int index = 0; index < _notes.size(); ++index) {
+            const auto& note = _notes[index];
+            if (!note.inScope || (!note.enabled && !_ghostVoices)) continue;
+            const int staff = note.track / VOICES;
+            if (!_velocityStaffNote.contains(staff)) {
+                  _velocityStaves.append(staff);
+                  _velocityStaffNote.insert(staff, index);
+                  }
+            else if (note.enabled && !_notes[_velocityStaffNote.value(staff)].enabled)
+                  _velocityStaffNote[staff] = index;
+            }
+      std::sort(_velocityStaves.begin(), _velocityStaves.end());
       rebuildPitchRows();_visibleScoreNotes.clear();_visibleScoreRect=QRect();
       _selectionRefreshNeeded = false; _hover = -1; updateSelection(); if (changed) { invalidateVisual(); invalidateOverlay(); }
       }

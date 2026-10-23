@@ -114,7 +114,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             connect(action, &QAction::toggled, this, [this, v](bool on) { cancelGesture(); _voiceMask = on ? _voiceMask | (1 << v) : _voiceMask & ~(1 << v); rebuildFilter(); });
             }
       auto ghost = voiceMenu->addAction(tr("显示过滤外音符为淡色参考")); ghost->setCheckable(true); ghost->setChecked(true);
-      connect(ghost, &QAction::toggled, this, [this](bool on) { _ghostVoices = on; invalidateVisual(); invalidateOverlay(); });
+      connect(ghost, &QAction::toggled, this, [this](bool on) { finishWheel(); cancelGesture(); _ghostVoices = on; rebuildFilter(); invalidateVisual(); invalidateOverlay(); });
       voiceMenu->addSeparator();
       for (int scope = 0; scope < 3; ++scope) {
             auto action = voiceMenu->addAction(scope == 0 ? tr("选择这些声部：时间选区／当前视窗") : (scope == 1 ? tr("选择这些声部：当前视窗") : tr("选择这些声部：全曲")));
@@ -361,6 +361,7 @@ void PerformanceEditor::setView(ScoreView* view)
       if (_score) _score->removeViewer(this);
       disconnect(_scoreDestroyed);
       _view = view; _score = next;
+      _velocityReferences.clear();
       for (auto& boundaries : _pedalBoundaries) boundaries.clear();
       _selectedTempoTick = _tempoPointTick = _unlockedTempo = -1;
       _tempoCurves.clear(); _tempoPlot.clear(); _selectedCurve = nullptr; _curveIndex = -1;
@@ -373,7 +374,7 @@ void PerformanceEditor::setView(ScoreView* view)
                   _playTimer.stop(); _intervals.clear(); _playingNotes.clear(); _linkedIndex.clear(); cancelSurfaceGesture();
                   finishWheel(false);
                   _tempoCurves.clear(); _tempoPlot.clear(); _selectedCurve = nullptr; _curveIndex = -1;
-                  _score = nullptr; _notes.clear(); _segments.clear(); _tempos.clear(); _pedals.clear();
+                  _score = nullptr; _notes.clear(); _segments.clear(); _tempos.clear(); _pedals.clear(); _velocityReferences.clear();
                   _noteIndex.clear(); _layoutIndex.clear(); _pending.clear(); _propertyPending.clear(); _selectedIndices.clear(); _systemIndices.clear(); _system = nullptr; status(); updateSurfaces();
                   });
             }
@@ -446,6 +447,13 @@ void PerformanceEditor::refresh()
       _contextTrack = track;
       const int globalMethod = mscore ? mscore->synthesizerState().method() : 1;
       const auto markNames=readMarkVelocityText(_score);
+      _velocityReferences.clear();
+      if (stablePlayback) {
+            // Copy numeric maps once with the note snapshot. Painting reads the
+            // whole staff's dynamics, including rests and the middle of a tie.
+            for (int staff = 0; staff < _score->nstaves(); ++staff)
+                  _velocityReferences.append({_score->staff(staff)->velocities(), markNames.value(staff)});
+            }
       _relativeMax = 100; _tempoMax = 240; _measures.clear();
       for (auto measure = _score->firstMeasure(); measure; measure = measure->nextMeasure()) {
             int bar, beat, subtick; _score->sigmap()->tickValues(measure->tick().ticks(), &bar, &beat, &subtick);
