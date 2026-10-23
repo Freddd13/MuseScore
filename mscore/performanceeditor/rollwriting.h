@@ -14,7 +14,6 @@
 class QComboBox;
 class QLabel;
 class QToolButton;
-class QGridLayout;
 class QPainter;
 class QAction;
 class QMenu;
@@ -24,6 +23,7 @@ class Score;
 class MasterScore;
 class PerformanceEditor;
 class PerformanceIntervalIndex;
+class ControlFlowLayout;
 QAction *rollWritingAction();
 class RollWritingBar final : public QWidget {
   Q_OBJECT
@@ -33,7 +33,7 @@ class RollWritingBar final : public QWidget {
   QToolButton *_toggle, *_apply, *_original, *_proposed, *_stop;
   QComboBox *_mode, *_tool, *_grid, *_track;
   QLabel *_range, *_message;
-  QGridLayout *_layout;
+  ControlFlowLayout *_layout;
   QMenu *_lockMenu, *_savedMenu;
   QAction *_autoVoice, *_precision, *_followDynamics;
   QSpinBox *_fixedVelocity;
@@ -61,7 +61,6 @@ class RollWritingBar final : public QWidget {
   QPointF _press, _marqueeEnd;
   int _pressTick = 0, _pressPitch = 0, _cursorTick = 0, _generation = 0,
       _jobGeneration = 0, _cursor = 0;
-  int _columns = 0;
   QString scopeId() const;
   QVariantMap settings() const;
   QVariantMap stored() const;
@@ -77,6 +76,7 @@ class RollWritingBar final : public QWidget {
   void calculated();
   void saveDraft();
   void restoreFromScore();
+  void discardDraft();
   void stopAudition();
   bool preparePreview();
   void audition(bool);
@@ -96,7 +96,6 @@ class RollWritingBar final : public QWidget {
   void move(QPointF);
   void finish(QPointF);
   void cancelGesture();
-  void resizeEvent(QResizeEvent *) override;
   void hideEvent(QHideEvent *) override;
   void showEvent(QShowEvent *) override;
   bool eventFilter(QObject *, QEvent *) override;

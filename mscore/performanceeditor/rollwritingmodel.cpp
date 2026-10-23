@@ -520,6 +520,20 @@ void RollWritingBar::stopAudition() {
   _previewKey.clear();
   updateActions();
 }
+void RollWritingBar::discardDraft() {
+  if (!_score || _busy) return;
+  stopAudition();
+  auto root = stored(), drafts = root["drafts"].toMap();
+  if (!drafts.value(scopeId()).toMap().value("draft").toBool()) return;
+  drafts.remove(scopeId());root["drafts"] = drafts;
+  if (root["activeId"].toString() == scopeId()) root.remove("activeId");
+  _internal = true;_score->startCmd();
+  _score->undo(new ChangeMetaText(_score->masterScore(), "kumo.rollWriting",
+      QString::fromUtf8(QJsonDocument::fromVariant(root).toJson(QJsonDocument::Compact))));
+  _score->endCmd();if (mscore) mscore->endCmd();_internal = false;
+  readScope(_state["scope"].toMap());
+  setMessage(tr("已删除这段草稿。Ctrl+Z 可以恢复。"));
+}
 bool RollWritingBar::preparePreview() {
   if (!_ready || _busy || !_score)
     return false;
@@ -576,8 +590,8 @@ void RollWritingBar::audition(bool proposed) {
   updateActions();
   if (!prepared)
     return;
-  const auto result =
-      startPlaybackPreview(_score, proposed, _state["scope"].toMap());
+  auto range = _state["scope"].toMap();range["exactStart"] = true;
+  const auto result = startPlaybackPreview(_score, proposed, range);
   setMessage(result.contains("error") ? result["error"].toString()
              : proposed               ? tr("正在听：草稿效果")
                                       : tr("正在听：谱中效果"));

@@ -1,6 +1,8 @@
 # MuseScore Evolution 个人功能说明
 
-本文对应个人版本：**0.86.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+本文对应个人版本：**0.87.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+
+卷帘草稿的继续修改、删除与恢复，以及写节奏的录制、试听和采用见[完整步骤](docs/WRITING_087_GUIDE.md)。
 
 工作视图的尺寸与工具页返回见[窗口操作](docs/LAYOUT_079_GUIDE.md)。
 

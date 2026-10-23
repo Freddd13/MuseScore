@@ -4,6 +4,7 @@
 #ifdef SCRIPT_INTERFACE
 #include "spectrumpane.h"
 #include "rollwriting.h"
+#include "rhythmpane.h"
 #endif
 #include "libmscore/select.h"
 #include "libmscore/pedal.h"
@@ -29,6 +30,7 @@ void PerformanceEditor::updateSurfaces()
 #ifdef SCRIPT_INTERFACE
       if(_spectrum)_spectrum->viewChanged();
       if(_rollWriting)_rollWriting->contextChanged();
+      if(auto rhythm=findChild<RhythmPane*>())rhythm->contextChanged();
 #endif
       updateDetachedRulers(this);
       if (_canvas) _canvas->update(); if (_noteCanvas) _noteCanvas->update(); if (_ruler) _ruler->update(); if(_workflowPanel&&_workflowPanel->isVisible())for(auto child:_workflowPanel->findChildren<QWidget*>())child->update(); }

@@ -16,6 +16,7 @@ class QPushButton;
 class QLabel;
 class QSplitter;
 class QTableWidget;
+class QUndoStack;
 namespace Ms {
 class Score;
 class PerformanceEditor;
@@ -34,16 +35,25 @@ class RhythmPane : public QWidget {
     QLabel *_scopeLabel, *_status;
     QTableWidget *_table;
     RhythmCanvas *_canvas;
+    QUndoStack *_edits;
     QTimer _pages, _draftTimer;
     QVariantMap _state, _data, _midi, _draft;
     QVariantList _rows;
     QString _candidate;
+    QString _pendingAction;
     int _cursor = 0, _token = 0, _readGeneration = 0;
     bool _ready = false, _editing = false, _manualRows = false, _applied = false, _calculating = false;
+    bool _applying = false, _refreshQueued = false, _loadingMidi = false, _closing = false;
     std::shared_ptr<std::atomic_bool> _cancelRead;
     QVariantMap settings() const;
     int quantize(int tick) const;
     void readPage();
+    void readSource(const QVariantMap &scope, bool adopted = false);
+    void sourceChanged();
+    void updateActions();
+    void selectRow(int);
+    void commitRows(const QVariantList &, bool manual, bool applied);
+    bool eventFilter(QObject *, QEvent *) override;
     void queueDraft(bool fresh = false);
     void calculateDraft();
     void fillTable();
@@ -60,6 +70,7 @@ class RhythmPane : public QWidget {
   public:
     explicit RhythmPane(PerformanceEditor *);
     ~RhythmPane() override;
+    void contextChanged() { sourceChanged(); }
     Q_SLOT void readScope();
     Q_SLOT void loadMidiFile(const QString &);
 };

@@ -10,6 +10,7 @@
 #include "mscore/plugin/api/score.h"
 #include "mscore/scoreview.h"
 #include "mscore/seq.h"
+#include "mscore/shortcut.h"
 #include "mscore/workflow/arrangement.h"
 #include "mscore/workflow/playbackpreview.h"
 #include "performanceeditor.h"
@@ -431,6 +432,18 @@ bool RollWritingBar::handle(QEvent *event) {
   if (event->type() == QEvent::KeyPress ||
       event->type() == QEvent::ShortcutOverride) {
     auto key = static_cast<QKeyEvent *>(event);
+    if (key->matches(QKeySequence::Undo) || key->matches(QKeySequence::Redo)) {
+      event->accept();
+      if (event->type() == QEvent::KeyPress && !key->isAutoRepeat()) {
+        const bool unfinished = _gesture;
+        cancelGesture();
+        if (unfinished) return true;
+        stopAudition();
+        getAction(key->matches(QKeySequence::Undo) ? "undo" : "redo")->trigger();
+        contextChanged();
+      }
+      return true;
+    }
     const bool escape = key->key() == Qt::Key_Escape,
                remove = key->key() == Qt::Key_Delete,
                all = key->matches(QKeySequence::SelectAll),

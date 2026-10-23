@@ -118,8 +118,8 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 速度重建边界	libmscore/score.cpp	void Score::beginTempoEdit()	418	撤销/重做批量重建	mtest/mscore/performanceeditor
 播放同步	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::updatePlayhead	303	Seq当前时刻/反复映射/稳定滚页	mtest/mscore/performanceeditor
 演奏筛选选择	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::selectIndices	56	原生批选/框选/过滤与重入保护	mtest/mscore/performanceeditor
-演奏绘制	mscore/performanceeditor/performancepainting.cpp	void PerformanceEditor::paintForeground	334	识音/参数着色/发声与预览描边	mtest/mscore/performanceeditor
-演奏网格	mscore/performanceeditor/performancepainting.cpp	void PerformanceEditor::paintBackground	77	原生小节拍位/半音键条/参数数字	mtest/mscore/performanceeditor
+演奏绘制	mscore/performanceeditor/performancepainting.cpp	void PerformanceEditor::paintForeground	336	识音/参数着色/发声与预览描边	mtest/mscore/performanceeditor
+演奏网格	mscore/performanceeditor/performancepainting.cpp	void PerformanceEditor::paintBackground	79	原生小节拍位/半音键条/参数数字	mtest/mscore/performanceeditor
 持续音查询	mscore/performanceeditor/performanceview.cpp	QVector<int> PerformanceIntervalIndex::query	86	分音高前缀最大结束时刻区间查询	mtest/mscore/performanceeditor
 演奏配色	mscore/performanceeditor/performancesettings.cpp	bool PerformanceAppearance::edit	94	独立颜色设置/渐变节点/重启恢复	mtest/mscore/performanceeditor
 演奏选择桥	mscore/performanceeditor/performanceselection.cpp	bool PerformanceSelection::apply	7	一次宿主通知/保留播放位置	mtest/mscore/performanceeditor
@@ -307,8 +307,8 @@ MCP关闭处理	mscore/workflow/arrangementreader.cpp	void ScoreObserver::prepar
 编配建议面板	mscore/workflow/suggestionpanel.cpp	void showSuggestionPanel(	346	原生差异、定位、试听和采用	mtest/mscore/pluginhost/tst_pluginhost.cpp
 传统编配建议任务	mscore/workflow/localsuggestions.cpp	void LocalSuggestionTask::start(	69	分批读取、可取消音乐规则和原生候选	mtest/mscore/pluginhost/tst_pluginhost.cpp
 指法与配音规则	share/plugins/ArrangementAssistant/Suggestions.js	function generate(	229	连续按键、指法、换手和对位候选	mtest/mscore/pluginhost/tst_pluginhost.cpp
-给定音高写节奏	mscore/performanceeditor/rhythmpane.cpp	RhythmPane::RhythmPane(	232	给定音高录制、紧凑换行、拖动草稿、试听和采用	mtest/mscore/pluginhost/layout_079_tests.inc;mtest/mscore/pluginhost/tst_pluginhost.cpp
-节奏音序与时值	share/plugins/PerformanceExpression/Rhythm.js	function build(	60	给定音高、漏敲多敲、休止与连音组	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/PerformanceExpression/tests/test-rhythm.cjs
+给定音高写节奏	mscore/performanceeditor/rhythmpane.cpp	RhythmPane::RhythmPane(	281	给定音高录制、紧凑换行、拖动草稿、试听和采用	mtest/mscore/pluginhost/layout_079_tests.inc;mtest/mscore/pluginhost/tst_pluginhost.cpp
+节奏音序与时值	share/plugins/PerformanceExpression/Rhythm.js	function build(	98	给定音高、漏敲多敲、休止与连音组	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/PerformanceExpression/tests/test-rhythm.cjs
 MIDI录音目录	mscore/workflow/midicapture.cpp	"const QString folder=QSettings().value(""workflow/recordingDirectory"""	254	沿用录制，默认写入E盘	mtest/mscore/pluginhost/tst_pluginhost.cpp
 个人扩展开关	mscore/workflow/featuregate.cpp	bool personalFeaturesEnabled()	56	程序旁配置、入口和后台能力统一控制	mtest/mscore/pluginhost/tst_pluginhost.cpp
 原生AI连接	mscore/workflow/aiconnection.cpp	void initializeBuiltinAI()	440	私有桥接、窗口选择、Codex配置和帮助	mtest/mscore/pluginhost/tst_pluginhost.cpp
@@ -324,7 +324,7 @@ MIDI录音目录	mscore/workflow/midicapture.cpp	"const QString folder=QSettings
 频谱标注长度	mscore/performanceeditor/spectrumannotation.cpp	QVariantMap estimateSpectrumExtent(	6	估计亮线连续范围和常用记谱时值	mtest/mscore/pluginhost/tst_pluginhost.cpp
 频谱听辨均衡	mscore/referenceaudio/auditionfilter.cpp	AuditionFilter::AuditionFilter(	53	独立双声道均衡与选频听	mtest/mscore/spectrum/tst_spectrum.cpp
 原曲速度估计	mscore/referenceaudio/tempoestimate.cpp	QVariantMap estimateTempo(	13	起音能量、周期与第一拍候选	mtest/mscore/spectrum/tst_spectrum.cpp
-卷帘写音交互	mscore/performanceeditor/rollwritinginteraction.cpp	void RollWritingBar::begin(	146	画音、移动、复制、尾端和选择	mtest/mscore/pluginhost/tst_pluginhost.cpp
+卷帘写音交互	mscore/performanceeditor/rollwritinginteraction.cpp	void RollWritingBar::begin(	147	画音、移动、复制、尾端和选择	mtest/mscore/pluginhost/tst_pluginhost.cpp
 卷帘写音转换	mscore/performanceeditor/rollnotation.cpp	QVariantMap buildRollEdit(	135	工作线程中的修改范围、声部、时值与连音组	mtest/mscore/pluginhost/tst_pluginhost.cpp
 卷帘草稿保存	mscore/performanceeditor/rollwritingmodel.cpp	void RollWritingBar::saveDraft(	470	草稿、试听、采用与撤销	mtest/mscore/pluginhost/tst_pluginhost.cpp
 谱行锁定	mscore/workflow/systemlocks.cpp	QVariantMap changeSystemLocks(	117	分行范围、原生撤销、相邻行边界与解锁	mtest/mscore/pluginhost/system_lock_tests.inc
@@ -389,3 +389,7 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	191	空列�
 圆滑线连续绕行	libmscore/freeslurrouting.cpp	RoutingCandidate smoothRouting(	43	比较整段形状、避让边界与共同切线，固定人工节点	mtest/mscore/performanceeditor/engraving_085_tests.inc
 圆滑线独立端点	libmscore/freeslurendpoints.cpp	std::array<QPointF,4> SlurSegment::freeDrawingControls(	65	复用原生符干和符杠端点，独立保存位置和切线	mtest/mscore/performanceeditor/endpoints_085_tests.inc
 导出音长的撤销	mscore/midicrop/gatehistory.cpp	void MidiCropPanel::changeRelease(	39	每份谱独立记录松手和排除，一次手势一次撤销，保留乐谱撤销	mtest/mscore/performanceeditor/midi_gate_086_tests.inc
+节奏草稿连续采用	mscore/performanceeditor/rhythmpane.cpp	void RhythmPane::operate(	964	采用后重新读取、等待计算后执行、试听状态与原生撤销	mtest/mscore/performanceeditor/writing_087_tests.inc
+节奏草稿局部撤销	mscore/performanceeditor/rhythmpane.cpp	void RhythmPane::commitRows(	1050	一次拖动或表格编辑一次撤销，恢复草稿及采用状态	mtest/mscore/performanceeditor/writing_087_tests.inc
+节奏的逐音保持	share/plugins/PerformanceExpression/Rhythm.js	function voiceEvents(	65	保留休止、各音延音与力度，按交叠区间写延音和休止	mtest/mscore/performanceeditor/writing_087_tests.inc;../../muse3_plugins/PerformanceExpression/tests/test-rhythm-preservation.cjs
+卷帘草稿删除	mscore/performanceeditor/rollwritingmodel.cpp	void RollWritingBar::discardDraft(	523	只删除当前范围的草稿，原生撤销及保存恢复	mtest/mscore/performanceeditor/writing_087_tests.inc

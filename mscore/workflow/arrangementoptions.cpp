@@ -1072,7 +1072,10 @@ QVariantMap arrangementOperation(PluginAPI::ScoreObserver *observer, Score *scor
                         if (!playbackPreviewPrepared(score, option.id))
                             preparePlaybackPreview(score, option.id, renderPlaybackPreview(score, score),
                                                    renderPlaybackPreview(score, option.copy.get()));
-                        return startPlaybackPreview(score, step == "audition", option.scope);
+                        auto range = option.scope;
+                        if (request.value("exactStart").toBool())
+                            range["exactStart"] = true;
+                        return startPlaybackPreview(score, step == "audition", range);
                     }
                     if (seq && seq->isPlaying())
                         seq->stopWait();

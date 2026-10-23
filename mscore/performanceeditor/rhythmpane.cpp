@@ -4,6 +4,7 @@
 #include "../workflow/controlflowlayout.h"
 #include "performanceeditor.h"
 #include "mscore/musescore.h"
+#include "mscore/shortcut.h"
 #include "mscore/plugin/api/score.h"
 #include "mscore/workflow/midiinput.h"
 #include "mscore/workflow/workflowcontext.h"
@@ -39,6 +40,10 @@
 #include <QToolTip>
 #include <QUrl>
 #include <QSet>
+#include <QUndoStack>
+#include <QUndoCommand>
+#include <QKeyEvent>
+#include "mscore/workflow/playbackpreview.h"
 #include <algorithm>
 #include <QtConcurrent>
 #include <cmath>
@@ -75,10 +80,20 @@ double number(QString text, bool *valid) {
     return *valid ? x / y : 0;
 }
 } // namespace
+namespace {
+class RhythmEdit final : public QUndoCommand {
+    std::function<void(bool)> _restore;
+public:
+    explicit RhythmEdit(std::function<void(bool)> restore) : _restore(std::move(restore)) {}
+    void undo() override { _restore(false); }
+    void redo() override { _restore(true); }
+};
+}
 class RhythmCanvas : public QWidget {
     RhythmPane *_pane;
     int _drag = -1;
-    bool _tail = false;
+    bool _tail = false, _wasManual = false, _wasApplied = false;
+    QVariantList _before;
     double _press = 0;
     int _original = 0;
     QVector<QPair<QRectF, int>> _hits;
@@ -127,15 +142,18 @@ class RhythmCanvas : public QWidget {
             if (length <= 0)
                 length = 120;
             for (auto value : notes) {
-                int pitch = value.toMap()["pitch"].toInt();
+                const auto note = value.toMap();
+                int pitch = note["pitch"].toInt();
+                const int noteLength = row["noteDurations"].toMap().value(note["id"].toString(), length).toInt();
                 double y = 26 + (high - pitch) * step;
                 QRectF box(x(row["start"].toInt()), y,
-                           qMax(6., x(row["start"].toInt() + length) - x(row["start"].toInt())),
+                           qMax(6., x(row["start"].toInt() + noteLength) - x(row["start"].toInt())),
                            qMax(4., step - 1));
                 auto color = palette().color(QPalette::Active, QPalette::Highlight);
                 color.setAlpha(row["estimated"].toBool() ? 105 : 195);
                 p.setBrush(color);
-                p.setPen(palette().color(QPalette::Active, QPalette::Highlight));
+                const bool selected = _pane->_table->currentRow() == i;
+                p.setPen(QPen(selected ? palette().text().color() : palette().highlight().color(), selected ? 2 : 1));
                 p.drawRoundedRect(box, 2, 2);
                 _hits.append({box, i});
                 if (box.width() > 34 && box.height() >= 11) {
@@ -152,8 +170,10 @@ class RhythmCanvas : public QWidget {
         }
     }
     void mousePressEvent(QMouseEvent *e) override {
-        if (e->button() != Qt::LeftButton)
+        if (e->button() != Qt::LeftButton || !_pane->_ready ||
+            _pane->_capture.state()["recording"].toBool())
             return;
+        setFocus(Qt::MouseFocusReason);
         double best = std::numeric_limits<double>::infinity();
         QRectF chosen;
         for (const auto &hit : _hits)
@@ -168,6 +188,10 @@ class RhythmCanvas : public QWidget {
                 }
             }
         if (_drag >= 0) {
+            if (playbackPreviewPrepared(_pane->_score, _pane->_candidate)) stopPlaybackPreview(true);
+            _before = _pane->_rows;
+            _wasManual = _pane->_manualRows;
+            _wasApplied = _pane->_applied;
             _tail = e->pos().x() > chosen.right() - 6;
             _press = e->pos().x();
             auto row = _pane->_rows[_drag].toMap();
@@ -188,12 +212,15 @@ class RhythmCanvas : public QWidget {
         if (_tail) {
             row["duration"] = qMax(_pane->_grid->currentData().toInt(), value);
             row["effectiveDuration"] = row["duration"];
+            row["durationEdited"] = true;
+            row.remove("noteDurations");
         } else
             row["start"] = qMax(0, value);
         row["estimated"] = false;
         row["manual"] = true;
         _pane->_rows[_drag] = row;
         _pane->_manualRows = true;
+        _pane->_applied = false;
         _pane->_candidate.clear();
         _pane->_apply->setEnabled(false);
         update();
@@ -209,11 +236,22 @@ class RhythmCanvas : public QWidget {
             _drag = -1;
             if (QWidget::mouseGrabber() == this)
                 releaseMouse();
-            _pane->queueDraft();
+            QToolTip::hideText();
+            _pane->commitRows(_before, _wasManual, _wasApplied);
         }
+    }
+    void keyPressEvent(QKeyEvent *e) override {
+        if (e->key() == Qt::Key_Escape && _drag >= 0) {
+            cancelDrag();
+            e->accept();
+        } else if (e->key() == Qt::Key_Space && !e->isAutoRepeat()) {
+            _pane->operate(playbackPreviewActive(_pane->_score, true) || playbackPreviewActive(_pane->_score, false) ? "stop" : "audition");
+            e->accept();
+        } else QWidget::keyPressEvent(e);
     }
 
     void hideEvent(QHideEvent *e) override {
+        cancelDrag();
         if (QWidget::mouseGrabber() == this)
             releaseMouse();
         _drag = -1;
@@ -221,10 +259,21 @@ class RhythmCanvas : public QWidget {
     }
 
   public:
+    void cancelDrag() {
+        if (_drag < 0) return;
+        _pane->_rows = _before;
+        _pane->_manualRows = _wasManual;
+        _pane->_applied = _wasApplied;
+        _drag = -1;
+        if (QWidget::mouseGrabber() == this) releaseMouse();
+        QToolTip::hideText();
+        _pane->queueDraft();
+    }
     explicit RhythmCanvas(RhythmPane *pane) : QWidget(pane), _pane(pane) {
         setObjectName("rhythmDraftCanvas");
         setMinimumHeight(55);
         setMouseTracking(true);
+        setFocusPolicy(Qt::StrongFocus);
         setToolTip(tr("拖音符改变起音，拖右端改变时值；上方数字是选段中的拍位。"));
     }
 };
@@ -232,6 +281,8 @@ class RhythmCanvas : public QWidget {
 RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(this), _capture(this) {
     setObjectName("rhythmWritingPane");
     setMinimumHeight(90);
+    _edits = new QUndoStack(this);
+    qApp->installEventFilter(this);
     auto layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
     layout->setSpacing(3);
@@ -296,6 +347,15 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     _record->setText(tr("录制"));
     _record->setObjectName("rhythmRecord");
     recording->addWidget(_record);
+    auto midiInput = new QToolButton;
+    midiInput->setObjectName("rhythmMidiInput");
+    midiInput->setDefaultAction(getAction("midi-on"));
+    midiInput->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    recording->addWidget(midiInput);
+    auto devices = new QPushButton(tr("MIDI设备…"));
+    devices->setObjectName("rhythmMidiDevices");
+    connect(devices, &QPushButton::clicked, this, [] { getAction("pref")->trigger(); });
+    recording->addWidget(devices);
     _endMode = new QComboBox;
     _endMode->addItem(tr("手动停止"), "manual");
     _endMode->addItem(tr("弹完音序后停止"), "passage");
@@ -311,6 +371,7 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     import->setObjectName("rhythmImportMidi");
     recording->addWidget(import);
     auto restore = new QPushButton(tr("重用上次录音"));
+    restore->setObjectName("rhythmRestoreRecording");
     recording->addWidget(restore);
     layout->addWidget(recordingHost);
     auto split = new QSplitter(Qt::Vertical);
@@ -328,7 +389,7 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     _table->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     _table->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Stretch);
     _table->setToolTip(
-        tr("音序从1开始，0表示跳过这次敲击。拍位从选段第1拍算起。时值填0会自动延续；可输入1/3等分数。"));
+        tr("音序从1开始，0表示跳过这次敲击。起音从选段第1拍算起；时值显示实际长度，可输入1/3等分数。时值填0会按下一次起音重新估计。"));
     split->addWidget(_table);
     if (!split->restoreState(QSettings().value("performanceEditor/rhythmDraftLayout").toByteArray()))
         split->setSizes({160, 150});
@@ -344,6 +405,7 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
                                                     {tr("停止试听"), "stop"}}) {
         auto button = new QPushButton(pair.first);
         button->setObjectName("rhythm-" + pair.second);
+        button->setCheckable(pair.second == "audition" || pair.second == "original");
         actions->addWidget(button);
         connect(button, &QPushButton::clicked, this, [this, pair] { operate(pair.second); });
     }
@@ -386,6 +448,9 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     connect(_endMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this] { _duration->setVisible(_endMode->currentData() == "duration"); });
     connect(_table, &QTableWidget::cellChanged, this, &RhythmPane::editCell);
+    connect(_table, &QTableWidget::currentCellChanged, this, [this](int row, int, int, int) { selectRow(row); });
+    connect(workflowContext(), &WorkflowContext::auditionChanged, this, &RhythmPane::updateActions);
+    connect(&_observer, &PluginAPI::ScoreObserver::scoreChanged, this, &RhythmPane::sourceChanged);
     connect(&_capture, &MidiCaptureSession::changed, this, &RhythmPane::recordingChanged);
     connect(&_capture, &MidiCaptureSession::finished, this,
             [this](const QString &path, const QString &) { loadMidiFile(path); });
@@ -396,7 +461,11 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
                 if (token != _token)
                     return;
                 _calculating = false;
+                updateActions();
                 if (result.contains("error")) {
+                    _draft.clear();
+                    _pendingAction.clear();
+                    updateActions();
                     _status->setText(result["error"].toString());
                     return;
                 }
@@ -409,8 +478,11 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
                 fillTable();
                 _canvas->update();
                 auto errors = result["errors"].toStringList();
-                _apply->setEnabled(errors.isEmpty() && !_rows.isEmpty() && !_applied &&
-                                   (_manualRows || !_midi["notes"].toList().isEmpty()));
+                updateActions();
+                if (_applied && errors.isEmpty()) {
+                    _status->setText(tr("已采用节奏与力度。可继续拖动或修改表格；Ctrl+Z撤销采用，Ctrl+S保存。"));
+                    return;
+                }
                 if (_midi["notes"].toList().isEmpty() && !_manualRows) {
                     _status->setText(tr("已读取%1组音高。点“录制”敲出节奏，或直接拖动草稿、修改表格。")
                                          .arg(result["sourceGroups"].toList().size()));
@@ -424,11 +496,26 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
                               .arg(_midi["notes"].toList().size())
                               .arg(result["estimated"].toInt())
                         : errors.join("\n"));
+                const auto pending = _pendingAction;
+                _pendingAction.clear();
+                updateActions();
+                if (!pending.isEmpty() && errors.isEmpty())
+                    QTimer::singleShot(0, this, [this, pending] { operate(pending); });
             });
     _grid->setCurrentIndex(qMax(0, _grid->findData(QSettings().value("rhythmWriting/grid", 120))));
     _releases->setChecked(QSettings().value("rhythmWriting/releases", false).toBool());
 }
 RhythmPane::~RhythmPane() {
+    _closing = true;
+    disconnect(&_capture, nullptr, this, nullptr);
+    disconnect(&_observer, nullptr, this, nullptr);
+    disconnect(workflowContext(), nullptr, this, nullptr);
+    qApp->removeEventFilter(this);
+    _canvas->cancelDrag();
+    _pages.stop();
+    _draftTimer.stop();
+    _observer.cancelReadOnlyJob();
+    if (playbackPreviewPrepared(_score, _candidate)) stopPlaybackPreview(true);
     if (_cancelRead)
         _cancelRead->store(true);
     _capture.cancel();
@@ -457,11 +544,14 @@ void RhythmPane::resetForScore() {
     ++_readGeneration;
     _score = current;
     _ready = false;
+    _calculating = false;
+    _edits->clear();
     _data.clear();
     _midi.clear();
     _rows.clear();
     _draft.clear();
     _candidate.clear();
+    _pendingAction.clear();
     _apply->setEnabled(false);
     _table->setRowCount(0);
     _canvas->update();
@@ -507,13 +597,16 @@ void RhythmPane::showEvent(QShowEvent *e) {
         queueDraft();
 }
 void RhythmPane::hideEvent(QHideEvent *e) {
+    if (playbackPreviewPrepared(_score, _candidate)) stopPlaybackPreview(true);
     _capture.stop();
     _pages.stop();
     _draftTimer.stop();
     _observer.cancelReadOnlyJob();
     QWidget::hideEvent(e);
 }
-void RhythmPane::readScope() {
+void RhythmPane::readScope() { readSource({}); }
+void RhythmPane::readSource(const QVariantMap &fixedScope, bool adopted) {
+    if (_closing) return;
     if (_capture.state()["recording"].toBool()) {
         _status->setText(tr("先停止本次录制，再更换音高或选段。"));
         return;
@@ -524,11 +617,16 @@ void RhythmPane::readScope() {
         return;
     }
     _pages.stop();
+    _draftTimer.stop();
     _observer.cancelReadOnlyJob();
+    _calculating = false;
+    _edits->clear();
+    _ready = false;
+    _pendingAction.clear();
     _score = score;
     PluginAPI::Score wrapped(score);
     _observer.setScore(&wrapped);
-    auto selection = _observer.arrangementState();
+    auto selection = _observer.arrangementState(fixedScope.isEmpty() ? QVariantMap{} : QVariantMap{{"scope", fixedScope}});
     if (selection.contains("error")) {
         _status->setText(selection["error"].toString());
         return;
@@ -547,13 +645,14 @@ void RhythmPane::readScope() {
     _data = {{"scope", scope}, {"snapshotId", _state["snapshotId"]}};
     _cursor = scope["start"].toInt();
     _ready = false;
-    _applied = false;
+    _applied = adopted;
     _manualRows = false;
     _draft.clear();
     _candidate.clear();
     _apply->setEnabled(false);
     _tracks->setProperty("preferredTrack", selected["firstTrack"]);
     _pages.start();
+    updateActions();
     _status->setText(tr("正在读取选段的音高…"));
 }
 void RhythmPane::readPage() {
@@ -603,17 +702,25 @@ void RhythmPane::readPage() {
     queueDraft(true);
 }
 void RhythmPane::queueDraft(bool fresh) {
-    _calculating = true;
+    if (_closing) return;
+    _observer.cancelReadOnlyJob();
+    _token = 0;
+    _calculating = _ready && isVisible();
     if (fresh)
         _manualRows = false;
     _candidate.clear();
     _apply->setEnabled(false);
+    updateActions();
     if (_ready && isVisible())
         _draftTimer.start();
 }
 void RhythmPane::calculateDraft() {
-    if (!_ready || !_score || _tracks->currentIndex() < 0)
+    if (_closing) return;
+    if (!_ready || !_score || _tracks->currentIndex() < 0) {
+        _calculating = false;
+        updateActions();
         return;
+    }
     auto notes = _midi["notes"].toList();
     double first = std::numeric_limits<double>::infinity();
     for (auto value : notes)
@@ -641,6 +748,8 @@ void RhythmPane::calculateDraft() {
             QUrl::fromLocalFile(mscoreGlobalShare + "plugins/PerformanceExpression/" + pair.second)
                 .toString());
         if (text.isEmpty()) {
+            _calculating = false;
+            updateActions();
             _status->setText(tr("找不到节奏规则：%1").arg(pair.second));
             return;
         }
@@ -654,6 +763,7 @@ void RhythmPane::calculateDraft() {
 }
 void RhythmPane::fillTable() {
     QSignalBlocker block(_table);
+    const int selected = _table->currentRow();
     _table->setRowCount(_rows.size());
     auto groups = _draft["sourceGroups"].toList();
     for (int i = 0; i < _rows.size(); ++i) {
@@ -666,7 +776,7 @@ void RhythmPane::fillTable() {
         QStringList texts{QString::number(index + 1),
                           pitches.join(" "),
                           QString::number(1. + row["start"].toInt() / 480., 'g', 7),
-                          QString::number(row.value("duration", 0).toInt() / 480., 'g', 7),
+                          QString::number(row.value("effectiveDuration", row.value("duration", 0)).toInt() / 480., 'g', 7),
                           QString::number(row["velocity"].toInt()),
                           row["status"].toString()};
         for (int col = 0; col < texts.size(); ++col) {
@@ -677,11 +787,30 @@ void RhythmPane::fillTable() {
                 item->setForeground(palette().link());
             _table->setItem(i, col, item);
         }
+        if (index >= 0 && index < groups.size()) {
+            QStringList details;
+            QSet<int> lengths, velocities;
+            for (auto value : groups[index].toMap()["notes"].toList()) {
+                const auto note = value.toMap();
+                const int length = row["noteDurations"].toMap().value(note["id"].toString(), row["effectiveDuration"]).toInt();
+                const int velocity = row["velocityEdited"].toBool() || !row["fromScore"].toBool() ? row["velocity"].toInt() : note["velocity"].toInt();
+                lengths.insert(length); velocities.insert(velocity);
+                details.append(tr("%1：%2拍，力度%3").arg(pitchName(note["pitch"].toInt())).arg(length / 480., 0, 'g', 7).arg(velocity));
+            }
+            _table->item(i, 3)->setToolTip(details.join('\n'));
+            _table->item(i, 4)->setToolTip(details.join('\n') + tr("\n在力度列填入数值，可一起调整这一组。"));
+            if (lengths.size() > 1 || velocities.size() > 1)
+                _table->item(i, 5)->setText(texts[5] + tr(" · 各音保留自己的时值和力度"));
+        }
     }
+    if (selected >= 0 && selected < _table->rowCount()) _table->selectRow(selected);
 }
 void RhythmPane::editCell(int row, int col) {
     if (row < 0 || row >= _rows.size() || col == 1 || col == 5)
         return;
+    if (playbackPreviewPrepared(_score, _candidate)) stopPlaybackPreview(true);
+    const auto before = _rows;
+    const bool wasManual = _manualRows, wasApplied = _applied;
     auto value = _rows[row].toMap();
     bool ok = false;
     double n = number(_table->item(row, col)->text(), &ok);
@@ -696,22 +825,27 @@ void RhythmPane::editCell(int row, int col) {
         value["sourceIndex"] = qRound(n) - 1;
     else if (col == 2)
         value["start"] = quantize(qRound((n - 1) * 480));
-    else if (col == 3)
+    else if (col == 3) {
         value["duration"] = n > 0 ? quantize(qRound(n * 480)) : 0;
-    else if (col == 4)
+        value["durationEdited"] = true;
+    } else if (col == 4) {
         value["velocity"] = qBound(1, qRound(n), 127);
+        value["velocityEdited"] = true;
+    }
     value["estimated"] = false;
     value["manual"] = true;
     _rows[row] = value;
     _manualRows = true;
+    _applied = false;
     _canvas->update();
-    queueDraft();
+    commitRows(before, wasManual, wasApplied);
 }
 void RhythmPane::record() {
     if (_capture.state()["recording"].toBool()) {
         _capture.stop();
         return;
     }
+    stopPlaybackPreview(true);
     if (!_ready) {
         _status->setText(tr("先点“读取当前选段”，选择要写节奏的声部。"));
         return;
@@ -734,6 +868,8 @@ void RhythmPane::recordingChanged() {
     bool recording = state["recording"].toBool();
     _record->setText(recording ? tr("停止录制") : tr("录制"));
     _record->setEnabled(!state["stopping"].toBool() && !state["saving"].toBool());
+    updateActions();
+    _canvas->update();
     if (recording)
         _status->setText(tr("录制中 · %1次起音 · %2秒 · 再点一次结束")
                              .arg(state["count"].toInt())
@@ -744,6 +880,8 @@ void RhythmPane::loadMidiFile(const QString &path) {
     _candidate.clear();
     _apply->setEnabled(false);
     _calculating = true;
+    _loadingMidi = true;
+    updateActions();
     if (_cancelRead)
         _cancelRead->store(true);
     _cancelRead = std::make_shared<std::atomic_bool>(false);
@@ -757,6 +895,8 @@ void RhythmPane::loadMidiFile(const QString &path) {
         if (generation != _readGeneration)
             return;
         _calculating = false;
+        _loadingMidi = false;
+        updateActions();
         if (result.contains("error")) {
             _status->setText(result["error"].toString());
             return;
@@ -822,24 +962,127 @@ bool RhythmPane::prepare() {
     return true;
 }
 void RhythmPane::operate(const QString &action) {
+    if (action == "stop") _pendingAction.clear();
+    else if (_calculating || _draftTimer.isActive()) {
+        _pendingAction = action;
+        _status->setText(action == "apply" ? tr("正在整理刚才的修改，完成后采用草稿…") : tr("正在整理刚才的修改，完成后开始试听…"));
+        updateActions();
+        return;
+    }
     if (action != "stop" && !prepare())
         return;
-    auto result =
-        _observer.arrangementRequest("arrangementOption", {{"optionId", _candidate}, {"action", action}});
+    _applying = action == "apply";
+    auto result = _observer.arrangementRequest("arrangementOption",
+        {{"optionId", _candidate}, {"action", action}, {"exactStart", true}});
+    _applying = false;
     if (result.contains("error")) {
         _status->setText(result["error"].toString());
         return;
     }
     if (action == "apply") {
-        _applied = true;
-        _apply->setEnabled(false);
-        _status->setText(tr("已采用节奏与力度 · Ctrl+Z撤销整次采用 · Ctrl+S保存。录音和对应也随谱保存。"));
+        const auto scope = _data["scope"].toMap();
+        _midi.clear();
+        readSource(scope, true);
     } else if (action == "audition")
         _status->setText(tr("正在听：节奏草稿"));
     else if (action == "original")
         _status->setText(tr("正在听：谱中写法"));
     else if (action == "stop")
         _status->setText(tr("已停止试听，可以继续调整草稿。"));
+    updateActions();
+}
+void RhythmPane::updateActions() {
+    if (_closing) return;
+    const auto capture = _capture.state();
+    const bool recording = capture["recording"].toBool();
+    const bool saving = capture["stopping"].toBool() || capture["saving"].toBool();
+    const bool busy = recording || saving || _loadingMidi || !_ready;
+    const bool valid = !busy && _pendingAction.isEmpty() && !_rows.isEmpty() && !_draft["voices"].toList().isEmpty() && _draft["errors"].toStringList().isEmpty();
+    const bool own = _score && !_candidate.isEmpty() && playbackPreviewPrepared(_score, _candidate);
+    const bool proposed = own && playbackPreviewActive(_score, true);
+    const bool original = own && playbackPreviewActive(_score, false);
+    _record->setEnabled(!saving && !_loadingMidi && (_ready || recording));
+    _table->setEnabled(!busy);
+    _canvas->setEnabled(!busy);
+    for (auto name : {"rhythmReadScope", "rhythmImportMidi", "rhythmRestoreRecording"})
+        if (auto button = findChild<QPushButton *>(name)) button->setEnabled(!recording && !saving && !_loadingMidi);
+    for (QWidget *field : QList<QWidget *>{_tracks, _grid, _releases, _endMode}) field->setEnabled(!busy);
+    for (auto action : {"preview", "audition", "original", "stop"}) {
+        auto button = findChild<QPushButton *>(QString("rhythm-") + action);
+        if (!button) continue;
+        button->setEnabled(QString(action) == "stop" ? proposed || original : valid && (_manualRows || !_midi["notes"].toList().isEmpty()) && !_applied);
+        button->setChecked(QString(action) == "audition" ? proposed : QString(action) == "original" && original);
+    }
+    _apply->setEnabled(valid && !_applied && (_manualRows || !_midi["notes"].toList().isEmpty()));
+}
+void RhythmPane::selectRow(int row) {
+    _canvas->update();
+    if (row < 0 || row >= _rows.size()) return;
+    const auto groups = _draft["sourceGroups"].toList();
+    const int index = _rows[row].toMap()["sourceIndex"].toInt();
+    if (index < 0 || index >= groups.size()) return;
+    const auto notes = groups[index].toMap()["notes"].toList();
+    if (!notes.isEmpty()) {
+        auto note = notes.front().toMap();
+        note["revision"] = _observer.analysisRevision();
+        _observer.selectExpressionNote(note);
+    }
+}
+void RhythmPane::sourceChanged() {
+    if (_closing || _applying || !isVisible() || !_ready || _refreshQueued ||
+        _observer.analysisContentRevision() == _state["snapshotId"].toString()) return;
+    _candidate.clear();
+    _observer.cancelReadOnlyJob();
+    _draftTimer.stop();
+    _calculating = false;
+    if (_manualRows && !_applied) {
+        _ready = false;
+        updateActions();
+        _status->setText(tr("谱中内容已改变。点“读取当前选段”载入现在的音高，再继续写节奏。"));
+        return;
+    }
+    _refreshQueued = true;
+    QTimer::singleShot(0, this, [this] {
+        _refreshQueued = false;
+        if (isVisible()) readSource(_data["scope"].toMap());
+    });
+}
+void RhythmPane::commitRows(const QVariantList &before, bool wasManual, bool wasApplied) {
+    if (before == _rows) { queueDraft(); return; }
+    const auto after = _rows;
+    _edits->push(new RhythmEdit([this, before, after, wasManual, wasApplied](bool forward) {
+        _rows = forward ? after : before;
+        _manualRows = forward || wasManual;
+        _applied = !forward && wasApplied;
+        fillTable();
+        _canvas->update();
+        queueDraft();
+    }));
+}
+bool RhythmPane::eventFilter(QObject *, QEvent *event) {
+    auto focus = QApplication::focusWidget();
+    if (!isVisible() || !focus || (focus != this && !isAncestorOf(focus))) return false;
+    if (event->type() != QEvent::ShortcutOverride && event->type() != QEvent::KeyPress) return false;
+    if (focus->inherits("QLineEdit") || focus->inherits("QAbstractSpinBox")) return false;
+    auto key = static_cast<QKeyEvent *>(event);
+    if ((key->key() == Qt::Key_Escape || key->matches(QKeySequence::Undo)) && focus == _canvas && QWidget::mouseGrabber() == _canvas) {
+        if (event->type() == QEvent::KeyPress) _canvas->cancelDrag();
+        event->accept();
+        return true;
+    }
+    const bool undo = key->matches(QKeySequence::Undo), redo = key->matches(QKeySequence::Redo);
+    if (!undo && !redo) return false;
+    if (event->type() == QEvent::ShortcutOverride) { event->accept(); return true; }
+    if (!key->isAutoRepeat()) {
+        if (undo && _edits->canUndo()) _edits->undo();
+        else if (redo && _edits->canRedo()) _edits->redo();
+        else {
+            getAction(undo ? "undo" : "redo")->trigger();
+            sourceChanged();
+        }
+    }
+    event->accept();
+    return true;
 }
 void RhythmPane::restoreRecording() {
     auto saved = _observer.workflowData("arrangement");

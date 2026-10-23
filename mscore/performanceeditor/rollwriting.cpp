@@ -12,6 +12,8 @@
 #include "mscore/seq.h"
 #include "mscore/workflow/arrangement.h"
 #include "mscore/workflow/editorareas.h"
+#include "mscore/workflow/controlflowlayout.h"
+#include "mscore/workflow/workflowcontext.h"
 #include "mscore/workflow/featuregate.h"
 #include "mscore/workflow/playbackpreview.h"
 #include "mscore/workflow/workspaceviews.h"
@@ -83,10 +85,10 @@ RollWritingBar::RollWritingBar(PerformanceEditor *editor, QToolButton *toggle,
   outer->setContentsMargins(3, 0, 3, 3);
   outer->setSpacing(3);
   auto host = new QWidget;
-  _layout = new QGridLayout(host);
+  _layout = new ControlFlowLayout(host);
   _layout->setContentsMargins(0, 0, 0, 0);
   _layout->setSpacing(4);
-  auto scroll = new QScrollArea;
+  auto scroll = new ControlScrollArea;
   scroll->setWidget(host);
   scroll->setWidgetResizable(true);
   scroll->setFrameShape(QFrame::NoFrame);
@@ -98,7 +100,7 @@ RollWritingBar::RollWritingBar(PerformanceEditor *editor, QToolButton *toggle,
     box->setObjectName(name);
     box->addItems(items);
     box->setMinimumContentsLength(4);
-    box->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    box->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     _controls.append(box);
     return box;
   };
@@ -111,6 +113,7 @@ RollWritingBar::RollWritingBar(PerformanceEditor *editor, QToolButton *toggle,
   for (int i = 0; i < 6; ++i)
     _grid->setItemData(i, QList<int>{480, 240, 120, 60, 160, 80}[i]);
   _track = combo("rollWriteTrack", {});
+  _track->setMaximumWidth(230);
   auto button = [&](const QString &name, const QString &text, auto action) {
     auto b = new QToolButton;
     b->setObjectName(name);
@@ -184,18 +187,21 @@ RollWritingBar::RollWritingBar(PerformanceEditor *editor, QToolButton *toggle,
   button("rollWriteReset", tr("从谱子重新开始"),
          [this] { restoreFromScore(); });
   for (auto widget : _controls) {
-    widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    widget->setMinimumWidth(0);
+    widget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    _layout->addWidget(widget);
   }
   _range = new QLabel;
   _range->setObjectName("rollWriteRange");
   _range->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+  _range->setWordWrap(true);
   outer->addWidget(_range);
   _message = new QLabel;
   _message->setObjectName("rollWriteStatus");
   _message->setWordWrap(true);
   _message->setMaximumHeight(fontMetrics().lineSpacing() * 2 + 2);
   outer->addWidget(_message);
+  connect(workflowContext(), &WorkflowContext::auditionChanged, this,
+          &RollWritingBar::updateActions);
   if (seq)
     connect(seq, &Seq::stopped, this, [this] {
       QTimer::singleShot(0, this, [this] {
@@ -240,7 +246,6 @@ RollWritingBar::RollWritingBar(PerformanceEditor *editor, QToolButton *toggle,
   _grid->setToolTip(
       tr("选择画音和移动使用的网格；“量化选音”整理已选音的起止。"));
   hide();
-  resizeEvent(nullptr);
 }
 void RollWritingBar::setWritingEnabled(bool enabled) {
   _enabled = enabled;
@@ -348,21 +353,6 @@ QVariantMap RollWritingBar::record(bool draft) const {
   root["activeId"] = scopeId();
   return root;
 }
-void RollWritingBar::resizeEvent(QResizeEvent *) {
-  const int columns = width() >= 1000  ? 7
-                      : width() >= 650 ? 5
-                      : width() >= 450 ? 3
-                                       : 2;
-  if (columns == _columns)
-    return;
-  _columns = columns;
-  for (int c = 0; c < qMax(columns, _layout->columnCount()); ++c)
-    _layout->setColumnStretch(c, c < columns ? 1 : 0);
-  for (auto widget : _controls)
-    _layout->removeWidget(widget);
-  for (int i = 0; i < _controls.size(); ++i)
-    _layout->addWidget(_controls[i], i / columns, i % columns);
-}
 void RollWritingBar::hideEvent(QHideEvent *event) {
   qApp->removeEventFilter(this);
   if (_closing) {
@@ -394,7 +384,9 @@ bool RollWritingBar::eventFilter(QObject *object, QEvent *event) {
   // writing gesture its own cancellation while the roll has keyboard focus.
   if (object == _editor->_noteCanvas &&
       (event->type() == QEvent::KeyPress || event->type() == QEvent::ShortcutOverride) &&
-      static_cast<QKeyEvent *>(event)->key() == Qt::Key_Escape)
+      (static_cast<QKeyEvent *>(event)->key() == Qt::Key_Escape ||
+       static_cast<QKeyEvent *>(event)->matches(QKeySequence::Undo) ||
+       static_cast<QKeyEvent *>(event)->matches(QKeySequence::Redo)))
     return handle(event);
   return false;
 }
@@ -408,7 +400,8 @@ void RollWritingBar::updateActions() {
   _stop->setVisible(_mode->currentIndex() == 1);
   _original->setEnabled(usable);
   _proposed->setEnabled(usable);
-  _stop->setEnabled(!_previewKey.isEmpty());
+  const bool own = _score && !_previewKey.isEmpty() && playbackPreviewPrepared(_score, _previewKey);
+  _stop->setEnabled(own && (playbackPreviewActive(_score, false) || playbackPreviewActive(_score, true)));
   _grid->setEnabled(_enabled && _ready && !_busy);
   _tool->setEnabled(_enabled && _ready && !_busy);
   _track->setEnabled(_enabled && _ready && !_busy);
@@ -418,8 +411,8 @@ void RollWritingBar::updateActions() {
       button->setEnabled(_enabled && _ready && !_busy);
   {
     QSignalBlocker original(_original), proposed(_proposed);
-    _original->setChecked(_score && playbackPreviewActive(_score, false));
-    _proposed->setChecked(_score && playbackPreviewActive(_score, true));
+    _original->setChecked(own && playbackPreviewActive(_score, false));
+    _proposed->setChecked(own && playbackPreviewActive(_score, true));
   }
   setProperty("rollReady", _enabled && _ready && !_busy && !_pages.isActive());
 }
@@ -464,6 +457,10 @@ void RollWritingBar::savedMenu() {
   }
   if (_savedMenu->isEmpty())
     _savedMenu->addAction(tr("画音后，草稿会随乐谱保存。"))->setEnabled(false);
+  _savedMenu->addSeparator();
+  auto discard = _savedMenu->addAction(tr("删除当前草稿"));
+  discard->setEnabled(entries.value(scopeId()).toMap().value("draft").toBool());
+  connect(discard, &QAction::triggered, this, &RollWritingBar::discardDraft);
 }
 QVariantMap RollWritingBar::state() const {
   QVariantList selected;

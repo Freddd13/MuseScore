@@ -783,6 +783,7 @@ class TestPluginHost : public QObject {
       }
 
       void rhythmRecordDragApplyAndRestore(){
+            QSettings().setValue("workflow/recordingDirectory", _settings.filePath("rhythm-recordings-087"));
             auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/pluginhost/rhythm.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));main->resize(1300,1000);main->show();score->deselectAll();
             auto first=toChord(score->firstSegment(SegmentType::ChordRest)->element(0));auto last=toChord(score->tick2segment(Fraction::fromTicks(1440),false,SegmentType::ChordRest)->element(0));
             score->startCmd();last->undoChangeProperty(Pid::STAFF_MOVE,1);first->notes()[0]->undoChangeProperty(Pid::TUNING,15.);auto slur=new Slur(score);slur->setTrack(0);slur->setTrack2(0);slur->setTick(Fraction());slur->setTick2(Fraction::fromTicks(1440));slur->setStartElement(first);slur->setEndElement(last);score->undoAddElement(slur);score->endCmd();score->doLayout();
@@ -799,9 +800,9 @@ class TestPluginHost : public QObject {
             double step=qMax(2.,double(canvas->height()-30)/10.);int x=52+qRound(360./1920*(canvas->width()-64))+10,y=qRound(26+2*step+qMax(4.,step-1)/2);
             QTest::mousePress(canvas,Qt::LeftButton,Qt::NoModifier,QPoint(x,y));QTest::mouseMove(canvas->window()->windowHandle(),canvas->mapTo(canvas->window(),QPoint(x+qRound(120./1920*(canvas->width()-64)),y)),60);QTest::mouseRelease(canvas,Qt::LeftButton,Qt::NoModifier,QPoint(x+qRound(120./1920*(canvas->width()-64)),y));
             QTRY_VERIFY_WITH_TIMEOUT(table->item(3,2)->text().toDouble()>=1.99,5000);
-            QVERIFY(table->visualItemRect(table->item(0,0)).top()>=0);
+            QVERIFY(table->currentRow()>=0);QVERIFY(table->visualItemRect(table->item(table->currentRow(),0)).intersects(table->viewport()->rect()));
             main->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("rhythm-writing-062.png"));
-            auto apply=pane->findChild<QPushButton*>("rhythmApply");QTRY_VERIFY(apply->isEnabled());QTest::mouseClick(apply,Qt::LeftButton);QVERIFY2(label->text().contains("已采用"),qUtf8Printable(label->text()));QCOMPARE(score->undoStack()->getCurIdx(),before+1);
+            auto apply=pane->findChild<QPushButton*>("rhythmApply");QTRY_VERIFY(apply->isEnabled());QTest::mouseClick(apply,Qt::LeftButton);QTRY_VERIFY2_WITH_TIMEOUT(label->text().contains("已采用"),qUtf8Printable(label->text()),10000);QCOMPARE(score->undoStack()->getCurIdx(),before+1);
             QVector<int> pitches;for(auto segment=score->firstSegment(SegmentType::ChordRest);segment;segment=segment->next1(SegmentType::ChordRest)){auto e=segment->element(0);if(e&&e->isChord())for(auto n:toChord(e)->notes())if(!n->tieBack())pitches.append(n->pitch());}QCOMPARE(pitches,QVector<int>({60,62,64,65}));
             auto head=toChord(score->firstSegment(SegmentType::ChordRest)->element(0))->notes()[0];QVERIFY(!head->el().empty());QCOMPARE(head->veloOffset(),90);QCOMPARE(head->tuning(),15.);QCOMPARE(toChord(score->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest)->element(0))->staffMove(),1);QCOMPARE(VelocityBackup::original(head),(QPair<int,int>(int(Note::ValueType::OFFSET_VAL),0)));bool moved=false;for(auto row:score->spannerMap().map())if(row.second->isSlur()){QCOMPARE(row.second->tick2().ticks(),480);moved=true;}QVERIFY(moved);
             PluginAPI::ScoreObserver info;PluginAPI::Score wrapped(score);info.setScore(&wrapped);auto saved=info.workflowData("arrangement");QCOMPARE(saved["materials"].toList().size(),1);QCOMPARE(saved["materials"].toList()[0].toMap()["notes"].toList().size(),4);

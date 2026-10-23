@@ -5,6 +5,10 @@
 #include "mscore/workflow/playbackpreview.h"
 #include "mscore/midicrop/gateaudition.h"
 #include "mscore/midicrop/midicroppanel.h"
+#include "mscore/performanceeditor/rollwriting.h"
+#include "mscore/performanceeditor/rollnotation.h"
+#include "mscore/performanceeditor/rhythmpane.h"
+#include "mscore/workflow/arrangement.h"
 #include <QTableView>
 #include <QBuffer>
 #include "mscore/workflow/regionalcomparison.h"
@@ -962,6 +966,11 @@ class TestPerformanceEditor : public QObject, public MTest {
       void freeSlurEndpointEditsAcrossSystems();
       void midiGateHistoryAndLayout();
       void midiGateAuditionTransport();
+      void rollDraftReopenAndContinue();
+      void rollDraftAuditionStartsAtScope();
+      void rhythmShowsActualLengths();
+      void rhythmEditApplyContinueAndUndo();
+      void rhythmPreservesSourceDurationsAndVelocities();
       void freeSlurRoutedGeometry();
       void freeSlurRoutedPersistenceAndControls();
       void handSymbolPlacementExamples();
@@ -1157,5 +1166,6 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "endpoints_085_tests.inc"
 #include "midi_gate_086_tests.inc"
 #include "midi_transport_086_tests.inc"
+#include "writing_087_tests.inc"
 QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"
