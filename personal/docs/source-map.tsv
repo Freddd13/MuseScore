@@ -396,3 +396,6 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	241	空列�
 音源与效果的范围	mscore/workflow/vstpanel.cpp	class Panel final	100	分别选择当前乐器与主输出效果，逐乐器恢复原音源及预设	mtest/mscore/pluginhost/vst_088_tests.inc
 浮动插件参数	mscore/workflow/vstparameters.cpp	class ParameterWindow final	40	按实际插件身份跟随排序，输入、拖动与原生撤销同步	mtest/mscore/pluginhost/vst_088_tests.inc
 音源和效果预设	mscore/workflow/vstpresets.cpp	QByteArray readVstPreset(	17	读写带插件身份的预设，继续读取已有格式	mtest/mscore/pluginhost/vst_088_tests.inc
+换谱恢复音源	mscore/workflow/vstpanel.cpp	void restoreVstForScore(	1013	按当前谱读取音源配置并恢复路由；共用与保留设计见SOUND_PEDAL_PLAN.md	-
+音源实例复用	audio/vst/rack.cpp	bool Rack::load(	292	复用当前配置中相同实例，换谱保留的实现位置	-
+踏板编辑取点	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::beginGesture(	921	参数区与谱行带的踏板端点取点	-
