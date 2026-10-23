@@ -954,6 +954,9 @@ class TestPerformanceEditor : public QObject, public MTest {
       void referenceSourcePositionAndLoop();
       void referenceIndependentPlaybackPolicy();
       void referenceShortcutPreservesUserChoice();
+      void referenceLiveTrackControls();
+      void referenceOverlappingAssociationChoice();
+      void referenceLiveMixLoopAndPositions();
       void editorUsabilityRepairs();
       void editorVelocitySectionsAndInputWheel();
       void velocityReferencesAcrossRestsAndFilters();
@@ -1191,5 +1194,6 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "expression_096_tests.inc"
 #include "expression_097_tests.inc"
 #include "reference_098_tests.inc"
+#include "reference_099_tests.inc"
 QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"

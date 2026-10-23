@@ -59,12 +59,13 @@ public:
       QVariantList tracks()const{return _tracks;}
       QVariantMap diagnostics()const;
       QVariantMap playbackPlan()const{return property("workflowPlaybackPlan").toMap();}
-      Q_INVOKABLE double sourcePosition(const QString& path)const;
+      Q_INVOKABLE double sourcePosition(const QString& path,const QString& trackId=QString())const;
       bool audioStopsScore()const;
       bool scoreStopsAudio()const;
       void setAudioStopsScore(bool);
       void setScoreStopsAudio(bool);
       Q_INVOKABLE QVariantMap setTracks(const QVariantList&);
+      Q_INVOKABLE QVariantMap setTrackMix(const QVariantList&,const QString& changedId=QString());
       // Plan contains only file names, sample times and gains; never score objects.
       Q_INVOKABLE QVariantMap start(const QVariantMap&);
       Q_INVOKABLE void stop();

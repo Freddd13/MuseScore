@@ -931,6 +931,11 @@ void SpectrumPane::refreshTracks() {
     const int wanted =
         tracks.isEmpty() ? -1 : qBound(0, _media->property("selectedTrack").toInt(), tracks.size() - 1);
     const int displayedIndex = tracks.isEmpty() ? 0 : wanted;
+    if(ids==old&&_tracks->currentIndex()==displayedIndex&&wanted>=0){
+        auto current=tracks[wanted].toMap(),previous=_track;
+        for(const char* field:{"volume","mute","solo","participate"}){current.remove(field);previous.remove(field);}
+        if(current==previous){_track=tracks[wanted].toMap();return;}
+    }
     if (ids == old && _tracks->currentIndex() == displayedIndex &&
         (wanted < 0 ? _track.isEmpty() : tracks[wanted].toMap() == _track))
         return;
@@ -978,6 +983,8 @@ bool SpectrumPane::sourceInPlayback() const {
     if (!_media || !_media->property("playing").toBool())
         return false;
     for (auto value : _media->property("workflowPlaybackPlan").toMap().value("clips").toList()) {
+        const auto clip=value.toMap();
+        if(clip.contains("id")&&!_track.value("id").toString().isEmpty()&&clip.value("id")!=_track.value("id"))continue;
         const auto text = value.toMap().value("path").toString();
         const auto path = QUrl(text).isLocalFile() ? QUrl(text).toLocalFile() : text;
         if (QFileInfo(path).absoluteFilePath() == QFileInfo(_path).absoluteFilePath())
@@ -992,6 +999,7 @@ double SpectrumPane::sourcePosition() const {
         const auto plan = _media->property("workflowPlaybackPlan").toMap();
         for (auto value : plan.value("clips").toList()) {
             const auto clip = value.toMap();
+            if(clip.contains("id")&&!_track.value("id").toString().isEmpty()&&clip.value("id")!=_track.value("id"))continue;
             const auto path = QUrl(clip.value("path").toString()).isLocalFile()
                                   ? QUrl(clip.value("path").toString()).toLocalFile()
                                   : clip.value("path").toString();
@@ -1042,7 +1050,8 @@ void SpectrumPane::playSource() {
                             {"at", 0.},
                             {"duration", (until - from) / _playSpeed},
                             {"fade", true}};
-    const QVariantMap clip{{"path", _path},
+    const QVariantMap clip{{"id", _track.value("id")},
+                           {"path", _path},
                            {"identity", _track.value("identity")},
                            {"listen", _listenControls->values()},
                            {"volume", _track.value("volume", 1.)},
@@ -1051,7 +1060,7 @@ void SpectrumPane::playSource() {
                            {"clips", QVariantList{clip}},
                            {"joint", false},
                            {"loop", _loop->isChecked()},
-                           {"volume", _media->property("volume")}};
+                           {"volume", 1.}};
     QVariantMap result;
     const bool called = QMetaObject::invokeMethod(_media, "start", Q_RETURN_ARG(QVariantMap, result),
                                                   Q_ARG(QVariantMap, plan));

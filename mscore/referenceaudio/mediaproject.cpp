@@ -21,17 +21,18 @@ using KumoAudio::PcmRing;
 namespace {
 QString localPath(QString path){return QUrl(path).isLocalFile()?QUrl(path).toLocalFile():path;}
 class RingDevice : public QIODevice {
-      PcmRing* _ring;
+      void* _context;
+      unsigned (*_available)(void*);
+      unsigned (*_read)(void*,float*,unsigned,bool);
       bool _integer;
-      const std::atomic<float>* _gain;
 public:
-      RingDevice(PcmRing* ring,QObject* parent,const std::atomic<float>* gain,bool integer=false):QIODevice(parent),_ring(ring),_integer(integer),_gain(gain){open(QIODevice::ReadOnly);}
+      RingDevice(void* context,unsigned (*available)(void*),unsigned (*read)(void*,float*,unsigned,bool),QObject* parent,bool integer=false):QIODevice(parent),_context(context),_available(available),_read(read),_integer(integer){open(QIODevice::ReadOnly);}
       bool isSequential()const override{return true;}
-      qint64 bytesAvailable()const override{return qint64(_ring->available())*(_integer?4:8)+QIODevice::bytesAvailable();}
+      qint64 bytesAvailable()const override{return qint64(_available(_context))*(_integer?4:8)+QIODevice::bytesAvailable();}
       qint64 readData(char* data,qint64 size)override{
-            if(!_integer){const unsigned count=unsigned(size/8);_ring->pop(reinterpret_cast<float*>(data),count,false,_gain->load(std::memory_order_relaxed));return qint64(count)*8;}
+            if(!_integer){const unsigned count=unsigned(size/8);_read(_context,reinterpret_cast<float*>(data),count,false);return qint64(count)*8;}
             const unsigned count=unsigned(size/4);std::array<float,2048> samples;unsigned written=0;
-            while(written<count){unsigned n=qMin(1024u,count-written);_ring->pop(samples.data(),n,false,_gain->load(std::memory_order_relaxed));for(unsigned i=0;i<n*2;++i){qint16 value=qint16(std::lround(qBound(-1.f,samples[i],1.f)*32767));std::memcpy(data+(written*2+i)*2,&value,2);}written+=n;}return qint64(count)*4;
+            while(written<count){unsigned n=qMin(1024u,count-written);_read(_context,samples.data(),n,false);for(unsigned i=0;i<n*2;++i){qint16 value=qint16(std::lround(qBound(-1.f,samples[i],1.f)*32767));std::memcpy(data+(written*2+i)*2,&value,2);}written+=n;}return qint64(count)*4;
             }
       qint64 writeData(const char*,qint64)override{return -1;}
 };
@@ -42,10 +43,34 @@ struct ReferenceMediaProject::Session {
       int rate=48000,startFrame=0;
       qint64 total=0,offset=0;
       std::atomic<float> master{.8f};
-      bool joint=false,attached=false,loop=false;
+      bool joint=false,attached=false,loop=false,notifiedStart=false;
       std::atomic_bool started{false};
-      PcmRing output;
       std::vector<std::shared_ptr<PcmRing>> lanes;
+      QStringList trackIds;
+      std::vector<std::shared_ptr<std::atomic<float>>> gains;
+      // Only the output consumer touches these values; GUI controls set atomic targets.
+      std::vector<float> currentGains;
+      qint64 consumedFrames=0;
+      std::atomic<quint64> underruns{0};
+      unsigned available()const {
+            unsigned count=131072;for(const auto& lane:lanes)count=qMin(count,lane->available());return count;
+            }
+      unsigned consume(float* destination,unsigned frames,bool add) {
+            if(!add)std::fill(destination,destination+frames*2,0.f);
+            if(canceled)return 0;
+            const unsigned count=loop?frames:unsigned(qMin<qint64>(frames,qMax<qint64>(0,total-consumedFrames)));
+            for(const auto& lane:lanes)if(lane->available()<count&&!lane->done.load()){++underruns;canceled=true;return 0;}
+            const float masterGain=master.load(std::memory_order_relaxed),step=1.f/qMax(1,rate/200); // 5 ms fade for track controls.
+            std::array<float,2048> samples;
+            for(size_t lane=0;lane<lanes.size();++lane){
+                  float gain=currentGains[lane];const float target=gains[lane]->load(std::memory_order_relaxed);
+                  for(unsigned offset=0;offset<count;){const unsigned n=qMin(1024u,count-offset);lanes[lane]->pop(samples.data(),n);
+                        for(unsigned frame=0;frame<n;++frame){gain+=qBound(-step,target-gain,step);for(unsigned channel=0;channel<2;++channel)destination[(offset+frame)*2+channel]+=samples[frame*2+channel]*gain*masterGain;}offset+=n;
+                        }
+                  currentGains[lane]=gain;
+                  }
+            consumedFrames+=count;return count;
+            }
       QMutex errorsMutex;
       QString error;
       void fail(QString value){QMutexLocker lock(&errorsMutex);if(error.isEmpty())error=value;canceled=true;}
@@ -63,11 +88,11 @@ bool ReferenceMediaProject::audioStopsScore()const{return QSettings().value("wor
 bool ReferenceMediaProject::scoreStopsAudio()const{return QSettings().value("workflow/reference/stopAudioOnScore",false).toBool();}
 void ReferenceMediaProject::setAudioStopsScore(bool value){QSettings().setValue("workflow/reference/stopScoreOnAudio",value);emit changed();}
 void ReferenceMediaProject::setScoreStopsAudio(bool value){QSettings().setValue("workflow/reference/stopAudioOnScore",value);emit changed();}
-double ReferenceMediaProject::sourcePosition(const QString& path)const {
+double ReferenceMediaProject::sourcePosition(const QString& path,const QString& trackId)const {
       const auto wanted=QDir::cleanPath(QFileInfo(localPath(path)).absoluteFilePath());
       const double output=_session?position():_stoppedOutput;
       for(auto value:playbackPlan().value("clips").toList()){
-            const auto clip=value.toMap();if(QDir::cleanPath(QFileInfo(localPath(clip.value("path").toString())).absoluteFilePath()).compare(wanted,Qt::CaseInsensitive)!=0)continue;
+            const auto clip=value.toMap();if(!trackId.isEmpty()&&clip.value("id").toString()!=trackId)continue;if(QDir::cleanPath(QFileInfo(localPath(clip.value("path").toString())).absoluteFilePath()).compare(wanted,Qt::CaseInsensitive)!=0)continue;
             const auto pieces=clip.value("pieces").toList();double previous=-1;
             for(auto part:pieces){const auto p=part.toMap();const double at=p.value("at").toDouble(),duration=p.value("duration").toDouble(),from=p.value("from").toDouble(),until=p.value("until").toDouble();
                   if(output<at)return previous<0?from:previous;if(output<=at+duration&&duration>0)return from+(until-from)*(output-at)/duration;previous=until;}
@@ -77,7 +102,7 @@ double ReferenceMediaProject::sourcePosition(const QString& path)const {
 }
 QVariantMap ReferenceMediaProject::diagnostics()const {
       if(!_session)return {};auto s=_session;
-      return {{"sampleRate",s->rate},{"bufferFrames",131072},{"audioTracks",int(s->lanes.size())},{"underruns",qulonglong(s->output.underruns.load())},{"outputFrames",s->outputFrames.load()},{"boundedBytes",qint64(s->lanes.size()+1)*131072*8}};
+      return {{"sampleRate",s->rate},{"bufferFrames",131072},{"audioTracks",int(s->lanes.size())},{"underruns",qulonglong(s->underruns.load())},{"outputFrames",s->outputFrames.load()},{"boundedBytes",qint64(s->lanes.size())*131072*8}};
       }
 QVariantMap ReferenceMediaProject::setTracks(const QVariantList& values) {
       if(playing())return {{"error",tr("请先停止播放，再改变音轨。")}};
@@ -85,6 +110,22 @@ QVariantMap ReferenceMediaProject::setTracks(const QVariantList& values) {
       QSet<QString> ids;
       for(auto value:values){auto v=value.toMap();QString id=v.value("id").toString();if(id.isEmpty()||ids.contains(id))return {{"error",tr("音轨名称对应的编号重复或缺失。")}};ids.insert(id);}
       _tracks=values;emit tracksChanged();return {{"ok",true}};
+      }
+QVariantMap ReferenceMediaProject::setTrackMix(const QVariantList& values,const QString& changedId) {
+      if(values.size()>16)return {{"error",tr("本次最多使用 16 条音频。")}};
+      QSet<QString> ids;bool solo=false;QVariantMap gains;
+      for(auto value:values){const auto track=value.toMap();const auto id=track.value("id").toString();const double volume=track.value("volume",1.).toDouble();
+            if(id.isEmpty()||ids.contains(id)||!std::isfinite(volume)||volume<0||volume>1)return {{"error",tr("请检查音轨编号和 0–100% 的音量。")}};
+            ids.insert(id);if(track.value("participate",true).toBool()&&track.value("solo").toBool())solo=true;
+            }
+      for(auto value:values){const auto track=value.toMap();const auto id=track.value("id").toString();const bool audible=track.value("participate",true).toBool()&&!track.value("mute").toBool()&&(!solo||track.value("solo").toBool());
+            gains[id]=audible?track.value("volume",1.).toDouble():0.;
+            if(_session&&id==changedId&&audible&&!_session->trackIds.contains(id))return {{"error",tr("这条音轨尚未加入本次播放。停止后选择参加播放，再重新开始。")}};
+            }
+      if(_session)for(int lane=0;lane<_session->trackIds.size();++lane)if(gains.contains(_session->trackIds[lane]))_session->gains[size_t(lane)]->store(float(gains.value(_session->trackIds[lane]).toDouble()),std::memory_order_relaxed);
+      auto plan=playbackPlan();plan["mixTracks"]=values;setProperty("workflowPlaybackPlan",plan);
+      for(int i=0;i<_tracks.size();++i){auto saved=_tracks[i].toMap();for(auto value:values){const auto track=value.toMap();if(track.value("id")==saved.value("id")){for(const char* field:{"volume","mute","solo","participate"})if(track.contains(field))saved[field]=track.value(field);break;}}_tracks[i]=saved;}
+      emit tracksChanged();return {{"ok",true}};
       }
 QVariantMap ReferenceMediaProject::start(const QVariantMap& plan) {
       stop();setProperty("workflowPlaybackOwner",plan.value("owner"));const auto clips=plan.value("clips").toList();
@@ -106,10 +147,10 @@ QVariantMap ReferenceMediaProject::start(const QVariantMap& plan) {
       if(s->total<=0||(s->loop&&s->total<s->rate/5))return {{"error",tr("多音轨循环至少选择 0.2 秒的片段。更短的循环可使用单曲播放器。")}};
       const double offset=plan.value("offset",0).toDouble();
       if(!std::isfinite(offset)||offset<0||offset>=double(s->total)*1000/s->rate||(s->joint&&offset>0))return {{"error",tr("播放位置应在片段内。")}};
-      s->offset=qint64(std::llround(offset*s->rate/1000));s->outputFrames=s->offset;_stoppedOutput=0;
+      s->offset=qint64(std::llround(offset*s->rate/1000));s->outputFrames=s->offset;s->consumedFrames=s->offset;_stoppedOutput=0;
       setProperty("workflowPlaybackPlan",plan);_completed=false;_session=s;_joint=s->joint;_status=tr("正在准备 %1 条音频…").arg(clips.size());
-      for(auto clipValue:clips){auto clip=clipValue.toMap();auto ring=std::make_shared<PcmRing>();s->lanes.push_back(ring);QString path=localPath(clip.value("path").toString());auto pieces=clip.value("pieces").toList();const float gain=float(clip.value("volume",1).toDouble());const auto listen=clip.value("listen").toMap();
-            QtConcurrent::run(&_pool,[s,ring,path,pieces,gain,listen]{
+      for(auto clipValue:clips){auto clip=clipValue.toMap();auto ring=std::make_shared<PcmRing>();s->lanes.push_back(ring);s->trackIds.append(clip.value("id").toString());const float gain=float(clip.value("volume",1).toDouble());s->gains.push_back(std::make_shared<std::atomic<float>>(gain));s->currentGains.push_back(gain);QString path=localPath(clip.value("path").toString());auto pieces=clip.value("pieces").toList();const auto listen=clip.value("listen").toMap();
+            QtConcurrent::run(&_pool,[s,ring,path,pieces,listen]{
                   KumoAudio::AuditionFilter filter(s->rate,listen);
                   qint64 written=0;std::array<float,8192> silence{};
                   auto zeros=[&](qint64 end){while(written<end&&!s->canceled){unsigned n=unsigned(qMin<qint64>(4096,end-written));if(!ring->push(silence.data(),n,s->canceled))return false;written+=n;}return !s->canceled;};
@@ -120,23 +161,14 @@ QVariantMap ReferenceMediaProject::start(const QVariantMap& plan) {
                         std::vector<KumoAudio::Segment> chain;auto append=[&](const QVariantMap& piece){chain.push_back({piece.value("from").toDouble(),piece.value("until").toDouble(),qBound(.5,(piece.value("until").toDouble()-piece.value("from").toDouble())/piece.value("duration").toDouble(),1.5),piece.value("fade",true).toBool()});};append(p);
                         while(pi+1<pieces.size()){auto next=pieces[pi+1].toMap();qint64 nextAt=std::llround(next.value("at").toDouble()*s->rate/1000);if(nextAt!=end||std::abs(next.value("from").toDouble()-chain.back().end)>.01)break;append(next);end=std::llround((next.value("at").toDouble()+next.value("duration").toDouble())*s->rate/1000);++pi;}
                         QString error;
-                        bool ok=KumoAudio::streamSequence(path,chain,s->rate,[&](const float* data,int count){count=int(qMin<qint64>(count,end-written));std::array<float,8192> scaled;for(int i=0;i<count*2;++i)scaled[i]=data[i]*gain;filter.process(scaled.data(),count);written+=count;return ring->push(scaled.data(),unsigned(count),s->canceled);},s->canceled,&error);
+                        bool ok=KumoAudio::streamSequence(path,chain,s->rate,[&](const float* data,int count){count=int(qMin<qint64>(count,end-written));std::array<float,8192> scaled;std::copy(data,data+count*2,scaled.data());filter.process(scaled.data(),count);written+=count;return ring->push(scaled.data(),unsigned(count),s->canceled);},s->canceled,&error);
                         if(!ok&&!s->canceled){s->fail(error);break;}if(!zeros(end))break;
                         }
                   zeros(s->total);
                   }while(s->loop&&!s->canceled);ring->done=true;
                   });
             }
-      QtConcurrent::run(&_pool,[s]{
-            std::array<float,2048> mixed,temp;qint64 produced=s->offset;
-            while((s->loop||produced<s->total)&&!s->canceled){unsigned n=unsigned(qMin<qint64>(1024,s->total-produced%s->total));bool available=true;for(auto lane:s->lanes)if(lane->available()<n&&!lane->done.load())available=false;
-                  if(!available){std::this_thread::sleep_for(std::chrono::milliseconds(1));continue;}
-                  std::fill(mixed.begin(),mixed.end(),0.f);for(auto lane:s->lanes){lane->pop(temp.data(),n);for(unsigned i=0;i<n*2;++i)mixed[i]+=temp[i];}
-                  if(!s->output.push(mixed.data(),n,s->canceled))break;produced+=n;
-                  if(s->output.available()>=qMin<qint64>(8192,s->total))s->ready=true;
-                  }
-            s->output.done=true;s->ready=true;
-            });
+      const auto initialMix=plan.value("mixTracks").toList();if(!initialMix.isEmpty()){const auto result=setTrackMix(initialMix);if(result.contains("error")){stop();return result;}for(size_t lane=0;lane<s->gains.size();++lane)s->currentGains[lane]=s->gains[lane]->load(std::memory_order_relaxed);}
       _timer.start();emit changed();return {{"ok",true},{"preparing",true}};
       }
 void ReferenceMediaProject::mix(void* context,float* buffer,unsigned count,int frame,bool playing) {
@@ -145,21 +177,22 @@ void ReferenceMediaProject::mix(void* context,float* buffer,unsigned count,int f
       if(!s->started){if(!playing||qint64(frame)+count<=s->startFrame)return;skipped=unsigned(qMax(0,s->startFrame-frame));s->started=true;s->expected=frame;}
       const qint64 expected=s->expected.load();
       if(playing&&std::abs(qint64(frame)-expected)>qint64(count)*2){s->discontinuous=true;return;}
-      const auto got=s->output.pop(buffer+skipped*2,count-skipped,true,s->master.load(std::memory_order_relaxed));if(got<count-skipped&&!s->output.done)s->canceled=true;s->outputFrames+=count-skipped;s->expected=expected+count;
+      s->consume(buffer+skipped*2,count-skipped,true);s->outputFrames+=count-skipped;s->expected=expected+count;
       }
 void ReferenceMediaProject::poll() {
       auto s=_session;if(!s)return;
-      if(s->output.underruns.load()>0&&!s->output.done.load())s->canceled=true;
-      if(s->canceled){QString error;{QMutexLocker lock(&s->errorsMutex);error=s->error;}const bool underrun=s->output.underruns.load()>0;stop();_status=underrun?tr("音频准备跟不上播放，已停止以免位置错开。请减少同时播放的音轨。"):error.isEmpty()?tr("播放已停止。"):tr("音频无法播放：%1").arg(error);emit changed();return;}
+      if(s->canceled){QString error;{QMutexLocker lock(&s->errorsMutex);error=s->error;}const bool underrun=s->underruns.load()>0;stop();_status=underrun?tr("音频准备跟不上播放，已停止以免位置错开。请减少同时播放的音轨。"):error.isEmpty()?tr("播放已停止。"):tr("音频无法播放：%1").arg(error);emit changed();return;}
+      if(!s->ready){bool ready=true;for(const auto& lane:s->lanes)if(lane->available()<qMin<qint64>(8192,s->total-s->offset)&&!lane->done.load())ready=false;s->ready=ready;}
       if(s->discontinuous){stop();_status=tr("乐谱播放位置改变，联合播放已停止。请从新的位置重新开始。");emit changed();return;}
       if(s->ready&&!s->started&& !_audio&&!s->attached){
             if(s->joint){if(!_host.attach||!_host.attach(&ReferenceMediaProject::mix,s.get())){stop();_status=tr("联合播放输出正被使用，请停止另一次播放。");emit changed();return;}s->attached=true;setProperty("prepared",true);_status=tr("音频已准备，等待乐谱开始。");emit changed();return;}
             QAudioFormat f;f.setSampleRate(s->rate);f.setChannelCount(2);f.setSampleSize(32);f.setSampleType(QAudioFormat::Float);f.setByteOrder(QAudioFormat::LittleEndian);f.setCodec("audio/pcm");auto device=QAudioDeviceInfo::defaultOutputDevice();
             bool integer=false;if(!device.isFormatSupported(f)){f.setSampleSize(16);f.setSampleType(QAudioFormat::SignedInt);integer=true;}
             if(device.isNull()||!device.isFormatSupported(f)){stop();_status=tr("声音设备不能播放此采样格式。");emit changed();return;}
-            _device=new RingDevice(&s->output,this,&s->master,integer);_audio=new QAudioOutput(device,f,this);_audio->setBufferSize(s->rate*(integer?4:8)/10);_audio->start(_device);s->started=true;_status=tr("音频播放中。");
+            _device=new RingDevice(s.get(),[](void* context){return static_cast<Session*>(context)->available();},[](void* context,float* data,unsigned count,bool add){return static_cast<Session*>(context)->consume(data,count,add);},this,integer);_audio=new QAudioOutput(device,f,this);_audio->setBufferSize(s->rate*(integer?4:8)/10);_audio->start(_device);s->started=true;_status=tr("音频播放中。");
             }
       if(!s->joint){qint64 frames=s->offset+(_audio?_audio->processedUSecs()*s->rate/1000000:0);s->outputFrames=s->loop?frames:qMin(s->total,frames);}
+      if(s->joint&&s->started&&!s->notifiedStart){s->notifiedStart=true;_status=tr("乐谱与参考音频一起播放中。");}
       if(s->started&&!s->loop&&s->outputFrames>=s->total){bool wasJoint=s->joint;stop();_completed=true;_status=tr("片段播放结束。");emit changed();emit finished(wasJoint);return;}emit changed();
       }
 void ReferenceMediaProject::stop(){

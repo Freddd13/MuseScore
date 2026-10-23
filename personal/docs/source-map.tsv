@@ -433,3 +433,6 @@ QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this
 原曲播放配合	mscore/workflow/referencefactory.cpp	class ReferencePlaybackPolicy	33	按个人开关处理普通乐谱与原曲相互停止	mtest/mscore/performanceeditor/reference_098_tests.inc
 原曲默认快捷键	mscore/shortcut.cpp	void Shortcut::load()	4749	旧配置缺少新动作时补齐空闲键，保留自选和取消	mtest/mscore/performanceeditor/reference_098_tests.inc
 面板空白处按键	mscore/plugin/qmlplugin.cpp	bool QmlPlugin::eventFilter	141	窗口有焦点时处理播放键，保留文字输入	mtest/mscore/performanceeditor/reference_098_tests.inc
+
+原曲实时混音	mscore/referenceaudio/mediaproject.cpp	ReferenceMediaProject::setTrackMix	114	输出时逐轨应用音量与静音，循环保留设置	reference_099_tests.inc
+原曲片段选择	share/workflow/panels/ReferencePlayer/ReferencePlayer.view.qml	exclusiveAssociation	429	重叠关联、遍次、删除恢复及异步读取	reference_099_tests.inc

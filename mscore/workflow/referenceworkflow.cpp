@@ -26,6 +26,8 @@
 #include <QSignalBlocker>
 #include <cmath>
 #include <algorithm>
+#include <QFileInfo>
+#include <QUrl>
 namespace Ms { namespace PluginAPI {
 QVariantMap ScoreObserver::setReferenceTracks(const QVariantList& tracks){
  auto project=referenceProject();QVariantMap result;QMetaObject::invokeMethod(project,"setTracks",Q_RETURN_ARG(QVariantMap,result),Q_ARG(QVariantList,tracks));if(result.value("ok").toBool())workflowContext()->setReferenceScore(_score);return result;
@@ -76,9 +78,12 @@ QVariantMap ScoreObserver::referencePlan(const QVariantMap& request){
   for(int tick:ticks){double normal=seconds(tick),output=origin+(audioAt(leader,tick)-audioAt(leader,start))/1000/speed;clock.append({normal,output});clockValues.append(QVariantMap{{"score",normal},{"output",output}});}
  }
  auto outputAt=[&](int tick){return mode==2?origin+(audioAt(leader,tick)-audioAt(leader,start))/1000/speed:seconds(tick);};
- QVariantList clips;bool solo=false;for(auto value:request.value("tracks").toList())if(value.toMap().value("solo").toBool())solo=true;
+ QVariantList clips,mixTracks;bool solo=false;for(auto value:request.value("tracks").toList())if(value.toMap().value("participate",true).toBool()&&value.toMap().value("solo").toBool())solo=true;
  for(auto value:request.value("tracks").toList()){
-  auto track=value.toMap();if(track.value("mute").toBool()||!track.value("participate",true).toBool()||(solo&&!track.value("solo").toBool()))continue;
+  auto track=value.toMap();mixTracks.append(QVariantMap{{"id",track.value("id")},{"volume",track.value("volume",1.)},{"mute",track.value("mute",false)},{"solo",track.value("solo",false)},{"participate",track.value("participate",true)}});
+  if(!track.value("participate",true).toBool())continue;
+  const bool audible=!track.value("mute").toBool()&&(!solo||track.value("solo").toBool());
+  auto makePieces=[&]()->QVariantMap {
   QVariantList pieces;
   const double trackSpeed=mode==0?track.value("speed",speed).toDouble():speed;if(!std::isfinite(trackSpeed)||trackSpeed<.5||trackSpeed>1.5)return {{"error",tr("音轨速度应在 50–150% 之间。")}};
   auto associations=track.value("associations").toList();
@@ -108,7 +113,12 @@ QVariantMap ScoreObserver::referencePlan(const QVariantMap& request){
     if(std::abs(endAt-piece.value("at").toDouble())<.01&&std::abs(previous.value("until").toDouble()-piece.value("from").toDouble())<.01&&std::abs(previousSpeed-nextSpeed)<.00001){previous["until"]=piece.value("until");previous["duration"]=previous.value("duration").toDouble()+piece.value("duration").toDouble();merged.back()=previous;continue;}}
    merged.append(piece);
   }
-  if(!merged.isEmpty())clips.append(QVariantMap{{"id",track.value("id")},{"path",track.value("path")},{"identity",track.value("identity")},{"volume",track.value("volume",1.)},{"pieces",merged}});
+  return {{"pieces",merged}};
+  };
+  const auto built=makePieces();if(built.contains("error")){if(audible)return built;continue;}
+  const auto pieces=built.value("pieces").toList();if(pieces.isEmpty())continue;
+  if(!audible){const auto url=QUrl(track.value("path").toString());QFileInfo file(url.isLocalFile()?url.toLocalFile():url.toString());const auto identity=track.value("identity").toMap();if(!file.exists()||(!identity.isEmpty()&&(identity.value("size").toLongLong()!=file.size()||identity.value("modified").toLongLong()!=file.lastModified().toMSecsSinceEpoch())))continue;}
+  clips.append(QVariantMap{{"id",track.value("id")},{"path",track.value("path")},{"identity",track.value("identity")},{"volume",track.value("volume",1.)},{"pieces",pieces}});
  }
  if(clips.isEmpty())return {{"error",tr("这个谱段没有选中可播放的音频关联。")}};
  int context=start;auto measure=_score->tick2measure(Fraction::fromTicks(start));
@@ -125,7 +135,7 @@ QVariantMap ScoreObserver::referencePlan(const QVariantMap& request){
  }
  for(auto pair:_score->spannerMap().map()){auto line=pair.second;if(line->isPedal()&&line->tick().ticks()<start&&line->tick2().ticks()>start)context=qMin(context,line->tick().ticks());}
  int launch=qMax(0,from-(start-context));
- return {{"ok",true},{"revision",analysisRevision()},{"clips",clips},{"clock",clockValues},{"joint",true},{"volume",request.value("volume",.8)},{"fromUtick",from},{"contextUtick",launch},{"startUtick",from},{"untilUtick",until},{"startFrame",int(origin*MScore::sampleRate)},{"actualStart",start},{"start",start},{"end",end},{"mode",mode}};
+ return {{"ok",true},{"revision",analysisRevision()},{"clips",clips},{"mixTracks",mixTracks},{"clock",clockValues},{"joint",true},{"volume",request.value("volume",.8)},{"fromUtick",from},{"contextUtick",launch},{"startUtick",from},{"untilUtick",until},{"startFrame",int(origin*MScore::sampleRate)},{"actualStart",start},{"start",start},{"end",end},{"mode",mode}};
 }
 QVariantMap ScoreObserver::startReferencePlayback(const QVariantMap& plan){
  delete _workflowRepeat.data();_workflowRepeat.clear();
@@ -152,7 +162,7 @@ QVariantMap ScoreObserver::startReferencePlayback(const QVariantMap& plan){
  auto complete=[this,session,plan,finished,usesPreview,project]{
   if(*finished)return;*finished=true;
   std::function<void()> restart;
-  if(project->property("repeatSelection").toBool())restart=usesPreview?playbackPreviewRepeat():std::function<void()>([this,plan,project]{if(!project->property("repeatSelection").toBool())return;auto next=plan;next["loop"]=true;next["fromUtick"]=plan.value("startUtick",plan.value("fromUtick"));auto result=startReferencePlayback(next);if(result.contains("error"))emit workflowPlaybackError(result.value("error").toString());});
+  if(project->property("repeatSelection").toBool())restart=usesPreview?playbackPreviewRepeat():std::function<void()>([this,plan,project]{if(!project->property("repeatSelection").toBool())return;auto next=plan;next["mixTracks"]=project->property("playbackPlan").toMap().value("mixTracks",plan.value("mixTracks"));next["loop"]=true;next["fromUtick"]=plan.value("startUtick",plan.value("fromUtick"));auto result=startReferencePlayback(next);if(result.contains("error"))emit workflowPlaybackError(result.value("error").toString());});
   session->deleteLater();
   if(restart){auto pending=new QObject(this);_workflowRepeat=pending;QTimer::singleShot(40,pending,[this,pending,restart]{_workflowRepeat.clear();pending->deleteLater();restart();});}
  };
