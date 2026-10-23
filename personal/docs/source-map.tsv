@@ -82,7 +82,7 @@ MIDI左右手拆分	importexport/midiimport/importmidi_lrhand.h	void splitIntoLe
 踏板/琶音上下文	mscore/plugin/api/scoreobserver.cpp	QVariantMap ScoreObserver::contextSnapshot(	343	即时音/上下文分离，小节/休止/踏板边界	mtest/mscore/scoreobserver
 谱面屏幕标注	mscore/plugin/api/scoreobserver.cpp	void ScoreObserver::applyPreview(	423	独立和声变化标记、原谱优先与两层避让	mtest/mscore/pluginhost
 插件停靠状态	mscore/plugin/qmlplugin.cpp	void QmlPlugin::attachPanelDock(	64	实际区域/悬浮通知，可选横条高度	mtest/mscore/pluginhost
-插件菜单/析构回归	mtest/mscore/pluginhost/tst_pluginhost.cpp	class TestPluginHost	118	真实 Qt 主窗口、菜单、重排和停靠	mtest/mscore/pluginhost
+插件菜单/析构回归	mtest/mscore/pluginhost/tst_pluginhost.cpp	class TestPluginHost	119	真实 Qt 主窗口、菜单、重排和停靠	mtest/mscore/pluginhost
 plugin-preview	mscore/plugin/api/scoreobserver.cpp	ScoreObserver::setActiveScorePreview	628	固定区间高亮，不复制全谱色表	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-preview	mscore/scoreview.cpp	ScoreView::activateNotePreview	5785	固定记号点击命中与弱目标转发	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-preview	mscore/plugin/qmlplugin.cpp	QmlPlugin::focusPanel	100	聚焦已有插件窗口，保留停靠状态	mtest/mscore/pluginhost/tst_pluginhost.cpp
@@ -329,7 +329,7 @@ MIDI录音目录	mscore/workflow/midicapture.cpp	"const QString folder=QSettings
 卷帘草稿保存	mscore/performanceeditor/rollwritingmodel.cpp	void RollWritingBar::saveDraft(	470	草稿、试听、采用与撤销	mtest/mscore/pluginhost/tst_pluginhost.cpp
 谱行锁定	mscore/workflow/systemlocks.cpp	QVariantMap changeSystemLocks(	117	分行范围、原生撤销、相邻行边界与解锁	mtest/mscore/pluginhost/system_lock_tests.inc
 谱行锁定保存	libmscore/layoutbreak.cpp	"xml.tag(""kumoSystemLock"""	76	常规分行符附带分组，插入小节后继续对应	mtest/mscore/pluginhost/system_lock_tests.inc
-VST 音源与效果	mscore/workflow/vstpanel.cpp	void addVstPanelAction(	1085	原生面板、扫描、预设、撤销和独立实例	mtest/mscore/pluginhost/vst_tests.inc
+VST 音源与效果	mscore/workflow/vstpanel.cpp	void addVstPanelAction(	1191	原生面板、扫描、预设、撤销和独立实例	mtest/mscore/pluginhost/vst_tests.inc
 VST 音频图	audio/vst/rack.cpp	struct Rack::Impl	93	有界 MIDI 队列、串联效果、SF2 混合和延迟补偿	../../muse3_plugins/P2/tests/vst/checks.cpp
 VST3 适配	audio/vst/vst3plugin.cpp	class Vst3Plugin	57	音频、MIDI、参数、状态和插件界面	mtest/mscore/pluginhost/vst_tests.inc
 VST2 适配	audio/vst/vst2plugin.cpp	class Vst2Plugin	21	x64 ABI、CC、预设、CFX 和插件界面	mtest/mscore/pluginhost/vst_tests.inc
@@ -344,10 +344,10 @@ SF2 单乐器效果	audio/vst/fluidsource.cpp	class FluidSource	12	按需创建�
 紧凑控件换行	mscore/workflow/controlflowlayout.h	class ControlFlowLayout	13	实际控件宽度、换行及工具栏占高	mtest/mscore/pluginhost/usability_072_tests.inc
 工作视图恢复顺序	mscore/workflow/editorareas.cpp	void settleEditorAreaLayout	583	在主窗口恢复停靠后恢复内部高度	mtest/mscore/pluginhost/usability_072_tests.inc
 工作流面板位置保存	mscore/workflow/paneldock.cpp	class PanelPosition	11	独立开关和全屏入口、临时全屏期间保留原位置	mtest/mscore/pluginhost/usability_072_tests.inc
-VST 当前参数保存	mscore/workflow/vstpanel.cpp	void saveVstEdits(	1041	保存当前参数时保留已载入音源及其窗口，撤销恢复保存状态	mtest/mscore/pluginhost/usability_072_tests.inc
+VST 当前参数保存	mscore/workflow/vstpanel.cpp	void saveVstEdits(	1146	保存当前参数时保留已载入音源及其窗口，撤销恢复保存状态	mtest/mscore/pluginhost/usability_072_tests.inc
 CFX 状态比较	audio/vst/plugin.cpp	bool sameConfiguration(	83	保留完整音源状态，识别 ARIA 读取计数和真正参数变化	../../muse3_plugins/P2/tests/vst/checks.cpp;mtest/mscore/pluginhost/usability_072_tests.inc
 旧工作区 AI 入口	mscore/workflow/aiconnection.cpp	void addAIConnectionAction(	461	主窗口持有动作，旧工作区重建后复用菜单入口	mtest/mscore/pluginhost/usability_072_tests.inc
-VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	191	空列表显示添加步骤，区分音源与效果	mtest/mscore/pluginhost/usability_072_tests.inc
+VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	241	空列表显示添加步骤，区分音源与效果	mtest/mscore/pluginhost/usability_072_tests.inc
 演奏结果逐音列表	share/workflow/panels/PerformanceExpression/ExpressionResults.qml	ColumnLayout {	7	音名、拍位、前后力度、分类与定位；预览拖动保留列表位置	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/PerformanceExpression/tests/test-results.cjs
 演奏结果文字整理	share/workflow/panels/PerformanceExpression/ExpressionRows.js	function build(	25	同音不同声部、已采用、需核对、漏弹多弹与拼写	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/PerformanceExpression/tests/test-results.cjs
 内置音源释放	audio/midi/fluid/fluid.cpp	Fluid::~Fluid()	119	停止后释放声音资源，再解锁互斥量	mtest/mscore/pluginhost/tst_pluginhost.cpp
@@ -393,3 +393,6 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	191	空列�
 节奏草稿局部撤销	mscore/performanceeditor/rhythmpane.cpp	void RhythmPane::commitRows(	1050	一次拖动或表格编辑一次撤销，恢复草稿及采用状态	mtest/mscore/performanceeditor/writing_087_tests.inc
 节奏的逐音保持	share/plugins/PerformanceExpression/Rhythm.js	function voiceEvents(	65	保留休止、各音延音与力度，按交叠区间写延音和休止	mtest/mscore/performanceeditor/writing_087_tests.inc;../../muse3_plugins/PerformanceExpression/tests/test-rhythm-preservation.cjs
 卷帘草稿删除	mscore/performanceeditor/rollwritingmodel.cpp	void RollWritingBar::discardDraft(	523	只删除当前范围的草稿，原生撤销及保存恢复	mtest/mscore/performanceeditor/writing_087_tests.inc
+音源与效果的范围	mscore/workflow/vstpanel.cpp	class Panel final	100	分别选择当前乐器与主输出效果，逐乐器恢复原音源及预设	mtest/mscore/pluginhost/vst_088_tests.inc
+浮动插件参数	mscore/workflow/vstparameters.cpp	class ParameterWindow final	40	按实际插件身份跟随排序，输入、拖动与原生撤销同步	mtest/mscore/pluginhost/vst_088_tests.inc
+音源和效果预设	mscore/workflow/vstpresets.cpp	QByteArray readVstPreset(	17	读写带插件身份的预设，继续读取已有格式	mtest/mscore/pluginhost/vst_088_tests.inc

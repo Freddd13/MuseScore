@@ -1,6 +1,6 @@
 # MuseScore Evolution 个人功能说明
 
-本文对应个人版本：**0.87.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+本文对应个人版本：**0.88.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
 
 卷帘草稿的继续修改、删除与恢复，以及写节奏的录制、试听和采用见[完整步骤](docs/WRITING_087_GUIDE.md)。
 
@@ -531,7 +531,7 @@ Ctrl+Z撤销，编辑菜单中的“重做”可恢复这一步。节点位置�
 
 ### 使用VST或回到SF2
 
-打开“视图 → 音源与效果”，先看当前乐器，再选择音源。第一次使用VST，点“添加／扫描”，选中扫描结果后使用。点“打开界面”进入Pianoteq或CFX。想回到原来的音色，选择“SF2／Fluid”；完整步骤与保存方法见[音源与效果](docs/WORKSPACE_069_GUIDE.md)。
+打开“视图 → 音源与效果（VST）”，在“乐器”里选钢琴。点“添加插件…”扫描安装好的音源，选中后点“用作此乐器音源”，再点“打开音源”选择钢琴与预设。点“切回原音源”恢复原来的SF2音色。效果链旁可保存、载入选中效果的预设，参数窗口支持撤销与重做。完整例子见[使用钢琴音源与效果](docs/VST_088_GUIDE.md)。
 
 ### 工作区域太小或窗口跑到外面
 

@@ -23,6 +23,7 @@
 #include "mscore/workflow/builtinpanels.h"
 #include "mscore/workflow/systemlocks.h"
 #include "mscore/workflow/vstpanel.h"
+#include "mscore/workflow/vstparameters.h"
 #include "audio/midi/msynthesizer.h"
 #include "audio/midi/fluid/fluid.h"
 #include "mscore/synthcontrol.h"
@@ -119,6 +120,12 @@ class TestPluginHost : public QObject {
       Q_OBJECT
       QTemporaryDir _settings;
    private slots:
+      void vstRestoreFollowsSelectedInstrument();
+      void vstEffectsHaveOwnPresets();
+      void vstParameterStartsWithReadableValue();
+      void vstInstrumentFirstScanAndRestoreSound();
+      void vstMasterEffectsStayOutOfPartList();
+      void vstInstrumentListFollowsScoreEdits();
       void existingEditorProfileFirstOpen();
       void rhythmControlsFitNarrowPanel();
       void detachedToolsKeepEditorWorking();
@@ -1367,5 +1374,6 @@ class TestPluginHost : public QObject {
 #include "spectrum_078_tests.inc"
 #include "layout_079_tests.inc"
 #include "arrangement_083_tests.inc"
+#include "vst_088_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

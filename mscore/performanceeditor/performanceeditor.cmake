@@ -1,6 +1,10 @@
 set(PERFORMANCEEDITOR_SRC
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/vstpanel.cpp
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/vstpanel.h
+      ${CMAKE_CURRENT_LIST_DIR}/../workflow/vstparameters.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/../workflow/vstparameters.h
+      ${CMAKE_CURRENT_LIST_DIR}/../workflow/vstpresets.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/../workflow/vstpresets.h
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/systemlocks.cpp
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/systemlocks.h
       ${CMAKE_CURRENT_LIST_DIR}/rollnotation.cpp
