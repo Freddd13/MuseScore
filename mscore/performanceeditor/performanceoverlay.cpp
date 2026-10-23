@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performanceeditor.h"
+#include "performancelabels.h"
 #include "mscore/scoreview.h"
 #include "libmscore/note.h"
 #include "libmscore/system.h"
@@ -52,6 +53,9 @@ void PerformanceEditor::overlayViewChanged()
       }
 bool PerformanceEditor::overlayEvent(QEvent* event)
       {
+      const bool growDown=_view&&_bandFollowsSystem&&_scoreFrame.top()>=_view->matrix().map(QPointF(0,_systemBottom)).y();
+      const double resizeY=growDown?_scoreFrame.bottom():_scoreFrame.top();
+      const QRectF resizeEdge=_scoreFrame.isEmpty()?QRectF():QRectF(_scoreFrame.left(),resizeY-4,_scoreFrame.width(),8);
       if(_bandResizing){
             if(event->type()==QEvent::MouseMove){
                   auto mouse=static_cast<QMouseEvent*>(event);invalidateOverlay();
@@ -72,9 +76,7 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
       if (event->type() == QEvent::MouseButtonPress && _band->isChecked() && !_dirty && !_geometryDirty && !_scoreLane.isEmpty()) {
             auto mouse = static_cast<QMouseEvent*>(event);
             if (mouse->button() == Qt::LeftButton) {
-                  const bool growDown=_bandFollowsSystem && _scoreFrame.top()>=_view->matrix().map(QPointF(0,_systemBottom)).y();
-                  const double edge=growDown?_scoreFrame.bottom():_scoreFrame.top();
-                  if(QRectF(_scoreFrame.left(),edge-4,_scoreFrame.width(),8).contains(mouse->pos())){
+                  if(resizeEdge.contains(mouse->pos())){
                         finishWheel();cancelGesture();_bandResizing=true;_bandResizeDown=growDown;
                         _bandResizeAnchor=growDown?_scoreLane.top():_scoreLane.bottom();
                         _bandResizeHeight=_bandHeight;_press=mouse->pos();qApp->installEventFilter(this);
@@ -125,7 +127,8 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
       if (event->type() == QEvent::MouseMove && !_dragging) {
             auto mouse = static_cast<QMouseEvent*>(event);
             const bool before = _overBand; const QPointF old = _overlayPointer;
-            _overBand = _band->isChecked() && _scoreLane.contains(mouse->pos()); _overlayPointer = mouse->pos();
+            const bool overResize=_band->isChecked()&&resizeEdge.contains(mouse->pos());
+            _overBand = !overResize && _band->isChecked() && _scoreLane.contains(mouse->pos()); _overlayPointer = mouse->pos();
             int hover = -1;
             if (_overBand && _parameter->currentIndex() == 0) { const auto candidates = hits(mouse->pos(), true, true); if (!candidates.isEmpty()) hover = candidates.front(); }
             else if (!_overBand && !_scoreFrame.contains(mouse->pos())) {
@@ -144,10 +147,12 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
                   for (double x : {old.x(), _overlayPointer.x()}) _view->update(QRect(qRound(x) - 3, qRound(_scoreLane.top()) - 24, 7, qRound(_scoreLane.height()) + 30));
                   _view->setCursor(_overBand ? Qt::CrossCursor : Qt::ArrowCursor);
                   }
+            if(overResize){_view->setCursor(Qt::SizeVerCursor);return true;}
             if (_scoreFrame.contains(mouse->pos())) { if (!_overBand) _view->setCursor(Qt::ArrowCursor); return true; }
             }
       if (event->type() == QEvent::ToolTip) {
             auto help = static_cast<QHelpEvent*>(event);
+            if(_band->isChecked()&&resizeEdge.contains(help->pos())){QToolTip::showText(help->globalPos(),tr("上下拖动这条边，调整谱行带高度。"),_view);return true;}
             const QStringList controls {tr("缩小纵向显示，显示更大数值范围"), tr("放大纵向显示，精细调节当前范围"), _scoreFrame.width()<400?tr("更多操作：移动、匹配与恢复显示范围"):tr("数值视窗上移"), tr("数值视窗下移"), tr("匹配当前谱行选音；没有选音时匹配当前谱行数据"), tr("恢复此参数的完整合法范围")};
             for (int i = 0; i < 6; ++i) if (_scoreControls[i].contains(help->pos())) { QToolTip::showText(help->globalPos(), controls[i], _view); return true; }
             if (_scoreFrame.contains(help->pos()) && help->y() < _scoreLane.top()) { QToolTip::showText(help->globalPos(), tr("右键标题可切换谱行带位置与高度；自动位置放不下时回到视口底部。"), _view); return true; }
@@ -249,6 +254,9 @@ void PerformanceEditor::paintOverlay(QPainter& painter)
             }
       QRegion damage;
       painter.save(); painter.resetTransform(); painter.setRenderHint(QPainter::Antialiasing);
+      struct ValueLabel { int index; QPointF handle; QRectF preferred; QString text; QColor color; };
+      QVector<ValueLabel> values;
+      QVector<QRectF> labelObstacles;
       QVector<int> handles;QVector<QPair<int,QRectF>> handleBounds;
       if(_handles->isChecked() || _band->isChecked() || _peekHeld || _showValues){
             rebuildVisibleScoreNotes();QSet<int> seen;
@@ -266,10 +274,38 @@ void PerformanceEditor::paintOverlay(QPainter& painter)
                   damage |= bounds.adjusted(-5, -5, 5, 5).toAlignedRect();
                   }
             if ((!_handles->isChecked()&&!_peekHeld&&!_showValues) || _parameter->currentIndex() != 0 || !noteEditable(note)) continue;
-            const QPointF handle = bounds.topRight() + QPointF(12, -12);
-            painter.setPen(QPen(color, 2)); painter.setBrush(note.audible ? QBrush(Qt::white) : Qt::NoBrush); painter.drawEllipse(handle, 5, 5);
-            painter.drawText(handle + QPointF(8, -4), QString::number(noteValue(i)) + (rangeKind()==1 ? "%" : ""));
-            damage |= QRectF(handle - QPointF(8, 20), QSizeF(95, 30)).toAlignedRect();
+            const bool editableHandle=_handles->isChecked()&&(note.selected||i==_hover);
+            const QPointF handle = bounds.topRight() + (editableHandle?QPointF(12,-12):QPointF());
+            if(editableHandle) {
+                  painter.setPen(QPen(color, 2)); painter.setBrush(note.audible ? QBrush(Qt::white) : Qt::NoBrush); painter.drawEllipse(handle, 5, 5);
+                  labelObstacles.append(QRectF(handle-QPointF(6,6),QSizeF(12,12)));
+                  damage |= QRectF(handle-QPointF(7,7),QSizeF(14,14)).toAlignedRect();
+                  }
+            const QString text=QString::number(noteValue(i))+(rangeKind()==1?"%":"");
+            const QSizeF size(painter.fontMetrics().horizontalAdvance(text)+6,painter.fontMetrics().height()+2);
+            values.append({i,handle,QRectF(handle+QPointF(editableHandle?8:4,-size.height()),size),text,color});
+            }
+      if(!values.isEmpty()) {
+            if(_band->isChecked())labelObstacles.append(scoreBandLane().adjusted(-50,-26,4,5));
+            }
+      std::stable_sort(values.begin(),values.end(),[this](const ValueLabel& a,const ValueLabel& b){
+            const auto priority=[this](int i){return i==_hover?4:_notes[i].selected?3:_pending.contains(_notes[i].note)?2:0;};
+            return priority(a.index)>priority(b.index);
+            });
+      QVector<QPair<int,QRectF>> requests;for(const auto& value:values)requests.append({value.index,value.preferred});
+      const auto& placed=_scoreValueLabels.arrange(_visibleScoreRevision,_view->rect().adjusted(3,3,-3,-3),requests,labelObstacles,[this](PerformanceLabelSpace& space){
+            for(const auto& ink:_visibleScoreInk)space.reserve(ink);
+            for(const auto& item:_visibleScoreNotes)space.reserve(item.second.adjusted(-2,-2,2,2));
+            });
+      for(int index=0;index<values.size();++index) {
+            const auto& value=values[index];const auto box=placed[index];if(box.isEmpty())continue;
+            const QPointF target(qBound(box.left(),value.handle.x(),box.right()),qBound(box.top(),value.handle.y(),box.bottom()));
+            if(QLineF(target,value.handle).length()>12) {
+                  auto line=value.color;line.setAlpha(125);painter.setPen(QPen(line,1));painter.drawLine(value.handle,target);
+                  damage|=QRectF(value.handle,target).normalized().adjusted(-2,-2,2,2).toAlignedRect();
+                  }
+            painter.fillRect(box,QColor(255,255,255,225));painter.setPen(value.color);
+            painter.drawText(box,Qt::AlignCenter,value.text);damage|=box.adjusted(-2,-2,2,2).toAlignedRect();
             }
       _scoreLane = _scoreAxis = _scoreFrame = QRectF(); _scoreControls.fill(QRectF());
       if (_band->isChecked() && _system && !_systemSegments.isEmpty()) {

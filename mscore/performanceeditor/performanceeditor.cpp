@@ -204,7 +204,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             connect(action, &QAction::triggered, this, [this, h] { cancelGesture(); invalidateOverlay(); _bandHeight = h; QSettings().setValue("performanceEditor/bandHeight", h); if (_view) _view->update(); });
             }
       auto values = displayMenu->addAction(tr("一直显示力度（谱面与卷帘）")); values->setCheckable(true); values->setChecked(QSettings().value("performanceEditor/showValues", false).toBool()); _showValues = values->isChecked();
-      connect(values, &QAction::toggled, this, [this](bool on) { _showValues = on; QSettings().setValue("performanceEditor/showValues", on); invalidateOverlay(); syncOverlayTracking(); updateSurfaces(); });
+      connect(values, &QAction::toggled, this, [this](bool on) { _showValues = on; QSettings().setValue("performanceEditor/showValues", on); if(on)scheduleRefresh(); invalidateOverlay(); syncOverlayTracking(); updateSurfaces(); });
       auto appearanceAction = displayMenu->addAction(tr("配色／力度柱宽…")); appearanceAction->setObjectName("performanceAppearance");
       connect(appearanceAction, &QAction::triggered, this, [this] { if (_appearance.edit(this)) { applyAppearance(); invalidateVisual(); if (_view) _view->update(); } });
       connect(displayMenu->addAction(tr("REAPER 默认力度色")), &QAction::triggered, this, [this] { _appearance = PerformanceAppearance(); _appearance.save(); applyAppearance(); invalidateVisual(); if (_view) _view->update(); });

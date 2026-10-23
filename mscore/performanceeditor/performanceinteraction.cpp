@@ -368,11 +368,12 @@ void PerformanceEditor::updateHover(int index)
       if (index == _hover) return;
       const int before = _hover; _hover = index; buildGeometry();
       if (index >= 0 && _notes[index].system != _system && _selectedIndices.isEmpty()) updateSelection();
-      if (_view && (_handles->isChecked() || _band->isChecked())) {
+      if (_view && (_handles->isChecked() || _band->isChecked() || _peekHeld || _showValues)) {
             invalidateOverlay();
             for (int i : {before, index}) if (i >= 0 && i < _notes.size()) _view->update(_view->matrix().mapRect(_notes[i].bounds).adjusted(-5, -35, 95, 5).toAlignedRect());
             }
       for (const auto& geometry : _noteGeometry) if (geometry.index == before || geometry.index == index) _noteCanvas->update(geometry.rect.adjusted(-3, -24, 3, 3).toAlignedRect());
+      if(_peekHeld||_showValues)_noteCanvas->update();
       for (int i : {before, index}) if (i >= 0 && i < _notes.size()) { const int x = qRound(xForTick(_notes[i].tick, false)); _canvas->update(QRect(x - 8, 0, 17, _canvas->height())); }
       }
 void PerformanceEditor::seek(int tick)

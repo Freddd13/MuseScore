@@ -416,3 +416,6 @@ QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this
 工作视图侧栏宽度	mscore/workflow/workspaceviews.cpp	void restoreSideWidths(	116	先恢复中央乐谱，保存并恢复侧栏与标签组宽度	mtest/mscore/pluginhost/workspace_093_tests.inc
 停播编辑状态	mscore/seq.cpp	void MuseScore::seqStopped()	570	主窗口补齐当前谱窗的编辑状态，恢复符号面板	mtest/mscore/pluginhost/workspace_093_tests.inc
 编辑器鼠标归还	mscore/performanceeditor/performanceeditor.cpp	bool PerformanceEditor::eventFilter(	1152	播放及手势中断后归还鼠标，保持其它原生与QML面板可用	mtest/mscore/pluginhost/workspace_093_tests.inc
+密集力度数字	mscore/performanceeditor/performancelabels.h	class PerformanceValueLayout	54	按可见内容避让数字，保留选择优先与稳定重绘	mtest/mscore/pluginhost/values_094_tests.inc
+谱面可见符号轮廓	mscore/performanceeditor/performanceux.cpp	void PerformanceEditor::rebuildVisibleScoreNotes()	142	按需缓存符干、符杠和变音记号，随布局及视口更新	mtest/mscore/pluginhost/values_094_tests.inc
+常显力度准备	mscore/performanceeditor/performanceeditor.cpp	connect(values, &QAction::toggled	207	开启常显时补齐当前谱的数据读取	mtest/mscore/pluginhost/values_094_tests.inc

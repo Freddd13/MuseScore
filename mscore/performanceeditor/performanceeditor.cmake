@@ -28,6 +28,7 @@ set(PERFORMANCEEDITOR_SRC
       ${CMAKE_CURRENT_LIST_DIR}/performancesettings.h
       ${CMAKE_CURRENT_LIST_DIR}/performanceoverlay.cpp
       ${CMAKE_CURRENT_LIST_DIR}/performancepainting.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/performancelabels.h
       ${CMAKE_CURRENT_LIST_DIR}/expressioncompare.cpp
       ${CMAKE_CURRENT_LIST_DIR}/markvelocity.cpp
       ${CMAKE_CURRENT_LIST_DIR}/markvelocity.h

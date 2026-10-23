@@ -15,6 +15,7 @@
 #include "parameteredit.h"
 #include "performanceview.h"
 #include "performancesettings.h"
+#include "performancelabels.h"
 class QWheelEvent;
 class QGridLayout;
 class QSplitter;
@@ -157,10 +158,13 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QSet<int> _disabledTracks, _usedPitches;
       bool _peekHeld=false, _peekAll=false, _closestWheelActive=false;
       int _peekKey=0;
-      struct ScoreNoteRow { QRectF bounds; QVector<int> indices; };
+      struct ScoreNoteRow { QRectF bounds; QVector<int> indices; QVector<QRectF> ink; bool inkReady=false; };
       QVector<ScoreNoteRow> _scoreNoteRows;
       void rebuildScoreNoteRows();
       QVector<QPair<int,QRectF>> _visibleScoreNotes;
+      QVector<QRectF> _visibleScoreInk;
+      quint64 _visibleScoreRevision=1;
+      PerformanceValueLayout _scoreValueLabels, _rollValueLabels;
       QTransform _visibleScoreMatrix;
       QRect _visibleScoreRect;
       ScoreContentState _visibleScoreState;

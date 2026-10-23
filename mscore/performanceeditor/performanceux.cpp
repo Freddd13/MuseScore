@@ -6,6 +6,8 @@
 #include "libmscore/select.h"
 #include "libmscore/part.h"
 #include "libmscore/staff.h"
+#include "libmscore/chord.h"
+#include "libmscore/beam.h"
 #include <QApplication>
 #include <QActionGroup>
 #include <QCheckBox>
@@ -141,12 +143,23 @@ void PerformanceEditor::rebuildVisibleScoreNotes()
       {
       if(!_view||!_score||_dirty||_geometryDirty)return;
       auto matrix=_view->matrix();if(_visibleScoreMatrix==matrix&&_visibleScoreRect==_view->rect()&&_visibleScoreState==_state)return;
-      _visibleScoreNotes.clear();_visibleScoreMatrix=matrix;_visibleScoreRect=_view->rect();_visibleScoreState=_state;
+      _visibleScoreNotes.clear();_visibleScoreInk.clear();_visibleScoreMatrix=matrix;_visibleScoreRect=_view->rect();_visibleScoreState=_state;
+      ++_visibleScoreRevision;
       bool invertible=false;const auto logicalViewport=matrix.inverted(&invertible).mapRect(QRectF(_view->rect()));if(!invertible)return;
       // Layout already cached every head's bounds. Pointer operations must not
       // walk native parent objects across the whole score again.
-      for(const auto& row:_scoreNoteRows) {
+      for(auto& row:_scoreNoteRows) {
             if(!logicalViewport.intersects(row.bounds))continue;
+            if(!row.inkReady) {
+                  QSet<const Chord*> chords;QSet<const Beam*> beams;
+                  for(int i:row.indices) {
+                        const auto chord=_notes[i].note->chord();if(chords.contains(chord))continue;chords.insert(chord);
+                        for(const auto& shape:chord->shape())if(!shape.isEmpty())row.ink.append(shape.translated(chord->canvasPos()));
+                        if(auto beam=chord->beam())if(!beams.contains(beam)){beams.insert(beam);row.ink.append(beam->canvasBoundingRect());}
+                        }
+                  row.inkReady=true;
+                  }
+            for(const auto& ink:row.ink)if(logicalViewport.intersects(ink))_visibleScoreInk.append(matrix.mapRect(ink).adjusted(-1,-1,1,1));
             for(int i:row.indices) {const auto& note=_notes[i];if(!noteEditable(note)||!logicalViewport.intersects(note.bounds))continue;
                   QRectF bounds=matrix.mapRect(note.bounds);if(_view->rect().intersects(bounds.toAlignedRect()))_visibleScoreNotes.append({i,bounds});}
             }
@@ -251,7 +264,7 @@ void PerformanceEditor::rebuildScoreNoteRows()
       {
       _scoreNoteRows.clear();_visibleScoreRect=QRect();QHash<System*,int> rows;
       for(int i=0;i<_notes.size();++i){const auto& n=_notes[i];if(n.bounds.isEmpty())continue;
-            int row=rows.value(n.system,-1);if(row<0){row=_scoreNoteRows.size();rows.insert(n.system,row);_scoreNoteRows.append({{}, {}});}
+            int row=rows.value(n.system,-1);if(row<0){row=_scoreNoteRows.size();rows.insert(n.system,row);_scoreNoteRows.append({{}, {}, {}, false});}
             auto& r=_scoreNoteRows[row];r.bounds=r.bounds.united(n.bounds);r.indices.append(i);}
       }
 QRectF PerformanceEditor::velocityLane(int index,const QRectF& rect,bool onScore) const

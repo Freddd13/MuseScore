@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performanceeditor.h"
+#include "performancelabels.h"
 #include "../workflow/editorareas.h"
 #ifdef SCRIPT_INTERFACE
 #include "spectrumpane.h"
@@ -341,6 +342,8 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
       const QRectF clip = painter.clipBoundingRect();
       if (surface == PerformanceSurface::Notes) {
             buildGeometry(); QSet<quint64> cells;
+            struct ValueLabel { int index; QPointF anchor; QRectF preferred; QString text; };
+            QVector<ValueLabel> values;
 #ifdef SCRIPT_INTERFACE
             const bool showNotes=!_spectrum||_spectrum->showRollNotes();
 #endif
@@ -349,13 +352,21 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
 #ifdef SCRIPT_INTERFACE
                   if(!showNotes)continue;
 #endif
+                  const auto edit = _pending.value(note.note, {note.type, note.raw});
+                  const int midi = NoteVelocity::effective(note.base, edit.type, edit.raw);
+                  const bool showValue=note.enabled&&(_showValues || (_peekHeld && (_peekAll || note.selected || i==_hover || geometry.rect.adjusted(-160,-80,160,80).contains(_noteCanvas->mapFromGlobal(QCursor::pos())))));
+                  const QString value=showValue?QString::number(note.base<0?edit.raw:midi)+(note.base<0 && edit.type==Note::ValueType::OFFSET_VAL?"%":""):QString();
+                  const double valueWidth=showValue?painter.fontMetrics().horizontalAdvance(value)+6:0;
+                  const bool valueInside=showValue&&geometry.rect.height()>=painter.fontMetrics().height()+2&&geometry.rect.width()>=valueWidth;
+                  if(showValue&&!valueInside) {
+                        const QSizeF size(valueWidth,painter.fontMetrics().height()+2);
+                        values.append({i,QPointF(geometry.rect.right(),geometry.rect.center().y()),QRectF(geometry.rect.right()+3,geometry.rect.center().y()-size.height()/2,size.width(),size.height()),value});
+                        }
                   if (!geometry.rect.adjusted(-3, -3, 3, 3).intersects(clip)) continue;
                   if (_viewport.pixelsPerQuarter < 8 && !note.selected && i != _hover && !_playingNotes.contains(i) && !_pending.contains(note.note)) {
                         const quint64 cell = (quint64(qMax(0, int(qMax(area.left(), geometry.rect.left())) / 2)) << 8) | note.pitch;
                         if (cells.contains(cell)) continue; cells.insert(cell);
                         }
-                  const auto edit = _pending.value(note.note, {note.type, note.raw});
-                  const int midi = NoteVelocity::effective(note.base, edit.type, edit.raw);
                   QColor color = note.base < 0 && edit.type == Note::ValueType::OFFSET_VAL && _appearance.mode == 0 ? c[PerformanceAppearance::Grid].lighter(130) : _appearance.noteColor(midi, note.track); if (!note.enabled || !note.audible) color.setAlpha(45);
 #ifdef SCRIPT_INTERFACE
                   if(_rollWriting&&_rollWriting->dimsOriginal(note.tick,note.track))color.setAlpha(38);
@@ -364,15 +375,26 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
                   if (_playingNotes.contains(i)) { painter.setBrush(Qt::NoBrush); painter.setPen(QPen(c[PerformanceAppearance::Playhead], 2.5)); painter.drawRect(geometry.rect.adjusted(2, 2, -2, -2)); }
                   if (_pending.contains(note.note)) { painter.setBrush(Qt::NoBrush); painter.setPen(QPen(c[PerformanceAppearance::Preview], 1.5, Qt::DashLine)); painter.drawRect(geometry.rect.adjusted(-1, -1, 1, 1)); }
                   if (i == _hover) { painter.setBrush(Qt::NoBrush); painter.setPen(QPen(c[PerformanceAppearance::Text], 2)); painter.drawRect(geometry.rect.adjusted(-2, -2, 2, 2)); }
-                  const bool showValue=_showValues || (_peekHeld && (_peekAll || note.selected || i==_hover || geometry.rect.adjusted(-160,-80,160,80).contains(_noteCanvas->mapFromGlobal(QCursor::pos()))));
-                  if (_viewport.rowHeight >= 16 && geometry.rect.width() >= 28) {
-                        painter.setPen(color.lightness() > 145 ? Qt::black : Qt::white); painter.drawText(geometry.rect.adjusted(3, 0, -2, 0), Qt::AlignVCenter, note.name + (showValue ? QString(" · %1%2").arg(note.base < 0 ? edit.raw : midi).arg(note.base < 0 && edit.type == Note::ValueType::OFFSET_VAL ? "%" : "") : QString()));
+                  if ((_viewport.rowHeight >= 16 && geometry.rect.width() >= 28) || valueInside) {
+                        const QString full=valueInside?note.name+QString::fromUtf8(" · ")+value:note.name;
+                        const QString text=valueInside&&painter.fontMetrics().horizontalAdvance(full)>geometry.rect.width()-5?value:painter.fontMetrics().elidedText(full,Qt::ElideRight,qMax(0,int(geometry.rect.width()-5)));
+                        painter.setPen(color.lightness() > 145 ? Qt::black : Qt::white);
+                        painter.drawText(geometry.rect.adjusted(3,0,-2,0),Qt::AlignVCenter,text);
                         }
-                  if (showValue && note.enabled && (geometry.rect.width()<28 || _viewport.rowHeight<16)) {
-                        const QString value=QString::number(note.base<0?edit.raw:midi)+(note.base<0 && edit.type==Note::ValueType::OFFSET_VAL?"%":"");
-                        QRectF label(geometry.rect.right()+3,geometry.rect.center().y()-7,painter.fontMetrics().horizontalAdvance(value)+6,14);
-                        painter.fillRect(label,c[PerformanceAppearance::Background]);painter.setPen(c[PerformanceAppearance::Text]);painter.drawText(label,Qt::AlignCenter,value);
-                        }
+                  }
+            std::stable_sort(values.begin(),values.end(),[this](const ValueLabel& a,const ValueLabel& b){
+                  const auto priority=[this](int i){return i==_hover?4:_notes[i].selected?3:_pending.contains(_notes[i].note)?2:_playingNotes.contains(i)?1:0;};
+                  return priority(a.index)>priority(b.index);
+                  });
+            QVector<QPair<int,QRectF>> requests;for(const auto& value:values)requests.append({value.index,value.preferred});
+            const auto& placed=_rollValueLabels.arrange(_geometryRevision,area.adjusted(2,2,-2,-2),requests,{},[this](PerformanceLabelSpace& space){
+                  for(const auto& geometry:_noteGeometry)space.reserve(geometry.rect.adjusted(-2,-2,2,2));
+                  });
+            for(int index=0;index<values.size();++index) {
+                  const auto& value=values[index];const auto box=placed[index];if(box.isEmpty())continue;
+                  const QPointF target(qBound(box.left(),value.anchor.x(),box.right()),qBound(box.top(),value.anchor.y(),box.bottom()));
+                  if(QLineF(target,value.anchor).length()>12){auto line=c[PerformanceAppearance::Text];line.setAlpha(100);painter.setPen(QPen(line,1));painter.drawLine(value.anchor,target);}
+                  painter.fillRect(box,c[PerformanceAppearance::Background]);painter.setPen(c[PerformanceAppearance::Text]);painter.drawText(box,Qt::AlignCenter,value.text);
                   }
 #ifdef SCRIPT_INTERFACE
             if(_rollWriting)_rollWriting->paint(painter,area);

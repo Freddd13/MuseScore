@@ -150,6 +150,9 @@ class TestPluginHost : public QObject {
       void harmonyStyleSurfacesAndRestore();
       void nearestWheelOnBandAxis();
       void scoreBandStaysNearSelectedSystem();
+      void denseVelocityValuesAndScoreBand();
+      void valueLabelsKeepNotesClear();
+      void realScoreValuesAndBand();
       void harmonyDisplayAndHold();
       void chordHandlesStayAtMusicRange();
       void legacyVariantsSaveBeforeSwitch();
@@ -1388,5 +1391,6 @@ class TestPluginHost : public QObject {
 #include "layout_089_tests.inc"
 #include "components_092_tests.inc"
 #include "workspace_093_tests.inc"
+#include "values_094_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"
