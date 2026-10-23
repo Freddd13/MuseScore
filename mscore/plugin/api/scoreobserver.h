@@ -173,6 +173,7 @@ class ScoreObserver : public QObject {
       void readOnlyJobFinished(int token, const QVariantMap& result);
       void scoreChanged();
       void activeScoreChanged();
+      void workflowFileChanged();
       void positionChanged();
       void workflowPlaybackError(const QString& message);
       void previewActivated(int tick, int track);

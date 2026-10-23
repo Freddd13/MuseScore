@@ -66,6 +66,9 @@ ScoreObserver::ScoreObserver(QObject* parent) : QObject(parent)
             }
       auto context=workflowContext();context->setActiveScore(mscore?mscore->currentScore():nullptr);
       connect(context,&WorkflowContext::activeScoreChanged,this,&ScoreObserver::activeScoreChanged);
+      connect(context,&WorkflowContext::scoreFileChanged,this,[this](Ms::Score* score) {
+            if (_score && score == _score->masterScore()) emit workflowFileChanged();
+            });
       watchSurface();
       }
 

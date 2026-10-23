@@ -47,6 +47,7 @@ public:
 signals:
       void changed();
       void activeScoreChanged();
+      void scoreFileChanged(Score* score);
       void feedbackChanged();
       void auditionChanged();
       void captureChanged();
@@ -54,4 +55,6 @@ signals:
 };
 WorkflowContext* workflowContext();
 void notifyWorkflowCurrentScore(Score*);
+void notifyWorkflowScoreFileChanged(Score*);
+QString workflowScoreSession(Score*);
 }

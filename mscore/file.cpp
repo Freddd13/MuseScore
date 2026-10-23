@@ -23,6 +23,7 @@
 #include "instrdialog.h"
 #include "musescore.h"
 #include "workflow/vstpanel.h"
+#include "workflow/workflowcontext.h"
 #include "performanceeditor/performanceeditor.h"
 #include "newwizard.h"
 #include "palette.h"
@@ -1973,6 +1974,8 @@ bool MuseScore::saveAs(Score* cs_, bool saveCopy, const QString& path, const QSt
                   scoreCmpTool->updateScoreVersions(cs_);
                   addRecentScore(cs_);
                   writeSessionFile(false);
+                  if (cs_->isMaster() && originalScoreFileInfo.absoluteFilePath() != fi.absoluteFilePath())
+                        notifyWorkflowScoreFileChanged(cs_);
                   }
             }
       else if ((ext == "musicxml") || (ext == "xml")) {

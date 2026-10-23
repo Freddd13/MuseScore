@@ -66,14 +66,14 @@ QVariantMap ScoreObserver::stopWorkflowPlayback() {
 }
 QVariantMap ScoreObserver::workflowStatus() {
  if(!_score)return {{"error","no-score"}};auto master=_score->masterScore();
- return {{"revision",analysisRevision()},{"file",master->fileInfo()->absoluteFilePath()},{"name",master->name()},{"dirty",master->dirty()},{"readOnly",master->readOnly()}};
+ return {{"revision",analysisRevision()},{"file",master->fileInfo()->absoluteFilePath()},{"name",master->name()},{"dirty",master->dirty()},{"readOnly",master->readOnly()},{"scoreSession",workflowScoreSession(master)}};
 }
 QVariantMap ScoreObserver::workflowInfo() {
  if(!_score)return {{"error","no-score"}};
  if(playing() || (seq&&!seq->backgroundRenderingIdle()))return {{"error","playing-or-rendering"}};
  auto master=_score->masterScore();master->updateVelo();if(_score!=master)_score->updateVelo();
  QVariantList repeats;for(auto r:master->repeatList())repeats.append(QVariantMap{{"tick",r->tick},{"end",r->tick+r->len()},{"utick",r->utick},{"seconds",r->utime},{"occurrence",r->playbackCount}});
- return {{"revision",analysisRevision()},{"file",master->fileInfo()->absoluteFilePath()},{"name",master->name()},{"dirty",master->dirty()},{"readOnly",master->readOnly()},{"repeats",repeats},{"velocityWriteModes",true}};
+ return {{"revision",analysisRevision()},{"file",master->fileInfo()->absoluteFilePath()},{"name",master->name()},{"dirty",master->dirty()},{"readOnly",master->readOnly()},{"repeats",repeats},{"velocityWriteModes",true},{"scoreSession",workflowScoreSession(master)}};
 }
 QVariantMap ScoreObserver::performanceRange(int start,int end,int firstTrack,int endTrack,int fromTick,int limit,const QString& expected) {
  QElapsedTimer work;work.start();

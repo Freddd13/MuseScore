@@ -151,6 +151,7 @@ class TestPluginHost : public QObject {
       void harmonyDisplayAndHold();
       void chordHandlesStayAtMusicRange();
       void legacyVariantsSaveBeforeSwitch();
+      void legacyVariantsFollowSaveAs();
       void metadataSkipsSupportComponents();
       void contentWidthControlsWrapWithoutOverlap();
       void restoredWorkspaceKeepsPersonalTools();
@@ -1374,6 +1375,7 @@ class TestPluginHost : public QObject {
 #include "score_editing_075_tests.inc"
 #include "harmony_display_075_tests.inc"
 #include "variant_metadata_076_tests.inc"
+#include "variants_091_tests.inc"
 #include "harmony_panel_077_tests.inc"
 #include "spectrum_078_tests.inc"
 #include "layout_079_tests.inc"

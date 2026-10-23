@@ -39,6 +39,7 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
+#include <QMap>
 #include <QSignalBlocker>
 #include <QPushButton>
 #include <QSaveFile>
@@ -51,8 +52,38 @@
 #include <QUrl>
 #include <QVBoxLayout>
 #include <memory>
+#include <algorithm>
 namespace Ms {
 namespace {
+QString rangeNumbers(const QList<int>& numbers) {
+      QStringList parts;
+      for (int i = 0; i < numbers.size(); ++i) {
+            const int first = numbers[i];
+            while (i + 1 < numbers.size() && numbers[i + 1] == numbers[i] + 1) ++i;
+            parts << (first == numbers[i] ? QString::number(first)
+                                        : QString("%1–%2").arg(first).arg(numbers[i]));
+      }
+      return parts.join("、");
+}
+QString scopeSummary(const QVariantList& tracks) {
+      QMap<int, QList<int>> staves;
+      for (const auto& track : tracks) {
+            auto& voices = staves[track.toInt() / VOICES + 1];
+            const int voice = track.toInt() % VOICES + 1;
+            if (!voices.contains(voice)) voices.append(voice);
+      }
+      QMap<QString, QList<int>> sameVoices;
+      for (auto staff = staves.begin(); staff != staves.end(); ++staff) {
+            std::sort(staff.value().begin(), staff.value().end());
+            const auto voices = staff.value().size() == VOICES ? QObject::tr("全部声部")
+                : QObject::tr("声部%1").arg(rangeNumbers(staff.value()));
+            sameVoices[voices].append(staff.key());
+      }
+      QStringList summary;
+      for (auto voices = sameVoices.begin(); voices != sameVoices.end(); ++voices)
+            summary << QObject::tr("谱表%1 · %2").arg(rangeNumbers(voices.value()), voices.key());
+      return summary.join("；");
+}
 class RegionalPanel : public QWidget {
       QTreeWidget *_tree;
       QLabel *_status;
@@ -193,14 +224,11 @@ class RegionalPanel : public QWidget {
                         current = entry.toMap().value("name").toString();
             auto first = score()->tick2measure(Fraction::fromTicks(g.value("start").toInt())),
                  last = score()->tick2measure(Fraction::fromTicks(g.value("end").toInt() - 1));
-            QStringList scope;
-            for (auto track : g.value("tracks").toList())
-                  scope << tr("谱表%1声部%2").arg(track.toInt() / 4 + 1).arg(track.toInt() % 4 + 1);
             _scope->setText(tr("%1 · 第%2–%3小节\n%4 · 正在编辑：%5")
                                 .arg(g.value("name").toString())
                                 .arg(first ? first->no() + 1 : 0)
                                 .arg(last ? last->no() + 1 : 0)
-                                .arg(scope.join("、"), current));
+                                .arg(scopeSummary(g.value("tracks").toList()), current));
             for (auto entry : g.value("variants").toList()) {
                   auto v = entry.toMap();
                   auto button = new QPushButton(this);

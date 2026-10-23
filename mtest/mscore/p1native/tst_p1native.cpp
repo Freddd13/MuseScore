@@ -475,6 +475,8 @@ private slots:
  void regionalScoreSwitchMouseAndRestore();
  void regionalSwitchUndoAndSharedSettings();
  void regionalEditedWritingsRoundTrip();
+ void regionalRealPianoWritings();
+ void regionalControlsFollowVisibleSystem();
  void regionalSingleClickActuallySwitches();
  void regionalDeleteUndoAndReopen();
  void regionalDeleteMouseAndButtonPlacement();
@@ -494,6 +496,7 @@ private slots:
 #include "reference_056_tests.inc"
 #include "regional_tests.inc"
 #include "regional_070_tests.inc"
+#include "regional_091_tests.inc"
 #include "regional_comparison_tests.inc"
 #include "gate_comparison_tests.inc"
 QTEST_MAIN(TestP1Native)

@@ -11,7 +11,7 @@ MuseScore {
     property string preferredPanelGroup: "rightTools"
  id:root
  menuPath:"Plugins.Arrangement Variants";description:"试写方案：独立完整谱副本、原生标签页切换、范围比较和试听。"
- version:"1.2.0";requiresScore:true;pluginType:"dock";dockArea:"right";implicitWidth:400;implicitHeight:560
+ version:"1.2.1";requiresScore:true;pluginType:"dock";dockArea:"right";implicitWidth:400;implicitHeight:560
  property var observer:null
  property string workspace:""
  property var groups:[]
@@ -30,26 +30,46 @@ MuseScore {
  property string queryRevision:""
  property string queryAction:""
  property var group:groupIndex>=0&&groupIndex<groups.length?groups[groupIndex]:null
- property var currentOwner:findOwner(currentInfo.file,groups,workspace)
+ property var scoreOwners:({})
+ property var currentOwner:findOwner(currentInfo.file,groups,workspace,currentInfo.scoreSession)
  property var active:currentOwner&&currentOwner.groupIndex===groupIndex?currentOwner.entry:null
  property var removedState:null
  Desk.UiTheme {id:theme}
  function fail(e){status=Messages.readable(e);busy=false}
  function local(path){return Project.path(path).replace(/\\/g,"/").toLowerCase()}
  function resolveEntry(e){return Project.fileUrl(Project.resolve(workspace,e.path))}
- function findOwner(file,items,project){
+ function findOwner(file,items,project,session){
   if(!file)return null;
+  var bound=session&&scoreOwners?scoreOwners[session]:null;
+  if(bound)for(var g=0;g<items.length;++g)if(items[g].id===bound.group)
+   for(var i=0;i<items[g].entries.length;++i)if(items[g].entries[i].id===bound.entry)
+    return {groupIndex:g,entryIndex:i,entry:items[g].entries[i]};
   var at=local(file);
-  for(var g=0;g<items.length;++g)for(var i=0;i<items[g].entries.length;++i){
-   var e=items[g].entries[i],paths=[Project.resolve(project,e.path)].concat(e.aliases||[]);
-   for(var j=0;j<paths.length;++j)if(local(paths[j])===at)return {groupIndex:g,entryIndex:i,entry:e};
-  }
+  for(var group=0;group<items.length;++group)for(var index=0;index<items[group].entries.length;++index){
+    var e=items[group].entries[index],paths=[Project.resolve(project,e.path)].concat(session?[]:(e.aliases||[]));
+    for(var j=0;j<paths.length;++j)if(local(paths[j])===at)return {groupIndex:group,entryIndex:index,entry:e};
+   }
   return null;
  }
  function refresh(){
   if(!observer)return;
   observer.score=curScore;var info=typeof observer.workflowStatus==="function"?observer.workflowStatus():observer.workflowInfo();
-  currentInfo=info;if(info.error)status=Messages.readable(info.error);
+  var owner=findOwner(info.file,groups,workspace,info.scoreSession);
+  currentInfo=info;if(info.error){status=Messages.readable(info.error);return}
+  if(owner&&info.scoreSession){
+   var binding=scoreOwners[info.scoreSession],groupId=groups[owner.groupIndex].id;
+   if(!binding||binding.group!==groupId||binding.entry!==owner.entry.id){
+    var bindings=Project.copy(scoreOwners);bindings[info.scoreSession]={group:groupId,entry:owner.entry.id};scoreOwners=bindings;
+   }
+  }
+  if(!workspace||info.dirty||!info.scoreSession)return;
+  if(!owner||owner.entry.baseline||local(Project.resolve(workspace,owner.entry.path))===local(info.file))return;
+  var all=Project.copy(groups),g=all[owner.groupIndex],entry=g.entries[owner.entryIndex];
+  entry.aliases=(entry.aliases||[]).concat([Project.resolve(workspace,entry.path),info.file]);
+  entry.aliases=entry.aliases.filter(function(path,at,paths){return path&&paths.indexOf(path)===at});
+  entry.path=Project.relative(workspace,info.file);entry.savedRevision=info.revision;
+  groups=all;dirty=true;
+  if(saveManifest())status="已更新“"+entry.name+"”的文件位置，可以继续编辑。";
  }
  function rangeText(scope){return scope?"第"+scope.firstMeasure+(scope.lastMeasure===scope.firstMeasure?"":"–"+scope.lastMeasure)+"小节":""}
  function fileName(kind){return Project.directory(workspace)+kind+"-"+Date.now()+"-"+Math.floor(Math.random()*1000000)+".mscz"}
@@ -110,8 +130,8 @@ MuseScore {
   }
   var g=Project.copy(groups[ownerIndex]);
   for(var i=0;i<g.entries.length;++i)if(g.entries[i].id===id){
-   var e=g.entries[i];e.aliases=(e.aliases||[]).concat([currentInfo.file]);
-   e.aliases=e.aliases.filter(function(path,at,all){return all.indexOf(path)===at});
+   var e=g.entries[i];e.aliases=(e.aliases||[]).concat([Project.resolve(workspace,e.path),currentInfo.file]);
+   e.aliases=e.aliases.filter(function(path,at,all){return path&&all.indexOf(path)===at});
    e.path=Project.relative(workspace,r.path);e.hash=r.sha256;e.savedRevision=observer.analysisRevision();
   }
   var all=Project.copy(groups);all[ownerIndex]=g;groups=all;dirty=true;return saveManifest();
@@ -164,7 +184,7 @@ MuseScore {
    var p=Project.read(observer,url).variants;
    if(!p||!Array.isArray(p.groups)||p.groups.some(function(g){return !g||!g.scope||!Array.isArray(g.entries)||!g.entries.length}))
     throw new Error("请选择完整谱试写保存的JSON工作区。");
-   workspace=String(url);groups=p.groups;removedState=null;
+   workspace=String(url);groups=p.groups;scoreOwners=({});removedState=null;
    groupIndex=groups.length?Math.max(0,Math.min(p.groupIndex||0,groups.length-1)):-1;selected=p.selected||0;
    groups.forEach(function(g){if(!g.id)g.id="group-"+g.entries[0].id;g.entries.forEach(function(e){e.aliases=[];e.savedRevision=""})});
    if(groups.length)switchTo(selected,false);else status="工作区已打开，选择谱段后新建组。";
@@ -176,7 +196,7 @@ MuseScore {
   return e.comparison.same?"范围外相同":e.comparison.reasons.join("；");
  }
  onRun:{if(typeof newScoreObserver!=="function"){fail("请用 Kumo 版 MuseScore 打开此工具。");return}observer=newScoreObserver();observer.score=curScore;refresh()}
- Connections {target:root.observer;ignoreUnknownSignals:true;function onActiveScoreChanged(){if(!root.switching)root.refresh()}}
+ Connections {target:root.observer;ignoreUnknownSignals:true;function onActiveScoreChanged(){if(!root.switching)root.refresh()}function onWorkflowFileChanged(){if(!root.switching)root.refresh()}}
  onScoreStateChanged:if(!switching&&visible){refresh();if(busy&&observer.analysisRevision()!==queryRevision){paging.stop();busy=false;status="乐谱已修改；点检查差异可更新列表。"}}
  onVisibleChanged:{if(!visible){paging.stop();busy=false}else if(observer)refresh()}
  Timer {id:paging;interval:1;repeat:true;onTriggered:root.page()}
