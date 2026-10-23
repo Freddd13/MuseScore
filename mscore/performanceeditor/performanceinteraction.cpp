@@ -183,6 +183,7 @@ void PerformanceEditor::togglePlayback(bool startOnly)
       {
       if (!_view || !_score || !seq || !seq->isRunning()) { status(tr("播放不可用，请检查音频设备。")); return; }
       if (startOnly && seq->isPlaying()) return;
+      if (!seq->isPlaying()) { cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); }
       _view->cmd("play"); syncTransport();
       }
 void PerformanceEditor::revealTick(int tick)

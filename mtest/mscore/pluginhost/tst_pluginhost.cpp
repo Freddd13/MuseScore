@@ -123,6 +123,8 @@ class TestPluginHost : public QObject {
       Q_OBJECT
       QTemporaryDir _settings;
    private slots:
+      void workspaceSideWidthsRoundTrip();
+      void paletteRemainsInteractiveAfterPlayback();
       void combinedToolsKeepWorkspaceAndScreenBounds();
       void vstRestoreFollowsSelectedInstrument();
       void vstEffectsHaveOwnPresets();
@@ -1385,5 +1387,6 @@ class TestPluginHost : public QObject {
 #include "vst_088_tests.inc"
 #include "layout_089_tests.inc"
 #include "components_092_tests.inc"
+#include "workspace_093_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

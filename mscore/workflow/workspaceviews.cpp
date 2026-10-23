@@ -18,6 +18,7 @@
 #include <QPainterPath>
 #include <QPointer>
 #include <QSettings>
+#include <QSet>
 #include <QSignalBlocker>
 #include <QSplitter>
 #include <QStyle>
@@ -46,6 +47,20 @@ class WorkspaceViews : public QObject {
       saveEditorAreaLayout(editor);
     QSettings settings;
     settings.setValue(key(current + "/layout"), window->saveState(1));
+    QVariantMap sideWidths;
+    for (auto dock : window->findChildren<QDockWidget*>(QString(), Qt::FindDirectChildrenOnly)) {
+      const auto area = window->dockWidgetArea(dock);
+      if (dock->isHidden() || dock->isFloating() || dock->objectName().isEmpty() ||
+          (area != Qt::LeftDockWidgetArea && area != Qt::RightDockWidgetArea))
+        continue;
+      auto visible = dock;
+      for (auto peer : window->tabifiedDockWidgets(dock))
+        if (!peer->visibleRegion().isEmpty())
+          visible = peer;
+      sideWidths.insert(dock->objectName(), visible->width());
+    }
+    settings.setValue(key(current + "/sideWidths"), sideWidths);
+    settings.setValue(key(current + "/windowWidth"), window->width());
     if (auto dock = window->findChild<QDockWidget *>("performanceEditorDock"))
       if (!dock->isHidden() && !dock->isFloating()) {
         // Tabbed docks can retain the size of their inactive page. Save the
@@ -97,6 +112,36 @@ class WorkspaceViews : public QObject {
     for (auto button : selectors)
       if (button)
         button->setText(action->text());
+  }
+  void restoreSideWidths(const QString &mode) {
+    if (!window || current != mode)
+      return;
+    QSettings settings;
+    const bool firstLayout = settings.value(key(mode + "/layout")).toByteArray().isEmpty();
+    const QString source = !settings.contains(key(mode + "/sideWidths")) && firstLayout
+        ? "arrange" : mode;
+    const auto widths = settings.value(key(source + "/sideWidths")).toMap();
+    const int savedWidth = settings.value(key(source + "/windowWidth")).toInt();
+    if (widths.isEmpty() || savedWidth <= 0)
+      return;
+    QList<QDockWidget*> docks;
+    QList<int> sizes;
+    QSet<QDockWidget*> included;
+    for (auto dock : window->findChildren<QDockWidget*>(QString(), Qt::FindDirectChildrenOnly)) {
+      const auto area = window->dockWidgetArea(dock);
+      if (included.contains(dock) || dock->isHidden() || dock->isFloating() ||
+          (area != Qt::LeftDockWidgetArea && area != Qt::RightDockWidgetArea) ||
+          !widths.contains(dock->objectName()))
+        continue;
+      docks.append(dock);
+      sizes.append(qMax(1, qRound(widths.value(dock->objectName()).toInt() *
+                                 double(window->width()) / savedWidth)));
+      included.insert(dock);
+      for (auto peer : window->tabifiedDockWidgets(dock))
+        included.insert(peer);
+    }
+    if (!docks.isEmpty())
+      window->resizeDocks(docks, sizes, Qt::Horizontal);
   }
   void showScore(bool visible, bool arrangeFirstTime = false) {
     if (!window || !window->centralWidget())
@@ -235,10 +280,17 @@ public:
     current = mode;
     window->setProperty("kumoWorkspaceView", mode);
     const auto state = QSettings().value(key(mode + "/layout")).toByteArray();
+    const auto initialState = state.isEmpty() && (mode == "engrave" || mode == "post")
+        ? QSettings().value(key("arrange/layout")).toByteArray() : state;
+    const bool visible =
+        mode != "daw" || QSettings().value(key("daw/showScore"), false).toBool();
+    // Dock sizes must be restored with the destination score area present.
+    // A hidden DAW centre otherwise lets side docks consume its space.
+    showScore(visible);
     if (mode == "daw")
       window->showPerformanceEditor(true);
-    if (!state.isEmpty())
-      window->restoreState(state, 1);
+    if (!initialState.isEmpty())
+      window->restoreState(initialState, 1);
     else if (mode == "daw") {
       for (auto dock : window->findChildren<QDockWidget *>()) {
         const bool summary =
@@ -256,20 +308,21 @@ public:
       if (auto input = window->findChild<QToolBar *>("entry-tools"))
         input->hide();
     scoreComparison->setEnabled(mode == "daw");
-    const bool visible =
-        mode != "daw" ||
-        QSettings().value(key("daw/showScore"), false).toBool();
     {
       QSignalBlocker block(scoreComparison);
       scoreComparison->setChecked(visible);
     }
     showScore(visible, state.isEmpty());
+    if (window->QWidget::layout())
+      window->QWidget::layout()->activate();
+    restoreSideWidths(mode);
     // Restore internal heights after the main window has restored dock sizes.
     QTimer::singleShot(0, this, [this, mode] {
       if (window && current == mode) {
         if (auto editor = window->findChild<PerformanceEditor*>())
           settleEditorAreaLayout(editor);
         restoreEditorExtent(mode);
+        restoreSideWidths(mode);
       }
     });
     selected->setChecked(true);

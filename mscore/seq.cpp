@@ -569,6 +569,16 @@ void MuseScore::seqStarted()
 
 void MuseScore::seqStopped()
       {
+      // A view may predate the current sequencer (for example after changing
+      // audio setup). The main window owns edit availability, so complete its
+      // transition here as well as the view's per-sequencer connection.
+      if (seq && seq->isPlaying())
+            return;
+      if (cv && cv->mscoreState() == STATE_PLAY)
+            cv->changeState(ViewState::NORMAL);
+      else if (state() == STATE_PLAY)
+            changeState(cv ? cv->mscoreState() : STATE_DISABLED);
+
       if (cv) {
             cv->setCursorOn(false);
             }

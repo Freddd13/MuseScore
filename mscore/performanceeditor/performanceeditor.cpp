@@ -319,10 +319,13 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       for (auto box : {_handles, _band}) connect(box, &QCheckBox::toggled, this, [this] { cancelGesture(); syncOverlayTracking(); if (_view) _view->update(); });
       connect(_band, &QCheckBox::toggled, this, [this](bool enabled) { emit scoreBandChanged(enabled); scheduleRefresh(); syncTransport(); });
       if (seq) {
-            connect(seq, &Seq::stopped, this, [this] { if (_snapshotDegraded) { _dirty = true; scheduleRefresh(); } _commitTimer.start(0); syncTransport(); });
-            connect(seq, &Seq::started, this, [this] { cancelGesture(); _following = true; _followButton->setChecked(true); syncTransport(); status(); });
+            connect(seq, &Seq::stopped, this, [this] { cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); if (_snapshotDegraded) { _dirty = true; scheduleRefresh(); } _commitTimer.start(0); syncTransport(); });
+            connect(seq, &Seq::started, this, [this] { cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); _following = true; _followButton->setChecked(true); syncTransport(); status(); });
             connect(seq, &Seq::heartBeat, this, [this](int, int, int) { syncTransport(); playbackNotes(); });
             }
+      if (mscore) connect(mscore, &MuseScore::scoreStateChanged, this, [this](ScoreState state) {
+            if (state == STATE_PLAY) { cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); }
+            });
       _playTimer.setParent(this); _playTimer.setObjectName("performancePlaybackTimer");
       _playTimer.setInterval(16); _playTimer.setTimerType(Qt::PreciseTimer);
       connect(&_playTimer, &QTimer::timeout, this, &PerformanceEditor::updatePlayhead);
@@ -1149,6 +1152,17 @@ void PerformanceEditor::cancelGesture()
 bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       {
       if (!personalFeaturesEnabled()) return false;
+      QWidget* gestureOwner = nullptr;
+      if (_comparisonDragging) gestureOwner = _canvas;
+      else if (_bandResizing || _scoreRangePanning || (_dragging && _scoreGesture)) gestureOwner = _view;
+      else if (_marquee || (_dragging && _noteGesture)) gestureOwner = _noteCanvas;
+      else if (_seeking) gestureOwner = _seekingSurface;
+      else if (_rangePanning || _dragging) gestureOwner = _canvas;
+      if (event->type() == QEvent::ApplicationDeactivate ||
+          (event->type() == QEvent::UngrabMouse && object == gestureOwner)) {
+            cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); updateSurfaces();
+            return false;
+            }
 #ifdef SCRIPT_INTERFACE
       if(object==_noteCanvas && _spectrum && _spectrum->overlayEvent(event))return true;
 #endif

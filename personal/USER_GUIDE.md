@@ -4,9 +4,11 @@
 
 本次补充的音源面板、换谱保留和两种踏板方式见[后续安排](docs/SOUND_PEDAL_PLAN.md)。这些选项随对应批次交付，当前音源操作见[使用步骤](docs/VST_088_GUIDE.md)。
 
-本文对应个人版本：**0.92.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+本文对应个人版本：**0.93.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
 
 分段A/B的修改、组合、保存和删除见[分段写法](docs/VARIANTS_070_GUIDE.md)；完整谱工作区另存后会自动更新文件位置，见[完整谱保存](docs/VARIANTS_076_GUIDE.md)。
+
+切换工作视图后保留两侧宽度，以及从编辑器返回原曲参考、符号面板的操作，见[工作视图与面板操作](docs/WORKSPACE_093_GUIDE.md)。
 
 常用按钮图标、音轨静音／独听及新的音源分组见[图标与音源面板](docs/COMPONENTS_092_GUIDE.md)。
 
