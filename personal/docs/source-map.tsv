@@ -424,3 +424,7 @@ QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this
 人工对应选音	mscore/performanceeditor/workflowlanes.cpp	void WorkflowLanes::mousePressEvent	212	分别选择谱音与演奏音，显示音名位置，连接和采用	mtest/mscore/performanceeditor/expression_096_tests.inc
 对应与预览撤销	share/workflow/panels/PerformanceExpression/PerformanceExpression.view.qml	 function editorRequest(	107	对应快照、范围数量更新、失败导入保留资料及采用读回	mtest/mscore/performanceeditor/expression_096_tests.inc
 密集琶音选段	share/workflow/panels/PerformanceExpression/Alignment.js	function rolledOnsets(	132	连续起音合并、尾音与下一低音分辨、角色选择及人工连接	mtest/mscore/performanceeditor/expression_096_tests.inc;../../muse3_plugins/PerformanceExpression/tests/test-alignment-workflows.cjs
+演奏速度范围计算	share/workflow/panels/PerformanceExpression/Alignment.js	function tempoTransfer(	383	完整速度与停顿、受保护区间、分范围时长与恢复点	mtest/mscore/performanceeditor/expression_097_tests.inc;../../muse3_plugins/PerformanceExpression/tests/test-tempo-transfer.cjs
+演奏速度快照	mscore/workflow/scoreworkflow.cpp	QVariantMap ScoreObserver::performanceRange(	80	分页提供原速度、暂停、可写位置和保护区间	mtest/mscore/performanceeditor/expression_097_tests.inc
+演奏速度来源	mscore/workflow/expressiontempo.h	namespace Ms	9	隐藏速度点来源随谱保存，区分原有与采用的速度	mtest/mscore/performanceeditor/expression_097_tests.inc
+演奏速度采用	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::applyExpression(	63	实际时长模拟、必要恢复点及一次撤销	mtest/mscore/performanceeditor/expression_097_tests.inc

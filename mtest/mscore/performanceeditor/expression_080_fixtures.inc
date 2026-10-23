@@ -31,9 +31,17 @@ static QVariantMap expressionMap080(QmlPlugin* root,const char* name)
 }
 static bool expressionClick080(QmlPlugin* root,const char* name)
 {
-    auto item=root->findChild<QQuickItem*>(name);if(!item||!item->isVisible()||!item->isEnabled())return false;
-    const auto point=item->mapToScene(QPointF(item->width()/2,item->height()/2));
-    if(!QRectF(0,0,root->width(),root->height()).contains(root->mapFromScene(point))||!QRectF(0,0,item->window()->width(),item->window()->height()).contains(point))return false;
+    auto item=root->findChild<QQuickItem*>(name);if(!item)return false;
+    if(!QTest::qWaitFor([&]{return item->isVisible()&&item->isEnabled();},3000)){qInfo()<<"expression click unavailable"<<name<<"visible"<<item->isVisible()<<"enabled"<<item->isEnabled()<<"busy"<<root->property("busy")<<"stale"<<root->property("stale")<<"preview"<<root->property("previewUpdating")<<"status"<<root->property("status");return false;}
+    auto point=item->mapToScene(QPointF(item->width()/2,item->height()/2));
+    for(int attempt=0;attempt<12&&!QRectF(0,0,root->width(),root->height()).contains(root->mapFromScene(point));++attempt){
+        const QPointF local(root->window()->width()-24,root->window()->height()/2);
+        const QPoint delta(0,root->mapFromScene(point).y()<0?120:-120);
+        QWheelEvent wheel(local,root->window()->mapToGlobal(local.toPoint()),QPoint(),delta,Qt::NoButton,Qt::NoModifier,Qt::NoScrollPhase,false);
+        QApplication::sendEvent(root->window(),&wheel);QTest::qWait(40);
+        point=item->mapToScene(QPointF(item->width()/2,item->height()/2));
+    }
+    if(!QRectF(0,0,root->width(),root->height()).contains(root->mapFromScene(point))||!QRectF(0,0,item->window()->width(),item->window()->height()).contains(point)){qInfo()<<"expression click outside"<<name<<root->mapFromScene(point)<<QSizeF(root->width(),root->height())<<point<<item->window()->size();return false;}
     QTest::mouseClick(item->window(),Qt::LeftButton,Qt::NoModifier,point.toPoint());return true;
 }
 static void expressionShowMain080(MuseScore* main)

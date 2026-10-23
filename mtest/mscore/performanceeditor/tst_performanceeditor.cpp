@@ -19,6 +19,8 @@
 #include "mscore/workflow/referencepanel.h"
 #include "mscore/workflow/builtinpanels.h"
 #include "mscore/workflow/midicapture.h"
+#include "mscore/workflow/expressiontempo.h"
+#include "libmscore/tempoexpression.h"
 #include "mscore/workflow/midiinput.h"
 #include "mscore/workflow/referencebus.h"
 #include "libmscore/handbracket.h"
@@ -945,6 +947,9 @@ class TestPerformanceEditor : public QObject, public MTest {
       void expressionCorrectionKeepsPickedNotes();
       void expressionRolledPassageRoles();
       void expressionRealDecoratedPassage();
+      void expressionTempoWithRestsAndCurves();
+      void expressionTempoSelectedRanges();
+      void expressionRecordingAcrossLongRest();
       void editorUsabilityRepairs();
       void editorVelocitySectionsAndInputWheel();
       void velocityReferencesAcrossRestsAndFilters();
@@ -1180,5 +1185,6 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "writing_087_tests.inc"
 #include "expression_095_tests.inc"
 #include "expression_096_tests.inc"
+#include "expression_097_tests.inc"
 QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"

@@ -2,6 +2,8 @@
 #include "mscore/plugin/api/scoreobserver.h"
 #include "midiinput.h"
 #include "workflowcontext.h"
+#include "expressiontempo.h"
+#include "libmscore/fermata.h"
 #include "playbackpreview.h"
 #include "positionhint.h"
 #include "mscore/seq.h"
@@ -78,11 +80,11 @@ QVariantMap ScoreObserver::workflowInfo() {
 QVariantMap ScoreObserver::performanceRange(int start,int end,int firstTrack,int endTrack,int fromTick,int limit,const QString& expected) {
  QElapsedTimer work;work.start();
  // Bounded cache shared by independent workflow observers, invalidated by native content state.
- struct Cache {QPointer<Ms::Score> score;ScoreContentState state;TempoMap clock;QVector<QPair<int,int>> curves;MarkVelocityText marks;QCache<QString,QVariantMap> pages{64};};static Cache cache;
+ struct Cache {QPointer<Ms::Score> score;ScoreContentState state;TempoMap clock;QVector<QPair<int,int>> curves;MarkVelocityText marks;QMap<int,double> expressionTempos;QCache<QString,QVariantMap> pages{64};};static Cache cache;
  const QString revision=analysisRevision();
  if(!_score||(!expected.isEmpty()&&revision!=expected)||playing())return {{"error","stale-or-playing"}};
  const auto state=_score->masterScore()->state();
- if(cache.score!=_score||cache.state!=state){cache.score=_score;cache.state=state;cache.pages.clear();cache.clock=*_score->tempomap();cache.clock.setRelTempo(1.0);cache.marks=readMarkVelocityText(_score);cache.curves.clear();for(auto curve:TempoExpression::curves(_score->masterScore()))cache.curves.append({curve->tick().ticks(),curve->tick2().ticks()});}
+ if(cache.score!=_score||cache.state!=state){cache.score=_score;cache.state=state;cache.pages.clear();cache.clock=*_score->tempomap();cache.clock.setRelTempo(1.0);cache.marks=readMarkVelocityText(_score);cache.expressionTempos=ExpressionTempo::read(_score->masterScore());cache.curves.clear();for(auto curve:TempoExpression::curves(_score->masterScore()))cache.curves.append({curve->tick().ticks(),curve->tick2().ticks()});}
  QString key=QString("%1:%2:%3:%4:%5:%6").arg(start).arg(end).arg(firstTrack).arg(endTrack).arg(fromTick).arg(limit);
  if(auto saved=cache.pages.object(key)){auto value=*saved;value.insert("revision",revision);value.insert("milliseconds",double(work.nsecsElapsed())/1000000);return value;}
  auto page=analysisRange(start,end,firstTrack,endTrack,fromTick,limit,expected);
@@ -99,7 +101,7 @@ QVariantMap ScoreObserver::performanceRange(int start,int end,int firstTrack,int
   bool manual=note->veloType()!=Ms::Note::ValueType::OFFSET_VAL||note->veloOffset()!=0||note->chord()->playEventType()==PlayEventType::User;
   n.insert("protected",manual);n.insert("protection",manual?"manual velocity / play events":"");
   bool tempoProtected=false;
-  auto segment=note->chord()->segment();for(auto e:segment->annotations())if(e->isTempoText())tempoProtected=true;
+  auto segment=note->chord()->segment();for(auto e:segment->annotations())if(e->isTempoText()&&!ExpressionTempo::owns(toTempoText(e),cache.expressionTempos))tempoProtected=true;
   for(auto curve:cache.curves)if(n.value("tick").toInt()>=curve.first&&n.value("tick").toInt()<curve.second)tempoProtected=true;
   n.insert("tempoProtected",tempoProtected);n.insert("bpm",_score->tempomap()->tempo(n.value("tick").toInt())*60);
   notes.append(n);
@@ -114,6 +116,39 @@ QVariantMap ScoreObserver::performanceRange(int start,int end,int firstTrack,int
    }++gi;}
   }
  }
+ // Return the written clock and protection data alongside this bounded page.
+ auto master=_score->masterScore();const int until=page.value("done").toBool()?end:page.value("nextTick").toInt();
+ QVariantList points,protectedTicks,ranges,restore,writable;
+ auto clockPoint=[&](int tick){return QVariantMap{{"tick",tick},{"bpm",scoreClock.tempo(tick)*60},{"seconds",double(scoreClock.tick2time(tick))}};};
+ auto restoreBefore=[&](int tick){
+    auto segment=master->tick2leftSegment(Fraction::fromTicks(tick));
+    while(segment&&(segment->tick().ticks()>=tick||!segment->isChordRestType()))segment=segment->prev1(SegmentType::ChordRest);
+    if(segment&&segment->tick().ticks()>=start)restore.append(clockPoint(segment->tick().ticks()));
+ };
+ if(fromTick<=start){
+    points.append(clockPoint(start));
+    for(auto curve:cache.curves)if(curve.first<end&&curve.second>start){ranges.append(QVariantMap{{"start",curve.first},{"end",curve.second},{"reason",tr("沿用谱上已有的渐慢或渐快。")}});restoreBefore(curve.first);}
+ }
+ for(auto it=scoreClock.lower_bound(fromTick);it!=scoreClock.end()&&it->first<until;++it){
+    auto value=clockPoint(it->first);value["pause"]=it->second.pause;value["fixed"]=bool(it->second.type&(TempoType::FIX|TempoType::RAMP));
+    value["owned"]=ExpressionTempo::owns(master,it->first,cache.expressionTempos);points.append(value);
+    if(it->second.pause>0)restoreBefore(it->first);
+ }
+ if(page.value("done").toBool()){auto value=clockPoint(end);auto at=scoreClock.find(end);if(at!=scoreClock.end()){value["pause"]=at->second.pause;value["fixed"]=bool(at->second.type&(TempoType::FIX|TempoType::RAMP));}points.append(value);}
+ for(auto segment=master->tick2rightSegment(Fraction::fromTicks(fromTick));segment&&segment->tick().ticks()<until;segment=segment->next1(SegmentType::ChordRest)){
+    if(!segment->isChordRestType())continue;const int tick=segment->tick().ticks();writable.append(tick);
+    for(auto element:segment->annotations()){
+       if(element->isTempoText()&&!ExpressionTempo::owns(toTempoText(element),cache.expressionTempos)){
+          protectedTicks.append(QVariantMap{{"tick",tick},{"reason",tr("沿用谱上已有的速度记号。")}});restoreBefore(tick);
+       }else if(element->isFermata()&&toFermata(element)->play()&&std::abs(toFermata(element)->timeStretch()-1)>.00001){
+          ranges.append(QVariantMap{{"start",tick},{"end",tick+segment->ticks().ticks()},{"reason",tr("沿用延长记号的播放时长。")}});restoreBefore(tick);
+       }
+    }
+ }
+ page["tempoContext"]=QVariantMap{{"start",start},{"end",end},{"scoreEnd",master->lastMeasure()->endTick().ticks()},
+    {"startSeconds",double(scoreClock.tick2time(start))},{"endSeconds",double(scoreClock.tick2time(end))},
+    {"endWritable",bool(master->tick2segment(Fraction::fromTicks(end),false,SegmentType::ChordRest))},
+    {"points",points},{"protectedTicks",protectedTicks},{"protectedRanges",ranges},{"restoreTicks",restore},{"writableTicks",writable}};
  page.insert("notes",notes);page.insert("milliseconds",double(work.nsecsElapsed())/1000000);cache.pages.insert(key,new QVariantMap(page));return page;
 }
 QVariantMap ScoreObserver::navigateWorkflow(const QVariantMap& range,bool audition) {

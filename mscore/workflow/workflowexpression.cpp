@@ -23,6 +23,7 @@
 #include "mscore/seq.h"
 #include "referencefactory.h"
 #include "workflowcontext.h"
+#include "expressiontempo.h"
 #include "playbackpreview.h"
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -69,7 +70,7 @@ QVariantMap ScoreObserver::applyExpression(const QVariantMap& candidate){
  if(start<0||end<=start||first<0||last>_score->ntracks()||last<=first||!_score->lastMeasure()||end>_score->lastMeasure()->endTick().ticks())return {{"error","invalid candidate range"}};
  auto values=candidate["velocity"].toList(),tempoValues=candidate["tempos"].toList();
  if(values.size()+tempoValues.size()>20000)return {{"error","candidate too large; use smaller ranges"}};
- QMap<Ms::Note*,VelocityEdit> velocities;QMap<int,double> bpm;
+ QMap<Ms::Note*,VelocityEdit> velocities;QMap<int,double> bpm;QMap<int,QVariantMap> requestedTempos;
  for(auto value:values){
   auto v=value.toMap();int tick=v["tick"].toInt(),track=v["track"].toInt();auto note=noteAt(_score,v);
   if(!note||tick<start||tick>=end||track<first||track>=last||velocities.contains(note))return {{"error","invalid, duplicate or changed note"}};
@@ -85,27 +86,39 @@ QVariantMap ScoreObserver::applyExpression(const QVariantMap& candidate){
  }
  for(auto value:tempoValues){
   auto v=value.toMap();int tick=v.value("tick",-1).toInt();double target=v.value("bpm").toDouble(),old=v.value("oldBpm").toDouble();
-  if(tick<start||tick>end||bpm.contains(tick)||!std::isfinite(target)||target<5||target>999||!std::isfinite(old)||std::abs(_score->tempomap()->tempo(tick)*60-old)>.001)return {{"error","invalid, duplicate or changed tempo"}};
-  if(std::abs(target-old)<.00001)continue;
-  auto segment=_score->masterScore()->tick2segment(Fraction::fromTicks(tick),false,SegmentType::ChordRest);if(!segment)return {{"error","tempo target is not an onset"}};
-  for(auto e:segment->annotations())if(e->isTempoText()){auto t=toTempoText(e);if(t->visible()||t->isRelative()||t->restoreMode())return {{"error","existing visible/relative/a-tempo marker protected"}};}
-  for(auto curve:TempoExpression::curves(_score->masterScore()))if(tick>=curve->tick().ticks()&&tick<curve->tick2().ticks())return {{"error","existing tempo curve protected"}};
-  bpm.insert(tick,target);
+  if(tick<start||tick>end||requestedTempos.contains(tick)||!std::isfinite(target)||target<5||target>999||!std::isfinite(old)||std::abs(_score->tempomap()->tempo(tick)*60-old)>.001)return {{"error",tr("这处速度已经改变，请重新读取演奏结果。")}};
+  requestedTempos.insert(tick,v);
  }
- TempoMap simulation=*_score->tempomap();for(auto i=bpm.begin();i!=bpm.end();++i)simulation.setTempo(i.key(),i.value()/60);
- double oldDuration=_score->tempomap()->tick2time(end)-_score->tempomap()->tick2time(start),newDuration=simulation.tick2time(end)-simulation.tick2time(start);
+ const auto savedTempos=ExpressionTempo::read(_score->masterScore());
+ TempoMap simulation=*_score->tempomap();simulation.setRelTempo(1.0);
+ for(auto it=requestedTempos.begin();it!=requestedTempos.end();++it){
+  const int tick=it.key();const double target=it.value().value("bpm").toDouble();
+  if(std::abs(simulation.tempo(tick)*60-target)<.00001)continue;
+  auto segment=_score->masterScore()->tick2segment(Fraction::fromTicks(tick),false,SegmentType::ChordRest);if(!segment)return {{"error","tempo target is not an onset"}};
+  for(auto e:segment->annotations())if(e->isTempoText()){auto t=toTempoText(e);if(!ExpressionTempo::owns(t,savedTempos))return {{"error",tr("这一处保留谱上已有的速度记号；可以在速度区直接编辑它。")}};}
+  for(auto curve:TempoExpression::curves(_score->masterScore()))if(tick>=curve->tick().ticks()&&tick<curve->tick2().ticks())return {{"error","existing tempo curve protected"}};
+  bpm.insert(tick,target);simulation.setTempo(tick,target/60.);
+ }
+ TempoMap originalClock=*_score->tempomap();originalClock.setRelTempo(1.0);
+ double oldDuration=originalClock.tick2time(end)-originalClock.tick2time(start),newDuration=simulation.tick2time(end)-simulation.tick2time(start);
  double error=std::abs(newDuration-oldDuration);
- if(candidate.value("keepDuration",true).toBool()&&!bpm.isEmpty()&&error>qMax(.015,oldDuration*.005))return {{"error","written tempo approximation cannot preserve duration; adjust anchors/strength or use performed duration"},{"durationError",error}};
+ if(candidate.value("keepDuration",true).toBool()&&!bpm.isEmpty()&&error>qMax(.015,oldDuration*.005))return {{"error",tr("拟采用速度会改变这段时长。重新对应这一段后再使用速度，或在设置中采用演奏时长。")},{"durationError",error}};
  QString issue;
  auto rollback=[this](const QString& why){EditData ed;_score->undoRedo(true,&ed);return QVariantMap{{"error",why+"; application rolled back"}};};
  if(velocities.isEmpty()&&bpm.isEmpty())return {{"ok",true},{"changed",0},{"durationError",error}};
- if(!ParameterEdit::expression(_score,velocities,bpm,&issue,!_workflowApplyingPreview))return {{"error",issue.isEmpty()?"application preflight failed":issue}};
+ _score->startCmd();
+ if(!ParameterEdit::expression(_score,velocities,bpm,&issue,!_workflowApplyingPreview,false)){_score->endCmd(true);return {{"error",issue.isEmpty()?tr("请重新读取这一段后使用演奏结果。"):issue}};}
+ if(!bpm.isEmpty()){auto master=_score->masterScore();auto tags=master->metaTags();tags[ExpressionTempo::key()]=ExpressionTempo::updated(master,bpm);master->undo(new ChangeMetaTags(master,tags));}
+ _score->endCmd();
  for(auto i=velocities.begin();i!=velocities.end();++i)if(i.key()->veloType()!=i->type||i.key()->veloOffset()!=i->raw)return rollback("velocity readback failed");
  for(auto i=bpm.begin();i!=bpm.end();++i)if(std::abs(_score->tempomap()->tempo(i.key())*60-i.value())>.01)return rollback("tempo readback failed");
 
+ QVariantList appliedTempos;
+ if(!tempoValues.isEmpty())for(auto value:candidate.value("tempoNodes").toList()){const int tick=value.toInt();if(tick>=start&&tick<=end)appliedTempos.append(QVariantMap{{"tick",tick},{"bpm",_score->tempomap()->tempo(tick)*60}});}
+ if(appliedTempos.isEmpty())appliedTempos=tempoValues;
  QVariantList appliedValues;
  for(auto value:values){auto item=value.toMap();auto note=noteAt(_score,item);item["oldType"]=int(note->veloType());item["oldRaw"]=note->veloOffset();item["oldBase"]=NoteVelocity::referenceBase(note);appliedValues.append(item);}
- return {{"ok",true},{"changed",velocities.size()+bpm.size()},{"durationError",error},{"duration",newDuration},{"revision",analysisRevision()},{"appliedVelocity",appliedValues}};
+ return {{"ok",true},{"changed",velocities.size()+bpm.size()},{"durationError",error},{"duration",newDuration},{"revision",analysisRevision()},{"appliedVelocity",appliedValues},{"appliedTempos",appliedTempos}};
 }
 QVariantMap ScoreObserver::copyWorkflowScore(const QString& destination,const QString& expected,bool overwrite){
  if(!_score||!idle())return {{"error","stop playback and wait for rendering before copying"}};
@@ -194,7 +207,7 @@ QVariantMap ScoreObserver::selectExpressionNote(const QVariantMap& value) {
  return {{"ok",true},{"tick",note->chord()->tick().ticks()},{"track",note->track()}};
 }
 QVariantMap ScoreObserver::expressionSelection(bool exactElements){
- QVariantList notes;if(_score)for(auto note:_score->selection().noteList()){auto value=describe(note,note->ppitch());if(note->chord()->isGrace()&&note->chord()->parent()&&note->chord()->parent()->isChord())value["graceIndex"]=toChord(note->chord()->parent())->graceNotes().indexOf(note->chord());notes.append(value);}
+ QVariantList notes;if(_score)for(auto note:_score->selection().noteList()){auto value=describe(note,note->ppitch());value["end"]=note->chord()->endTick().ticks();if(note->chord()->isGrace()&&note->chord()->parent()&&note->chord()->parent()->isChord())value["graceIndex"]=toChord(note->chord()->parent())->graceNotes().indexOf(note->chord());notes.append(value);}
  auto scope=analysisScope(false);
  if(_score&&_score->selection().isRange()) {
   const auto& selection=_score->selection();const int start=selection.tickStart().ticks(),end=selection.tickEnd().ticks();

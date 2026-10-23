@@ -4,7 +4,7 @@ function noteKey(note) { return [note.tick, note.track, note.graceIndex === unde
 function pending(candidate, progress) {
     var value = copy(candidate), done = progress || {};
     value.velocity = (value.velocity || []).filter(function(n) { return !(done.velocity || {})[noteKey(n)]; });
-    value.tempos = (value.tempos || []).filter(function(n) { return !(done.tempos || {})[n.tick]; });
+    if(!value.tempoScoped)value.tempos = (value.tempos || []).filter(function(n) { return !(done.tempos || {})[n.tick]; });
     value.velocityById = {};
     value.velocity.forEach(function(n) { value.velocityById[n.id] = n; });
     return value;
@@ -29,7 +29,7 @@ function portion(candidate, kind, selection) {
     var range = selection.scope, keys = {}, ticks = {};
     (selection.notes || []).forEach(function(n) { keys[noteKey(n)] = true; ticks[n.tick] = true; });
     value.velocity = value.velocity.filter(function(n) { return kind === 0 ? !!keys[noteKey(n)] : inRange(n, range); });
-    value.tempos = value.tempos.filter(function(n) { return kind === 0 ? !!ticks[n.tick] : n.tick >= range.start && n.tick < range.end; });
+    if(!value.tempoScoped)value.tempos = value.tempos.filter(function(n) { return kind === 0 ? !!ticks[n.tick] : n.tick >= range.start && n.tick < range.end; });
     return value;
 }
 function refreshed(result, notes) {
@@ -44,7 +44,7 @@ function targets(candidate, config) {
     var value=copy(candidate), velocities=config.previewVelocity||{}, tempos=config.previewTempo||{};
     value.velocityById={};
     (value.velocity||[]).forEach(function(n){if(velocities[n.id]!==undefined)n.target=Math.max(1,Math.min(127,Math.round(velocities[n.id])));value.velocityById[n.id]=n;});
-    (value.tempos||[]).forEach(function(n){if(tempos[n.tick]!==undefined)n.bpm=Math.max(5,Math.min(999,tempos[n.tick]));});
+    if(!value.tempoScoped)(value.tempos||[]).forEach(function(n){if(tempos[n.tick]!==undefined)n.bpm=Math.max(5,Math.min(999,tempos[n.tick]));});
     return value;
 }
 function display(result, progress, showApplied) {

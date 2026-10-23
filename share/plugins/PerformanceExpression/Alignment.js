@@ -378,6 +378,97 @@ function align(input) {
     matches.sort(function(a,b){return (a.original.alignmentTick||a.tick)-(b.original.alignmentTick||b.tick)||a.track-b.track||a.index-b.index});
     return {matches:matches,displayMatches:matches.slice().sort(function(a,b){return a.tick-b.tick||a.track-b.track||a.index-b.index}),missing:score.filter(function(n){return !n.tieBack&&!usedScore[n.id]}),extra:performance.filter(function(n){return !usedMidi[n.id]}),segments:segments,cacheKey:cacheKey,pending:matches.filter(function(v){return !v.confirmed&&v.confidence<.8}).length,scale:scale,passage:passage};
 }
+// Tempo transfer uses the complete written clock, including protected marks,
+// rests and curve intervals. Only value data crosses the worker boundary.
+function tempoTransfer(input,confirmed){
+    var config=input.config||{},kept=[],byTick={};
+    confirmed.filter(function(m){return !m.original.grace}).forEach(function(m){if(!byTick[m.tick])byTick[m.tick]=[];byTick[m.tick].push(m)});
+    var anchors=Object.keys(byTick).map(Number).sort(function(a,b){return a-b}).map(function(tick){return {tick:tick,seconds:median(byTick[tick].map(function(m){return m.seconds})),note:byTick[tick][0].original}});
+    if(anchors.length<4)return {tempos:[],kept:[{reason:"至少对应四处不同的起音后，可以使用演奏速度。"}],summary:null};
+    for(var i=1;i<anchors.length;++i)if(anchors[i].seconds<=anchors[i-1].seconds)return {tempos:[],kept:[{tick:anchors[i].tick,reason:"这几处演奏时间前后交叉，调整对应后可以使用速度。"}],summary:null};
+    var context=input.tempoContext||{},scope=input.scope||{},start=scope.start===undefined?(context.start===undefined?anchors[0].tick:context.start):scope.start;
+    var end=scope.end===undefined?(context.end===undefined?anchors[anchors.length-1].tick:context.end):scope.end;
+    if(end<=start)return {tempos:[],kept:[{reason:"选择要采用速度的完整谱段。"}],summary:null};
+    var base={},initial=anchors[0].note.bpm||120;
+    if(context.points&&context.points.length)context.points.forEach(function(p){base[p.tick]={tick:p.tick,bpm:p.bpm,pause:p.pause||0,fixed:p.fixed!==false,owned:!!p.owned}});
+    else {var previousRate;anchors.forEach(function(p){if(p.note.bpm&&(previousRate===undefined||p.note.bpm!==previousRate||p.note.tempoProtected))base[p.tick]={tick:p.tick,bpm:p.note.bpm,pause:0,fixed:true};previousRate=p.note.bpm;});}
+    var baseTicks=Object.keys(base).map(Number).sort(function(a,b){return a-b}),baseRates=[],baseTimes=[],pauseSums=[];
+    var activeRate=initial,previousTick=baseTicks.length?baseTicks[0]:start,time=0,pauseSum=0;
+    baseTicks.forEach(function(tick){var p=base[tick];time+=(tick-previousTick)/480*60/activeRate+(p.pause||0);pauseSum+=p.pause||0;if(p.fixed)activeRate=p.bpm;baseTimes.push(time);baseRates.push(activeRate);pauseSums.push(pauseSum);previousTick=tick;});
+    function upper(tick){var lo=0,hi=baseTicks.length;while(lo<hi){var mid=(lo+hi)>>1;if(baseTicks[mid]<=tick)lo=mid+1;else hi=mid;}return lo;}
+    function baseAt(tick){var index=upper(tick)-1;return index<0?initial:baseRates[index];}
+    function baseTime(tick){var index=upper(tick)-1;return index<0?tick/480*60/initial:baseTimes[index]+(tick-baseTicks[index])/480*60/baseRates[index];}
+    function pauses(from,until){var first=upper(from)-1,last=upper(until)-1;return (last<0?0:pauseSums[last])-(first<0?0:pauseSums[first]);}
+    function duration(events,from,until){
+        if(events===base)return baseTime(until)-baseTime(from);
+        var ticks=Object.keys(events).map(Number).sort(function(a,b){return a-b}),rate=initial,at=from,seconds=0;
+        for(var j=0;j<ticks.length;++j){var tick=ticks[j],event=events[tick];if(tick<=from){if(event.fixed!==false)rate=event.bpm;continue;}if(tick>until)break;seconds+=(tick-at)/480*60/rate+(event.pause||0);at=tick;if(event.fixed!==false)rate=event.bpm;}
+        return seconds+(until-at)/480*60/rate;
+    }
+    var originalDuration=duration(base,start,end),strength=Math.max(0,Math.min(1,(config.rubatoStrength===undefined?(config.strength===undefined?50:config.strength):config.rubatoStrength)/100));
+    var keep=config.keepDuration!==false,rates=[],gaps=[];
+    for(i=1;i<anchors.length;++i){var a=anchors[i-1],b=anchors[i],elapsed=b.seconds-a.seconds-pauses(a.tick,b.tick);if(elapsed<=0)return {tempos:[],kept:[{tick:b.tick,reason:"谱上的停顿长于这两处演奏间隔，请检查对应的演奏位置。"}],summary:null};rates.push((b.tick-a.tick)/480*60/elapsed);gaps.push(b.tick-a.tick);}
+    function interval(tick){var lo=0,hi=anchors.length-1;while(lo+1<hi){var mid=(lo+hi)>>1;if(anchors[mid].tick<=tick)lo=mid;else hi=mid;}return Math.min(lo,anchors.length-2);}
+    function mapped(tick){var j=interval(tick),a=anchors[j],b=anchors[j+1],span=b.seconds-a.seconds-pauses(a.tick,b.tick);return a.seconds+(tick-a.tick)/(b.tick-a.tick)*span+pauses(a.tick,tick);}
+    var measuredDuration=mapped(end)-mapped(start),normalization=keep&&originalDuration>0?measuredDuration/originalDuration:1;
+    var locks={},cuts=[start,end],ranges=context.protectedRanges||[],protectedTicks=context.protectedTicks||[];
+    if(!context.points)anchors.forEach(function(p){if(p.note.tempoProtected)protectedTicks.push(p.tick)});
+    protectedTicks=protectedTicks.filter(function(v){var t=typeof v==="number"?v:v.tick;return t>=start&&t<end});
+    ranges=ranges.filter(function(r){return r.start<end&&r.end>start});
+    protectedTicks.forEach(function(value){var tick=typeof value==="number"?value:value.tick;locks[tick]=true;if(tick>start&&tick<end)cuts.push(tick);kept.push({tick:tick,reason:typeof value==="object"&&value.reason?value.reason:"沿用谱上已有的速度记号。"});});
+    ranges.forEach(function(range){if(range.start>start&&range.start<end)cuts.push(range.start);if(range.end>start&&range.end<end)cuts.push(range.end);kept.push({tick:Math.max(start,range.start),reason:range.reason||"沿用谱上已有的速度变化。"});});
+    Object.keys(input.appliedTempos||{}).forEach(function(key){var tick=Number(key),saved=input.appliedTempos[key];if(tick>=start&&tick<=end&&(saved===true||Math.abs(saved.bpm-baseAt(tick))<.01)){locks[tick]=true;if(tick>start&&tick<end)cuts.push(tick);}});
+    function protectedAt(tick){return locks[tick]||ranges.some(function(r){return tick>=r.start&&tick<r.end});}
+    var nodes={},typical=median(gaps)||480;
+    function addNode(tick,locked){
+        if(tick<start||tick>end)return;
+        var j=interval(tick),rate=rates[j];
+        if(gaps[j]<=typical*3)rate=median(rates.slice(Math.max(0,j-1),Math.min(rates.length,j+2)));
+        var old=baseAt(tick);
+        var ease=keep?Math.max(0,Math.min(1,(tick-start)/(typical*2),(end-tick)/(typical*2))):1;
+        var fixed=!!locked||!!protectedAt(tick),manual=!fixed&&(config.previewTempo||{})[tick]!==undefined;
+        var target=fixed?old:manual?Math.max(5,Math.min(999,Number(config.previewTempo[tick]))):Math.max(5,Math.min(999,old+(rate*normalization-old)*strength*ease));
+        nodes[tick]={tick:tick,oldBpm:old,bpm:target,locked:fixed||manual};
+    }
+    anchors.forEach(function(p){addNode(p.tick,false)});
+    baseTicks.forEach(function(tick){if(base[tick].owned)addNode(tick,false)});
+    (context.restoreTicks||[]).forEach(function(value){addNode(typeof value==="number"?value:value.tick,true)});
+    if(keep){var inside=Object.keys(nodes).map(Number).filter(function(t){return t<end}).sort(function(a,b){return a-b});if(inside.length){addNode(inside[0],true);addNode(inside[inside.length-1],true);}}
+    if(context.endWritable&&end===context.end||(context.writableTicks||[]).indexOf(end)>=0)addNode(end,true);
+    else if(!keep&&context.scoreEnd!==undefined&&end<context.scoreEnd){var lastInside=anchors.filter(function(p){return p.tick<end&&p.tick>=start});if(lastInside.length)addNode(lastInside[lastInside.length-1].tick,true);}
+    var all={};baseTicks.forEach(function(tick){all[tick]=true});Object.keys(nodes).forEach(function(tick){all[tick]=true});cuts.forEach(function(tick){all[tick]=true});
+    var timeline=Object.keys(all).map(Number).sort(function(a,b){return a-b}),pieces=[],rate=baseAt(start),owner=null;
+    for(i=0;i<timeline.length-1;++i){
+        var tick=timeline[i],next=timeline[i+1];if(base[tick]&&base[tick].fixed){rate=base[tick].bpm;owner=null;}
+        if(nodes[tick]){rate=nodes[tick].bpm;owner=nodes[tick].locked?null:tick;}
+        if(tick>=start&&next<=end)pieces.push({start:tick,end:next,weight:(next-tick)/480*60,rate:rate,owner:owner});
+    }
+    cuts=keep?cuts.filter(function(tick,index,list){return list.indexOf(tick)===index}).sort(function(a,b){return a-b}):[start,end];
+    var pieceIndex=0;
+    for(var part=1;part<cuts.length;++part){
+        var from=cuts[part-1],until=cuts[part],fixed=pauses(from,until),weights={};
+        while(pieceIndex<pieces.length&&pieces[pieceIndex].end<=from)++pieceIndex;
+        for(var at=pieceIndex;at<pieces.length&&pieces[at].end<=until;++at){var piece=pieces[at];if(piece.owner===null)fixed+=piece.weight/piece.rate;else weights[piece.owner]=(weights[piece.owner]||0)+piece.weight;}
+        var keys=Object.keys(weights),desired=keep?duration(base,from,until):originalDuration*(1-strength)+measuredDuration*strength;
+        if(!keys.length){if(Math.abs(desired-fixed)>1e-6){Object.keys(nodes).forEach(function(key){if(Number(key)>=from&&Number(key)<until)nodes[key].bpm=nodes[key].oldBpm});kept.push({tick:from,reason:"这处预览速度会改变保留的句长；扩大选段或关闭保持时长后可以继续调整。"});}continue;}
+        var remaining=desired-fixed;
+        function flexible(factor){var total=0;keys.forEach(function(key){total+=weights[key]/Math.max(5,Math.min(999,nodes[key].bpm*factor))});return total;}
+        if(remaining<flexible(1e9)-1e-7||remaining>flexible(1e-9)+1e-7){
+            Object.keys(nodes).forEach(function(key){if(Number(key)>=from&&Number(key)<until)nodes[key].bpm=nodes[key].oldBpm});kept.push({tick:from,reason:"这段保留原有速度后，已没有足够的可调范围；请扩大选段或调整采用比例。"});continue;
+        }
+        var lo=1e-9,hi=1e9;for(var pass=0;pass<80;++pass){var factor=Math.sqrt(lo*hi);if(flexible(factor)>remaining)lo=factor;else hi=factor;}
+        keys.forEach(function(key){nodes[key].bpm=Math.max(5,Math.min(999,nodes[key].bpm*Math.sqrt(lo*hi)))});
+    }
+    // Keep restoration points even when their value equals the old score:
+    // a preceding new tempo may otherwise continue beyond this range.
+    var written={},tempos=[],cursor=0,active=initial;Object.keys(base).forEach(function(key){written[key]=clone(base[key])});
+    Object.keys(nodes).map(Number).sort(function(a,b){return a-b}).forEach(function(tick){
+        var node=nodes[tick];while(cursor<baseTicks.length&&baseTicks[cursor]<=tick){var p=base[baseTicks[cursor++]];if(p.fixed!==false)active=p.bpm;}
+        if(Math.abs(active-node.bpm)<.00001)return;
+        tempos.push({tick:tick,oldBpm:node.oldBpm,bpm:node.bpm});written[tick]={tick:tick,bpm:node.bpm,pause:base[tick]?base[tick].pause:0,fixed:true};active=node.bpm;
+    });
+    return {tempos:tempos,nodes:Object.keys(nodes).map(Number),kept:kept,summary:{ranges:1,originalDuration:originalDuration,performedDuration:measuredDuration,proposedDuration:duration(written,start,end),keepDuration:keep,protectedCount:protectedTicks.length+ranges.length}};
+}
 function candidates(input) {
     var result=clone(input.result),config=input.config||{},strength=(config.strength===undefined?50:config.strength)/100,velocity=[],tempos=[],kept=[],confirmed=result.matches.filter(function(m){return m.confirmed||m.confidence>=.8}),unlock=config.unlocked||[];
     confirmed.forEach(function(m){
@@ -404,40 +495,15 @@ function candidates(input) {
     var repeatedTicks={};confirmed.forEach(function(m){var key=[m.tick,m.track,m.index].join(":");repeatedTicks[key]=(repeatedTicks[key]||0)+1});
     var repeated=Object.keys(repeatedTicks).some(function(k){return repeatedTicks[k]>1});
     if(config.rubato&&repeated)kept.push({reason:"Rubato 请先选择一次反复出现"});
+    var tempoSummary=null,tempoNodes=[];
     if(config.rubato&&!repeated){
-        var rs=config.rubatoStrength===undefined?strength:config.rubatoStrength/100;
-        var byTick={};confirmed.filter(function(m){return !m.original.grace}).forEach(function(m){if(!byTick[m.tick])byTick[m.tick]=[];byTick[m.tick].push(m)});
-        var ticks=Object.keys(byTick).map(Number).sort(function(a,b){return a-b}),points=ticks.map(function(t){return {tick:t,seconds:median(byTick[t].map(function(m){return m.seconds})),original:byTick[t][0].original.scoreSeconds===undefined?byTick[t][0].original.onSeconds:byTick[t][0].original.scoreSeconds}});
-        if(points.length<4)kept.push({reason:"Rubato 至少需要四个可靠的不同起音"});
-        else {
-            var span=points[points.length-1].seconds-points[0].seconds,originalSpan=points[points.length-1].original-points[0].original;
-            if(span<=0)throw new Error("演奏时间映射必须严格单调");
-            var factor=config.keepDuration!==false?originalSpan/span:1,previous=points[0].seconds;
-            for(var i=1;i<points.length;++i){
-                if(points[i].seconds<=previous)throw new Error("这几处对应的演奏时间前后交叉了。调整对应后再使用速度。");previous=points[i].seconds;
-            }
-            // Piecewise beat velocities, median-smoothed; boundary points retain score tempo.
-            var rates=[];
-            for(i=1;i<points.length;++i)rates.push((points[i].tick-points[i-1].tick)/480*60/((points[i].seconds-points[i-1].seconds)*factor));
-            for(i=0;i<points.length-1;++i){
-                var point=points[i],n=byTick[point.tick][0].original,window=rates.slice(Math.max(0,i-1),Math.min(rates.length,i+2)),rate=median(window);
-                var ease=Math.min(1,i/2,(points.length-2-i)/2),target=n.bpm+(rate-n.bpm)*rs*Math.max(0,ease);
-                if(n.tempoProtected){kept.push({tick:point.tick,reason:"已有速度记号／曲线保护"});continue}
-                if(target<5||target>999){kept.push({tick:point.tick,reason:"速度超出可写范围"});continue}
-                tempos.push({tick:point.tick,oldBpm:n.bpm,bpm:target});
-            }
-            var last=points[points.length-1],ln=byTick[last.tick][0].original;
-            if(!ln.tempoProtected)tempos.push({tick:last.tick,oldBpm:ln.bpm,bpm:ln.bpm});
-            // Normalize the *written* step-tempo approximation, not just input anchors.
-            if(config.keepDuration!==false&&tempos.length>2){
-                var duration=0;for(i=1;i<tempos.length;++i)duration+=(tempos[i].tick-tempos[i-1].tick)/480*60/tempos[i-1].bpm;
-                var desired=points[points.length-1].original-points[0].original;
-                var fixed=0,flex=0;for(i=1;i<tempos.length;++i){var dt=(tempos[i].tick-tempos[i-1].tick)/480*60/tempos[i-1].bpm;if(i===1)fixed+=dt;else flex+=dt}
-                if(desired>fixed&&flex>0){var correction=flex/(desired-fixed);for(i=1;i<tempos.length-1;++i)tempos[i].bpm*=correction;}
-            }
-        }
+        var ranges=input.tempoRanges===undefined?[input.scope||{}]:input.tempoRanges;
+        ranges.forEach(function(range){var local={};Object.keys(input).forEach(function(k){local[k]=input[k]});local.scope=range;var transfer=tempoTransfer(local,confirmed);
+            Array.prototype.push.apply(tempos,transfer.tempos);Array.prototype.push.apply(tempoNodes,transfer.nodes||[]);Array.prototype.push.apply(kept,transfer.kept);
+            if(transfer.summary){if(!tempoSummary)tempoSummary={ranges:0,originalDuration:0,performedDuration:0,proposedDuration:0,keepDuration:transfer.summary.keepDuration,protectedCount:0};["ranges","originalDuration","performedDuration","proposedDuration","protectedCount"].forEach(function(k){tempoSummary[k]+=transfer.summary[k]});}
+        });
     }
     velocity.forEach(function(v){if(v.graceIndex===undefined)delete v.graceIndex});
     var velocityById={};velocity.forEach(function(v){velocityById[v.id]=v});
-    return {revision:input.revision,scope:input.scope,keepDuration:config.keepDuration!==false,velocity:velocity,velocityById:velocityById,tempos:tempos,kept:kept,protect:true};
+    return {revision:input.revision,scope:input.scope,keepDuration:config.keepDuration!==false,velocity:velocity,velocityById:velocityById,tempos:tempos,tempoSummary:tempoSummary,tempoNodes:tempoNodes,tempoScoped:input.tempoRanges!==undefined,kept:kept,protect:true};
 }
