@@ -1,8 +1,8 @@
 // Value-only rows shared by the compact result list and its checks.
 function pitchName(pitch, tpc) {
     if (typeof pitch !== "number" || !isFinite(pitch)) return "音高待核对";
-    if (typeof tpc === "number" && tpc >= 0 && tpc <= 33) {
-        var degree = tpc % 7, accidental = Math.floor((tpc - 13) / 7);
+    if (typeof tpc === "number" && tpc >= -1 && tpc <= 33) {
+        var degree = ((tpc % 7) + 7) % 7, accidental = Math.floor((tpc - 13) / 7);
         return ["C", "G", "D", "A", "E", "B", "F"][degree] +
             (accidental < 0 ? accidental === -2 ? "♭♭" : "♭" : accidental === 2 ? "♯♯" : accidental === 1 ? "♯" : "") +
             (Math.floor((pitch - [0, 7, 2, 9, 4, 11, 5][degree] - accidental) / 12) - 1);
@@ -41,7 +41,9 @@ function build(result, progress, candidate, filter) {
             pitch:pitchName(note.writtenPitch === undefined ? match.pitch : note.writtenPitch, note.writtenTpc), place:position(note),
             original:typeof old === "number" ? old : null,
             proposed:proposed ? proposed.target : null,
-            detail:applied ? "已使用演奏力度" : pending ? match.uncertainty || "请核对这两个音的对应" : kept[note.id] || "演奏 " + Number(match.seconds || 0).toFixed(3) + " 秒 · 力度 " + match.velocity});
+            detail:applied ? "已使用演奏力度" : pending ?
+                (typeof match.performedPitch === "number" && match.performedPitch !== match.pitch ? "演奏 " + pitchName(match.performedPitch) + " · " : "") +
+                (match.uncertainty || "请核对这两个音的对应") : kept[note.id] || "演奏 " + Number(match.seconds || 0).toFixed(3) + " 秒 · 力度 " + match.velocity});
     });
     return rows;
 }

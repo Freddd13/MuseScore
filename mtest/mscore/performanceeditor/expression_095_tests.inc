@@ -4,14 +4,14 @@ static QList<int> expressionPitches095(int attack)
     const int bar=attack/8, degree=(bar*3+attack*2+attack/5)%12;
     return {36+(bar*5)%12,55+degree%7,72+degree};
 }
-static bool expressionMidi095(const QString& path, int attacks, bool repeat=false)
+static bool expressionMidi095(const QString& path, int attacks, bool repeat=false,double roll=.035)
 {
     struct Event { int tick; QByteArray bytes; };
     QVector<Event> events; double seconds=0;
     for(int i=0;i<attacks;++i) {
         auto pitches=expressionPitches095(i);
         for(int k=0;k<3;++k) {
-            const int on=qRound((seconds+k*.035)*960), velocity=55+(i+k*11)%54;
+            const int on=qRound((seconds+k*roll)*960), velocity=55+(i+k*11)%54;
             QByteArray start=QByteArray::fromHex("90");start.append(char(pitches[k]));start.append(char(velocity));
             QByteArray end=QByteArray::fromHex("80");end.append(char(pitches[k]));end.append(char(0));
             events.append({on,start});events.append({on+120,end});
@@ -78,6 +78,7 @@ void TestPerformanceEditor::expressionWholeMidiMiddlePassage()
     }
     auto first=toChord(score->findCR(Fraction::fromTicks(begin),0))->upNote();score->select(first);
     root->setProperty("applicationScope",0);
+    QVERIFY(QMetaObject::invokeMethod(root,"refreshLiveSelection"));
     QTRY_COMPARE(expressionMap080(root,"scopedCandidate").value("velocity").toList().size(),1);
     const int undo=score->undoStack()->getCurIdx();
     QTRY_VERIFY(root->findChild<QQuickItem*>("expressionApplyVelocity")->isEnabled());QTest::qWait(100);
@@ -169,7 +170,7 @@ void TestPerformanceEditor::expressionRealPerformanceFiles()
     if(source.isEmpty()||midi.isEmpty()||reference.isEmpty())QSKIP("Provide separately licensed MusicXML, MIDI and expert reference files.");
     expressionHost080(_directory.path());auto main=Ms::mscore;
     auto score=main->readScore(source);QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));expressionShowMain080(main);
-    auto root=expressionRoot080(main);QVERIFY(root);QVERIFY(QMetaObject::invokeMethod(root,"chooseTarget",Q_ARG(QVariant,true)));
+    auto root=expressionRoot080(main);QVERIFY(root);root->setProperty("role",0);QVERIFY(QMetaObject::invokeMethod(root,"chooseTarget",Q_ARG(QVariant,true)));
     QVERIFY(QMetaObject::invokeMethod(root,"importMidi",Q_ARG(QVariant,QUrl::fromLocalFile(midi).toString())));
     QTRY_VERIFY_WITH_TIMEOUT(!root->property("busy").toBool()&&!expressionMap080(root,"candidate").isEmpty(),30000);
     QFile file(reference);QVERIFY(file.open(QIODevice::ReadOnly));const auto json=QJsonDocument::fromJson(file.readAll()).object();

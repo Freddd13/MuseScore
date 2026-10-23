@@ -237,7 +237,7 @@ MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	209	�
 多音轨媒体	mscore/referenceaudio/mediaproject.cpp	QVariantMap ReferenceMediaProject::start(	71	固定缓冲、后台处理与整体播放	mtest/mscore/p1native;../../muse3_plugins/Repairs/tests/tst_referenceproject.cpp
 连续保调	mscore/referenceaudio/audioreader.cpp	bool streamSequence(	58	连续片段共用处理器，不在内部对应点反复淡入	mtest/mscore/p1native;../../muse3_plugins/Repairs/tests/tst_referenceproject.cpp
 联合播放	mscore/workflow/referenceworkflow.cpp	QVariantMap ScoreObserver::referencePlan(	58	三种时间对应、反复出现和进入前文	mtest/mscore/p1native;../../muse3_plugins/Repairs/tests/tst_referenceproject.cpp
-编辑器对应	mscore/performanceeditor/workflowlanes.cpp	void WorkflowLanes::paintEvent(	69	可见音轨、对应与数值对比	mtest/mscore/p1native;../../muse3_plugins/Repairs/tests/tst_referenceproject.cpp
+编辑器对应	mscore/performanceeditor/workflowlanes.cpp	void WorkflowLanes::paintEvent(	95	可见音轨、对应与数值对比	mtest/mscore/p1native;../../muse3_plugins/Repairs/tests/tst_referenceproject.cpp
 共同项目	mscore/workflow/workflowcontext.h	class WorkflowContext	8	乐谱归属、结果更新和操作反馈	mtest/mscore/p1native;../../muse3_plugins/Repairs/tests/tst_referenceproject.cpp
 分段方案	libmscore/regionalvariants.cpp	QVariantMap select(	616	压缩写法、声部范围、原生撤销和连线保护	mtest/mscore/p1native/regional_tests.inc
 方案保存	libmscore/regionalvariants.cpp	bool save(	789	普通主方案入口和本分支当前组合恢复	mtest/mscore/p1native/regional_tests.inc
@@ -256,7 +256,7 @@ MIDI松手说明	mscore/midicrop/midicroppanel.cpp	QString reasonText(	35	原长
 方案连线	libmscore/regionalconnections.cpp	QVariantList capture(	111	按逻辑端点保存与恢复延音线和圆滑线	mtest/mscore/p1native
 谱面方案按钮	mscore/workflow/regionalcontrols.cpp	void updateRegionalControls(	263	可隐藏的写法切换、定位面板和视口更新	mtest/mscore/p1native
 打开演奏对比	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::showEditorComparison(	168	展开对应轨、分配空间并切换到当前结果	mtest/mscore/p1native
-对应轨筛选	mscore/performanceeditor/workflowlanes.cpp	bool WorkflowLanes::matchEnabled(	52	共用谱表声部筛选、直接应用和数值提示	mtest/mscore/p1native
+对应轨筛选	mscore/performanceeditor/workflowlanes.cpp	bool WorkflowLanes::matchEnabled(	88	共用谱表声部筛选、直接应用和数值提示	mtest/mscore/p1native
 最近音滚轮	mscore/performanceeditor/performancewheel.cpp	bool PerformanceEditor::nearestWheelShortcut(	130	输入状态、横向滚轮和可选快捷键	mtest/mscore/performanceeditor/editor_usability_tests.inc
 谱行音符索引	mscore/performanceeditor/performanceux.cpp	void PerformanceEditor::rebuildScoreNoteRows(	252	缩放和平移只检查可见谱行	mtest/mscore/performanceeditor/editor_usability_tests.inc
 多谱表力度显示	mscore/performanceeditor/performanceux.cpp	QRectF PerformanceEditor::velocityLane(	259	同图、分区、记号力度和统一选音坐标	mtest/mscore/performanceeditor/editor_usability_tests.inc
@@ -369,7 +369,7 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	241	空列�
 工具内容高度	mscore/workflow/editorareas.cpp	void ensureEditorDockContent(	578	根据当前内容补足最小空间，保留用户调整的较大编辑器	mtest/mscore/pluginhost/layout_079_tests.inc
 工作视图初始显示	mscore/workflow/workspaceviews.cpp	void activate(	223	首次雕版与DAW收起输入工具，保存布局继续恢复	mtest/mscore/pluginhost/layout_079_tests.inc
 表达结果选音	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::selectExpressionNote(	186	对应列表与原生选音同步，播放中保持拍位并更新采用数量	mtest/mscore/performanceeditor/expression_080_tests.inc
-录完直接看结果	share/workflow/panels/PerformanceExpression/PerformanceExpression.view.qml	 function revealResults()	52	录制与导入后显示试听、采用和逐音结果；保留手动浏览	mtest/mscore/performanceeditor/expression_080_tests.inc
+录完直接看结果	share/workflow/panels/PerformanceExpression/PerformanceExpression.view.qml	 function revealResults()	54	录制与导入后显示试听、采用和逐音结果；保留手动浏览	mtest/mscore/performanceeditor/expression_080_tests.inc
 正常主窗口保存与关联范围	mtest/mscore/nativeui/tst_nativeui.cpp	class TestNativeUi	39	正常菜单及工作区初始化；内嵌／悬浮Ctrl+S与保存读回，八音轨关联的精确拍位	mtest/mscore/nativeui/tst_nativeui.cpp
 持续音恢复	mscore/workflow/playbackpreview.cpp	EventMap restoredPlaybackEvents(	122	共用起点处的按键与踏板恢复，核对边界控制器及原始事件	mtest/mscore/performanceeditor/reference_081_tests.inc
 联合播放准确起点	mscore/seq.cpp	void Seq::startAtUTick(	428	区分读取前文与实际输出位置，恢复持续音并回到普通播放	mtest/mscore/performanceeditor/reference_081_tests.inc
@@ -419,5 +419,8 @@ QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this
 密集力度数字	mscore/performanceeditor/performancelabels.h	class PerformanceValueLayout	54	按可见内容避让数字，保留选择优先与稳定重绘	mtest/mscore/pluginhost/values_094_tests.inc
 谱面可见符号轮廓	mscore/performanceeditor/performanceux.cpp	void PerformanceEditor::rebuildVisibleScoreNotes()	142	按需缓存符干、符杠和变音记号，随布局及视口更新	mtest/mscore/pluginhost/values_094_tests.inc
 常显力度准备	mscore/performanceeditor/performanceeditor.cpp	connect(values, &QAction::toggled	207	开启常显时补齐当前谱的数据读取	mtest/mscore/pluginhost/values_094_tests.inc
-演奏分组与连续对应	share/workflow/panels/PerformanceExpression/Alignment.js	function align(input)	167	琶音、局部时间、固定点、疑问对应及按时间选择片段	mtest/mscore/performanceeditor/expression_095_tests.inc
+演奏分组与连续对应	share/workflow/panels/PerformanceExpression/Alignment.js	function align(input)	203	琶音、局部时间、固定点、疑问对应及按时间选择片段	mtest/mscore/performanceeditor/expression_095_tests.inc
 演奏片段选择	share/workflow/panels/PerformanceExpression/ExpressionPassageChoice.qml	Item	5	内置页面和独立页面共用候选时间选择	mtest/mscore/performanceeditor/expression_095_tests.inc
+人工对应选音	mscore/performanceeditor/workflowlanes.cpp	void WorkflowLanes::mousePressEvent	212	分别选择谱音与演奏音，显示音名位置，连接和采用	mtest/mscore/performanceeditor/expression_096_tests.inc
+对应与预览撤销	share/workflow/panels/PerformanceExpression/PerformanceExpression.view.qml	 function editorRequest(	107	对应快照、范围数量更新、失败导入保留资料及采用读回	mtest/mscore/performanceeditor/expression_096_tests.inc
+密集琶音选段	share/workflow/panels/PerformanceExpression/Alignment.js	function rolledOnsets(	132	连续起音合并、尾音与下一低音分辨、角色选择及人工连接	mtest/mscore/performanceeditor/expression_096_tests.inc;../../muse3_plugins/PerformanceExpression/tests/test-alignment-workflows.cjs

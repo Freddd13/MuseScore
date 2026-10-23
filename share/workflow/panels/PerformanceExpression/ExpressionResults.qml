@@ -22,7 +22,7 @@ ColumnLayout {
             id: filter
             objectName: "expressionResultFilter"
             width: 148
-            model: ["待使用", "需核对", "漏弹", "多弹", "已使用"]
+            model: ["待使用", "需核对", "漏弹", workflow.role > 0 ? "其它演奏音" : "多弹", "已使用"]
             onActivated: workflow.showApplied = currentIndex === 4
         }
         Label { text: panel.rows.length + " 项"; height: 28; verticalAlignment: Text.AlignVCenter; color: theme.muted; font: Qt.application.font }

@@ -10,6 +10,7 @@ import "../WorkflowCommon/Workspace.js" as Project
 import "../WorkflowCommon/ActionMessages.js" as Messages
 import "Alignment.js" as Rules
 import "ExpressionProgress.js" as Progress
+import "ExpressionRows.js" as RowText
 MuseScore {
     property string preferredPanelGroup: "rightTools"
  id:root
@@ -34,12 +35,13 @@ MuseScore {
 
  menuPath:"Plugins.Performance Expression"
  description:"演奏表达：把 MIDI 演奏的力度和速度用于选中的乐谱。"
- version:"1.6.2";requiresScore:true;pluginType:"dock";dockArea:"right"
+ version:"1.6.3";requiresScore:true;pluginType:"dock";dockArea:"right"
  implicitWidth:embeddedWorkflow?700:440;implicitHeight:embeddedWorkflow?180:720
  property var observer:null
  property var editorContext:null
  property var liveSelection:({scope:{},notes:[]})
  property var scopedCandidate:candidate?Progress.portion(candidate,applicationScope,liveSelection):({velocity:[],tempos:[]})
+ onScopedCandidateChanged:publishComparison()
  onApplicationScopeChanged:{refreshLiveSelection();publishComparison()}
  onLiveSelectionChanged:publishComparison()
  property string editorOwner:"expression-"+Date.now()+"-"+Math.random()
@@ -82,7 +84,7 @@ MuseScore {
   if(!observer||!curScore){status="打开乐谱后，选择要演奏的段落。";return}
   if(!prepareEditing())return
   whole=useWhole;observer.score=curScore;retainedScope=readTarget(useWhole);scopeOwner=curScore;scope=retainedScope
-  passageChoice=-1;passageFrom=-1;selectedMidiId="";selectedIssueScoreId="";dirtyProject=true
+  passageChoice=-1;passageFrom=-1;selectedMidiId="";selectedIssueScoreId="";previewUndo=[];previewRedo=[];dirtyProject=true
   candidate=null;result=({matches:[],missing:[],extra:[],pending:0});notes=[];selected=-1
   status="目标已设为："+targetDescription
   if(midi)readScore(false)
@@ -104,15 +106,24 @@ MuseScore {
  }
  function editorRequest(action,scoreId,midiId){
   if(!editorContext || editorContext.expression.owner!==editorOwner)return;
+  if(action==="stopAudition"){stopAudition();return;}
   if(stale||busy||(candidate&&previewUpdating)){status=(busy||previewUpdating)?"正在对应演奏，请等结果出现后继续。":"乐谱已改变，请重新对应这一段。";return;}
   if(action==="applyVelocity" || action==="applyTempo"){if(!candidate){status="先完成演奏对应，再使用预览里的力度或速度。";return;}applyPart(action==="applyVelocity"?"velocity":"tempo");return;}
   if(action==="auditionOriginal" || action==="auditionCandidate"){audition(action==="auditionCandidate");return;}
   if(action==="undoPreview"||action==="redoPreview"){
    var backward=action==="undoPreview",history=(backward?previewUndo:previewRedo).slice();
    if(!history.length)return;
-   var current={config:Project.copy(config)},previous=history.pop();
+   var current=previewState(),previous=history.pop();
    if(backward){previewUndo=history;previewRedo=previewRedo.concat([current]);}else{previewRedo=history;previewUndo=previewUndo.concat([current]);}
-   candidateConfig="";config=previous.config;candidateTimer.restart();dirtyProject=true;status=backward?"已撤销上一次预览调整。":"已重做预览调整。";return;
+   var mappingChanged=JSON.stringify([links,manualAnchors,passageChoice,passageFrom])!==JSON.stringify([previous.links,previous.anchors,previous.passageChoice,previous.passageFrom]);
+   candidateConfig="";config=previous.config;dirtyProject=true;
+   if(mappingChanged&&previous.links!==undefined){
+    if(!prepareEditing())return;
+    links=previous.links;manualAnchors=previous.anchors;passageChoice=previous.passageChoice;passageFrom=previous.passageFrom;
+    pendingMatch=previous.selectedScoreId||"";selectedMidiId=previous.selectedMidiId||"";
+    pendingFeedback=backward?"已撤销上一次对应调整。":"已重做上一次对应调整。";runAlignment();
+   }else{candidateTimer.restart();status=backward?"已撤销上一次预览调整。":"已重做预览调整。";}
+   return;
   }
   if(action==="velocityTargets"||action==="tempoTargets"){
    var values;try{values=JSON.parse(midiId)}catch(e){status="请重新拖动预览中的音。";return;}
@@ -120,16 +131,18 @@ MuseScore {
    var next=Project.copy(config),key=action==="velocityTargets"?"previewVelocity":"previewTempo",updates=next[key]||{};
    values.forEach(function(v){updates[action==="velocityTargets"?v.id:v.tick]=action==="velocityTargets"?v.target:v.bpm;});next[key]=updates;config=next;candidateConfig=JSON.stringify(config);candidate=Progress.targets(candidate,config);dirtyProject=true;status="已调整拟采用效果。试听后点击使用力度或使用速度。";return;
   }
-  var index=result.matches.findIndex(function(m){return m.scoreId===scoreId});if(index>=0)selected=index;
+  var index=result.matches.findIndex(function(m){return m.scoreId===scoreId});
+  if(index>=0)selected=index;
+  else if(scoreId&&result.missing.some(function(n){return n.id===scoreId})){selected=-1;selectedIssueScoreId=scoreId;}
   if(action==="select"){selectedMidiId=midiId;publishComparison();return;}
   if(action==="confirm"){confirm();return;}
   if(action==="anchor"){anchor();return;}
   if(action==="connect"){
    if(!scoreId||!midiId){status="先在编辑器点一个谱面音和一个演奏音，再连接。";return;}
-   var list=Project.copy(links).filter(function(v){return v.scoreId!==scoreId&&v.midiId!==midiId});list.push({scoreId:scoreId,midiId:midiId});links=list;dirtyProject=true;pendingMatch=scoreId;pendingFeedback="已连接选定的两个音；乐谱没有改变。";runAlignment();return;
+   connectPair(scoreId,midiId);return;
   }
   if(action==="unlink"){
-   if(index<0)return;var m=result.matches[index],list=Project.copy(links).filter(function(v){return v.scoreId!==scoreId});list.push({scoreId:scoreId,midiId:m.midiId,disabled:true});links=list;dirtyProject=true;pendingFeedback="已解除这对音的对应。";runAlignment();
+   if(index<0)return;pushPreviewUndo();var m=result.matches[index],list=Project.copy(links).filter(function(v){return v.scoreId!==scoreId});list.push({scoreId:scoreId,midiId:m.midiId,disabled:true});links=list;dirtyProject=true;pendingMatch=scoreId;pendingFeedback="已解除这对音的对应。";runAlignment();
   }
  }
  onResultChanged:{publishComparison();candidateTimer.restart()}
@@ -139,6 +152,8 @@ MuseScore {
  Connections {target:root.editorContext;ignoreUnknownSignals:true;onRequested:root.editorRequest(action,scoreId,midiId)}
  property string workerSource:""
  property var midi:null
+ property bool newImportPending:false
+ property var pendingProjectRestore:null
  property var scope:({})
  property var notes:[]
  property var collecting:[]
@@ -206,10 +221,10 @@ MuseScore {
  function openMenu(menu,control){if(root.embeddedWorkflow){root.openToolDialog(menu);return;}var where=control.mapToItem(root,0,control.height);menu.x=Math.max(0,Math.min(where.x,root.width-menu.implicitWidth));menu.y=Math.max(0,Math.min(where.y,root.height-menu.implicitHeight));menu.open()}
  function fail(e){status=Messages.readable(e)}
  function passageHint(){var p=result.passage;return p&&p.ambiguous&&!p.chosen?"发现几处相似的演奏，请在“演奏片段”选择本次时间。 ":""}
- function choosePassage(index){if(!prepareEditing())return;passageChoice=index;passageFrom=result.passage.candidates[index].from;dirtyProject=true;runAlignment()}
+ function choosePassage(index){if(!prepareEditing())return;pushPreviewUndo();passageChoice=index;passageFrom=result.passage.candidates[index].from;dirtyProject=true;runAlignment()}
  function freshVelocitySettings(){var next=Project.copy(config);next.velocityStrength=100;next.velocityWriteMode="fixed";config=next}
  function velocityWriteText(item){var mode=item.writeMode||"preserve";return mode==="fixed"||mode==="preserve"&&item.oldType===1?"固定力度 "+item.target:"跟随力度记号 "+Math.round((item.target-item.oldBase)*100/item.oldBase)+"%"}
- function cancel(){var wasBusy=busy||captureState.recording||captureState.stopping||captureState.saving;readForCapture=false;refreshingApplication=false;if(captureSession)captureSession.cancel();pendingAudition=null;auditionRetry.stop();paging.stop();if(observer){observer.cancelReadOnlyJob();if(typeof observer.cancelPerformanceMidi==="function")observer.cancelPerformanceMidi()}busy=false;if(wasBusy)status="已取消，可以继续导入或录制。"}
+ function cancel(){var wasBusy=busy||captureState.recording||captureState.stopping||captureState.saving;readForCapture=false;refreshingApplication=false;newImportPending=false;pendingProjectRestore=null;midiToken="";if(captureSession)captureSession.cancel();pendingAudition=null;auditionRetry.stop();paging.stop();if(observer){observer.cancelReadOnlyJob();if(typeof observer.cancelPerformanceMidi==="function")observer.cancelPerformanceMidi()}busy=false;if(wasBusy)status="已取消，可以继续导入或录制。"}
  function runAlignment(){
   if(!midi||!notes.length){status="需要谱面起音与 MIDI";return}
   if(stale || observer.analysisRevision()!==revision){status="谱面已变化，请重新读取";return}
@@ -219,7 +234,12 @@ MuseScore {
  function importMidi(path){
   if(!path)return;
   if(!prepareEditing())return;
-  revealResultsPending=true;dirtyProject=true;freshVelocitySettings();appliedProgress=({velocity:{},tempos:{}});loadedSourceHash="";passageChoice=-1;passageFrom=-1;fromSeconds=0;untilSeconds=999999;manualAnchors=[];links=[];candidate=null;midi=null;busy=true;status="正在读取演奏 MIDI…";midiToken=observer.readPerformanceMidi(String(path));
+  cancel();candidateTimer.stop();newImportPending=true;busy=true;status="正在读取演奏 MIDI…";midiToken=observer.readPerformanceMidi(String(path));
+ }
+ function acceptNewMaterial(){
+  newImportPending=false;revealResultsPending=true;dirtyProject=true;freshVelocitySettings();
+  appliedProgress=({velocity:{},tempos:{}});loadedSourceHash="";passageChoice=-1;passageFrom=-1;
+  fromSeconds=0;untilSeconds=999999;manualAnchors=[];links=[];previewUndo=[];previewRedo=[];candidate=null;
  }
  function chooseMidi(){
   if(root.embeddedWorkflow&&typeof root.choosePerformanceMidi==="function")root.importMidi(root.choosePerformanceMidi());
@@ -260,7 +280,7 @@ MuseScore {
   if(notes.length)readApplied(text+" · "+r.changed+" 个音。Ctrl+Z 撤销。");else status=text+" · "+r.changed+" 个音。";
  }
  function slice(){
-  if(!visible||observer.playing||observer.analysisRevision()!==revision){cancel();stale=true;status="任务暂停／谱面变化";return}
+  if((!visible&&!refreshingApplication)||observer.playing||observer.analysisRevision()!==revision){cancel();stale=true;status="任务暂停／谱面变化";return}
   var page=observer.performanceRange(scope.start,scope.end,scope.firstTrack,scope.endTrack,nextTick,batchSize,revision);
   if(page.error){cancel();fail(page.error);return}
   worstBatch=Math.max(worstBatch,page.milliseconds||0);if(page.milliseconds>2)batchSize=Math.max(1,Math.floor(batchSize/2));else if(page.milliseconds<.8)batchSize=Math.min(32,batchSize+1);
@@ -276,18 +296,25 @@ MuseScore {
   token=observer.startReadOnlyJob(workerSource+"\ncandidates(input)",{result:result,config:config,notes:notes,revision:revision,scope:scope});
   busy=true;status="正在计算新力度与速度…";
  }
- function pushPreviewUndo(){if(candidate){previewUndo=previewUndo.concat([{config:Project.copy(config)}]).slice(-40);previewRedo=[];}}
+ function previewState(){return {config:Project.copy(config),links:Project.copy(links),anchors:Project.copy(manualAnchors),passageChoice:passageChoice,passageFrom:passageFrom,selectedScoreId:selected>=0&&selected<result.matches.length?result.matches[selected].scoreId:selectedIssueScoreId,selectedMidiId:selectedMidiId}}
+ function pushPreviewUndo(){if(candidate||midi){previewUndo=previewUndo.concat([previewState()]).slice(-40);previewRedo=[];}}
+ function connectPair(scoreId,midiId){
+  if(!prepareEditing())return;
+  pushPreviewUndo();var list=Project.copy(links).filter(function(v){return v.scoreId!==scoreId&&v.midiId!==midiId});
+  list.push({scoreId:scoreId,midiId:midiId});links=list;dirtyProject=true;pendingMatch=scoreId;
+  pendingFeedback="已连接这两个音，力度预览已更新。";runAlignment();
+ }
  function editConfig(name,value){
   if(!prepareEditing())return;pushPreviewUndo();candidateTimer.restart();var c=Project.copy(config);c[name]=value;config=c;dirtyProject=true;status="正在更新拟采用的力度与速度…";publishComparison()}
  function confirm(){
   if(!prepareEditing())return;
   if(selected<0||selected>=result.matches.length)return;
-  var m=result.matches[selected];var l=Project.copy(links).filter(function(v){return v.scoreId!==m.scoreId&&v.midiId!==m.midiId});l.push({scoreId:m.scoreId,midiId:m.midiId});links=l;dirtyProject=true;pendingMatch=m.scoreId;pendingFeedback="已确认这对音，力度预览已更新。";runAlignment();
+  pushPreviewUndo();var m=result.matches[selected];var l=Project.copy(links).filter(function(v){return v.scoreId!==m.scoreId&&v.midiId!==m.midiId});l.push({scoreId:m.scoreId,midiId:m.midiId});links=l;dirtyProject=true;pendingMatch=m.scoreId;pendingFeedback="已确认这对音，力度预览已更新。";runAlignment();
  }
  function anchor(){
   if(!prepareEditing())return;
   if(selected<0||selected>=result.matches.length)return;
-  var m=result.matches[selected];var a=manualAnchors.filter(function(v){return v.scoreId!==m.scoreId});a.push({scoreId:m.scoreId,midiId:m.midiId});manualAnchors=a;dirtyProject=true;pendingMatch=m.scoreId;pendingFeedback="已固定这处对应，正在更新旁边的对应。";runAlignment();
+  pushPreviewUndo();var m=result.matches[selected];var a=manualAnchors.filter(function(v){return v.scoreId!==m.scoreId});a.push({scoreId:m.scoreId,midiId:m.midiId});manualAnchors=a;dirtyProject=true;pendingMatch=m.scoreId;pendingFeedback="已固定这处对应，正在更新旁边的对应。";runAlignment();
  }
  function locate(){
   if(selected<0||selected>=result.matches.length)return;
@@ -335,10 +362,16 @@ MuseScore {
   if(!prepareEditing())return;
   try{
    var data=Project.read(observer,url).expression;if(!data)throw new Error("无表达项目");
-   workspace=String(url);passageChoice=data.passageChoice===undefined?-1:data.passageChoice;passageFrom=data.passageFrom===undefined?-1:data.passageFrom;retainedScope=Project.copy(data.scope);scopeOwner=curScore;appliedProgress=data.applied||({velocity:{},tempos:{}});loadedSourceHash=data.sha256||"";scope=data.scope;notes=data.notes||[];manualAnchors=data.anchors||[];links=data.links||[];mode=data.mode||0;role=data.role||0;selectedTrack=data.track||0;occurrence=data.occurrence||1;config=ExpressionSettings.restored(data.config);fromSeconds=data.from||0;untilSeconds=data.until||999999;
-   info=data.score||{};revision=observer.analysisRevision();stale=true;
-   midiToken=observer.readPerformanceMidi(Project.fileUrl(Project.resolve(url,data.source)));status="已恢复人工对应；重新读取谱面以验证候选";
+   cancel();candidateTimer.stop();pendingProjectRestore={data:data,url:String(url)};busy=true;
+   midiToken=observer.readPerformanceMidi(Project.fileUrl(Project.resolve(url,data.source)));status="正在读取表达项目与原始演奏…";
   }catch(e){fail(e)}
+ }
+ function restoreProject(data,url){
+  stale=true;revealResultsPending=true;workspace=String(url);passageChoice=data.passageChoice===undefined?-1:data.passageChoice;passageFrom=data.passageFrom===undefined?-1:data.passageFrom;
+  retainedScope=Project.copy(data.scope);scopeOwner=curScore;appliedProgress=data.applied||({velocity:{},tempos:{}});scope=data.scope;notes=data.notes||[];
+  manualAnchors=data.anchors||[];links=data.links||[];mode=data.mode||0;role=data.role||0;selectedTrack=data.track||0;occurrence=data.occurrence||1;
+  config=ExpressionSettings.restored(data.config);fromSeconds=data.from||0;untilSeconds=data.until||999999;info=data.score||{};
+  revision=observer.analysisRevision();previewUndo=[];previewRedo=[];candidate=null;result=({matches:[],missing:[],extra:[],pending:0});dirtyProject=false;
  }
  function returnOriginal(){if(!legacyAudition&&typeof observer.finishExpressionAudition==="function"){observer.finishExpressionAudition();previewing=false;status="已结束比较，可以继续编辑乐谱。";return true;}if(previewing&&audioProject&&audioProject.playing&&audioProject.joint)observer.stopReferencePlayback();var r=observer.returnWorkflowSource();if(r.error){fail(r.error);return false}previewing=false;status="已返回原谱，可以使用力度或继续比较。";return true}
  function stopAudition(){pendingAudition=null;auditionRetry.stop();if(previewing&&audioProject&&audioProject.playing&&audioProject.joint)observer.stopReferencePlayback();if(typeof observer.stopWorkflowPlayback!=="function"){status="请用软件上方的播放按钮停止。";return}var r=observer.stopWorkflowPlayback();if(r.error)fail(r.error);else status="试听已停止。可接着比较、调整预览或使用结果。";}
@@ -418,7 +451,7 @@ MuseScore {
   target:root.captureSession;ignoreUnknownSignals:true
   onFailed:{root.busy=false;root.fail(message)}
   onFinished:{
-   root.revealResultsPending=true;root.freshVelocitySettings();root.appliedProgress=({velocity:{},tempos:{}});root.recordingImport=true;root.loadedSourceHash="";root.manualAnchors=[];root.links=[];root.passageChoice=-1;root.passageFrom=-1;root.fromSeconds=0;root.untilSeconds=999999;root.busy=true;root.dirtyProject=true;
+   root.newImportPending=true;root.recordingImport=true;root.busy=true;
    root.midiToken=root.observer.readPerformanceMidi(path);root.status=reason+"，正在对应选段…";
   }
  }
@@ -430,15 +463,18 @@ MuseScore {
   target:observer;ignoreUnknownSignals:true
   onPerformanceMidiReady:{
    if(token!==root.midiToken)return;
-   if(result.error){root.busy=false;root.fail(result.error);return}
-   if(root.loadedSourceHash&&root.loadedSourceHash!==result.sha256){root.busy=false;root.fail("项目原始 MIDI 已变化，请重新导入并核查人工对应");root.midi=null;return}
+   if(result.error){root.newImportPending=false;root.pendingProjectRestore=null;root.recordingImport=false;root.busy=false;root.fail(result.error);return}
+   var expected=root.pendingProjectRestore?root.pendingProjectRestore.data.sha256:root.newImportPending?"":root.loadedSourceHash;
+   if(expected&&expected!==result.sha256){root.pendingProjectRestore=null;root.busy=false;root.fail("项目原始 MIDI 已变化，请重新导入并核查人工对应");return}
+   if(root.pendingProjectRestore){var project=root.pendingProjectRestore;root.pendingProjectRestore=null;root.restoreProject(project.data,project.url);}
+   else if(root.newImportPending)root.acceptNewMaterial();
    root.busy=false;root.loadedSourceHash="";root.midi=result;root.status="已导入 "+result.notes.length+" 个音，正在寻找所选谱段";if(root.recordingImport){root.recordingImport=false;if(!root.visible){root.alignmentOnShow=true;root.status="录制已保存，打开面板后显示对应结果。";}else if(root.revision===root.observer.analysisRevision())root.runAlignment();else root.analyze()}else root.analyze();
   }
   onReadOnlyJobFinished:{
    if(token!==root.token)return;
    root.busy=false;if(result.error){root.fail(result.error);return}
    if(root.observer.analysisRevision()!==root.revision){root.stale=true;root.status="乐谱刚刚改变，正在更新对应";return}
-   if(result.matches){root.appliedProgress=Progress.changedMatches(root.appliedProgress,root.result,result);root.result=result;root.selected=result.matches.length?0:-1;if(root.pendingMatch){for(var i=0;i<result.matches.length;++i)if(result.matches[i].scoreId===root.pendingMatch)root.selected=i;}root.pendingMatch="";root.status=root.passageHint()+(root.pendingFeedback?root.pendingFeedback+" ":"")+"已匹配 "+result.matches.length+" · 待确认 "+result.pending+" · 漏弹 "+result.missing.length+" · 多弹 "+result.extra.length;root.pendingFeedback=""}
+   if(result.matches){root.appliedProgress=Progress.changedMatches(root.appliedProgress,root.result,result);root.result=result;root.selected=result.matches.length?0:-1;if(root.pendingMatch){var found=false;for(var i=0;i<result.matches.length;++i)if(result.matches[i].scoreId===root.pendingMatch){root.selected=i;found=true;}if(!found&&result.missing.some(function(n){return n.id===root.pendingMatch})){root.selected=-1;root.selectedIssueScoreId=root.pendingMatch;root.publishComparison();}}root.pendingMatch="";root.status=root.passageHint()+(root.pendingFeedback?root.pendingFeedback+" ":"")+"已匹配 "+result.matches.length+" · 待确认 "+result.pending+" · 漏弹 "+result.missing.length+" · "+(root.role>0?"其它演奏音 ":"多弹 ")+result.extra.length;root.pendingFeedback=""}
    else{if(root.candidateConfig!==JSON.stringify(root.config)){root.build();return;}root.candidate=Progress.pending(Progress.targets(result,root.config),root.appliedProgress);root.status=root.passageHint()+(root.applicationMessage?root.applicationMessage+" ":"")+"还有 "+root.candidate.velocity.length+" 个音的力度、"+root.candidate.tempos.length+" 处速度可用";root.applicationMessage="";if(root.revealResultsPending){root.revealResultsPending=false;resultRevealTimer.restart()}}
   }
  }
@@ -684,16 +720,26 @@ MuseScore {
  }
  Dialog {
   id:correction;title:"调整演奏对应";modal:true;width:380;height:320;standardButtons:Dialog.Close
+  onOpened:{
+   var ns=root.result.matches.map(function(m){return m.original}).concat(root.result.missing);
+   var chosen=root.selected>=0?root.result.matches[root.selected].scoreId:root.selectedIssueScoreId;
+   var scoreIndex=ns.findIndex(function(n){return n.id===chosen});if(scoreIndex>=0)scoreChoice.currentIndex=scoreIndex;
+   var midiIndex=root.midi?root.midi.notes.findIndex(function(n){return n.id===root.selectedMidiId}):-1;if(midiIndex>=0)midiChoice.currentIndex=midiIndex;
+  }
   ColumnLayout {anchors.fill:parent
    Label {text:"选择谱音与演奏事件，可重新连接或标记漏／多弹"}
-   Desk.DeskComboBox {id:scoreChoice;Layout.fillWidth:true;model:root.result.matches.map(function(m){return m.original}).concat(root.result.missing).map(function(n){return n.id+" · "+n.pitch});}
-   Desk.DeskComboBox {id:midiChoice;Layout.fillWidth:true;model:root.midi?root.midi.notes.map(function(n){return n.id+" · "+n.seconds.toFixed(3)+"s · "+n.pitch}):[]}
-   RowLayout {
-    Desk.DeskButton {iconName:"link";text:"重新连接";onClicked:{var ns=root.result.matches.map(function(m){return m.original}).concat(root.result.missing),ms=root.midi.notes;if(scoreChoice.currentIndex<0||midiChoice.currentIndex<0)return;var l=root.links.filter(function(v){return v.scoreId!==ns[scoreChoice.currentIndex].id&&v.midiId!==ms[midiChoice.currentIndex].id});l.push({scoreId:ns[scoreChoice.currentIndex].id,midiId:ms[midiChoice.currentIndex].id});root.links=l;root.runAlignment()}}
-    Desk.DeskButton {iconName:"delete";text:"取消对应";onClicked:{if(root.selected<0)return;var m=root.result.matches[root.selected],l=Project.copy(root.links);l.push({scoreId:m.scoreId,midiId:m.midiId,disabled:true});root.links=l;root.runAlignment()}}
+   GridLayout {columns:2;Layout.fillWidth:true
+    Label {text:"谱面音";color:theme.text;font:Qt.application.font}
+    Desk.DeskComboBox {id:scoreChoice;Layout.fillWidth:true;model:root.result.matches.map(function(m){return m.original}).concat(root.result.missing).map(function(n){return RowText.pitchName(n.writtenPitch===undefined?n.pitch:n.writtenPitch,n.writtenTpc)+" · "+RowText.position(n)+" · 谱表 "+(Math.floor(n.track/4)+1)});}
+    Label {text:"演奏音";color:theme.text;font:Qt.application.font}
+    Desk.DeskComboBox {id:midiChoice;Layout.fillWidth:true;model:root.midi?root.midi.notes.map(function(n){return RowText.pitchName(n.pitch)+" · "+n.seconds.toFixed(3)+" 秒 · 力度 "+n.velocity}):[]}
    }
-   Desk.DeskButton {text:"清除固定的对应位置";onClicked:{root.manualAnchors=[];root.runAlignment()}}
-   Label {Layout.fillWidth:true;wrapMode:Text.Wrap;text:"漏弹 "+root.result.missing.map(function(n){return n.id}).join(", ")+"\n多弹 "+root.result.extra.map(function(n){return n.id}).join(", ");elide:Text.ElideRight;maximumLineCount:5}
+   RowLayout {
+    Desk.DeskButton {iconName:"link";text:"连接这两音";enabled:!root.busy;onClicked:{var ns=root.result.matches.map(function(m){return m.original}).concat(root.result.missing),ms=root.midi.notes;if(scoreChoice.currentIndex<0||midiChoice.currentIndex<0)return;root.connectPair(ns[scoreChoice.currentIndex].id,ms[midiChoice.currentIndex].id);correction.close()}}
+    Desk.DeskButton {iconName:"delete";text:"解除对应";enabled:root.selected>=0&&!root.busy;onClicked:root.editorRequest("unlink",root.result.matches[root.selected].scoreId,"")}
+   }
+   Desk.DeskButton {text:"清除固定的对应位置";enabled:root.manualAnchors.length>0&&!root.busy;onClicked:{root.pushPreviewUndo();root.manualAnchors=[];root.dirtyProject=true;root.runAlignment()}}
+   Label {Layout.fillWidth:true;wrapMode:Text.Wrap;text:"漏弹 "+root.result.missing.length+" 音 · "+(root.role>0?"其它演奏音 ":"多弹 ")+root.result.extra.length+" 音。可在“对应结果”中查看具体音名和位置。";elide:Text.ElideRight;maximumLineCount:5}
   }
  }
  Dialog {

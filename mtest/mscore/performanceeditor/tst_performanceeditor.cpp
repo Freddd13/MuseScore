@@ -942,6 +942,9 @@ class TestPerformanceEditor : public QObject, public MTest {
       void expressionWholeMidiMiddlePassage();
       void expressionRepeatedPassageChoice();
       void expressionRealPerformanceFiles();
+      void expressionCorrectionKeepsPickedNotes();
+      void expressionRolledPassageRoles();
+      void expressionRealDecoratedPassage();
       void editorUsabilityRepairs();
       void editorVelocitySectionsAndInputWheel();
       void velocityReferencesAcrossRestsAndFilters();
@@ -1176,5 +1179,6 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "midi_transport_086_tests.inc"
 #include "writing_087_tests.inc"
 #include "expression_095_tests.inc"
+#include "expression_096_tests.inc"
 QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"

@@ -4,9 +4,9 @@
 
 本次补充的音源面板、换谱保留和两种踏板方式见[后续安排](docs/SOUND_PEDAL_PLAN.md)。这些选项随对应批次交付，当前音源操作见[使用步骤](docs/VST_088_GUIDE.md)。
 
-本文对应个人版本：**0.95.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+本文对应个人版本：**0.96.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
 
-从完整MIDI寻找选段、重复段的时间选择、分批使用力度与保存，见[演奏表达操作](docs/EXPRESSION_095_GUIDE.md)。
+从完整MIDI寻找选段、分别选择两音改对应、撤销重做及使用力度，见[演奏表达操作](docs/EXPRESSION_096_GUIDE.md)。
 
 分段A/B的修改、组合、保存和删除见[分段写法](docs/VARIANTS_070_GUIDE.md)；完整谱工作区另存后会自动更新文件位置，见[完整谱保存](docs/VARIANTS_076_GUIDE.md)。
 
@@ -414,6 +414,8 @@ Ctrl+Z撤销，编辑菜单中的“重做”可恢复这一步。节点位置�
 对应完成后，编辑器自动显示原力度与拟采用力度。默认采用全部演奏力度，并逐音固定保存。“谱中效果／拟采用效果”接着当前拍位切换；选好音、选段或全部已对应范围，直接点“使用力度 · N音”。一次应用可用 Ctrl+Z 撤销。
 
 面板提供 MIDI 输入开关。录制从第一个音开始计时，谱面和卷帘显示正在对应的位置。停止后自动显示结果，继续试听和采用。
+
+人工对应时，点“查看对应”，分别点上排谱面音、下排演奏音，再点“连接这两音”；所选两音的音名和位置写在工具行下方。对应区可用Ctrl+Z撤销、Ctrl+Shift+Z重做。完整例子见[调整对应并使用力度](docs/EXPRESSION_096_GUIDE.md)。
 
 录制后会直接显示对应结果，试听和采用放在同一处。点结果会选中对应的谱音；播放中选择时保留播放位置。逐音采用、采用剩余结果和保存恢复见[演奏表达操作说明](docs/EXPRESSION_080_GUIDE.md)。
 

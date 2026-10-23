@@ -41,6 +41,10 @@ function performanceWindow(scoreGroups,notes,tap) {
         low=median(short);high=median(long);
     }
     if(high/low<2.5||low>.085)return window;
+    // When short gaps are the minority they may join a rolled chord's tail
+    // to the next bass attack. Keep the events separate for the score-aware
+    // merge instead of deciding those groups from timing alone.
+    if(short.length<gaps.length*.5){window.gap=.001;window.span=.001;return window;}
     window.gap=Math.max(.012,Math.min(.085,Math.sqrt(low*high)));
     window.span=Math.max(.035,Math.min(.18,high*.85));window.adaptive=true;
     return window;
@@ -124,6 +128,38 @@ function path(s,p,tap) {
 }
 // Locate a score passage anywhere in a longer performance. Prefix/suffix are
 // free; insertions and missing notes inside the passage still have a cost.
+// Consecutive performed attacks can be one written, rolled chord.
+function rolledOnsets(performed) {
+    var out=[[],[],[],[]];
+    for(var size=2;size<=3;++size)for(var last=size-1;last<performed.length;++last){
+        var first=last-size+1;
+        if(performed[last].lastTime-performed[first].time>.3)continue;
+        var pitches=[];
+        for(var k=first;k<=last;++k)performed[k].pitches.forEach(function(pitch){if(pitches.indexOf(pitch)<0)pitches.push(pitch)});
+        if(pitches.length<=performed[last].pitches.length)continue;
+        out[size][last]={first:first,pitches:pitches,time:performed[first].time};
+    }
+    return out;
+}
+function rolledCost(score,roll,size,tap){
+    if(tap||!roll||score.pitches.length<2)return Infinity;
+    // The previous raw event may still belong to the preceding roll. Its
+    // distance is not the interval between the two written attacks. The
+    // following fine pass evaluates intervals after these groups are merged.
+    return pitchCost(score,roll)*1.8+.12*(size-1);
+}
+function mergeOnsets(performed,pairs){
+    var spans={};(pairs||[]).forEach(function(pair){if(pair.pEnd>pair.p)spans[pair.p]=pair.pEnd});
+    var out=[];
+    for(var first=0;first<performed.length;++first){
+        var last=spans[first];if(last===undefined){out.push(performed[first]);continue;}
+        var group={time:performed[first].time,lastTime:performed[last].lastTime,id:performed[first].id,notes:[],pitches:[]};
+        for(var k=first;k<=last;++k){Array.prototype.push.apply(group.notes,performed[k].notes);performed[k].pitches.forEach(function(pitch){if(group.pitches.indexOf(pitch)<0)group.pitches.push(pitch)})}
+        out.push(group);first=last;
+    }
+    return out;
+}
+
 function locatePassage(s,p,tap) {
     var n=s.length,m=p.length;
     if(n*m>8000000 && n>32) {
@@ -132,10 +168,10 @@ function locatePassage(s,p,tap) {
         var window=p.slice(start,end);
         if(n*window.length>8000000)return {start:start,end:Math.min(m,start+Math.ceil((s[n-1].time-s[0].time)/typicalIOI(s))+1),alternatives:[],cost:prefix.cost};
         var local=locatePassage(s,window,tap);
-        local.start+=start;local.end+=start;return local;
+        function shift(value){value.start+=start;value.end+=start;(value.pairs||[]).forEach(function(pair){pair.p+=start;if(pair.pEnd!==undefined)pair.pEnd+=start;})}shift(local);local.alternatives.forEach(shift);return local;
     }
     var trace=new Uint8Array((n+1)*(m+1)),previous=new Float64Array(m+1),current=new Float64Array(m+1);
-    var si=typicalIOI(s),pi=typicalIOI(p),gap=.95;
+    var si=typicalIOI(s),pi=typicalIOI(p),gap=.95,rolls=rolledOnsets(p);
     for(var i=1;i<=n;++i) {
         current[0]=i*gap;
         for(var j=1;j<=m;++j) {
@@ -144,7 +180,7 @@ function locatePassage(s,p,tap) {
             var diagonal=previous[j-1]+(tap?0:pitchCost(s[i-1],p[j-1])*1.8)+time;
             var deletion=previous[j]+gap,insertion=current[j-1]+gap,kind=1,value=diagonal;
             if(deletion<value){value=deletion;kind=2}if(insertion<value){value=insertion;kind=3}
-            current[j]=value;trace[i*(m+1)+j]=kind;
+            for(var size=2;size<=3&&size<=j;++size){var rolled=previous[j-size]+rolledCost(s[i-1],rolls[size][j-1],size,tap);if(rolled<value){value=rolled;kind=size+2;}}current[j]=value;trace[i*(m+1)+j]=kind;
         }
         var swap=previous;previous=current;current=swap;
     }
@@ -152,7 +188,7 @@ function locatePassage(s,p,tap) {
     endings.sort(function(a,b){return a.cost-b.cost||a.end-b.end});
     function recover(end) {
         var row=n,col=end,pairs=[];
-        while(row>0&&col>0){var kind=trace[row*(m+1)+col];if(kind===1){pairs.push({s:row-1,p:col-1});--row;--col}else if(kind===2)--row;else --col;}
+        while(row>0&&col>0){var kind=trace[row*(m+1)+col];if(kind===1){pairs.push({s:row-1,p:col-1});--row;--col}else if(kind===2)--row;else if(kind>=4){var size=kind-2;pairs.push({s:row-1,p:col-size,pEnd:col-1});--row;col-=size;}else --col;}
         pairs.reverse();return {start:pairs.length?pairs[0].p:col,end:end,pairs:pairs};
     }
     var best=recover(endings[0].end);best.cost=endings[0].cost/n;best.alternatives=[];
@@ -181,18 +217,28 @@ function align(input) {
     if(input.role===1){var highest={};score.forEach(function(n){highest[n.tick]=Math.max(highest[n.tick]||0,n.pitch)});score=score.filter(function(n){return n.pitch===highest[n.tick]})}
     else if(input.role===2)score=score.filter(function(n){return n.track===input.track});
     var performance=(input.performance||[]).filter(function(n){return n.seconds>=(input.from||0)&&n.seconds<=(input.until===undefined?Infinity:input.until)}),tap=input.mode==="tap";
+    var linkPerformance=performance;
     var window=performanceWindow(contextGroups,performance,tap);
     var s=groups(score,true,tap),p=groups(performance,false,tap,window),anchors=input.anchors||[],links=input.links||[];
     if(!s.length||!p.length)return {matches:[],missing:score,extra:performance,pending:0};
     var scoreIds={},midiIds={};s.forEach(function(g){g.notes.forEach(function(n){scoreIds[n.id]=true})});performance.forEach(function(n){midiIds[n.id]=true});
     anchors=anchors.filter(function(a){return scoreIds[a.scoreId]&&midiIds[a.midiId]});
+    if(input.role>0&&!tap){
+        var pitches={},manualMidi={};
+        s.forEach(function(group){group.pitches.forEach(function(pitch){for(var delta=-2;delta<=2;++delta)pitches[pitch+delta]=true})});
+        anchors.concat(links.filter(function(link){return !link.disabled&&scoreIds[link.scoreId]})).forEach(function(link){manualMidi[link.midiId]=true});
+        p=p.filter(function(group){return group.notes.some(function(note){return pitches[note.pitch]||manualMidi[note.id]})});
+        if(!p.length)return {matches:[],missing:score,extra:performance,pending:0};
+    }
+
     if(anchors.length) {
         var positions=anchors.map(function(a){return {s:s.findIndex(function(g){return g.notes.some(function(n){return n.id===a.scoreId})}),p:p.findIndex(function(g){return g.notes.some(function(n){return n.id===a.midiId})})}}).sort(function(a,b){return a.s-b.s});
         for(var at=1;at<positions.length;++at)if(positions[at].s!==positions[at-1].s||positions[at].p!==positions[at-1].p)if(positions[at].s<=positions[at-1].s||positions[at].p<=positions[at-1].p)throw new Error("固定对应的先后顺序交叉了，请调整其中一对音。");
-        var first=positions[0],last=positions[positions.length-1],si=typicalIOI(s),pi=typicalIOI(p);
+        var first=positions[0],last=positions[positions.length-1],si=typicalIOI(s),pi=typicalIOI(p)*Math.max(1,median(s.map(function(group){return group.pitches.length}))/Math.max(1,median(p.map(function(group){return group.pitches.length}))));
         var from=p[first.p].time-((s[first.s].time-s[0].time)/si*2+4)*pi;
         var until=p[last.p].lastTime+((s[s.length-1].time-s[last.s].time)/si*2+4)*pi;
         performance=performance.filter(function(n){return n.seconds>=from&&n.seconds<=until});p=groups(performance,false,tap,window);
+        if(!tap&&p.length>s.length*1.2)p=mergeOnsets(p,locatePassage(s,p,false).pairs);
     }
     var passage=null;
     if(!anchors.length && p.length>s.length*1.2 && input.findPassage!==false) {
@@ -208,7 +254,7 @@ function align(input) {
         var chosen=choice>0&&passage.alternatives[choice-1]?passage.alternatives[choice-1]:passage;
         var begin=p[chosen.start].time,end=p[Math.max(chosen.start,chosen.end-1)].lastTime+.001;
         performance=performance.filter(function(v){return v.seconds>=begin&&v.seconds<=end});
-        p=groups(performance,false,tap,window);
+        p=mergeOnsets(wholeGroups,chosen.pairs).filter(function(group){return group.time>=begin&&group.time<end});
         passage.from=begin;passage.until=end;
         passage.alternatives=passage.candidates.slice(1);
         passage.ambiguous=passage.alternatives.some(function(v){return v.cost-passage.candidates[0].cost<=.03});
@@ -224,7 +270,7 @@ function align(input) {
     fixed.sort(function(a,b){return a.s-b.s});
     fixed.forEach(function(a){var last=cuts[cuts.length-1];if(a.s===last.s&&a.p===last.p)return;if(a.s<=last.s||a.p<=last.p)throw new Error("固定对应的先后顺序交叉了，请调整其中一对音。");cuts.push(a)});
     cuts.push({s:s.length,p:p.length});
-    var cacheKey=(input.cacheKey||"")+":"+p[0].id+":"+p[p.length-1].id+":"+window.gap+":"+window.span;
+    var cacheKey=(input.cacheKey||"")+":"+window.gap+":"+window.span+":"+p.map(function(group){return group.id}).join("|");
     var coarse=[],matches=[],usedScore={},usedMidi={},segments={},cached=cacheKey===input.previousKey?(input.segments||{}):{};
     for(var c=1;c<cuts.length;++c){
         var a=cuts[c-1],b=cuts[c],key=[a.s,a.p,b.s,b.p].join(":"),local=cached[key]||path(s.slice(a.s+1,b.s),p.slice(a.p+1,b.p),tap);segments[key]=local;
@@ -292,15 +338,17 @@ function align(input) {
             if(!confirmed&&nearbySame.length>sameScore){confidence=Math.min(confidence,.55);uncertainty="附近弹了几次同音，请选择这个谱音对应的那一次。";}
             if(passage&&passage.ambiguous&&!passage.chosen&&!confirmed){confidence=Math.min(confidence,.55);uncertainty="演奏中有相似段落，请先选择演奏片段的时间。";}
             if(!confirmed&&(best.ambiguous||n.grace)){confidence=Math.min(confidence,.5);uncertainty="装饰音或重叠同音需要核对具体起音。";}
-            var row={scoreId:n.id,midiId:best.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,seconds:best.seconds,velocity:best.velocity,confidence:confidence,confirmed:confirmed,status:exact?"匹配":"错音待确认",uncertainty:uncertainty,source:"measured",original:n};
+            var row={scoreId:n.id,midiId:best.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,performedPitch:best.pitch,seconds:best.seconds,velocity:best.velocity,confidence:confidence,confirmed:confirmed,status:exact?"匹配":"错音待确认",uncertainty:uncertainty,source:"measured",original:n};
             matches.push(row);usedScore[n.id]=true;usedMidi[best.id]=true;
         });
     });
     links.forEach(function(link){
-        var n=score.find(function(v){return v.id===link.scoreId}),m=performance.find(function(v){return v.id===link.midiId});
-        if(!n||!m)return;
+        var n=score.find(function(v){return v.id===link.scoreId});
+        if(!n)return;
+        if(link.disabled){matches=matches.filter(function(v){return v.scoreId!==n.id});return;}
+        var m=linkPerformance.find(function(v){return v.id===link.midiId});if(!m)return;
         matches=matches.filter(function(v){return v.scoreId!==n.id&&v.midiId!==m.id});
-        if(!link.disabled)matches.push({scoreId:n.id,midiId:m.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,seconds:m.seconds,velocity:m.velocity,confidence:1,confirmed:true,status:"人工对应",source:"measured",original:n});
+        matches.push({scoreId:n.id,midiId:m.id,tick:n.tick,track:n.track,index:n.index,pitch:n.pitch,performedPitch:m.pitch,seconds:m.seconds,velocity:m.velocity,confidence:1,confirmed:true,status:"人工对应",source:"measured",original:n});
     });
     usedScore={};usedMidi={};matches.forEach(function(v){usedScore[v.scoreId]=true;usedMidi[v.midiId]=true});
     var matchedById={},pitchNotes={};
