@@ -3377,12 +3377,13 @@ Shortcut Shortcut::_sc[] = {
        "reference-player",QT_TRANSLATE_NOOP("action","原曲参考"),QT_TRANSLATE_NOOP("action","原曲参考"),QT_TRANSLATE_NOOP("action","打开或隐藏原曲参考播放器"),Icons::play_ICON},
         {
            MsWidget::MAIN_WINDOW,
-           STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
+           STATE_DISABLED | STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
            "reference-audio-play",
            QT_TRANSLATE_NOOP("action","播放／停止选定原曲片段"),
            QT_TRANSLATE_NOOP("action","播放／停止选定原曲片段"),
            QT_TRANSLATE_NOOP("action","在原曲参考中选择音轨和片段后，独立播放音频"),
-           Icons::play_ICON
+           Icons::play_ICON,
+           Qt::ApplicationShortcut
            },
         {
            MsWidget::MAIN_WINDOW,
@@ -4748,6 +4749,8 @@ void Shortcut::read(XmlReader& e)
 void Shortcut::load()
       {
       QFile f(dataPath + "/shortcuts.xml");
+      const bool userFile=f.exists();
+      bool referencePresent=false;
       if (!f.exists())
             f.setFileName(defaultFileName);
       if (!f.open(QIODevice::ReadOnly)) {
@@ -4768,6 +4771,7 @@ void Shortcut::load()
                                     const QStringRef& tag(e.name());
                                     if (tag == "key") {
                                           QString val(e.readElementText());
+                                          if(val=="reference-audio-play")referencePresent=true;
                                           sc = getShortcut(qPrintable(val));
                                           if (!sc) { // shortcut not found
                                                 if (!(!strcmp(qPrintable(val), "toggle-feedback")
@@ -4799,6 +4803,14 @@ void Shortcut::load()
             else
                   e.unknown();
             }
+#ifndef Q_OS_MAC
+      if(userFile&&!referencePresent){
+            auto reference=getShortcut("reference-audio-play");if(reference){reference->clear();const QKeySequence wanted(Qt::CTRL|Qt::Key_Space);bool occupied=false;
+                  for(const auto& item:_sc)if(&item!=reference)for(const auto& key:item._keys)if(wanted.matches(key)!=QKeySequence::NoMatch||key.matches(wanted)!=QKeySequence::NoMatch){occupied=true;break;}
+                  if(!occupied)reference->addShortcut(wanted);
+                  }
+            }
+#endif
       source = f.fileName();
       dirty = false;
       }

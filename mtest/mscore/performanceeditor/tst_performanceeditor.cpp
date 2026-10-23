@@ -950,6 +950,10 @@ class TestPerformanceEditor : public QObject, public MTest {
       void expressionTempoWithRestsAndCurves();
       void expressionTempoSelectedRanges();
       void expressionRecordingAcrossLongRest();
+      void referenceOneTransportFromEveryEntry();
+      void referenceSourcePositionAndLoop();
+      void referenceIndependentPlaybackPolicy();
+      void referenceShortcutPreservesUserChoice();
       void editorUsabilityRepairs();
       void editorVelocitySectionsAndInputWheel();
       void velocityReferencesAcrossRestsAndFilters();
@@ -1186,5 +1190,6 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "expression_095_tests.inc"
 #include "expression_096_tests.inc"
 #include "expression_097_tests.inc"
+#include "reference_098_tests.inc"
 QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"

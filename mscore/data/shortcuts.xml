@@ -1092,4 +1092,8 @@
     <key>zoom-out-vert-pre</key>
     <seq>Ctrl+Shift+-</seq>
     </SC>
+  <SC>
+    <key>reference-audio-play</key>
+    <seq>Ctrl+Space</seq>
+    </SC>
   </Shortcuts>

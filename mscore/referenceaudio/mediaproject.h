@@ -25,6 +25,9 @@ class ReferenceMediaProject : public QObject {
       Q_PROPERTY(bool expressionPreview MEMBER _expressionPreview NOTIFY tracksChanged)
       Q_PROPERTY(int scoreTick MEMBER _scoreTick NOTIFY changed)
       Q_PROPERTY(QVariantMap diagnostics READ diagnostics NOTIFY changed)
+      Q_PROPERTY(QVariantMap playbackPlan READ playbackPlan NOTIFY changed)
+      Q_PROPERTY(bool audioStopsScore READ audioStopsScore WRITE setAudioStopsScore NOTIFY changed)
+      Q_PROPERTY(bool scoreStopsAudio READ scoreStopsAudio WRITE setScoreStopsAudio NOTIFY changed)
       struct Session;
       KumoReferenceHost _host;
       QThreadPool _pool;
@@ -39,7 +42,7 @@ class ReferenceMediaProject : public QObject {
       int _scoreTick=0;
       QString _status;
       bool _joint=false, _completed=false, _repeatSelection=false;
-      double _volume=.8;
+      double _volume=.8, _stoppedOutput=0;
       static void mix(void*,float*,unsigned,int,bool);
       void poll();
 public:
@@ -55,6 +58,12 @@ public:
       void setVolume(double);
       QVariantList tracks()const{return _tracks;}
       QVariantMap diagnostics()const;
+      QVariantMap playbackPlan()const{return property("workflowPlaybackPlan").toMap();}
+      Q_INVOKABLE double sourcePosition(const QString& path)const;
+      bool audioStopsScore()const;
+      bool scoreStopsAudio()const;
+      void setAudioStopsScore(bool);
+      void setScoreStopsAudio(bool);
       Q_INVOKABLE QVariantMap setTracks(const QVariantList&);
       // Plan contains only file names, sample times and gains; never score objects.
       Q_INVOKABLE QVariantMap start(const QVariantMap&);

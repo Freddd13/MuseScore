@@ -154,7 +154,7 @@ bool QmlPlugin::eventFilter(QObject* object, QEvent* event)
             bool editingText=false;
             for (auto item=focus; item; item=item->parentItem())
                   if (item->inherits("QQuickTextInput") || item->inherits("QQuickTextEdit")) { editingText=true; break; }
-            if (quick && focus && !editingText && !handler.isEmpty() && keys->key()==Qt::Key_Space && keys->modifiers()==Qt::NoModifier) {
+            if (quick && !editingText && !handler.isEmpty() && keys->key()==Qt::Key_Space && keys->modifiers()==Qt::NoModifier) {
                   const auto release=property("panelSpaceReleaseHandler").toString().toUtf8();
                   if (!keys->isAutoRepeat()) {
                         QByteArray action;
