@@ -118,6 +118,11 @@ class GateModel : public QAbstractTableModel {
 MidiCropPanel::MidiCropPanel(QWidget* parent,std::function<QList<Score*>()> scores):QWidget(parent),_scores(std::move(scores)) {
       auto layout=new QVBoxLayout(this);layout->setContentsMargins(0,6,0,0);
       setVisible(personalFeaturesEnabled());
+      _writtenPedal=new QCheckBox(tr("导出谱上原始踏板"),this);_writtenPedal->setObjectName("midiWrittenPedal");
+      _writtenPedal->setChecked(QSettings().value("export/midi/writtenPedal",false).toBool());
+      _writtenPedal->setToolTip(tr("勾选后采用SF2原有踏板时机。关闭时采用乐谱中设置的钢琴换踏板。"));
+      layout->addWidget(_writtenPedal);
+      connect(_writtenPedal,&QCheckBox::toggled,this,[this]{savePreferences();});
       _enabled=new QCheckBox(tr("人性化裁剪：保守踏板模式"),this);
       _enabled->setChecked(preferences.getBool("export/midi/cropEnabled"));layout->addWidget(_enabled);
       auto buttons=new QHBoxLayout;
@@ -138,16 +143,17 @@ MidiCropPanel::MidiCropPanel(QWidget* parent,std::function<QList<Score*>()> scor
       connect(preview,&QPushButton::clicked,this,&MidiCropPanel::compare);
       }
 bool MidiCropPanel::enabled() const {return personalFeaturesEnabled() && _enabled->isChecked();}
-bool MidiCropPanel::includeOriginal() const {return personalFeaturesEnabled() && _original->isChecked();}
+bool MidiCropPanel::includeOriginal() const {return enabled() && _original->isChecked();}
+bool MidiCropPanel::usesWrittenPedal() const {return personalFeaturesEnabled() && _writtenPedal->isChecked();}
 MidiExportOptions MidiCropPanel::options(Score* score) const {
-      MidiExportOptions result;result.crop=enabled();result.gate=_gate;
+      MidiExportOptions result;result.crop=enabled();result.gate=_gate;result.writtenPedal=usesWrittenPedal();
       if(_fromMeasure>0){result.gate.scoreStart=INT_MAX;result.gate.scoreEnd=INT_MAX;int bar=1;for(auto m=score->firstMeasure();m;m=m->nextMeasure(),++bar){if(bar==_fromMeasure)result.gate.scoreStart=m->tick().ticks();if(bar==_untilMeasure)result.gate.scoreEnd=m->endTick().ticks();}if(_untilMeasure<_fromMeasure||_untilMeasure>score->nmeasures())result.gate.scoreStart=result.gate.scoreEnd=INT_MAX;}
       result.gate.tracks=_tracks.value(score);result.gate.protectedTracks=_protectedTracks.value(score);
       result.gate.excluded=_exclusions.value(score);if(_releaseStates.value(score)==score->masterScore()->state())result.gate.releaseOverrides=_releaseOverrides.value(score);result.gate.staves=_staves.value(score);return result;
       }
 void MidiCropPanel::savePreferences() const {
       if (!personalFeaturesEnabled()) return;
-      QSettings handSettings;handSettings.setValue("export/midi/releaseLeadMs",_gate.releaseLeadMs);
+      QSettings handSettings;handSettings.setValue("export/midi/writtenPedal",usesWrittenPedal());handSettings.setValue("export/midi/releaseLeadMs",_gate.releaseLeadMs);
       for(int side=0;side<2;++side) {const auto key=QString("export/midi/hand%1/").arg(side);handSettings.setValue(key+"comfort",_gate.hands[side].comfort);handSettings.setValue(key+"maximum",_gate.hands[side].maximum);handSettings.setValue(key+"white",_gate.hands[side].white);}handSettings.sync();
       preferences.setPreference("export/midi/cropFromMeasure",_fromMeasure);preferences.setPreference("export/midi/cropUntilMeasure",_untilMeasure);preferences.setPreference("export/midi/cropProtectMelody",_gate.protectMelody);
       auto text=[](const QSet<int>& values){QList<int> list=values.values();std::sort(list.begin(),list.end());QStringList result;for(int v:list)result<<QString::number(v);return result.join(',');};
@@ -187,8 +193,8 @@ bool MidiCropPanel::settings() {
       }
 bool MidiCropPanel::write(Score* score,const QString& path,const QString& original) {
       if(seq && (seq->isPlaying()||!seq->backgroundRenderingIdle())) {QMessageBox::information(this,tr("MIDI松手处理"),tr("请先停播，等待乐谱准备完成后再生成MIDI。"));return false;}
-      if(_fromMeasure>0&&(_untilMeasure>score->nmeasures()||_untilMeasure<_fromMeasure)){QMessageBox::warning(this,tr("MIDI松手处理"),tr("%1中不存在所填的小节范围，请调整后再导出。").arg(score->title()));return false;}
-      if(!_releaseOverrides.value(score).isEmpty()&&_releaseStates.value(score)!=score->masterScore()->state()){QMessageBox::information(this,tr("MIDI松手处理"),tr("乐谱已改变，请打开“查看对比”更新手动松手位置，再导出。"));return false;}
+      if(enabled()&&_fromMeasure>0&&(_untilMeasure>score->nmeasures()||_untilMeasure<_fromMeasure)){QMessageBox::warning(this,tr("MIDI松手处理"),tr("%1中不存在所填的小节范围，请调整后再导出。").arg(score->title()));return false;}
+      if(enabled()&&!_releaseOverrides.value(score).isEmpty()&&_releaseStates.value(score)!=score->masterScore()->state()){QMessageBox::information(this,tr("MIDI松手处理"),tr("乐谱已改变，请打开“查看对比”更新手动松手位置，再导出。"));return false;}
       ExportMidi exporter(score);QBuffer buffer;buffer.open(QIODevice::WriteOnly);
       if(!exporter.write(&buffer,preferences.getBool(PREF_IO_MIDI_EXPANDREPEATS),preferences.getBool(PREF_IO_MIDI_EXPORTRPNS),mscore->synthesizerState(),options(score)))return false;
       auto store=[&](const QString& name,const QByteArray& bytes) {QSaveFile f(name);if(!f.open(QIODevice::WriteOnly) || f.write(bytes)!=bytes.size() || !f.commit()) {QMessageBox::warning(this,tr("MIDI导出"),tr("无法写入%1：%2").arg(name,f.errorString()));return false;}return true;};

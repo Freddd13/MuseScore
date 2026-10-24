@@ -51,6 +51,7 @@ enum class PreferSharpFlat : char {
 //---------------------------------------------------------
 
 class Part final : public ScoreElement {
+      QString _pedalPlayback;
       QString _partName;            ///< used in tracklist (mixer)
       InstrumentList _instruments;
       QList<Staff*> _staves;
@@ -137,6 +138,7 @@ class Part final : public ScoreElement {
       void setColor(int value) { _color = value; }
 
       QVariant getProperty(Pid) const override;
+      QVariant propertyDefault(Pid) const override;
       bool setProperty(Pid, const QVariant&) override;
 
       int lyricCount() const;

@@ -99,7 +99,8 @@ Part* Part::masterPart()
 bool Part::readProperties(XmlReader& e)
       {
       const QStringRef& tag(e.name());
-      if (tag == "Staff") {
+      if (tag == propertyName(Pid::PEDAL_PLAYBACK)) readProperty(e, Pid::PEDAL_PLAYBACK);
+      else if (tag == "Staff") {
             Staff* staff = new Staff(score());
             staff->setPart(this);
             score()->staves().push_back(staff);
@@ -152,6 +153,7 @@ void Part::read(XmlReader& e)
 void Part::write(XmlWriter& xml) const
       {
       xml.stag(this);
+      writeProperty(xml, Pid::PEDAL_PLAYBACK);
       for (const Staff* staff : _staves)
             staff->write(xml);
       if (!_show)
@@ -467,9 +469,15 @@ void Part::setPlainShortNameAll(const QString& s)
 //   getProperty
 //---------------------------------------------------------
 
+QVariant Part::propertyDefault(Pid id) const
+{
+    return id == Pid::PEDAL_PLAYBACK ? QVariant(QString()) : ScoreElement::propertyDefault(id);
+}
+
 QVariant Part::getProperty(Pid id) const
       {
       switch (id) {
+            case Pid::PEDAL_PLAYBACK: return _pedalPlayback;
             case Pid::VISIBLE:
                   return QVariant(_show);
             case Pid::USE_DRUMSET:
@@ -488,6 +496,9 @@ QVariant Part::getProperty(Pid id) const
 bool Part::setProperty(Pid id, const QVariant& property)
       {
       switch (id) {
+            case Pid::PEDAL_PLAYBACK:
+                  _pedalPlayback = property.toString(); score()->setPlaylistDirty();
+                  return true;
             case Pid::VISIBLE:
                   setShow(property.toBool());
                   break;

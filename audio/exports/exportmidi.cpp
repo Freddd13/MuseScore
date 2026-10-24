@@ -13,6 +13,7 @@
 //=============================================================================
 
 #include "exportmidi.h"
+#include "libmscore/rendermidi.h"
 
 #include "audio/midi/midifile.h"
 #include "audio/midi/event.h"
@@ -259,7 +260,15 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
             tracks.append(MidiTrack());
 
       EventMap events;
-      cs->renderMidi(&events, false, midiExpandRepeats, synthState);
+      if (options.writtenPedal) {
+            auto master = cs->masterScore(); const bool previous = master->expandRepeats();
+            master->setExpandRepeats(midiExpandRepeats);
+            MidiRenderer::Context context(synthState); context.metronome = false;
+            context.renderHarmony = true; context.pedalPlayback = false;
+            MidiRenderer(cs).renderScore(&events, context);
+            master->setExpandRepeats(previous);
+            }
+      else cs->renderMidi(&events, false, midiExpandRepeats, synthState);
 
       pauseMap.calculate(cs);
       writeHeader(tempoTrack);

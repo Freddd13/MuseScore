@@ -9,6 +9,7 @@
 #include "libmscore/textline.h"
 #include "libmscore/tempoexpression.h"
 #include "libmscore/pedal.h"
+#include "libmscore/pedalplayback.h"
 #include "libmscore/spanner.h"
 #include "libmscore/staff.h"
 #include "libmscore/part.h"
@@ -53,6 +54,27 @@ class TempoBoundary : public UndoCommand {
       };
 }
 namespace ParameterEdit {
+bool pedalPlayback(Score* score, Part* part, Pedal* target, const PedalPlayback::Settings& settings, bool inherit, QString* error)
+{
+    if (!editable(score)) { if (error) *error = QObject::tr("请停止播放后调整踏板方式。"); return false; }
+    if (!part || part->score() != score || (target && target->part() != part)) return false;
+    const auto text = inherit && target ? QString() : PedalPlayback::encode(settings);
+    auto master = score->masterScore();
+    if (target) {
+        if (target->getProperty(Pid::PEDAL_PLAYBACK).toString() == text) return false;
+        master->startCmd(); target->undoChangeProperty(Pid::PEDAL_PLAYBACK, text); master->endCmd();
+    }
+    else {
+        auto owner = part->masterPart();
+        if (owner->getProperty(Pid::PEDAL_PLAYBACK).toString() == text) return false;
+        master->startCmd();
+        for (auto linkedScore : master->scoreList()) for (auto linkedPart : linkedScore->parts())
+            if (linkedPart->masterPart() == owner) master->undo(new ChangeProperty(linkedPart, Pid::PEDAL_PLAYBACK, text, PropertyFlags::NOSTYLE));
+        master->endCmd();
+    }
+    return true;
+}
+
 static bool velocitiesImpl(Score* score, const QMap<Note*, VelocityEdit>& edits,bool ownCommand,bool dryRun)
       {
       if (!editable(score)) return false;

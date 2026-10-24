@@ -189,6 +189,12 @@ class TestPerformanceEditor : public QObject, public MTest {
       Note* noteAt(Score* score, int tick = 480, int track = 0)
             { return toChord(score->tick2segment(Fraction::fromTicks(tick), false, SegmentType::ChordRest)->element(track))->notes().front(); }
    private slots:
+      void pedalSchedule106();
+      void pedalExportChoice106();
+      void pedalPlaybackChunked106();
+      void pedalPlaybackLinked106();
+      void pedalPlaybackPersistence106();
+      void pedalPlaybackWindow106();
       void initTestCase() { initMTest(); QVERIFY(_directory.isValid()); }
       void cleanupTestCase() { delete Ms::mscore; Ms::mscore = nullptr; }
       void integerPercentAndNearestConversion()
@@ -1212,6 +1218,7 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "writing_103_tests.inc"
 #include "writing_104_tests.inc"
 #include "pedal_105_tests.inc"
+#include "pedal_106_tests.inc"
 #include "expression_095_tests.inc"
 #include "expression_096_tests.inc"
 #include "expression_097_tests.inc"

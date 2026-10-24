@@ -457,3 +457,8 @@ AI读谱与取图安排	personal/docs/AI_WORKFLOW_REVIEW_20261024.md	当前实�
 踏板范围绘制	mscore/performanceeditor/parameteredit.cpp	bool paintPedal	332	画踩下段与抬起间隙、分开、删除和一次撤销	pedalGapFillSplitLinked105 / pedalPaintInstrumentScope105
 踏板端点与取点	mscore/performanceeditor/performancecontrols.cpp	Pedal* PerformanceEditor::pedalHit	92	相接端点、整体移动与键盘微调	pedalAdjacentHandles105 / pedalGuiPaintMoveDelete105
 踏板谱表筛选	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::rebuildFilter	41	上下谱表共用踏板、筛选后清除隐藏目标	pedalGuiPaintMoveDelete105 / pedalStripAndInterruptedGesture105
+踏板播放时序	libmscore/pedalplayback.h	inline QVector<Span> schedule	42	相接间隙、实际起音、短段与明确空隙	pedalSchedule106
+踏板演奏事件	libmscore/pedalplaybackrender.h	inline QSet<const Spanner*> render	19	分块、反复、连续控制与原有路径	pedalPlaybackChunked106
+踏板设置保存	mscore/performanceeditor/parameteredit.cpp	bool pedalPlayback	57	整架乐器、单段、分谱与撤销	pedalPlaybackPersistence106 / pedalPlaybackLinked106
+踏板播放窗口	mscore/performanceeditor/performancecontrols.cpp	void PerformanceEditor::showPedalPlayback	233	自然宽度、主题及保存反馈	pedalPlaybackWindow106
+导出原谱踏板	audio/exports/exportmidi.cpp	if (options.writtenPedal)	263	原谱／当前演奏踏板与导出副本	pedalExportChoice106

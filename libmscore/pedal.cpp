@@ -108,7 +108,8 @@ void Pedal::read(XmlReader& e)
             e.addSpanner(e.intAttribute("id", -1), this);
       while (e.readNextStartElement()) {
             const QStringRef& tag(e.name());
-            if (readStyledProperty(e, tag))
+            if (tag == propertyName(Pid::PEDAL_PLAYBACK)) readProperty(e, Pid::PEDAL_PLAYBACK);
+            else if (readStyledProperty(e, tag))
                   ;
             else if (!TextLineBase::readProperties(e))
                   e.unknown();
@@ -132,6 +133,7 @@ void Pedal::write(XmlWriter& xml) const
       if (!xml.canWrite(this))
             return;
       xml.stag(this);
+      writeProperty(xml, Pid::PEDAL_PLAYBACK);
 
       for (auto i : {
          Pid::END_HOOK_TYPE,
@@ -175,6 +177,7 @@ LineSegment* Pedal::createLineSegment()
 QVariant Pedal::propertyDefault(Pid propertyId) const
       {
       switch (propertyId) {
+            case Pid::PEDAL_PLAYBACK: return QString();
             case Pid::LINE_WIDTH:
                   return score()->styleP(Sid::pedalLineWidth);    // return point, not spatium
 
@@ -314,6 +317,17 @@ QPointF Pedal::linePos(Grip grip, System** sys) const
       *sys = s;
       return QPointF(x, 0);
       }
+
+QVariant Pedal::getProperty(Pid id) const
+{
+    return id == Pid::PEDAL_PLAYBACK ? QVariant(_playbackData) : TextLineBase::getProperty(id);
+}
+bool Pedal::setProperty(Pid id, const QVariant& value)
+{
+    if (id != Pid::PEDAL_PLAYBACK) return TextLineBase::setProperty(id, value);
+    _playbackData = value.toString(); score()->setPlaylistDirty();
+    triggerLayout(); return true;
+}
 
 }
 

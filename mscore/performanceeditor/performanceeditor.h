@@ -188,6 +188,8 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QComboBox* _pedalGrid = nullptr;
       QComboBox* _pedalTool = nullptr;
       QToolButton* _pedalDelete = nullptr;
+      QToolButton* _pedalPlaybackButton = nullptr;
+      void showPedalPlayback();
       Pedal* _selectedPedal = nullptr;
       bool _selectedPedalOnScore = false;
       int _pedalGrip = -1, _pedalOriginalFrom = 0, _pedalOriginalUntil = 0;

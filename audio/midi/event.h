@@ -253,6 +253,7 @@ class NPlayEvent : public PlayEvent {
       int _origin = -1;
       int _discard = 0;
       bool _portamento = false;
+      bool _generatedPedal = false;
 
    public:
       NPlayEvent() : PlayEvent() {}
@@ -275,6 +276,8 @@ class NPlayEvent : public PlayEvent {
             { return _noteEventIndex;  }
       void setNoteEventIndex(int index)
             { _noteEventIndex = index; }
+      bool generatedPedal() const { return _generatedPedal; }
+      void setGeneratedPedal(bool value) { _generatedPedal = value; }
       int nominalTick() const { return _nominalTick; }
       void setNominalTick(int tick) { _nominalTick = tick; }
 

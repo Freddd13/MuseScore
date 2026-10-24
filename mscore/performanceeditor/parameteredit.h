@@ -6,6 +6,8 @@
 namespace Ms {
 class Score;
 class Pedal;
+class Part;
+namespace PedalPlayback { struct Settings; }
 class TextLine;
 class TempoText;
 struct VelocityEdit {
@@ -28,6 +30,7 @@ bool pedal(Score*, int track, int from, int until, Pedal* target, QString* error
 bool paintPedal(Score*, int track, int from, int until, bool down, QString* error = nullptr);
 bool splitPedal(Score*, Pedal*, int tick, QString* error = nullptr);
 bool removePedal(Score*, Pedal*, QString* error = nullptr);
+bool pedalPlayback(Score*, Part*, Pedal*, const PedalPlayback::Settings&, bool inherit, QString* error = nullptr);
 }
 }
 #endif

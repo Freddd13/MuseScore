@@ -27,7 +27,7 @@ struct MidiGateOptions {
       double releaseLeadMs=60.;
       PianoHands::Limits hands[2];
       };
-struct MidiExportOptions { bool crop = false; MidiGateOptions gate; };
+struct MidiExportOptions { bool crop = false; MidiGateOptions gate; bool writtenPedal = false; };
 struct MidiGateNote {
       QString id, partName;
       int track = 0, offOrdinal = -1, staff = -1, voice = -1;

@@ -105,7 +105,7 @@ class MidiRenderer {
       void updateState();
 
       void renderStaffChunk(const Chunk&, EventMap* events, const StaffContext& sctx);
-      void renderSpanners(const Chunk&, EventMap* events);
+      void renderSpanners(const Chunk&, EventMap* events, const EventMap* lookahead = nullptr, bool pianoPedal = true);
       void renderMetronome(const Chunk&, EventMap* events);
       void renderMetronome(EventMap* events, Measure const * m, const Fraction& tickOffset);
 
@@ -121,6 +121,7 @@ class MidiRenderer {
             const SynthesizerState& synthState;
             bool metronome{true};
             bool renderHarmony{false};
+            bool pedalPlayback{true};
             Context(const SynthesizerState& ss) : synthState(ss) {}
             };
 

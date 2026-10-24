@@ -38,6 +38,7 @@
 #include "playbackenvelope.h"
 #include "part.h"
 #include "rendermidi.h"
+#include "pedalplaybackrender.h"
 #include "repeat.h"
 #include "repeatlist.h"
 #include "score.h"
@@ -1163,15 +1164,17 @@ void MidiRenderer::renderStaffChunk(const Chunk& chunk, EventMap* events, const 
 //   renderSpanners
 //---------------------------------------------------------
 
-void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
+void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events, const EventMap* lookahead, bool pianoPedal)
       {
       const int tickOffset = chunk.tickOffset();
       const int tick1 = chunk.tick1();
       const int tick2 = chunk.tick2();
 
+      const auto handledPedals = pianoPedal ? PedalPlayback::render(score, events, lookahead, tick1, tick2, tickOffset) : QSet<const Spanner*>{};
       std::map<int, std::vector<std::pair<int, std::pair<bool, int> > > > channelPedalEvents;
       for (const auto& sp : score->spannerMap().map()) {
             Spanner* s = sp.second;
+            if (handledPedals.contains(s)) continue;
 
             int staff = s->staffIdx();
             int idx = s->staff()->channel(s->tick(), 0);
@@ -2641,8 +2644,21 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
             }
       events->fixupMIDI();
 
+      // Prepare one following measure only when a pedal repedal needs its actual attack.
+      // This keeps chunked playback and full export on the same onset data.
+      EventMap pedalLookahead;
+      const bool pianoPedal = ctx.pedalPlayback && PedalPlayback::enabled(score);
+      if (pianoPedal && chunk.endMeasure()) {
+            auto next = chunk.endMeasure();
+            score->createPlayEvents(next, next->nextMeasure());
+            for (auto staff : score->staves()) {
+                  StaffContext sctx; sctx.staff = staff; sctx.method = renderMethod;
+                  sctx.cc = cc; sctx.renderHarmony = ctx.renderHarmony;
+                  renderStaffChunk(Chunk(chunk.tickOffset(), next, next), &pedalLookahead, sctx);
+                  }
+            }
       // create sustain pedal events
-      renderSpanners(chunk, events);
+      renderSpanners(chunk, events, &pedalLookahead, pianoPedal);
 
       if (ctx.metronome)
             renderMetronome(chunk, events);

@@ -14,6 +14,17 @@
 #include "mscore/seq.h"
 #include <QComboBox>
 #include <algorithm>
+#include "libmscore/pedalplayback.h"
+#include "mscore/musescore.h"
+#include <QSignalBlocker>
+#include <QApplication>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
+#include <QSpinBox>
+#include <QCheckBox>
+#include <QLabel>
+#include <QPushButton>
 namespace Ms {
 bool PerformanceEditor::staffEnabled(int track) const
       { return !_excludedStaves.contains(track / VOICES); }
@@ -219,4 +230,69 @@ QString PerformanceEditor::parameterTooltip(QPointF point, bool onScore) const
           .arg(position).arg(target->staffIdx() + 1).arg(grip == 0 ? tr("踩下端") : grip == 1 ? tr("抬起端") : tr("踏板段，拖动可整体移动"));
       return tr("%1 · %2\n水平拖动可画踩下段或抬起间隙；分开工具在段内点一下。").arg(position, _pedalTool->currentText());
       }
+void PerformanceEditor::showPedalPlayback()
+{
+    if (!_score || _score->nstaves() == 0) return;
+    if (auto existing = findChild<QDialog*>("performancePedalPlaybackDialog")) { existing->show(); existing->raise(); return; }
+    auto originalScore = _score;
+    auto part = _selectedPedal ? _selectedPedal->part() : _score->staff(qBound(0, _contextTrack / VOICES, _score->nstaves()-1))->part();
+    auto target = _selectedPedal;
+    auto dialog = new QDialog(this, Qt::Window); dialog->setObjectName("performancePedalPlaybackDialog");
+    dialog->setAttribute(Qt::WA_DeleteOnClose); dialog->setWindowTitle(tr("踏板播放 · %1").arg(part->partName()));
+    const auto theme = mscore ? mscore->palette() : QApplication::palette();
+    dialog->setPalette(theme); dialog->setFont(QApplication::font());
+    dialog->setStyleSheet(QString("QDialog {background:%1;color:%2;} QLabel,QCheckBox {color:%2;} QComboBox,QSpinBox,QPushButton {background:%3;color:%2;} QComboBox QAbstractItemView {background:%3;color:%2;selection-background-color:%4;selection-color:%5;}")
+        .arg(theme.color(QPalette::Window).name(), theme.color(QPalette::WindowText).name(), theme.color(QPalette::Base).name(), theme.color(QPalette::Highlight).name(), theme.color(QPalette::HighlightedText).name()));
+    auto form = new QFormLayout(dialog); form->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
+    auto scope = new QComboBox(dialog); scope->setObjectName("pedalPlaybackScope");
+    scope->addItem(tr("这架乐器的全部踏板")); if (target) scope->addItem(tr("选中的踏板段"));
+    if (target) scope->setCurrentIndex(1);
+    auto mode = new QComboBox(dialog); mode->setObjectName("pedalPlaybackMode");
+    auto lift = new QSpinBox(dialog); lift->setObjectName("pedalPlaybackReleaseMs"); lift->setRange(1, 300); lift->setSuffix(tr(" ms"));
+    auto down = new QSpinBox(dialog); down->setObjectName("pedalPlaybackDownMs"); down->setRange(0, 500); down->setSuffix(tr(" ms"));
+    auto first = new QCheckBox(tr("开始处也在音后踩下"), dialog); first->setObjectName("pedalPlaybackDelayFirst");
+    auto explanation = new QLabel(tr("钢琴方式在相接踏板之间安排抬起间隙，再于起音后踩下。谱上已画出的空隙继续保留。"), dialog);
+    explanation->setWordWrap(true); explanation->setMaximumWidth(400);
+    auto message = new QLabel(dialog); message->setWordWrap(true); message->setMaximumWidth(400); message->setObjectName("pedalPlaybackResult");
+    form->addRow(tr("应用于"), scope); form->addRow(tr("方式"), mode); form->addRow(tr("抬起间隔"), lift);
+    form->addRow(tr("音后踩下"), down); form->addRow(first); form->addRow(explanation); form->addRow(message);
+    auto buttons = new QDialogButtonBox(QDialogButtonBox::Apply | QDialogButtonBox::Close, dialog);
+    form->addRow(buttons); buttons->button(QDialogButtonBox::Apply)->setText(tr("保存设置")); buttons->button(QDialogButtonBox::Close)->setText(tr("关闭"));
+    auto updateEnabled = [=] { const bool active = mode->currentData().toInt() == 1; lift->setEnabled(active); down->setEnabled(active); first->setEnabled(active); };
+    auto available = [=] {
+        if (_score != originalScore || !_score->parts().contains(part)) return false;
+        if (scope->currentIndex() == 1) {
+            const auto& map = _score->spannerMap().map();
+            return std::any_of(map.cbegin(), map.cend(), [target](const auto& row) { return row.second == target; });
+        }
+        return true;
+    };
+    auto load = [=] {
+        if (!available()) { message->setText(tr("乐谱或所选踏板已改变，请重新打开当前对象的设置。")); return; }
+        const bool own = scope->currentIndex() == 1;
+        const auto data = own ? target->getProperty(Pid::PEDAL_PLAYBACK).toString() : PedalPlayback::partData(part);
+        const auto settings = own ? PedalPlayback::effective(target) : PedalPlayback::decode(data);
+        QSignalBlocker blocked(mode); mode->clear();
+        if (own) mode->addItem(tr("跟随这架乐器"), -1);
+        mode->addItem(tr("SF2原有方式"), 0); mode->addItem(tr("钢琴换踏板"), 1);
+        mode->setCurrentIndex(mode->findData(own && data.isEmpty() ? -1 : settings.piano ? 1 : 0));
+        lift->setValue(settings.releaseMs); down->setValue(settings.downMs); first->setChecked(settings.delayFirst); updateEnabled();
+    };
+    connect(scope, QOverload<int>::of(&QComboBox::currentIndexChanged), dialog, load);
+    connect(mode, QOverload<int>::of(&QComboBox::currentIndexChanged), dialog, updateEnabled);
+    connect(buttons->button(QDialogButtonBox::Close), &QPushButton::clicked, dialog, &QDialog::close);
+    connect(buttons->button(QDialogButtonBox::Apply), &QPushButton::clicked, dialog, [=] {
+        if (!available()) { message->setText(tr("乐谱或所选踏板已改变，请重新打开当前对象的设置。")); return; }
+        auto selected = scope->currentIndex() == 1 ? target : nullptr;
+        PedalPlayback::Settings settings; settings.piano = mode->currentData().toInt() == 1;
+        settings.releaseMs = lift->value(); settings.downMs = down->value(); settings.delayFirst = first->isChecked();
+        QString error; _committing = true;
+        const bool changed = ParameterEdit::pedalPlayback(_score, part, selected, settings, mode->currentData().toInt() == -1, &error);
+        _committing = false;
+        if (changed) { _dirty = true; scheduleRefresh(); if (mscore) mscore->endCmd(); }
+        message->setText(!error.isEmpty() ? error : tr("设置已保存 · Ctrl+Z撤销"));
+    });
+    load(); dialog->show();
+}
+
 }

@@ -43,6 +43,7 @@ class PedalSegment final : public TextLineBaseSegment {
 //---------------------------------------------------------
 
 class Pedal final : public TextLineBase {
+      QString _playbackData;
 
       Sid getPropertyStyle(Pid) const override;
 
@@ -55,6 +56,8 @@ class Pedal final : public TextLineBase {
       Pedal* clone() const override     { return new Pedal(*this);   }
       ElementType type() const override { return ElementType::PEDAL; }
 
+      QVariant getProperty(Pid) const override;
+      bool setProperty(Pid, const QVariant&) override;
       void read(XmlReader&) override;
       void write(XmlWriter& xml) const override;
 

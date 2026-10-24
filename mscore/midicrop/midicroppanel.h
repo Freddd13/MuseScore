@@ -13,6 +13,7 @@ class MidiCropPanel : public QWidget {
       Q_OBJECT
       QCheckBox* _enabled;
       QCheckBox* _original;
+      QCheckBox* _writtenPedal;
       MidiGateOptions _gate;
       int _fromMeasure=0,_untilMeasure=0;
       std::function<QList<Score*>()> _scores;
@@ -32,6 +33,7 @@ class MidiCropPanel : public QWidget {
       MidiCropPanel(QWidget*,std::function<QList<Score*>()>);
       bool enabled() const;
       bool includeOriginal() const;
+      bool usesWrittenPedal() const;
       void clearSessions();
       void savePreferences() const;
       MidiExportOptions options(Score*) const;

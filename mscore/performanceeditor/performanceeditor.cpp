@@ -141,6 +141,11 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       setComponentToolIcon(_pedalDelete, "delete"); _pedalDelete->setToolTip(tr("删除选中的踏板段，Delete也可使用；Ctrl+Z撤销。"));
       _pedalDelete->hide(); _pedalDelete->setEnabled(false); row->addWidget(_pedalDelete);
       connect(_pedalDelete, &QToolButton::clicked, this, &PerformanceEditor::deleteSelectedPedal);
+      _pedalPlaybackButton = new QToolButton(this); _pedalPlaybackButton->setObjectName("performancePedalPlayback");
+      _pedalPlaybackButton->setText(tr("踏板播放…")); _pedalPlaybackButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+      setComponentToolIcon(_pedalPlaybackButton, "settings"); row->addWidget(_pedalPlaybackButton); _pedalPlaybackButton->hide();
+      _pedalPlaybackButton->setToolTip(tr("选择SF2原有方式或钢琴换踏板，调整抬起与音后踩下的时间。"));
+      connect(_pedalPlaybackButton, &QToolButton::clicked, this, &PerformanceEditor::showPedalPlayback);
       row->setAlignment(Qt::AlignLeft);
       toolLayout->addLayout(row);
       _playButton = new QToolButton(this); _playButton->setObjectName("performancePlay"); _playButton->setText(tr("播放"));
@@ -306,6 +311,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             const bool velocity = _parameter->currentIndex() == 0;
             _pedalGrid->setVisible(_parameter->currentIndex() == 2);
             _pedalTool->setVisible(_parameter->currentIndex() == 2); _pedalDelete->setVisible(_parameter->currentIndex() == 2);
+            _pedalPlaybackButton->setVisible(_parameter->currentIndex() == 2);
             _tool->setVisible(_parameter->currentIndex() != 2); _tool->setEnabled(_parameter->currentIndex() != 2); syncPedalSelection();
             _tool->setItemText(0, _parameter->currentIndex() == 1 ? tr("节点 · 点按添加") : tr("拖动"));
             _parameterHint->setText(_parameter->currentIndex() == 1 ? tr("节点：空白点按添加，上下拖动改 BPM。rit.：拖首尾圆点或曲率菱形，右键解除关联后可自由画速度。时间尺定位播放。")
