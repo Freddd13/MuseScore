@@ -258,6 +258,13 @@ public:
       *error = QStringLiteral("音源未能开始处理声音。");
     return processing;
   }
+  bool resetAudio() override {
+    if (!processing || !active)
+      return false;
+    processor->setProcessing(false);
+    processing = processor->setProcessing(true) == kResultOk;
+    return processing;
+  }
   bool process(int count, const float *left, const float *right, float *outLeft,
                float *outRight, const Midi *input, int length,
                const Clock &clock) override {

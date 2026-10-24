@@ -168,6 +168,13 @@ class TestPluginHost : public QObject {
       void toolWindowScreenAndFullscreenRoundTrip();
       void spectrumButtonsAndFirstOpenContent();
       void cfxLiveStateKeepsEditorInstance();
+      void sourceSessionReuse107();
+      void sourceSessionEffectTail107();
+      void sourceSessionEffectTail107_data();
+      void sourceSessionPanel107();
+      void sourceSessionPanel107_data();
+      void sourceSessionPianos107_data();
+      void sourceSessionPianos107();
       void pedalRealPianoOutput106_data();
       void pedalRealPianoOutput106();
       void personalToolWindowsRemainIndependent();
@@ -1396,6 +1403,7 @@ class TestPluginHost : public QObject {
 #include "arrangement_083_tests.inc"
 #include "vst_088_tests.inc"
 #include "pedal_106_audio_tests.inc"
+#include "source_sessions_107_tests.inc"
 #include "layout_089_tests.inc"
 #include "components_092_tests.inc"
 #include "workspace_093_tests.inc"

@@ -468,3 +468,7 @@ AI读谱与取图安排	personal/docs/AI_WORKFLOW_REVIEW_20261024.md	当前实�
 手动踏板保护	libmscore/pedalplaybackrender.h	inline QSet<const Part*> retainedParts	31	整谱手动来源用于分块与完整导出	pedalManualControllersAcrossChunks106
 导出踏板试听	mscore/midicrop/gateaudition.cpp	GateAudition prepareGateAudition	11	原新长度均读取本次选择的踏板	pedalExportChoice106
 三种钢琴声音	mtest/mscore/pluginhost/pedal_106_audio_tests.inc	pedalRealPianoOutput106	1	SF2、Pianoteq和CFX实际输出六份WAV	pedalRealPianoOutput106
+换谱音源保留	audio/vst/rack.cpp	Rack::selectSession / Rack::load	350	按谱复用、关闭与闲置释放	sourceSessionReuse107 / sourceSessionPanel107
+效果尾音清理	audio/vst/rack.cpp	Unit::resetAudio / Impl::quiet	64	保留预设、清理处理历史与短延迟	sourceSessionEffectTail107
+独立音源重置	audio/vst/hostmain.cpp	resetAudio	168	取消旧块、松键与踏板、保留参数	sourceSessionEffectTail107 / sourceSessionPianos107
+音源保留入口	mscore/workflow/vstpanel.cpp	selectSourceSession / refreshRetained	43	本谱所属、默认保留设置与闲置数量	sourceSessionPanel107

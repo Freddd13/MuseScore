@@ -60,6 +60,9 @@ int main(int argc, char **argv) {
         if (!packet)
           break;
         std::lock_guard<std::mutex> guard(pluginMutex);
+        // A control-thread reset may cancel a packet selected before this lock.
+        if (InterlockedCompareExchange(&packet->status, 0, 0) != 1)
+          continue;
         audioBusy = true;
         if (plugin && packet->count > 0 && packet->count <= BridgeFrames &&
             packet->eventCount >= 0 && packet->eventCount <= BridgeMidi &&
@@ -161,6 +164,32 @@ int main(int argc, char **argv) {
             }
             result["state"] =
                 QString::fromLatin1(plugin->state(&error).toBase64());
+          } else if (op == "resetAudio") {
+            for (auto &packet : bridge.memory->packets) {
+              if (InterlockedCompareExchange(&packet.status, 0, 0) == 1)
+                for (int i = 0; i < packet.parameterCount; ++i)
+                  plugin->setParameter(packet.parameters[i].id, packet.parameters[i].value);
+              InterlockedExchange(&packet.status, 0);
+            }
+            for (const auto &v : command["parameters"].toList()) {
+              const auto p = v.toMap();
+              plugin->setParameter(p["id"].toUInt(), p["value"].toDouble());
+            }
+            // The last partial bridge block can contain note/pedal releases.
+            // Deliver a complete release here before clearing the pipeline.
+            std::array<Midi, 132> releases{};
+            releases[0] = {0, 0xb0, 64, 0};
+            releases[1] = {0, 0xb0, 66, 0};
+            releases[2] = {0, 0xb0, 123, 0};
+            releases[3] = {0, 0xb0, 120, 0};
+            for (int pitch = 0; pitch < 128; ++pitch)
+              releases[pitch + 4] = {0, 0x80, static_cast<unsigned char>(pitch), 64};
+            std::array<float, BridgeFrames> zero{}, left{}, right{};
+            Clock clock;
+            clock.rate = command.value("rate", 44100).toDouble();
+            plugin->process(64, zero.data(), zero.data(), left.data(), right.data(),
+                            releases.data(), int(releases.size()), clock);
+            result["ok"] = plugin->resetAudio();
           } else if (op == "restore")
             result["ok"] = plugin->restore(
                 QByteArray::fromBase64(command["state"].toByteArray()), &error);

@@ -37,6 +37,22 @@ VstSynth *backend() {
   return synti ? static_cast<VstSynth *>(synti->synthesizer("KumoVST"))
                : nullptr;
 }
+bool retainOpenSources() {
+  return personalFeaturesEnabled() && QSettings().value("kumo/vst/retainOpenScores",false).toBool();
+}
+void selectSourceSession(Score* score) {
+  auto engine=backend(); if (!engine) return;
+  if (!score) { engine->rack().selectSession({}, {}, false); return; }
+  score=score->masterScore();
+  auto id=score->property("kumoVstSessionId").toString();
+  if (id.isEmpty()) {
+    id=QUuid::createUuid().toString(QUuid::WithoutBraces); score->QObject::setProperty("kumoVstSessionId",id);
+    QObject::connect(score,&QObject::destroyed,qApp,[id] {
+      if (auto engine=backend()) engine->rack().releaseSession(id);
+    });
+  }
+  engine->rack().selectSession(id,score->name(),retainOpenSources());
+}
 SynthesizerState withConfiguration(SynthesizerState state,
                                    const QVariantMap &value) {
   for (auto it = state.begin(); it != state.end();)
@@ -106,7 +122,9 @@ class Panel final : public QDockWidget {
   QPushButton *scan, *forget, *choose, *removeSource, *restoreSource, *openSource, *addEffect,
       *removeEffect, *up, *down, *openEffect, *loadPreset, *savePreset, *effectLoadPreset,
       *effectSavePreset;
-  QCheckBox *isolate;
+  QCheckBox *isolate, *retainSources;
+  QPushButton *releaseInactive;
+  QLabel *retainedState;
   QProcess scanner;
   QTimer watch;
   QVariantList known;
@@ -474,6 +492,7 @@ class Panel final : public QDockWidget {
     auto c = selected();
     const int id = selectedSlot();
     auto engine = backend();
+    refreshRetained();
     const auto patch = c && synti ? synti->getPatchInfo(c->synti(), c->bank(), c->program()) : nullptr;
     const bool externalSource = c && c->synti() == "KumoVST" &&
         unit(id, -1)["plugin"].toMap()["format"].toString() != "SF2";
@@ -528,6 +547,16 @@ class Panel final : public QDockWidget {
     updating = false;
     refreshVstParameterWindows();
   }
+  void refreshRetained() {
+    QSignalBlocker blocked(retainSources); retainSources->setChecked(retainOpenSources());
+    const auto rows=backend()?backend()->rack().retainedSessions():QVariantList{};
+    int instances=0; QStringList names;
+    for (const auto& row:rows) { const auto value=row.toMap(); instances+=value["instances"].toInt(); names.append(value["label"].toString()); }
+    releaseInactive->setEnabled(!rows.isEmpty());
+    retainedState->setText(rows.isEmpty()?tr("当前没有闲置音源")
+        :tr("保留%1份谱的%2个音源／效果").arg(rows.size()).arg(instances));
+    retainedState->setToolTip(names.join('\n'));
+  }
   void persistEdits() {
     if (!score || !backend())
       return;
@@ -570,6 +599,25 @@ public:
     current->setWordWrap(true);
     current->setFixedHeight(fontMetrics().lineSpacing() * 2);
     sourceLayout->addWidget(current);
+    retainSources=new QCheckBox(tr("换谱时保留已加载音源"),body);
+    retainSources->setObjectName("kumoVstRetainSources");
+    retainSources->setToolTip(tr("返回已打开的乐谱时复用音源与效果。闲置时停止声音处理，关闭乐谱后释放。"));
+    sourceLayout->addWidget(retainSources);
+    auto retentionRow=new ControlFlowLayout;
+    releaseInactive=new QPushButton(tr("释放闲置音源"),body);
+    releaseInactive->setObjectName("kumoVstReleaseInactive"); setComponentToolIcon(releaseInactive,"close");
+    retainedState=new QLabel(body); retainedState->setObjectName("kumoVstRetainedState");
+    retentionRow->addWidget(releaseInactive); retentionRow->addWidget(retainedState); sourceLayout->addLayout(retentionRow);
+    connect(retainSources,&QCheckBox::toggled,this,[this](bool enabled) {
+      QSettings().setValue("kumo/vst/retainOpenScores",enabled); selectSourceSession(score);
+      if (!enabled && backend()) backend()->rack().releaseInactiveSessions();
+      state->setText(enabled?tr("已开启：换谱保留音源，返回时继续使用；关谱后释放。")
+          :tr("已关闭：闲置音源已释放，换谱沿用原有加载方式。")); refreshRetained();
+    });
+    connect(releaseInactive,&QPushButton::clicked,this,[this] {
+      if (backend()) backend()->rack().releaseInactiveSessions();
+      state->setText(tr("闲置音源已释放，当前乐谱的声音继续保留。")); refreshRetained();
+    });
     layout->addWidget(sourceGroup);
     auto libraryGroup = new QGroupBox(tr("添加或更换插件"), body);
     libraryGroup->setObjectName("kumoVstLibraryGroup");
@@ -961,6 +1009,7 @@ public:
       } else if (syncChannels())
         refresh();
       persistEdits();
+      refreshRetained();
       if (backend() && (backend()->revision() != lastRevision ||
                         backend()->problems().join("\n") != lastProblems)) {
         lastProblems = backend()->problems().join("\n");
@@ -1027,6 +1076,7 @@ void routeVstChannels(MasterSynthesizer *master, Score *score) {
 }
 void restoreVstForScore(Score *score) {
   if (auto engine = backend()) {
+    selectSourceSession(score);
     if (score)
       engine->setState(
           score->masterScore()->synthesizerState().group("KumoVST"));

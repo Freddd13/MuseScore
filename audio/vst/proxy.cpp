@@ -20,6 +20,7 @@ class Proxy final : public Plugin {
   BridgeHandles bridge;
   Queue<Parameter, 1024> parametersToAudio;
   bool offline = false;
+  double sampleRate = 44100;
   int pluginLatency = 0;
   qint64 pluginTail = 0, serial = 0;
   int fill = 0;
@@ -130,6 +131,7 @@ public:
       CloseHandle(job);
   }
   bool prepare(double rate, int, QString *error, bool value) override {
+    sampleRate = rate;
     offline = value;
     const auto key = QUuid::createUuid().toString(QUuid::Id128);
     if (!bridge.open(key, true)) {
@@ -191,6 +193,21 @@ public:
     preset = result["preset"].toString();
     parameterList = result["parameters"].toList();
     return result["ok"].toBool();
+  }
+  bool resetAudio() override {
+    QVariantList values;
+    Parameter p;
+    while (parametersToAudio.pop(p))
+      values.append(QVariantMap{{"id", p.id}, {"value", p.value}});
+    QString error;
+    const bool ok = rpc({{"op", "resetAudio"}, {"parameters", values},
+                         {"rate", sampleRate}}, &error)["ok"].toBool();
+    fill = 0;
+    serial = 0;
+    stage.count = stage.eventCount = stage.parameterCount = 0;
+    outputL.fill(0);
+    outputR.fill(0);
+    return ok;
   }
   bool restore(const QByteArray &value, QString *error) override {
     return rpc({{"op", "restore"},

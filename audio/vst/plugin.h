@@ -87,6 +87,9 @@ public:
   // is stopped.
   virtual bool prepare(double sampleRate, int maximumBlock, QString *error,
                        bool offline = false) = 0;
+  // Processing is stopped. Clear transient DSP history while retaining the
+  // instance, loaded samples and user parameters.
+  virtual bool resetAudio() { return true; }
   virtual bool restore(const QByteArray &, QString *error) = 0;
   virtual QByteArray state(QString *error) = 0;
   virtual int latency() const = 0;

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <thread>
+#include <map>
 namespace Ms {
 namespace VstHost {
 namespace {
@@ -56,6 +57,26 @@ struct Unit {
   int latency() const {
     return processor ? std::max(0, processor->latency()) : 0;
   }
+  bool resetAudio(const Clock &clock) {
+    dryDelay.clear();
+    if (!processor)
+      return true;
+    if (!processor->resetAudio())
+      return false;
+    // Also drain short fixed delays whose plugins keep history on suspend.
+    // This bounded preparation runs once on the control thread at a switch.
+    const std::array<float, Block> zero{};
+    for (int at = 0, remaining = std::min(Block, latency()) + 64;
+         at < remaining; at += Block) {
+      const int count = std::min(Block, remaining - at);
+      if (!processor->process(count, zero.data(), zero.data(), l.data(), r.data(),
+                              nullptr, 0, clock))
+        return false;
+    }
+    l.fill(0);
+    r.fill(0);
+    return true;
+  }
   QVariantMap save() {
     auto value = config;
     if (processor) {
@@ -100,6 +121,16 @@ struct Rack::Impl {
   Rack::InternalFactory factory;
   std::vector<std::unique_ptr<Slot>> slots;
   std::vector<std::unique_ptr<Unit>> master;
+  struct Stored {
+    QString label;
+    QVariantMap config;
+    double rate = 44100;
+    std::vector<std::unique_ptr<Slot>> slots;
+    std::vector<std::unique_ptr<Unit>> master;
+  };
+  std::map<QString, Stored> stored;
+  QString session, sessionLabel, nextSession, nextLabel;
+  bool retain = false, nextRetain = false;
   std::array<int, MaxChannels> banks{}, hi{}, lo{};
   std::array<float, MaxChannels> volumes{}, pans{};
   Queue<Message, 8192> queue;
@@ -274,6 +305,37 @@ struct Rack::Impl {
     return true;
   }
   void leave() { readers.fetch_sub(1, std::memory_order_release); }
+  bool quiet(bool closeEditors, int samples = 0) {
+    // Drain messages before closing this material; no queued key press may
+    // become a key press in the next score.
+    messages();
+    const Midi release[] = {{0,0xb0,64,0},{0,0xb0,66,0},{0,0xb0,123,0},{0,0xb0,120,0}};
+    Clock clock; clock.rate = rate; clock.offline = offline;
+    bool reset = true;
+    for (auto& slot : slots) {
+      std::array<Midi,132> notes{}; std::copy_n(release,4,notes.data()); int count=4;
+      for (int pitch=0; pitch<128; ++pitch) if (slot->held[pitch])
+        notes[count++]={0,0x80,static_cast<unsigned char>(pitch),64};
+      slot->held.fill(false); slot->count=0; slot->enabled=false;
+      std::fill_n(l.data(),samples,0); std::fill_n(r.data(),samples,0);
+      slot->source.process(samples,l.data(),r.data(),notes.data(),count,clock);
+      if (closeEditors) {
+        if (slot->source.processor) slot->source.processor->closeEditor();
+        for (auto& unit : slot->effects) if (unit->processor) unit->processor->closeEditor();
+        reset = slot->source.resetAudio(clock) && reset;
+        for (auto &unit : slot->effects)
+          reset = unit->resetAudio(clock) && reset;
+        slot->compensation.clear();
+      }
+    }
+    if (closeEditors) for (auto& unit : master) if (unit->processor) unit->processor->closeEditor();
+    if (closeEditors) {
+      for (auto &unit : master)
+        reset = unit->resetAudio(clock) && reset;
+      existingDelay.clear();
+    }
+    return reset;
+  }
 };
 Rack::Rack(bool offline, InternalFactory factory)
     : d(new Impl(offline, std::move(factory))) {}
@@ -291,6 +353,30 @@ void Rack::resume() {
 }
 bool Rack::load(const QVariantMap &value, double rate, QStringList *problems) {
   suspend();
+  if (d->rate != rate) d->stored.clear();
+  if (d->session != d->nextSession) {
+    const bool reset = d->quiet(true,64);
+    if (reset && d->retain && !d->offline && d->rate==rate && !d->session.isEmpty()
+        && (!d->slots.empty() || !d->master.empty())) {
+      Impl::Stored previous;
+      previous.label=d->sessionLabel; previous.config=d->config; previous.rate=d->rate;
+      previous.slots=std::move(d->slots); previous.master=std::move(d->master);
+      d->stored[d->session]=std::move(previous);
+    } else { d->slots.clear(); d->master.clear(); }
+    d->session=d->nextSession; d->sessionLabel=d->nextLabel; d->retain=d->nextRetain;
+    d->banks.fill(0); d->hi.fill(0); d->lo.fill(0); d->volumes.fill(1); d->pans.fill(0);
+    auto previous=d->stored.find(d->session);
+    if (previous!=d->stored.end()) {
+      const bool compatible=previous->second.rate==rate && sameConfiguration(previous->second.config,value);
+      if (compatible) {
+        d->slots=std::move(previous->second.slots); d->master=std::move(previous->second.master);
+        d->config=std::move(previous->second.config); d->rate=rate; d->stored.erase(previous);
+        d->recalculate(); resume(); return true;
+      }
+      d->stored.erase(previous);
+    }
+  }
+  if (d->rate != rate) { d->quiet(true,64); d->slots.clear(); d->master.clear(); }
   d->rate = rate;
   d->config = value;
   // Reuse unchanged instances; changing a different effect does not reload a
@@ -355,6 +441,26 @@ bool Rack::load(const QVariantMap &value, double rate, QStringList *problems) {
   d->recalculate();
   resume();
   return true;
+}
+void Rack::selectSession(const QString& id,const QString& label,bool retain) {
+  if (d->session.isEmpty() && d->nextSession.isEmpty() && !id.isEmpty()) d->session=id;
+  d->nextSession=id; d->nextLabel=label; d->nextRetain=retain && !d->offline;
+  if (d->session==id) { d->retain=d->nextRetain; d->sessionLabel=label; }
+}
+void Rack::releaseSession(const QString& id) {
+  d->stored.erase(id);
+  if (d->session==id) d->retain=false;
+  if (d->nextSession==id) d->nextRetain=false;
+}
+void Rack::releaseInactiveSessions() { d->stored.clear(); }
+QVariantList Rack::retainedSessions() const {
+  QVariantList result;
+  for (const auto& row : d->stored) {
+    int instances=int(row.second.master.size());
+    for (const auto& slot : row.second.slots) instances+=1+int(slot->effects.size());
+    result.append(QVariantMap{{"id",row.first},{"label",row.second.label},{"instances",instances}});
+  }
+  return result;
 }
 QVariantMap Rack::state() {
   suspend();
@@ -469,22 +575,7 @@ void Rack::silence(int c, bool immediate) {
 }
 void Rack::bindChannels(const QVector<int> &banks) {
   suspend();
-  d->messages();
-  const Midi release[] = {
-      {0, 0xb0, 64, 0}, {0, 0xb0, 66, 0}, {0, 0xb0, 123, 0}, {0, 0xb0, 120, 0}};
-  for (auto &s : d->slots) {
-    std::array<Midi, 132> messages{};
-    std::copy_n(release, 4, messages.data());
-    int used = 4;
-    for (int pitch = 0; pitch < 128; ++pitch)
-      if (s->held[pitch])
-        messages[used++] = {0, 0x80, static_cast<unsigned char>(pitch), 64};
-    s->held.fill(false);
-    s->source.process(0, d->l.data(), d->r.data(), messages.data(), used,
-                      Clock{});
-    s->count = 0;
-    s->enabled = false;
-  }
+  d->quiet(false);
   d->banks.fill(0);
   d->hi.fill(0);
   d->lo.fill(0);

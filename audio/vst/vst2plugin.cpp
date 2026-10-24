@@ -266,6 +266,15 @@ public:
     active = true;
     return true;
   }
+  bool resetAudio() override {
+    if (!active)
+      return false;
+    dispatch(72);
+    dispatch(effMainsChanged, 0, 0);
+    dispatch(effMainsChanged, 0, 1);
+    dispatch(71);
+    return true;
+  }
   bool process(int count, const float *left, const float *right, float *outLeft,
                float *outRight, const Midi *events, int length,
                const Clock &clock) override {

@@ -14,6 +14,10 @@ public:
   explicit Rack(bool offline = false, InternalFactory factory = {});
   ~Rack();
   bool load(const QVariantMap &, double rate, QStringList *problems = nullptr);
+  void selectSession(const QString& id, const QString& label, bool retain);
+  void releaseSession(const QString& id);
+  void releaseInactiveSessions();
+  QVariantList retainedSessions() const;
   QVariantMap state();
   QVariantList instruments() const;
   QVariantList effects(int slot) const;
