@@ -25,6 +25,9 @@
 #include "workflow/vstpanel.h"
 #include "workflow/workflowcontext.h"
 #include "performanceeditor/performanceeditor.h"
+#ifdef SCRIPT_INTERFACE
+#include "workflow/referencepanel.h"
+#endif
 #include "newwizard.h"
 #include "palette.h"
 #include "playpanel.h"
@@ -253,6 +256,9 @@ bool MuseScore::checkDirty(MasterScore* s)
       {
       saveVstEdits(s);
       PerformanceEditor::flushForScore(s);
+#ifdef SCRIPT_INTERFACE
+      flushReferencePanelForScore(s);
+#endif
       if (s->dirty() || (s->created() && !s->startedEmpty())) {
             QMessageBox::StandardButton n = QMessageBox::warning(this, tr("MuseScore"),
                tr("Save changes to the score \"%1\"\n"
@@ -521,6 +527,9 @@ bool MuseScore::saveFile()
 bool MuseScore::saveFile(MasterScore* score)
       {
       PerformanceEditor::flushForScore(score);
+#ifdef SCRIPT_INTERFACE
+      flushReferencePanelForScore(score);
+#endif
       saveVstEdits(score);
       if (score == 0)
             return false;
@@ -1909,6 +1918,9 @@ void MuseScore::printFile()
 bool MuseScore::saveAs(Score* cs_, bool saveCopy, const QString& path, const QString& ext, SaveReplacePolicy* replacePolicy)
       {
       PerformanceEditor::flushForScore(cs_);
+#ifdef SCRIPT_INTERFACE
+      flushReferencePanelForScore(cs_);
+#endif
       saveVstEdits(cs_);
       bool rv = false;
       QString suffix = "." + ext;

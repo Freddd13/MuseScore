@@ -961,13 +961,15 @@ void SpectrumPane::refreshTracks() {
     QMetaObject::invokeMethod(_tracks, "currentIndexChanged", Q_ARG(int, tracks.isEmpty() ? -1 : _tracks->currentIndex()));
 }
 void SpectrumPane::audioChanged() {
-    _play->setEnabled(!_path.isEmpty() && _audio->property("duration").toDouble() > 0);
+    const auto wanted=QUrl(_path).isLocalFile()?QUrl(_path).toLocalFile():_path;
+    const bool ready=!_path.isEmpty()&&!_audio->property("reading").toBool()&&_audio->property("duration").toDouble()>0&&QFileInfo(_audio->property("path").toString()).absoluteFilePath()==QFileInfo(wanted).absoluteFilePath();
+    _play->setEnabled(ready||(_media&&_media->property("playing").toBool()));
     const auto fileStatus = _audio->property("status").toString();
-    if (_audio->property("duration").toDouble() <= 0 && fileStatus.startsWith("Cannot")) {
+    if (!ready && (fileStatus.startsWith("Cannot")||fileStatus.startsWith(QString::fromUtf8("无法读取")))) {
         setStatus(tr("无法读取这份音频。请在原曲参考中检查文件位置。"));
         _status->setToolTip(fileStatus);
     }
-    if (!_audioLoaded && _audio->property("duration").toDouble() > 0) {
+    if (!_audioLoaded && ready) {
         _audioLoaded = true;
         _span = qBound(250., _audio->property("duration").toDouble(), 8000.);
         viewChanged();
@@ -1022,7 +1024,7 @@ double SpectrumPane::sourcePosition() const {
     return _lastAudioMs;
 }
 void SpectrumPane::playSource() {
-    if (!_media || !_audio || _audio->property("duration").toDouble() <= 0)
+    if (!_media || !_audio)
         return;
     if (_media->property("playing").toBool()) {
         const double at = sourcePosition();
@@ -1032,6 +1034,7 @@ void SpectrumPane::playSource() {
         setStatus(tr("原曲已暂停"));
         return;
     }
+    if(!_audioLoaded||_audio->property("reading").toBool()){setStatus(tr("音频读取完成后即可播放；缺失文件可在原曲参考中找回。"));return;}
     const double begin = _loop->isChecked() && _a >= 0 ? _a
                          : _clip.isEmpty()             ? 0
                                                        : _clip.value("from").toDouble();
@@ -1669,7 +1672,7 @@ int SpectrumPane::inputPitch(const QVariantMap &mark) const {
 }
 void SpectrumPane::updateActions() {
     updateInputTarget();
-    _fitTime->setEnabled(!_path.isEmpty() && _audio && _audio->property("duration").toDouble() > 0);
+    _fitTime->setEnabled(!_path.isEmpty() && _audioLoaded && _audio && !_audio->property("reading").toBool());
     _fitTime->setText(_clip.isEmpty() ? tr("匹配音频") : tr("匹配片段"));
     _fitTime->setToolTip(_clip.isEmpty() ? tr("扩大可见原曲范围；用底部滚动条浏览整条录音。")
                                      : tr("将当前关联片段放到视口内，卷帘与频谱一起调整。"));

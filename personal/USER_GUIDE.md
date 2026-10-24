@@ -4,7 +4,7 @@
 
 本次补充的音源面板、换谱保留和两种踏板方式见[后续安排](docs/SOUND_PEDAL_PLAN.md)。这些选项随对应批次交付，当前音源操作见[使用步骤](docs/VST_088_GUIDE.md)。
 
-本文对应个人版本：**0.99.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+本文对应个人版本：**0.100.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
 
 从完整MIDI寻找选段、分别选择两音改对应、撤销重做及使用力度，见[演奏表达操作](docs/EXPRESSION_096_GUIDE.md)。采用演奏中的快慢、分范围使用速度与长休止录制，见[速度与录制](docs/EXPRESSION_097_GUIDE.md)。
 
@@ -27,6 +27,8 @@
 原曲的精确选段、一起播放和修改关联见[从同一位置比较原曲与乐谱](docs/REFERENCE_081_GUIDE.md)。原曲暂停继续、Ctrl+空格及与乐谱轮流播放见[播放和快捷键](docs/REFERENCE_098_GUIDE.md)。
 
 播放中静音、独听、切换查看音轨，以及多个片段的采用、修改、删除恢复和保存，见[多轨比较与关联操作](docs/REFERENCE_099_GUIDE.md)。
+
+移动乐谱与录音文件夹、找回音频、取消读取，以及反复中的片段关联，见[文件与遍次操作](docs/REFERENCE_100_GUIDE.md)。
 
 扒谱显示范围由时间下拉框选择：“整条录音 · 原曲时间”用于浏览整首；“按谱对齐”用于对照关联谱段，并与卷帘一起缩放。叠加显示时，编辑器的“全曲”“选区”和参数区缩放也会同步改变频谱范围。完整步骤见[频谱范围](docs/SPECTRUM_078_GUIDE.md)。乐谱保存与本次检查见[保存和范围检查](docs/SAVE_RANGE_0801_CHECKS.md)。
 

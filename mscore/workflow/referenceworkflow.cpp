@@ -62,12 +62,13 @@ QVariantMap ScoreObserver::referencePlan(const QVariantMap& request){
  if(request.value("revision").toString()!=analysisRevision())return {{"error",tr("乐谱已经改变，请重新选择关联。")}};
  auto master=_score->masterScore();
  const int start=request.value("start",-1).toInt(),end=request.value("end",-1).toInt(),occurrence=request.value("occurrence",1).toInt(),mode=request.value("mode",0).toInt();
- if(start<0||end<=start||mode<0||mode>2)return {{"error",tr("请选择有效的谱段和播放方式。")}};
+ if(start<0||end<=start||mode<0||mode>2||occurrence<1)return {{"error",tr("请选择有效的谱段、播放方式和遍次。")}};
  int seen=0,from=-1,until=-1;for(auto r:master->repeatList()){
   if(from<0&&start>=r->tick&&start<r->tick+r->len()&&++seen==occurrence)from=r->utick+start-r->tick;
   if(from>=0&&end>=r->tick&&end<=r->tick+r->len()&&r->utick+end-r->tick>from){until=r->utick+end-r->tick;break;}
  }
- if(from<0||until<0||until-from!=end-start)return {{"error",tr("片段跨过了反复跳转。请拆成几段，并分别选择播放第几遍。")}};
+ if(from<0)return {{"error",tr("这段乐谱没有第 %1 遍，共有 %2 遍。请在关联中调整“播放第几遍”。").arg(occurrence).arg(seen)},{"availableOccurrences",seen}};
+ if(until<0||until-from!=end-start)return {{"error",tr("片段跨过了反复跳转。请拆成几段，并分别选择播放第几遍。")}};
  const double origin=PlaybackTiming::time(master,from);
  auto seconds=[&](int tick){return PlaybackTiming::time(master,from+tick-start);};
  QVariantList clockValues;QVector<QPair<double,double>> clock;

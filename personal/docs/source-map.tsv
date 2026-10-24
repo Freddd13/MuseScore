@@ -436,3 +436,8 @@ QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this
 
 原曲实时混音	mscore/referenceaudio/mediaproject.cpp	ReferenceMediaProject::setTrackMix	114	输出时逐轨应用音量与静音，循环保留设置	reference_099_tests.inc
 原曲片段选择	share/workflow/panels/ReferencePlayer/ReferencePlayer.view.qml	exclusiveAssociation	429	重叠关联、遍次、删除恢复及异步读取	reference_099_tests.inc
+
+音频读取	mscore/referenceaudio/mediasession.cpp	void ReferenceMediaSession::open	51	成功后更新文件，失败与取消保留当前音频	reference_100_tests.inc
+原曲反复	mscore/workflow/referenceworkflow.cpp	QVariantMap ScoreObserver::referencePlan	60	对应展开反复位置并解释不存在的遍次	reference_100_tests.inc
+
+原曲保存	mscore/workflow/referencepanel.cpp	flushReferencePanelForScore	22	原曲资料接入普通保存、另存与关窗检查	referenceImmediateSaveIncludesAssociations

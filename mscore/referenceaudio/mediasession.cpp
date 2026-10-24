@@ -47,19 +47,21 @@ void ReferenceMediaSession::stopWorker() {
  if(_audio){_audio->stop();delete _audio;_audio=nullptr;}
  _playJob.waitForFinished();delete _ring;_ring=nullptr;
 }
-void ReferenceMediaSession::cancelRead(){if(_loadCancel)*_loadCancel=true;if(_waveCancel)*_waveCancel=true;++_loadGeneration;++_waveGeneration;}
+void ReferenceMediaSession::cancelRead(){if(_loadCancel)*_loadCancel=true;if(_waveCancel)*_waveCancel=true;++_loadGeneration;++_waveGeneration;if(_reading){_reading=false;_requestedPath.clear();_status=tr("已取消读取音频。");emit changed();}}
 void ReferenceMediaSession::open(const QString& url) {
- stopWorker();if(_loadCancel)*_loadCancel=true;if(_waveCancel)*_waveCancel=true;++_waveGeneration;_tiles.clear();
- _path=QUrl(url).isLocalFile()?QUrl(url).toLocalFile():url;
- _duration=0;_position=0;_wave.clear();_status=tr("Reading audio…");emit changed();emit waveformChanged();
- const int token=++_loadGeneration;const QString path=_path;const bool makeWave=_waveformEnabled;
+ stopWorker();if(_loadCancel)*_loadCancel=true;if(_waveCancel)*_waveCancel=true;++_waveGeneration;
+ const QString path=QUrl(url).isLocalFile()?QUrl(url).toLocalFile():url;
+ _reading=true;_requestedPath=path;_status=tr("正在读取音频…");emit changed();
+ const int token=++_loadGeneration;const bool makeWave=_waveformEnabled;
  auto cancel=std::make_shared<std::atomic_bool>(false);_loadCancel=cancel;
  _loads.erase(std::remove_if(_loads.begin(),_loads.end(),[](const QFuture<void>& f){return f.isFinished();}),_loads.end());
  _loads.append(QtConcurrent::run([this,path,token,cancel,makeWave]{
   KumoAudio::Reader reader;QString error;
-  if(!reader.open(path,&error,cancel.get())){QMetaObject::invokeMethod(this,[this,error,token]{if(token==_loadGeneration){_status=error;emit changed();}},Qt::QueuedConnection);return;}
+  auto failed=[&](QString reason){if(reason.isEmpty()||reason.startsWith("Cannot decode"))reason=tr("请选择一份可以播放的 WAV、MP3 或 FLAC 文件。");QMetaObject::invokeMethod(this,[this,path,reason,token]{if(token==_loadGeneration){_reading=false;_requestedPath.clear();_status=tr("无法读取音频：%1").arg(reason);emit changed();emit fileError(path,reason);}},Qt::QueuedConnection);};
+  if(!reader.open(path,&error,cancel.get())){if(!*cancel)failed(error);return;}
   auto count=reader.frames();int rate=reader.rate(),channels=reader.channels();
-  QMetaObject::invokeMethod(this,[this,count,rate,token]{if(token!=_loadGeneration)return;_duration=double(count)*1000/rate;_a=0;_b=_duration;_rate=rate;_status=tr("Ready");emit changed();emit fileReady(identity());},Qt::QueuedConnection);
+  if(count<=0||rate<=0||channels<=0){failed(tr("文件里没有可播放的音频。"));return;}
+  QMetaObject::invokeMethod(this,[this,path,count,rate,token]{if(token!=_loadGeneration)return;_path=path;_duration=double(count)*1000/rate;_position=0;_wave.clear();_tiles.clear();_reading=false;_requestedPath.clear();_a=0;_b=_duration;_rate=rate;_status=tr("Ready");emit waveformChanged();emit changed();emit fileReady(identity());},Qt::QueuedConnection);
   if(!makeWave)return;
   QVector<double> peaks(4096,0);std::vector<float> block(8192*channels);qint64 position=0;
   while(position<count&&!*cancel) {

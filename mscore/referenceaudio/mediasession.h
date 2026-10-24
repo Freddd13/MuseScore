@@ -19,12 +19,15 @@ class ReferenceMediaSession:public QObject {
  Q_PROPERTY(bool playing READ playing NOTIFY changed)
  Q_PROPERTY(QString path READ path NOTIFY changed)
  Q_PROPERTY(QString status READ status NOTIFY changed)
+ Q_PROPERTY(bool reading READ reading NOTIFY changed)
+ Q_PROPERTY(QString requestedPath READ requestedPath NOTIFY changed)
  Q_PROPERTY(double duration READ duration NOTIFY changed)
  Q_PROPERTY(double position READ position NOTIFY changed)
  Q_PROPERTY(double speed READ speed WRITE setSpeed NOTIFY changed)
  Q_PROPERTY(double volume READ volume WRITE setVolume NOTIFY changed)
  Q_PROPERTY(QVariantList waveform READ waveform NOTIFY waveformChanged)
- bool _waveformEnabled=true;
+ bool _waveformEnabled=true,_reading=false;
+ QString _requestedPath;
  QString _path,_status;
  double _duration=0,_position=0,_speed=1,_volume=.8,_a=0,_b=0,_origin=0;
  bool _loop=false,_fade=true;
@@ -39,6 +42,7 @@ public:
  explicit ReferenceMediaSession(QObject*);~ReferenceMediaSession()override;
  bool available()const{return true;}bool playing()const{return _audio!=nullptr;}
  QString path()const{return _path;}QString status()const{return _status;}
+ bool reading()const{return _reading;}QString requestedPath()const{return _requestedPath;}
  double duration()const{return _duration;}double position()const{return _position;}
  double speed()const{return _speed;}double volume()const{return _volume;}
  QVariantList waveform()const{return _wave;}
@@ -50,4 +54,5 @@ public:
  void setSpeed(double);void setVolume(double);
 signals:
  void changed();void waveformChanged();void waveformReady(double from,double until,const QVariantList& peaks);void fileReady(const QVariantMap& info);
+ void fileError(const QString& path,const QString& message);
 };

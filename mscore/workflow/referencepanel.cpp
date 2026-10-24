@@ -8,6 +8,8 @@
 #include "mscore/shortcut.h"
 #include "mscore/plugin/qmlpluginengine.h"
 #include "mscore/plugin/qmlplugin.h"
+#include "mscore/plugin/api/score.h"
+#include <QJSValue>
 #include <QAction>
 #include <QDockWidget>
 #include <QQuickView>
@@ -17,6 +19,13 @@
 #include <QFileInfo>
 #include <QSignalBlocker>
 namespace Ms {namespace {QPointer<QDockWidget> referenceDock;QPointer<QmlPlugin> referenceRoot;}
+void flushReferencePanelForScore(Score* score){
+ if(!score||!referenceRoot)return;
+ const auto value=referenceRoot->property("owner");auto object=value.canConvert<QJSValue>()?value.value<QJSValue>().toQObject():value.value<QObject*>();auto owner=qobject_cast<PluginAPI::Score*>(object);
+ if(!owner||!owner->score()||owner->score()->masterScore()!=score->masterScore())return;
+ QMetaObject::invokeMethod(referenceRoot,"storeTrack",Qt::DirectConnection);
+ QMetaObject::invokeMethod(referenceRoot,"saveScoreProject",Qt::DirectConnection);
+}
 void showReferencePanel(bool visible){
  if(!mscore || !personalFeaturesEnabled())return;
  if(referenceDock&&referenceRoot){referenceDock->setVisible(visible);if(visible)referenceRoot->focusPanel();return;}
