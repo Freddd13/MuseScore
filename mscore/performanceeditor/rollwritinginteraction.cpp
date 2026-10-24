@@ -332,8 +332,8 @@ void RollWritingBar::finish(QPointF point) {
   if (!_gesture)
     return;
   move(point);
-  _editor->_noteCanvas->releaseMouse();
   _gesture = false;
+  _editor->_noteCanvas->releaseMouse();
   _indexDirty = true;
   if (_marquee) {
     const QRectF box = QRectF(_press, _marqueeEnd).normalized();

@@ -178,6 +178,7 @@ void RollWritingBar::finishRead() {
                                  events.front().toMap()["length"].toInt() / 1000
                            : note["duration"].toInt();
   }
+  QSet<QString> logicalRead;
   for (auto value : _data["notes"].toList()) {
     auto n = value.toMap();
     if (n["contextOnly"].toBool() || n["grace"].toBool())
@@ -192,16 +193,15 @@ void RollWritingBar::finishRead() {
         _tuplets.append(tuplet);
       }
     }
-    if (n["tieBack"].toBool())
+    const auto logicalId = n.value("logicalId", n["id"]).toString();
+    if (logicalRead.contains(logicalId))
       continue;
+    logicalRead.insert(logicalId);
     const int start = n["tick"].toInt(),
-              end = n.value("logicalEnd", n["end"]).toInt();
-    if (start < scope["start"].toInt() || end > scope["end"].toInt()) {
-      setMessage(
-          tr("有延音连到范围外，请把延音两端一起选中，再点“改用当前选区”。"));
-      updateActions();
-      return;
-    }
+              logicalEnd = n.value("logicalEnd", n["end"]).toInt(),
+              end = qMin(logicalEnd, scope["end"].toInt());
+    if (start < scope["start"].toInt() || end <= start)
+      continue;
     int rawStart = start, rawEnd = end;
     const auto events = n["playEvents"].toList();
     if (n["playEventType"].toInt() == int(PlayEventType::User) &&
@@ -222,6 +222,8 @@ void RollWritingBar::finishRead() {
         {"tpc2", n["tpc2"]},
         {"start", start},
         {"end", end},
+        {"boundaryStart", n["tieBack"].toBool()},
+        {"boundaryEnd", logicalEnd > end},
         {"rawStart", rawStart},
         {"rawEnd", rawEnd},
         {"customEventCount",

@@ -447,3 +447,6 @@ QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this
 
 频谱播放位置	mscore/performanceeditor/spectrumpane.cpp	SpectrumPane::sourcePosition	1007	共用原曲位置，循环调参、暂停和播完定位	spectrum_102_tests.inc
 频谱缓存容量	mtest/mscore/spectrum/tst_spectrum.cpp	cacheCapacityAndEviction	327	超出容量后淘汰旧块并保留其它文件	SPECTRUM_102_CHECKS.md
+
+写音中断	mscore/performanceeditor/rollwriting.cpp	RollWritingBar::eventFilter	393	播放、换窗口和鼠标转交时恢复未完成的写音	workspace_093_tests.inc / writing_103_tests.inc
+延音边界写音	mscore/performanceeditor/rollwritingmodel.cpp	RollWritingBar::finishRead	158	读取范围内的延音部分并保留外部连接	rollWritingBesideBoundaryTie / rollWritingBetweenBoundaryTies

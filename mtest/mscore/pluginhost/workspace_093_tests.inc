@@ -156,7 +156,7 @@ void TestPluginHost::paletteRemainsInteractiveAfterPlayback()
     QVERIFY2(clickHeader(), "播放前可展开或收起符号组");
     QSignalSpy messages(sequence, SIGNAL(toGui(int,int)));
     QSignalSpy stops(sequence, SIGNAL(stopped()));
-    for (int round = 0; round < 3; ++round) {
+    for (int round = 0; round < 4; ++round) {
         messages.clear(); stops.clear();
         struct PressedSurface {
             QPointer<QWidget> widget;
@@ -176,12 +176,31 @@ void TestPluginHost::paletteRemainsInteractiveAfterPlayback()
             QTest::mousePress(pressed.widget, Qt::LeftButton, Qt::NoModifier, pressed.point);
             QCOMPARE(QWidget::mouseGrabber(), pressed.widget.data());
         }
+        if (round == 3) {
+            main->showPerformanceEditor(true);
+            auto editor = main->performanceEditor();
+            editor->findChild<QTabBar*>("workflowExpressionTabs")->setCurrentIndex(0);
+            score->select(score->firstMeasure()->first()->element(0));
+            rollWritingAction()->setChecked(true);
+            auto writing = editor->findChild<RollWritingBar*>("rollWritingBar");
+            QVERIFY(writing);
+            QTRY_VERIFY(writing->state()["ready"].toBool());
+            editor->fit(false); QTest::qWait(80);
+            pressed.widget = editor->findChild<QWidget*>("performanceNoteCanvas");
+            QVERIFY(pressed.widget && pressed.widget->isVisible());
+            pressed.point = QPoint(qRound(writing->state()["fromX"].toDouble() +
+                                          writing->state()["quarterPixels"].toDouble() * .5),
+                                   pressed.widget->height()/2);
+            QTest::mousePress(pressed.widget, Qt::LeftButton, Qt::NoModifier, pressed.point);
+            QCOMPARE(QWidget::mouseGrabber(), pressed.widget.data());
+        }
         score->setPlayPos(Fraction());
         getAction("play")->trigger();
         QTRY_VERIFY(sequence->isPlaying());
         for (int step=0; step<4; ++step) { driver->pulse(); QTest::qWait(5); }
         QTRY_VERIFY2(QWidget::mouseGrabber() == nullptr, "播放开始后释放编辑器占用的鼠标，符号面板和原曲参考继续可用");
         pressed.release();
+        if (round == 3) rollWritingAction()->setChecked(false);
         qInfo() << "playing" << main->state() << palette->isEnabled() << window->rootObject()->isEnabled();
         QVERIFY(!palette->isEnabled());
         if (round == 0) main->showPerformanceEditor(true);
@@ -203,6 +222,22 @@ void TestPluginHost::paletteRemainsInteractiveAfterPlayback()
                 << "grabber" << QWidget::mouseGrabber() << window->mouseGrabberItem()
                 << "modal" << QGuiApplication::modalWindow();
         QVERIFY2(clickHeader(), "停播并切回编曲后可继续点击符号组");
+        showReferencePanel(true); QTest::qWait(120);
+        QmlPlugin* reference = nullptr;
+        for (auto candidate : QGuiApplication::allWindows())
+            if (auto view = qobject_cast<QQuickView*>(candidate))
+                if (auto root = qobject_cast<QmlPlugin*>(view->rootObject()))
+                    if (root->menuPath() == "Plugins.Reference Player") reference = root;
+        QVERIFY(reference);
+        QQuickItem* loop = nullptr;
+        for (auto item : reference->findChildren<QQuickItem*>())
+            if (item->property("text").toString() == QString::fromUtf8("循环") && item->isVisible()) { loop = item; break; }
+        QVERIFY(loop);
+        const bool loopBefore = reference->property("looping").toBool();
+        const auto point = loop->mapToScene(QPointF(loop->width()/2, loop->height()/2)).toPoint();
+        QTest::mouseMove(reference->window(), point);
+        QTest::mouseClick(reference->window(), Qt::LeftButton, Qt::NoModifier, point);
+        QTRY_COMPARE(reference->property("looping").toBool(), !loopBefore);
     }
     // Apply an actual palette symbol, then undo and redo it on the same score.
     QString symbolName;

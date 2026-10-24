@@ -1001,6 +1001,8 @@ class TestPerformanceEditor : public QObject, public MTest {
       void rhythmShowsActualLengths();
       void rhythmEditApplyContinueAndUndo();
       void rhythmPreservesSourceDurationsAndVelocities();
+      void rollWritingBesideBoundaryTie();
+      void rollWritingBetweenBoundaryTies();
       void freeSlurRoutedGeometry();
       void freeSlurRoutedPersistenceAndControls();
       void handSymbolPlacementExamples();
@@ -1198,6 +1200,7 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "midi_gate_086_tests.inc"
 #include "midi_transport_086_tests.inc"
 #include "writing_087_tests.inc"
+#include "writing_103_tests.inc"
 #include "expression_095_tests.inc"
 #include "expression_096_tests.inc"
 #include "expression_097_tests.inc"

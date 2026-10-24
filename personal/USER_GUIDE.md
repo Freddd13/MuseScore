@@ -4,7 +4,7 @@
 
 本次补充的音源面板、换谱保留和两种踏板方式见[后续安排](docs/SOUND_PEDAL_PLAN.md)。这些选项随对应批次交付，当前音源操作见[使用步骤](docs/VST_088_GUIDE.md)。
 
-本文对应个人版本：**0.102.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+本文对应个人版本：**0.103.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
 
 从完整MIDI寻找选段、分别选择两音改对应、撤销重做及使用力度，见[演奏表达操作](docs/EXPRESSION_096_GUIDE.md)。采用演奏中的快慢、分范围使用速度与长休止录制，见[速度与录制](docs/EXPRESSION_097_GUIDE.md)。
 
@@ -20,7 +20,7 @@
 
 混音器与编辑器共同使用、标签组高度恢复和工具图标见[组合面板操作](docs/WINDOWS_089_GUIDE.md)。
 
-卷帘草稿的继续修改、删除与恢复，以及写节奏的录制、试听和采用见[完整步骤](docs/WRITING_087_GUIDE.md)。
+卷帘画音、跨小节延音和拖动中断后的操作见[卷帘写音](docs/WORKSPACE_067_GUIDE.md)；草稿的继续修改、删除与恢复，以及写节奏的录制、试听和采用见[完整步骤](docs/WRITING_087_GUIDE.md)。
 
 工作视图的尺寸与工具页返回见[窗口操作](docs/LAYOUT_079_GUIDE.md)。
 

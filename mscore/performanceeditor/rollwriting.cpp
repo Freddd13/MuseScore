@@ -208,6 +208,11 @@ RollWritingBar::RollWritingBar(PerformanceEditor *editor, QToolButton *toggle,
   outer->addWidget(_message);
   connect(workflowContext(), &WorkflowContext::auditionChanged, this,
           &RollWritingBar::updateActions);
+  if (mscore)
+    connect(mscore, &MuseScore::scoreStateChanged, this, [this](ScoreState state) {
+      if (state == STATE_PLAY)
+        cancelGesture();
+    });
   if (seq)
     connect(seq, &Seq::stopped, this, [this] {
       QTimer::singleShot(0, this, [this] {
@@ -386,6 +391,12 @@ void RollWritingBar::showEvent(QShowEvent *event) {
     });
 }
 bool RollWritingBar::eventFilter(QObject *object, QEvent *event) {
+  if (_gesture &&
+      (QWidget::mouseGrabber() != _editor->_noteCanvas ||
+       event->type() == QEvent::ApplicationDeactivate ||
+       (event->type() == QEvent::WindowDeactivate && object == _editor->_noteCanvas->window()) ||
+       (event->type() == QEvent::UngrabMouse && object == _editor->_noteCanvas)))
+    cancelGesture();
   // The main application handles Escape before widget filters. Give the active
   // writing gesture its own cancellation while the roll has keyboard focus.
   if (object == _editor->_noteCanvas &&
