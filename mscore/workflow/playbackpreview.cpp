@@ -9,6 +9,7 @@
 #include "libmscore/score.h"
 #include "libmscore/playbacktiming.h"
 #include "libmscore/repeatlist.h"
+#include "libmscore/rendermidi.h"
 #include "libmscore/synthesizerstate.h"
 #include "libmscore/tempo.h"
 #include "libmscore/tie.h"
@@ -72,10 +73,17 @@ double mapClock(const QVector<QPair<double,double>>& points,double value,bool in
       if(next==points.cbegin())return value+y(points.front())-x(points.front());if(next==points.cend())return value+y(points.back())-x(points.back());auto before=next-1;return y(*before)+(value-x(*before))*(y(*next)-y(*before))/(x(*next)-x(*before));
 }
 }
-PlaybackPreviewMaterial renderPlaybackPreview(Score* original,Score* rendered){
+PlaybackPreviewMaterial renderPlaybackPreview(Score* original,Score* rendered,bool pianoPedal){
       PlaybackPreviewMaterial result;auto source=original->masterScore(),copy=rendered->masterScore();
       copy->tempomap()->setRelTempo(source->tempomap()->relTempo());
-      rendered->renderMidi(&result.events,true,MScore::playRepeats,mscore->synthesizerState());
+      if (pianoPedal) rendered->renderMidi(&result.events,true,MScore::playRepeats,mscore->synthesizerState());
+      else {
+            const bool previous = copy->expandRepeats(); copy->setExpandRepeats(MScore::playRepeats);
+            const auto synthState = mscore->synthesizerState();
+            MidiRenderer::Context context(synthState); context.renderHarmony = true; context.pedalPlayback = false;
+            MidiRenderer(rendered).renderScore(&result.events, context);
+            copy->setExpandRepeats(previous);
+            }
       const auto notes=sourceNotes(original);
       QHash<int,int> channels;
       for(int part=0;part<qMin(original->parts().size(),rendered->parts().size());++part){

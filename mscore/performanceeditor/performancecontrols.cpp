@@ -15,6 +15,9 @@
 #include <QComboBox>
 #include <algorithm>
 #include "libmscore/pedalplayback.h"
+#include "libmscore/pedalplaybackrender.h"
+#include "libmscore/rendermidi.h"
+#include <QElapsedTimer>
 #include "mscore/musescore.h"
 #include <QSignalBlocker>
 #include <QApplication>
@@ -226,8 +229,21 @@ QString PerformanceEditor::parameterTooltip(QPointF point, bool onScore) const
             return tr("%1 · 四分音符 %2 BPM\n节点模式：空白点按添加、上下拖动改值。\n原速度文字受保护；请点中方形节点再修改。").arg(position).arg(_score->tempo(Fraction::fromTicks(tick)) * 60, 0, 'f', 2);
       int grip = -1;
       const auto target = pedalHit(point, onScore ? _scoreLane : laneRect(), onScore, &grip);
-      if (target) return tr("%1 · 谱表%2\n%3 · 拖动调整；Delete删除\nShift+方向键每次微调1 tick")
-          .arg(position).arg(target->staffIdx() + 1).arg(grip == 0 ? tr("踩下端") : grip == 1 ? tr("抬起端") : tr("踏板段，拖动可整体移动"));
+      if (target) {
+          QString text = tr("%1 · 谱表%2\n%3 · 拖动调整；Delete删除\nShift+方向键每次微调1 tick")
+              .arg(position).arg(target->staffIdx() + 1).arg(grip == 0 ? tr("踩下端") : grip == 1 ? tr("抬起端") : tr("踏板段，拖动可整体移动"));
+          if (_retainedPedalParts.contains(target->part())) text += tr("\n这架乐器已有手动踏板控制，沿用原有控制数据。");
+          auto it = _pedalPlaybackRanges.constFind(target);
+          if (it != _pedalPlaybackRanges.cend() && it->downKnown && it->upKnown) {
+              const auto clock = _score->tempomap();
+              const double down = 1000 * (clock->tick2time(it->down) - clock->tick2time(target->tick().ticks()));
+              const double up = 1000 * (clock->tick2time(it->up) - clock->tick2time(target->tick2().ticks()));
+              text += tr("\n实际踩下：%1%2 ms；抬起：%3%4 ms")
+                  .arg(down < 0 ? tr("提前") : tr("延后")).arg(qAbs(down), 0, 'f', 1)
+                  .arg(up < 0 ? tr("提前") : tr("延后")).arg(qAbs(up), 0, 'f', 1);
+          }
+          return text;
+      }
       return tr("%1 · %2\n水平拖动可画踩下段或抬起间隙；分开工具在段内点一下。").arg(position, _pedalTool->currentText());
       }
 void PerformanceEditor::showPedalPlayback()
@@ -293,6 +309,110 @@ void PerformanceEditor::showPedalPlayback()
         message->setText(!error.isEmpty() ? error : tr("设置已保存 · Ctrl+Z撤销"));
     });
     load(); dialog->show();
+}
+
+bool PerformanceEditor::pedalPreviewVisible() const
+{
+    return _score && _parameter->currentIndex() == 2 && ((_canvas && _canvas->isVisible())
+        || (_band && _band->isChecked() && _view && _view->isVisible()));
+}
+void PerformanceEditor::cancelPedalPreview(bool clear)
+{
+    _pedalPreviewTimer.stop(); if (_canvas) _canvas->setProperty("pedalPlaybackBusy", false); _pedalPreviewEvents.clear(); _pedalPreviewMeasures.clear(); _pedalPreviewMeasure = 0;
+    if (clear) {
+        _pedalPlaybackRanges.clear(); _retainedPedalParts.clear(); _pedalRetainedKnown = false; _pedalPreviewReady = false; _pedalSeqVersion = 0;
+        if (_canvas) { _canvas->setProperty("pedalPlaybackRanges", QVariantList{}); _canvas->setProperty("pedalPlaybackReady", false); }
+    }
+}
+void PerformanceEditor::startPedalPreview(bool invalidate)
+{
+    if (invalidate || (_score && _pedalPreviewState != _score->masterScore()->state())) cancelPedalPreview(true);
+    if (_dirty || !pedalPreviewVisible() || !PedalPlayback::enabled(_score)) { cancelPedalPreview(); return; }
+    if (_pedalPreviewTimer.isActive()) return;
+    _pedalPreviewState = _score->masterScore()->state();
+    if (!_pedalRetainedKnown) { _retainedPedalParts = PedalPlayback::retainedParts(_score); _pedalRetainedKnown = true; }
+    if ((_score->isPlaying() || (seq && seq->isPlaying())) || !_pedalPreviewReady) _pedalPreviewTimer.start(1);
+}
+void PerformanceEditor::publishPedalPreview()
+{
+    QVariantList rows;
+    for (const auto& pedal : _pedals) {
+        auto it = _pedalPlaybackRanges.constFind(pedal.pedal); if (it == _pedalPlaybackRanges.cend()) continue;
+        rows.append(QVariantMap{{"from",pedal.from},{"until",pedal.until},{"down",it->down},{"up",it->up},
+            {"ready",it->downKnown && it->upKnown},{"track",pedal.track}});
+    }
+    _canvas->setProperty("pedalPlaybackRanges", rows);
+    _canvas->setProperty("pedalPlaybackReady", _pedalPreviewReady);
+    _canvas->setProperty("pedalPlaybackBusy", !_pedalPreviewEvents.isNull());
+    status(); updateSurfaces(); if (_view) _view->update();
+}
+void PerformanceEditor::stepPedalPreview()
+{
+    if (_dirty || !pedalPreviewVisible() || _pedalPreviewState != _score->masterScore()->state()) { cancelPedalPreview(true); return; }
+    const bool playing = _score->isPlaying() || (seq && seq->isPlaying());
+    if (playing) {
+        _pedalPreviewEvents.clear(); _pedalPreviewMeasures.clear(); _pedalPreviewMeasure = 0; _canvas->setProperty("pedalPlaybackBusy", false);
+        QVector<PreparedPedalPoint> points; auto version = _pedalSeqVersion;
+        const bool available = seq && seq->preparedPedalSnapshot(_score, version, &points);
+        if (!available && _pedalPlaybackRanges.isEmpty()) _status->setText(tr("踏板播放区间 · 正在读取当前演奏数据…"));
+        if (available && version != _pedalSeqVersion) {
+            _pedalSeqVersion = version;
+            _pedalPlaybackRanges.clear();
+            QMultiHash<QPair<int,int>, const Pedal*> starts, ends;
+            QHash<int,int> masterStaff;
+            for (int index = 0; index < _score->nstaves(); ++index) {
+                int source = index;
+                for (auto linked : _score->staff(index)->linkList())
+                    if (linked->isStaff() && linked->score() == _score->masterScore()) { source = toStaff(linked)->idx(); break; }
+                masterStaff.insert(index, source);
+            }
+            for (const auto& pedal : _pedals) {
+                if (_retainedPedalParts.contains(pedal.pedal->part())) continue;
+                const int staff = masterStaff.value(pedal.track / VOICES, pedal.track / VOICES);
+                starts.insert({staff, pedal.from}, pedal.pedal); ends.insert({staff, pedal.until}, pedal.pedal);
+            }
+            QHash<const Pedal*, QPair<int,int>> ranks;
+            const int current = seq->getCurTick();
+            const auto& repeats = _score->repeatList();
+            for (const auto& point : points) {
+                const bool down = point.value != 0;
+                const int nominal = down ? repeats.utick2tick(point.nominal) : repeats.utick2tick(point.nominal - 1) + 1;
+                const auto matches = (down ? starts : ends).values({point.staff, nominal});
+                for (auto pedal : matches) {
+                    if (!ranks.contains(pedal)) ranks.insert(pedal, {INT_MAX, INT_MAX});
+                    int& rank = down ? ranks[pedal].first : ranks[pedal].second;
+                    const int distance = qAbs(current - point.nominal); if (distance > rank) continue; rank = distance;
+                    auto& value = _pedalPlaybackRanges[pedal];
+                    if (down) { value.down = nominal + point.tick - point.nominal; value.downKnown = true; }
+                    else { value.up = nominal + point.tick - point.nominal; value.upKnown = true; }
+                }
+            }
+            publishPedalPreview();
+        }
+        _pedalPreviewTimer.start(50); return;
+    }
+    if (_pedalNeedsRestPrep) { cancelPedalPreview(true); _dirty = true; scheduleRefresh(); return; }
+    if (_pedalPreviewReady) return;
+    if (seq && !seq->backgroundRenderingIdle()) { _pedalPreviewTimer.start(30); return; }
+    if (_pedalPreviewEvents.isNull()) {
+        _pedalPreviewEvents = QSharedPointer<EventMap>::create(); _canvas->setProperty("pedalPlaybackBusy", true);
+        for (auto measure = _score->firstMeasure(); measure; measure = measure->nextMeasure()) _pedalPreviewMeasures.append(measure);
+        _pedalPreviewMeasure = 0;
+    }
+    QElapsedTimer work; work.start();
+    do {
+        if (_pedalPreviewMeasure >= _pedalPreviewMeasures.size()) break;
+        MidiRenderer::collectPreparedMeasure(_score, _pedalPreviewMeasures[_pedalPreviewMeasure++], _pedalPreviewEvents.data());
+    } while (work.nsecsElapsed() < 2000000);
+    const auto previousMax = _canvas->property("pedalPlaybackMaxBatchNs").toLongLong();
+    _canvas->setProperty("pedalPlaybackMaxBatchNs", qMax(previousMax, work.nsecsElapsed()));
+    _canvas->setProperty("pedalPlaybackProgress", 100 * _pedalPreviewMeasure / qMax(1, _pedalPreviewMeasures.size()));
+    if (_pedalPreviewMeasure < _pedalPreviewMeasures.size()) { status(); _pedalPreviewTimer.start(1); return; }
+    _pedalPlaybackRanges.clear();
+    for (const auto& row : PedalPlayback::plan(_score, _pedalPreviewEvents.data(), nullptr, 0, true, _retainedPedalParts))
+        _pedalPlaybackRanges.insert(row.source, {row.span.down, row.span.up, true, true});
+    _pedalPreviewReady = true; _pedalPreviewEvents.clear(); _pedalPreviewMeasures.clear();
+    publishPedalPreview();
 }
 
 }

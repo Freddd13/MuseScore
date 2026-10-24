@@ -501,6 +501,7 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
       if (collectGateData || options.crop) {
             for (auto& source : sources) source.on += preRoll;
             gateData = midiGateSnapshot(mf, sources);
+            gateData.writtenPedal = options.writtenPedal;
             if (options.crop) {
                   gateBaseline = mf;
                   MidiGateProcessor processor;

@@ -189,7 +189,12 @@ class TestPerformanceEditor : public QObject, public MTest {
       Note* noteAt(Score* score, int tick = 480, int track = 0)
             { return toChord(score->tick2segment(Fraction::fromTicks(tick), false, SegmentType::ChordRest)->element(track))->notes().front(); }
    private slots:
+      void pedalGraphMatchesPlayback106();
+      void pedalGraphBatchAndReuse106();
+      void pedalGraphDragAndCancel106();
+      void pedalGraphAfterPlayAndHide106();
       void pedalSchedule106();
+      void pedalManualControllersAcrossChunks106();
       void pedalExportChoice106();
       void pedalPlaybackChunked106();
       void pedalPlaybackLinked106();
@@ -1219,6 +1224,7 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "writing_104_tests.inc"
 #include "pedal_105_tests.inc"
 #include "pedal_106_tests.inc"
+#include "pedal_106_graph_tests.inc"
 #include "expression_095_tests.inc"
 #include "expression_096_tests.inc"
 #include "expression_097_tests.inc"

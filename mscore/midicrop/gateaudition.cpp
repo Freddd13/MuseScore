@@ -9,7 +9,7 @@
 #include <QSet>
 namespace Ms {
 GateAudition prepareGateAudition(Score* score,const MidiGateData& data,const QVector<MidiGateNote>& rows){
-      GateAudition result;if(!score)return result;result.original=renderPlaybackPreview(score,score);result.proposed=result.original;result.proposed.events.clear();
+      GateAudition result;if(!score)return result;result.original=renderPlaybackPreview(score,score,!data.writtenPedal);result.proposed=result.original;result.proposed.events.clear();
       MidiGateProcessor clock;clock.setClock(data);QHash<QString,int> sources;QSet<int> expected,changed;
       auto sourceKey=[](int tick,int track,int pitch,int port,int channel){return QString("%1:%2:%3:%4:%5").arg(tick).arg(track).arg(pitch).arg(port).arg(channel);};
       for(int i=0;i<rows.size();++i){const auto& n=rows[i];if(n.known)sources[sourceKey(n.sourceUtick,n.voice,n.pitch,n.port,n.channel)]=i;if(n.newOff<n.off)expected.insert(i);}

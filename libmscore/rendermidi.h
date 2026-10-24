@@ -22,12 +22,14 @@
 
 #include "fraction.h"
 #include "measure.h"
+#include <QSet>
 
 namespace Ms {
 
 class EventMap;
 class MasterScore;
 class Staff;
+class Part;
 class SynthesizerState;
 
 enum class DynamicsRenderMethod : signed char {
@@ -64,6 +66,7 @@ class MidiRenderer {
       Score* score{nullptr};
       bool needUpdate = true;
       int minChunkSize = 0;
+      QSet<const Part*> _retainedPedalParts;
 
    public:
       class Chunk {
@@ -126,6 +129,8 @@ class MidiRenderer {
             };
 
       void renderScore(EventMap* events, const Context& ctx);
+      // Read already prepared note events, without creating playback or synthesis state.
+      static void collectPreparedMeasure(Score*, Measure*, EventMap*);
       void renderChunk(const Chunk&, EventMap* events, const Context& ctx);
 
       void setScoreChanged() { needUpdate = true; }

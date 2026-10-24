@@ -146,6 +146,23 @@ void TestPerformanceEditor::pedalExportChoice106() {
     QVERIFY(ParameterEdit::pedalPlayback(score.get(), score->parts().front(), nullptr, settings, false));
     MidiExportOptions options; options.writtenPedal = true;
     QCOMPARE(bytes(options), original); QVERIFY(bytes({}) != original);
+    auto controllerSignature = [](const EventMap& events) {
+        QStringList result;
+        for (const auto& row : events) if (row.second.type() == ME_CONTROLLER && row.second.controller() == CTRL_SUSTAIN)
+            result.append(QString("%1:%2").arg(row.first).arg(row.second.value()));
+        return result;
+    };
+    for (bool written : {false,true}) {
+        options.writtenPedal = written;
+        ExportMidi exporter(score.get()); exporter.collectGateData = true;
+        QBuffer buffer; buffer.open(QIODevice::WriteOnly);
+        QVERIFY(exporter.write(&buffer, MScore::playRepeats, false, SynthesizerState{}, options));
+        QCOMPARE(exporter.gateData.writtenPedal, written);
+        auto material = prepareGateAudition(score.get(), exporter.gateData, exporter.gateData.notes);
+        const auto expected = controllerSignature(renderPlaybackPreview(score.get(), score.get(), !written).events);
+        QCOMPARE(controllerSignature(material.original.events), expected);
+        QCOMPARE(controllerSignature(material.proposed.events), expected);
+    }
     MidiCropPanel panel(nullptr, [&] { return QList<Score*>{score.get()}; });
     panel.show(); QTest::qWait(70);
     auto check = panel.findChild<QCheckBox*>("midiWrittenPedal"); QVERIFY(check); check->setChecked(false);

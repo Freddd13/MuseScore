@@ -33,6 +33,7 @@
 #include "libmscore/part.h"
 #include "libmscore/system.h"
 #include "libmscore/pedal.h"
+#include "libmscore/pedalplaybackrender.h"
 #include "libmscore/spanner.h"
 #include "libmscore/tempotext.h"
 #include "libmscore/textline.h"
@@ -299,6 +300,8 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       }
 #endif
       _status = new QLabel(this); _status->setWordWrap(true); layout->addWidget(_status);
+      _pedalPreviewTimer.setSingleShot(true);
+      connect(&_pedalPreviewTimer, &QTimer::timeout, this, &PerformanceEditor::stepPedalPreview);
       _refreshTimer.setSingleShot(true);
       connect(&_refreshTimer, &QTimer::timeout, this, &PerformanceEditor::refresh);
       _commitTimer.setSingleShot(true);
@@ -332,15 +335,11 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             _number->setRange(velocity ? (rangeKind()==1 ? NoteVelocity::minOffset : 1) : 5,
                   velocity ? (rangeKind()==1 ? NoteVelocity::maxOffset : 127) : 999);
             _number->setDecimals(velocity ? 0 : 2);
+            startPedalPreview();
             if (this->layout()) this->layout()->invalidate(); updateSelection(); status(); invalidateVisual(); if (_view) _view->update();
             });
       for (auto box : {_handles, _band}) connect(box, &QCheckBox::toggled, this, [this] { cancelGesture(); syncOverlayTracking(); if (_view) _view->update(); });
-      connect(_band, &QCheckBox::toggled, this, [this](bool enabled) { emit scoreBandChanged(enabled); scheduleRefresh(); syncTransport(); });
-      if (seq) {
-            connect(seq, &Seq::stopped, this, [this] { cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); if (_snapshotDegraded) { _dirty = true; scheduleRefresh(); } _commitTimer.start(0); syncTransport(); });
-            connect(seq, &Seq::started, this, [this] { cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); _following = true; _followButton->setChecked(true); syncTransport(); status(); });
-            connect(seq, &Seq::heartBeat, this, [this](int, int, int) { syncTransport(); playbackNotes(); });
-            }
+      connect(_band, &QCheckBox::toggled, this, [this](bool enabled) { emit scoreBandChanged(enabled); scheduleRefresh(); startPedalPreview(); syncTransport(); });
       if (mscore) connect(mscore, &MuseScore::scoreStateChanged, this, [this](ScoreState state) {
             if (state == STATE_PLAY) { cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); } syncPedalSelection();
             });
@@ -362,6 +361,7 @@ void PerformanceEditor::resizeEvent(QResizeEvent* event)
 PerformanceEditor::~PerformanceEditor()
       {
       setProperty("kumoEditorClosing",true);
+      cancelPedalPreview(true);
 #ifdef SCRIPT_INTERFACE
       if(_rollWriting)_rollWriting->shutdown();
 #endif
@@ -391,6 +391,7 @@ void PerformanceEditor::setView(ScoreView* view)
       _selectedTempoTick = _tempoPointTick = _unlockedTempo = -1;
       _tempoCurves.clear(); _tempoPlot.clear(); _selectedCurve = nullptr; _curveIndex = -1;
       _peekHeld=false;_disabledTracks.clear();_visibleScoreNotes.clear();_visibleScoreRect=QRect();_usedPitches.clear();_excludedStaves.clear(); rebuildStaffMenu();
+      cancelPedalPreview(true);
       _notes.clear(); _segments.clear(); _tempos.clear(); _pedals.clear(); _noteIndex.clear(); _layoutIndex.clear(); _selectedIndices.clear(); _systemIndices.clear();
       _system = nullptr; _hover = -1; _snapshotDegraded = false; _intervals.clear(); _measures.clear(); invalidateVisual();
       if (_score) {
@@ -449,7 +450,7 @@ void PerformanceEditor::refresh()
                   _dirty = false; if (_selectionRefreshNeeded) selectionChanged(); else updateSelection();
                   }
             if (_snapshotDegraded) _refreshTimer.start(20);
-            status(); return;
+            startPedalPreview(); status(); return;
             }
       if (!live && seq && !seq->backgroundRenderingIdle()) { _refreshTimer.start(20); return; }
       const auto state = _score->masterScore()->state();
@@ -459,15 +460,15 @@ void PerformanceEditor::refresh()
             if (_geometryDirty) {
                   refreshLayout();
                   }
-            if (_selectionRefreshNeeded) selectionChanged(); else updateSelection(); return;
+            if (_selectionRefreshNeeded) selectionChanged(); else updateSelection(); startPedalPreview(); return;
             }
       if (_dragging) cancelGesture();
       cancelSurfaceGesture();
       _notes.clear(); _segments.clear(); _tempos.clear(); _pedals.clear(); _noteIndex.clear(); _layoutIndex.clear(); _intervals.clear(); _linkedIndex.clear();
       for (auto& boundaries : _pedalBoundaries) boundaries.clear();
       QElapsedTimer snapshotTimer; snapshotTimer.start();
-      if (!live) { _score->createPlayEvents(); _score->updateVelo(); }
-      _snapshotDegraded = !stablePlayback;
+      if (!live) { _score->createPlayEvents(); _score->updateVelo(); if (PedalPlayback::enabled(_score)) _score->updateChannel(); }
+      _snapshotDegraded = !stablePlayback; _pedalNeedsRestPrep = live;
       const int track = selectionTrack(_score, _contextTrack);
       _contextTrack = track;
       const int globalMethod = mscore ? mscore->synthesizerState().method() : 1;
@@ -547,6 +548,7 @@ void PerformanceEditor::refresh()
       refreshTempoCurves();
       _hover = -1;
       _state = state; _dirty = false; _geometryDirty = false;
+      startPedalPreview(true);
       rebuildScoreNoteRows(); rebuildFilter(); invalidateVisual();
       if (_fitOnRefresh) { fit(); centerPitch(!_selectedIndices.isEmpty()); _fitOnRefresh = false; _following = true; _followButton->setChecked(true); _followButton->setText(tr("跟随播放")); }
       else surfaceResized(PerformanceSurface::Notes);
@@ -697,7 +699,17 @@ void PerformanceEditor::status(const QString& message)
             const int count = int(std::count_if(_pedals.cbegin(), _pedals.cend(), [this](const PedalInfo& p) { return pedalVisible(p); }));
             const QString operation = _pedalTool->currentIndex() == 2 ? tr("水平拖出抬起间隙") : _pedalTool->currentIndex() == 1 ? tr("水平拖动画踩下段")
                   : _pedalTool->currentIndex() == 3 ? tr("在踏板段内点一下分开") : _selectedPedal ? tr("已选踏板：拖两端改时机，拖内部移动，Delete删除") : tr("点三角选端点，拖段内移动；空白处可画踏板");
-            _status->setText(_dirty ? tr("正在读取踏板…") : tr("延音踏板 · 当前%1段 · %2 · Ctrl+Z撤销").arg(count).arg(operation));
+            const auto context = _score->nstaves() ? _score->staff(qBound(0, _contextTrack / VOICES, _score->nstaves() - 1))->part() : nullptr;
+            if (_retainedPedalParts.contains(context)) {
+                  _status->setText(tr("这架乐器已有手动踏板控制，沿用原有控制数据 · 图中显示谱上范围"));
+            }
+            else if (!_pedalPreviewEvents.isNull()) {
+                  _status->setText(tr("踏板播放区间 · 正在准备 %1% · 拖三角调整谱上端点").arg(100 * _pedalPreviewMeasure / qMax(1, _pedalPreviewMeasures.size())));
+            }
+            else if (!_pedalPlaybackRanges.isEmpty()) {
+                  _status->setText(tr("延音踏板 · %1段 · 细轮廓：谱上；实线：实际播放 · 拖三角改端点，拖段内移动 · Ctrl+Z撤销").arg(count));
+            }
+            else _status->setText(_dirty ? tr("正在读取踏板…") : tr("延音踏板 · 当前%1段 · %2 · Ctrl+Z撤销").arg(count).arg(operation));
             return;
             }
       const QString mode = _parameter->currentIndex() == 1 ? tr("四分音符 BPM · 实际速度阶梯")

@@ -1170,8 +1170,9 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events, const Ev
       const int tick1 = chunk.tick1();
       const int tick2 = chunk.tick2();
 
-      const auto handledPedals = pianoPedal ? PedalPlayback::render(score, events, lookahead, tick1, tick2, tickOffset) : QSet<const Spanner*>{};
-      std::map<int, std::vector<std::pair<int, std::pair<bool, int> > > > channelPedalEvents;
+      const auto handledPedals = pianoPedal ? PedalPlayback::render(score, events, lookahead, tick1, tick2, tickOffset, _retainedPedalParts) : QSet<const Spanner*>{};
+      struct PedalEvent { int tick; bool down; int staff; int nominal; };
+      std::map<int, std::vector<PedalEvent>> channelPedalEvents;
       for (const auto& sp : score->spannerMap().map()) {
             Spanner* s = sp.second;
             if (handledPedals.contains(s)) continue;
@@ -1181,24 +1182,24 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events, const Ev
             int channel = s->part()->instrument(s->tick())->channel(idx)->channel();
 
             if (s->isPedal() || s->isLetRing()) {
-                  channelPedalEvents.insert({channel, std::vector<std::pair<int, std::pair<bool, int> > >()});
-                  std::vector<std::pair<int, std::pair<bool, int> > > pedalEventList = channelPedalEvents.at(channel);
-                  std::pair<int, std::pair<bool, int> > lastEvent;
+                  channelPedalEvents.insert({channel, std::vector<PedalEvent>()});
+                  std::vector<PedalEvent> pedalEventList = channelPedalEvents.at(channel);
+                  PedalEvent lastEvent;
 
                   if (!pedalEventList.empty())
                         lastEvent = pedalEventList.back();
                   else
-                        lastEvent = std::pair<int, std::pair<bool, int> >(0, std::pair<bool, int>(true, staff));
+                        lastEvent = {0, true, staff, 0};
 
                   int st = s->tick().ticks();
                   if (st >= tick1 && st < tick2) {
                         // Handle "overlapping" pedal segments (usual case for connected pedal line)
-                        if (lastEvent.second.first == false && lastEvent.first >= (st + tickOffset + 2)) {
+                        if (!lastEvent.down && lastEvent.tick >= (st + tickOffset + 2)) {
                               channelPedalEvents.at(channel).pop_back();
-                              channelPedalEvents.at(channel).push_back(std::pair<int, std::pair<bool, int> >(st + tickOffset + (2 - MScore::pedalEventsMinTicks), std::pair<bool, int>(false, staff)));
+                              channelPedalEvents.at(channel).push_back({st + tickOffset + (2 - MScore::pedalEventsMinTicks), false, staff, lastEvent.nominal});
                               }
                         int a = st + tickOffset + (3 - MScore::pedalEventsMinTicks);
-                        channelPedalEvents.at(channel).push_back(std::pair<int, std::pair<bool, int> >(a, std::pair<bool, int>(true, staff)));
+                        channelPedalEvents.at(channel).push_back({a, true, staff, st + tickOffset});
                         }
                   if (s->tick2().ticks() >= tick1 && s->tick2().ticks() <= tick2) {
                         int t = s->tick2().ticks() + tickOffset + (2 - MScore::pedalEventsMinTicks);
@@ -1207,7 +1208,7 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events, const Ev
                               if (t > lastRepeat.utick + lastRepeat.len())
                                     t = lastRepeat.utick + lastRepeat.len();
                               }
-                        channelPedalEvents.at(channel).push_back(std::pair<int, std::pair<bool, int> >(t, std::pair<bool, int>(false, staff)));
+                        channelPedalEvents.at(channel).push_back({t, false, staff, s->tick2().ticks() + tickOffset});
                         }
                   }
             else if (s->isVibrato()) {
@@ -1272,12 +1273,13 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events, const Ev
             int channel = pedalEvents.first;
             for (const auto& pe : pedalEvents.second) {
                   NPlayEvent event;
-                  if (pe.second.first == true)
+                  if (pe.down)
                         event = NPlayEvent(ME_CONTROLLER, channel, CTRL_SUSTAIN, 127);
                   else
                         event = NPlayEvent(ME_CONTROLLER, channel, CTRL_SUSTAIN, 0);
-                  event.setOriginatingStaff(pe.second.second);
-                  events->insert(std::pair<int,NPlayEvent>(pe.first, event));
+                  event.setOriginatingStaff(pe.staff);
+                  event.setGeneratedPedal(true); event.setNominalTick(pe.nominal);
+                  events->insert(std::pair<int,NPlayEvent>(pe.tick, event));
                   }
             }
       }
@@ -2590,8 +2592,20 @@ void MidiRenderer::renderScore(EventMap* events, const Context& ctx)
             }
       }
 
+void MidiRenderer::collectPreparedMeasure(Score* score, Measure* measure, EventMap* events)
+      {
+      MidiRenderer renderer(score);
+      for (auto staff : score->staves()) {
+            auto first = measure;
+            while (first->prevMeasure() && first->isRepeatMeasure(staff)) first = first->prevMeasure();
+            StaffContext context; context.staff = staff; context.method = DynamicsRenderMethod::SIMPLE;
+            renderer.renderStaffChunk(Chunk(0, first, measure), events, context);
+            }
+      }
+
 void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Context& ctx)
       {
+      updateState();
       // TODO: avoid doing it multiple times for the same measures
       score->createPlayEvents(chunk.startMeasure(), chunk.endMeasure());
 
@@ -2647,7 +2661,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       // Prepare one following measure only when a pedal repedal needs its actual attack.
       // This keeps chunked playback and full export on the same onset data.
       EventMap pedalLookahead;
-      const bool pianoPedal = ctx.pedalPlayback && PedalPlayback::enabled(score);
+      const bool pianoPedal = ctx.pedalPlayback && PedalPlayback::enabled(score, _retainedPedalParts);
       if (pianoPedal && chunk.endMeasure()) {
             auto next = chunk.endMeasure();
             score->createPlayEvents(next, next->nextMeasure());
@@ -2700,6 +2714,7 @@ void MidiRenderer::updateState()
             // to avoid doing it multiple times on chunks rendering
             score->updateSwing();
             score->updateCapo();
+            _retainedPedalParts = PedalPlayback::enabled(score) ? PedalPlayback::retainedParts(score) : QSet<const Part*>{};
 
             updateChunksPartition();
 

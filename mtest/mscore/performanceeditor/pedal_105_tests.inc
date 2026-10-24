@@ -160,7 +160,7 @@ void TestPerformanceEditor::pedalGuiPaintMoveDelete105() {
     QMouseEvent previewMove(QEvent::MouseMove,window.point(960,0,20),Qt::NoButton,Qt::LeftButton,Qt::NoModifier);
     QApplication::sendEvent(window.canvas,&previewMove);QTest::qWait(40);
     QCOMPARE(pedalRanges105(score),QStringList({"4:0:1920"}));
-    QVERIFY(window.dock->grab().save("E:/programming/funcodes/muse3_plugins/P2/native/personal/docs/images/review-20261024/pedal-gap-preview-105.png"));
+    QVERIFY(window.dock->grab().save("E:/programming/funcodes/muse3_plugins/P2/out/pedal-gap-preview-105.png"));
     QTest::keyClick(window.canvas,Qt::Key_Escape);QTest::mouseRelease(window.canvas,Qt::LeftButton,Qt::NoModifier,window.point(960,0,20));
     QCOMPARE(score->undoStack()->getCurIdx(),gapUndo);
     QCOMPARE(pedalRanges105(score),QStringList({"4:0:1920"}));
@@ -208,7 +208,7 @@ void TestPerformanceEditor::pedalGuiPaintMoveDelete105() {
     QCOMPARE(pedalNotes105(score),notes);
     tools->setCurrentIndex(0);QTest::mouseClick(window.canvas,Qt::LeftButton,Qt::NoModifier,window.point(1440,0,30));
     QTest::qWait(50);
-    QVERIFY(window.dock->grab().save("E:/programming/funcodes/muse3_plugins/P2/native/personal/docs/images/review-20261024/pedal-edit-105.png"));
+    QVERIFY(window.dock->grab().save("E:/programming/funcodes/muse3_plugins/P2/out/pedal-edit-105.png"));
     const QString path=_directory.path()+"/pedal-ui-105.mscx";QVERIFY(saveScore(score,path));
     std::unique_ptr<MasterScore> reopened(readCreatedScore(path));QVERIFY(reopened);
     QCOMPARE(pedalRanges105(reopened.get()),pedalRanges105(score));
@@ -272,9 +272,9 @@ void TestPerformanceEditor::pedalStripAndInterruptedGesture105() {
     QCOMPARE(pedalRanges105(score),QStringList({"4:0:960", "4:1200:1440", "4:1680:1920"}));
     tools->setCurrentIndex(0);
     QTest::mouseClick(view,Qt::LeftButton,Qt::NoModifier,QPoint(qRound(x(1800)),y+20));QTest::qWait(60);
-    view->repaint();QVERIFY(view->grab().save("E:/programming/funcodes/muse3_plugins/P2/native/personal/docs/images/review-20261024/pedal-strip-105.png"));
+    view->repaint();QVERIFY(view->grab().save("E:/programming/funcodes/muse3_plugins/P2/out/pedal-strip-105.png"));
     const int imageLeft=qMax(0,qRound(x(0))-115),imageRight=qMin(view->width(),qRound(x(1920))+20);
-    QVERIFY(view->grab(QRect(imageLeft,y-30,imageRight-imageLeft,112)).save("E:/programming/funcodes/muse3_plugins/P2/native/personal/docs/images/review-20261024/pedal-strip-detail-105.png"));
+    QVERIFY(view->grab(QRect(imageLeft,y-30,imageRight-imageLeft,112)).save("E:/programming/funcodes/muse3_plugins/P2/out/pedal-strip-detail-105.png"));
     editor->setScoreBandEnabled(wasOn);
     if(wasFollow)follow->trigger();
     if(auto action=editor->findChild<QAction*>(QString("performanceBandHeight%1").arg(oldHeight)))action->trigger();

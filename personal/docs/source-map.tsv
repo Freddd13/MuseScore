@@ -462,3 +462,9 @@ AI读谱与取图安排	personal/docs/AI_WORKFLOW_REVIEW_20261024.md	当前实�
 踏板设置保存	mscore/performanceeditor/parameteredit.cpp	bool pedalPlayback	57	整架乐器、单段、分谱与撤销	pedalPlaybackPersistence106 / pedalPlaybackLinked106
 踏板播放窗口	mscore/performanceeditor/performancecontrols.cpp	void PerformanceEditor::showPedalPlayback	233	自然宽度、主题及保存反馈	pedalPlaybackWindow106
 导出原谱踏板	audio/exports/exportmidi.cpp	if (options.writtenPedal)	263	原谱／当前演奏踏板与导出副本	pedalExportChoice106
+
+踏板实际区间	mscore/performanceeditor/performancecontrols.cpp	void PerformanceEditor::stepPedalPreview	349	按批读取、播放材料切换与链接谱表坐标	pedalGraphAfterPlayAndHide106 / pedalGraphBatchAndReuse106
+踏板播放索引	mscore/seq.cpp	void Seq::appendPreparedPedalPoints	1579	读取当前实际材料，GUI非等待式读取	pedalGraphAfterPlayAndHide106
+手动踏板保护	libmscore/pedalplaybackrender.h	inline QSet<const Part*> retainedParts	31	整谱手动来源用于分块与完整导出	pedalManualControllersAcrossChunks106
+导出踏板试听	mscore/midicrop/gateaudition.cpp	GateAudition prepareGateAudition	11	原新长度均读取本次选择的踏板	pedalExportChoice106
+三种钢琴声音	mtest/mscore/pluginhost/pedal_106_audio_tests.inc	pedalRealPianoOutput106	1	SF2、Pianoteq和CFX实际输出六份WAV	pedalRealPianoOutput106

@@ -3,6 +3,7 @@
 #include <QWidget>
 #include "../workflow/controlflowlayout.h"
 #include <QPointer>
+#include <QSharedPointer>
 #include <QTimer>
 #include <QVector>
 #include <QSet>
@@ -29,6 +30,7 @@ class QScrollBar;
 class QDoubleSpinBox;
 namespace Ms {
 class ScoreView;
+class Seq;
 class Segment;
 class System;
 class TempoText;
@@ -190,6 +192,21 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QToolButton* _pedalDelete = nullptr;
       QToolButton* _pedalPlaybackButton = nullptr;
       void showPedalPlayback();
+      struct PedalPlaybackInfo { int down = 0, up = 0; bool downKnown = false, upKnown = false; };
+      QHash<const Pedal*, PedalPlaybackInfo> _pedalPlaybackRanges;
+      QSet<const Part*> _retainedPedalParts;
+      QSharedPointer<EventMap> _pedalPreviewEvents;
+      QVector<Measure*> _pedalPreviewMeasures;
+      int _pedalPreviewMeasure = 0;
+      quint64 _pedalSeqVersion = 0;
+      ScoreContentState _pedalPreviewState;
+      QTimer _pedalPreviewTimer;
+      bool _pedalPreviewReady = false, _pedalNeedsRestPrep = false, _pedalRetainedKnown = false;
+      void startPedalPreview(bool invalidate = false);
+      void stepPedalPreview();
+      void cancelPedalPreview(bool clear = false);
+      bool pedalPreviewVisible() const;
+      void publishPedalPreview();
       Pedal* _selectedPedal = nullptr;
       bool _selectedPedalOnScore = false;
       int _pedalGrip = -1, _pedalOriginalFrom = 0, _pedalOriginalUntil = 0;
@@ -288,6 +305,8 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       void resetRange(bool data);
       void pauseFollow();
       void syncTransport();
+      QPointer<Seq> _sequencer;
+      QVector<QMetaObject::Connection> _sequencerConnections;
       void updatePlayhead();
       void seek(int);
       void playbackNotes();

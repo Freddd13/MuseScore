@@ -2,7 +2,7 @@
 
 当前修复进度、各功能剩余检查与后续顺序见[进度与完整计划](docs/REWORK_PROGRESS.md)。
 
-钢琴换踏板的设置、检查进度和后续声音验证见[本批操作](docs/PEDAL_PLAYBACK_106_WORK.md)。
+钢琴换踏板的整架乐器／单段设置、实际踩踏区间和MIDI选择见[完整操作](docs/PEDAL_106_GUIDE.md)。本批声音及界面结果见[检查记录](docs/PEDAL_106_CHECKS.md)。
 
 踏板相接两端的拖动、画抬起间隙、重画和删除恢复，见[踏板编辑](docs/PEDAL_105_GUIDE.md)。
 

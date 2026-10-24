@@ -35,6 +35,8 @@
 class QTimer;
 
 namespace Ms {
+// Times and source boundaries are unwound MIDI ticks; the payload owns no score objects.
+struct PreparedPedalPoint { int tick, nominal, staff, value; };
 
 class Note;
 class MasterScore;
@@ -164,6 +166,10 @@ class Seq : public QObject, public Sequencer {
       double meterPeakValue[2];
       int peakTimer[2];
 
+      QVector<PreparedPedalPoint> _preparedPedalPoints;
+      quint64 _preparedPedalVersion = 0;
+      void appendPreparedPedalPoints(const EventMap&);
+      void rebuildPreparedPedalPoints();
       EventMap events;                    // playlist for playback mode
       EventMap::const_iterator eventsEnd;
       EventMap renderEvents;              // event list that is rendered in background
@@ -367,6 +373,8 @@ class Seq : public QObject, public Sequencer {
       const QHash<int, ActivePitchInfo>& activePitches() const;
       const QList<ActiveNoteEventInfo>& activeNoteEvents() const;
 
+      // Numeric controller snapshot; a busy preparation never blocks the caller.
+      bool preparedPedalSnapshot(Score*, quint64&, QVector<PreparedPedalPoint>*);
       void invalidatePlaybackEvents() { Q_ASSERT(!isPlaying()); playlistChanged=true; }
       void synchronizeStoppedGui();
       void collectEvents(int utick);

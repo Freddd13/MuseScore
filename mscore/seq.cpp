@@ -57,6 +57,7 @@
 #include "libmscore/staff.h"
 #include "libmscore/tempo.h"
 #include "libmscore/playbacktiming.h"
+#include "libmscore/pedalplaybackrender.h"
 #include "libmscore/tie.h"
 #include "libmscore/utils.h"
 
@@ -1575,6 +1576,30 @@ void Seq::updateEventsEnd()
 //   collectEvents
 //---------------------------------------------------------
 
+void Seq::appendPreparedPedalPoints(const EventMap& source)
+      {
+      for (const auto& row : source) if (row.second.generatedPedal())
+            _preparedPedalPoints.append({row.first, row.second.nominalTick(), row.second.getOriginatingStaff(), row.second.value()});
+      ++_preparedPedalVersion;
+      }
+void Seq::rebuildPreparedPedalPoints()
+      {
+      _preparedPedalPoints.clear();
+      if (cs && PedalPlayback::enabled(cs)) appendPreparedPedalPoints(events);
+      else ++_preparedPedalVersion;
+      }
+bool Seq::preparedPedalSnapshot(Score* score, quint64& version, QVector<PreparedPedalPoint>* output)
+      {
+      if (!mutex.tryLock()) return false;
+      // During playback these points describe the material that is actually sounding.
+      const bool valid = score && cs == score->masterScore() && (!playlistChanged || state == Transport::PLAY);
+      if (valid && version != _preparedPedalVersion) {
+            *output = _preparedPedalPoints;
+            version = _preparedPedalVersion;
+            }
+      mutex.unlock(); return valid;
+      }
+
 void Seq::collectEvents(int utick)
       {
       //do not collect even while playing
@@ -1609,6 +1634,7 @@ void Seq::collectEvents(int utick)
             }
 
       updateEventsEnd();
+      rebuildPreparedPedalPoints();
       _preparedStartTarget = utick;
       _preparedStartTick = PlaybackTiming::startTick(events, utick, cs);
       playPos = mscore->loop() ? events.find(cs->loopInTick().ticks()) : events.cbegin();
@@ -1632,6 +1658,7 @@ void Seq::ensureBufferAsync(int utick)
 
             if (!renderEvents.empty()) {
                   // TODO: use C++17 map::merge()?
+                  appendPreparedPedalPoints(renderEvents);
                   events.insert(renderEvents.begin(), renderEvents.end());
                   updateEventsEnd();
                   renderEvents.clear();

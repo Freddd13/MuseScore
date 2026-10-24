@@ -14,7 +14,7 @@ struct PlaybackPreviewMaterial {
       QVector<QPair<double,double>> clock;
       QVariantMap reference;
 };
-PlaybackPreviewMaterial renderPlaybackPreview(Score* original, Score* rendered);
+PlaybackPreviewMaterial renderPlaybackPreview(Score* original, Score* rendered, bool pianoPedal = true);
 EventMap restoredPlaybackEvents(const EventMap&,int tick);
 EventMap resumePlaybackPreview(const EventMap&,int tick);
 void alignPreviewReference(PlaybackPreviewMaterial&);

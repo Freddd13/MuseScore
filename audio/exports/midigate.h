@@ -45,6 +45,7 @@ struct MidiGatePedal { int port=0, channel=0, down=0, up=0; bool supported=true;
 struct MidiGateTempo { int tick=0; double micros=500000.; };
 struct MidiGateData {
       int division = 480;
+      bool writtenPedal = false;
       QVector<MidiGateNote> notes;
       QVector<MidiGatePedal> pedals;
       QVector<MidiGateTempo> tempos;

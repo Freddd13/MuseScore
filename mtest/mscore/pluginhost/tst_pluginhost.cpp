@@ -168,6 +168,8 @@ class TestPluginHost : public QObject {
       void toolWindowScreenAndFullscreenRoundTrip();
       void spectrumButtonsAndFirstOpenContent();
       void cfxLiveStateKeepsEditorInstance();
+      void pedalRealPianoOutput106_data();
+      void pedalRealPianoOutput106();
       void personalToolWindowsRemainIndependent();
       void metronomeFontCompatibility() {
             QVERIFY(QFontDatabase().families().contains("Metronome Text 3"));
@@ -1393,6 +1395,7 @@ class TestPluginHost : public QObject {
 #include "layout_079_tests.inc"
 #include "arrangement_083_tests.inc"
 #include "vst_088_tests.inc"
+#include "pedal_106_audio_tests.inc"
 #include "layout_089_tests.inc"
 #include "components_092_tests.inc"
 #include "workspace_093_tests.inc"

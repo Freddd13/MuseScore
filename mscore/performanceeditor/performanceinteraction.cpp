@@ -317,6 +317,15 @@ void PerformanceEditor::pauseFollow()
       { _following = false; if (_followButton) { _followButton->setChecked(false); _followButton->setText(tr("跟随：暂停")); } }
 void PerformanceEditor::syncTransport()
       {
+      if (_sequencer != seq) {
+            for (auto connection : _sequencerConnections) disconnect(connection);
+            _sequencerConnections.clear(); _sequencer = seq;
+            if (seq) {
+                  _sequencerConnections.append(connect(seq, &Seq::stopped, this, [this] { cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); if (_snapshotDegraded) { _dirty = true; scheduleRefresh(); } startPedalPreview(); _commitTimer.start(0); syncTransport(); }));
+                  _sequencerConnections.append(connect(seq, &Seq::started, this, [this] { cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); _following = true; _followButton->setChecked(true); syncTransport(); startPedalPreview(); status(); }));
+                  _sequencerConnections.append(connect(seq, &Seq::heartBeat, this, [this](int, int, int) { syncTransport(); playbackNotes(); }));
+                  }
+            }
       const bool playing = surfacesActive() && _score && seq && seq->isPlaying() && seq->score() == _score->masterScore();
       if (playing) { if (!_playTimer.isActive()) _playTimer.start(); }
       else { _playTimer.stop(); if (!_playingNotes.isEmpty()) { _playingNotes.clear(); updateSurfaces(); } }
@@ -419,10 +428,10 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
             event->accept(); if (event->type() == QEvent::KeyPress) togglePlayback(); return true;
             }
       if(event->type()==QEvent::MouseButtonPress && parameter && static_cast<QMouseEvent*>(event)->button()==Qt::LeftButton && velocityHeaderClick(static_cast<QMouseEvent*>(event)->pos()))return true;
-      if (event->type() == QEvent::Show) { scheduleRefresh(); syncTransport(); syncOverlayTracking(); }
+      if (event->type() == QEvent::Show) { scheduleRefresh(); startPedalPreview(); syncTransport(); syncOverlayTracking(); }
       if (event->type() == QEvent::MouseButtonPress && parameter && static_cast<QMouseEvent*>(event)->button() == Qt::RightButton
             && tempoCurveMenu(static_cast<QMouseEvent*>(event)->pos(), false)) return true;
-      if (event->type() == QEvent::Hide) { finishWheel(); cancelSurfaceGesture(); cancelGesture(); _playTimer.stop(); _playingNotes.clear(); invalidateOverlay(); syncOverlayTracking(); }
+      if (event->type() == QEvent::Hide) { if (!pedalPreviewVisible()) cancelPedalPreview(); finishWheel(); cancelSurfaceGesture(); cancelGesture(); _playTimer.stop(); _playingNotes.clear(); invalidateOverlay(); syncOverlayTracking(); }
       if (event->type() == QEvent::Leave && !_dragging && !_marquee) updateHover(-1);
       if (event->type() == QEvent::Wheel) {
             auto wheel = static_cast<QWheelEvent*>(event);
