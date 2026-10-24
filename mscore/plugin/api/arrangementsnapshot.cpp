@@ -4,6 +4,9 @@
 #include "readonlyanalysisjob.h"
 #include "libmscore/chord.h"
 #include "libmscore/note.h"
+#include "libmscore/notevelocity.h"
+#include "mscore/musescore.h"
+#include "mscore/seq.h"
 #include "libmscore/measure.h"
 #include "libmscore/segment.h"
 #include "libmscore/select.h"
@@ -94,6 +97,16 @@ QVariantMap ScoreObserver::analysisRange(int start,int end,int firstTrack,int en
       if(!_score || revision.isEmpty())return {{"error","no-score"}};
       if(!expected.isEmpty() && expected!=revision)return {{"error","stale"},{"revision",revision}};
       if(playing())return {{"error","playing"},{"revision",revision}};
+      if(seq && !seq->backgroundRenderingIdle())return {{"error","rendering"},{"revision",revision}};
+      QElapsedTimer preparation;preparation.start();
+      struct VelocityCache {QPointer<Ms::Score> score;ScoreContentState state;};
+      static VelocityCache velocityCache;
+      const auto state=_score->masterScore()->state();
+      if(velocityCache.score!=_score || velocityCache.state!=state) {
+            auto master=_score->masterScore();master->updateVelo();if(_score!=master)_score->updateVelo();
+            velocityCache.score=_score;velocityCache.state=state;
+            }
+      const double preparationMilliseconds=double(preparation.nsecsElapsed())/1000000.;
       firstTrack=qBound(0,firstTrack,_score->ntracks());endTrack=qBound(firstTrack,endTrack,_score->ntracks());
       const int scoreEnd=_score->lastMeasure()?_score->lastMeasure()->endTick().ticks():0;
       start=qBound(0,start,scoreEnd);end=qBound(start,end,scoreEnd);fromTick=qMax(start,fromTick);limit=qBound(1,limit,64);
@@ -145,6 +158,9 @@ QVariantMap ScoreObserver::analysisRange(int start,int end,int firstTrack,int en
                         const auto part=_score->staff(track/VOICES)->part();
                         row.insert("partId",part->startTrack());row.insert("partName",part->instrumentName(Fraction::fromTicks(attack)));row.insert("piano",part->instrumentId(Fraction::fromTicks(attack)).contains("piano",Qt::CaseInsensitive));
                         row.insert("key",int(_score->staff(track/VOICES)->key(Fraction::fromTicks(at))));
+                        const int base=NoteVelocity::referenceBase(note,mscore?mscore->synthesizerState().method():1);
+                        row.insert("velocityType",int(note->veloType()));row.insert("velocityRaw",note->veloOffset());row.insert("velocityBase",base);
+                        row.insert("velocity",NoteVelocity::effective(base,note->veloType(),note->veloOffset()));row.insert("play",note->play()&&!note->hidden());
                         QVariantList fingering;
                         for(const auto annotation:note->el())if(annotation->isFingering())fingering.append(toTextBase(annotation)->plainText());
                         row.insert("fingerings",fingering);handData(note->el(),at,track,index++,graceIndex);notes.append(row);
@@ -176,6 +192,6 @@ QVariantMap ScoreObserver::analysisRange(int start,int end,int firstTrack,int en
             for(const auto& entry:*_score->tempomap())if(entry.first>=start && entry.first<end)tempos.append(QVariantMap{{"tick",entry.first},{"seconds",_score->tempomap()->tick2time(entry.first)}});
             }
       return {{"revision",revision},{"notes",notes},{"rests",rests},{"meters",meters},{"harmonies",harmonies},{"hands",hands},{"pedals",pedals},{"parts",parts},{"keys",keys},{"tempos",tempos},
-            {"nextTick",segment?segment->tick().ticks():end},{"done",!segment || segment->tick().ticks()>=end},{"milliseconds",double(timer.nsecsElapsed())/1000000.},{"coverage",QString("%1–%2; tracks %3–%4").arg(start).arg(end).arg(firstTrack).arg(endTrack)}};
+            {"nextTick",segment?segment->tick().ticks():end},{"done",!segment || segment->tick().ticks()>=end},{"milliseconds",preparationMilliseconds+double(timer.nsecsElapsed())/1000000.},{"preparationMilliseconds",preparationMilliseconds},{"coverage",QString("%1–%2; tracks %3–%4").arg(start).arg(end).arg(firstTrack).arg(endTrack)}};
       }
 }}

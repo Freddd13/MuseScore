@@ -80,41 +80,35 @@ QVariantMap ScoreObserver::workflowInfo() {
 QVariantMap ScoreObserver::performanceRange(int start,int end,int firstTrack,int endTrack,int fromTick,int limit,const QString& expected) {
  QElapsedTimer work;work.start();
  // Bounded cache shared by independent workflow observers, invalidated by native content state.
- struct Cache {QPointer<Ms::Score> score;ScoreContentState state;TempoMap clock;QVector<QPair<int,int>> curves;MarkVelocityText marks;QMap<int,double> expressionTempos;QCache<QString,QVariantMap> pages{64};};static Cache cache;
+ struct Cache {QPointer<Ms::Score> score;ScoreContentState state;int method=-1;TempoMap clock;QVector<QPair<int,int>> curves;MarkVelocityText marks;QMap<int,double> expressionTempos;QCache<QString,QVariantMap> pages{64};};static Cache cache;
  const QString revision=analysisRevision();
  if(!_score||(!expected.isEmpty()&&revision!=expected)||playing())return {{"error","stale-or-playing"}};
+ if(seq&&!seq->backgroundRenderingIdle())return {{"error","rendering"}};
+ const int method=mscore?mscore->synthesizerState().method():1;
  const auto state=_score->masterScore()->state();
- if(cache.score!=_score||cache.state!=state){cache.score=_score;cache.state=state;cache.pages.clear();cache.clock=*_score->tempomap();cache.clock.setRelTempo(1.0);cache.marks=readMarkVelocityText(_score);cache.expressionTempos=ExpressionTempo::read(_score->masterScore());cache.curves.clear();for(auto curve:TempoExpression::curves(_score->masterScore()))cache.curves.append({curve->tick().ticks(),curve->tick2().ticks()});}
+ if(cache.score!=_score||cache.state!=state||cache.method!=method){cache.score=_score;cache.state=state;cache.method=method;cache.pages.clear();cache.clock=*_score->tempomap();cache.clock.setRelTempo(1.0);cache.marks=readMarkVelocityText(_score);cache.expressionTempos=ExpressionTempo::read(_score->masterScore());cache.curves.clear();for(auto curve:TempoExpression::curves(_score->masterScore()))cache.curves.append({curve->tick().ticks(),curve->tick2().ticks()});}
  QString key=QString("%1:%2:%3:%4:%5:%6").arg(start).arg(end).arg(firstTrack).arg(endTrack).arg(fromTick).arg(limit);
  if(auto saved=cache.pages.object(key)){auto value=*saved;value.insert("revision",revision);value.insert("milliseconds",double(work.nsecsElapsed())/1000000);return value;}
  auto page=analysisRange(start,end,firstTrack,endTrack,fromTick,limit,expected);
  if(page.contains("error"))return page;
  const auto& scoreClock=cache.clock;
- QVariantList notes;QSet<const Chord*> visited;
+ QVariantList notes;
  for(auto v:page.value("notes").toList()){
   auto n=v.toMap();auto note=resolve(n);if(!note)continue;
-  int base=NoteVelocity::referenceBase(note);
+  const bool grace=n.value("grace").toBool();
+  if(grace){const auto id=QString("g:%1:%2:%3:%4").arg(n.value("tick").toInt()).arg(n.value("track").toInt()).arg(n.value("graceIndex").toInt()).arg(n.value("index").toInt());n.insert("id",id);n.insert("logicalId",id);n.insert("tieBack",false);}
+  const int base=n.value("velocityBase").toInt();
   n.insert("scoreSeconds",scoreClock.tick2time(n.value("tick").toInt()));
   n.insert("velocityMark",markVelocityAt(cache.marks,note->track(),n.value("tick").toInt()));
   n.insert("velocityType",int(note->veloType()));n.insert("velocityRaw",note->veloOffset());n.insert("velocityBase",base);
   n.insert("velocity",NoteVelocity::effective(base,note->veloType(),note->veloOffset()));
-  bool manual=note->veloType()!=Ms::Note::ValueType::OFFSET_VAL||note->veloOffset()!=0||note->chord()->playEventType()==PlayEventType::User;
-  n.insert("protected",manual);n.insert("protection",manual?"manual velocity / play events":"");
-  bool tempoProtected=false;
+  bool manual=grace||note->veloType()!=Ms::Note::ValueType::OFFSET_VAL||note->veloOffset()!=0||note->chord()->playEventType()==PlayEventType::User;
+  n.insert("protected",manual);n.insert("protection",grace?"grace / ornament":manual?"manual velocity / play events":"");
+  bool tempoProtected=grace;
   auto segment=note->chord()->segment();for(auto e:segment->annotations())if(e->isTempoText()&&!ExpressionTempo::owns(toTempoText(e),cache.expressionTempos))tempoProtected=true;
   for(auto curve:cache.curves)if(n.value("tick").toInt()>=curve.first&&n.value("tick").toInt()<curve.second)tempoProtected=true;
   n.insert("tempoProtected",tempoProtected);n.insert("bpm",_score->tempomap()->tempo(n.value("tick").toInt())*60);
   notes.append(n);
-  auto chord=note->chord();
-  if(!visited.contains(chord)){visited.insert(chord);int gi=0;
-   for(auto grace:chord->graceNotes()){int ni=0;for(auto gn:grace->notes()){
-    auto g=describe(gn,gn->ppitch());g.insert("tick",n["tick"]);g.insert("graceIndex",gi);g.insert("index",ni++);
-    const QString id=QString("g:%1:%2:%3:%4").arg(n["tick"].toInt()).arg(gn->track()).arg(gi).arg(ni-1);
-    g.insert("id",id);g.insert("logicalId",id);g.insert("grace",true);g.insert("tieBack",false);g.insert("onSeconds",n["onSeconds"]);g.insert("measure",n["measure"]);g.insert("bpm",n["bpm"]);g.insert("tempoProtected",true);
-    int gb=NoteVelocity::referenceBase(gn);g.insert("velocityType",int(gn->veloType()));g.insert("velocityRaw",gn->veloOffset());g.insert("velocityBase",gb);g.insert("velocity",NoteVelocity::effective(gb,gn->veloType(),gn->veloOffset()));
-    g.insert("protected",true);g.insert("protection","grace / ornament");notes.append(g);
-   }++gi;}
-  }
  }
  // Return the written clock and protection data alongside this bounded page.
  auto master=_score->masterScore();const int until=page.value("done").toBool()?end:page.value("nextTick").toInt();

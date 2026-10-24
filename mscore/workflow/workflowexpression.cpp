@@ -74,7 +74,7 @@ QVariantMap ScoreObserver::applyExpression(const QVariantMap& candidate){
  for(auto value:values){
   auto v=value.toMap();int tick=v["tick"].toInt(),track=v["track"].toInt();auto note=noteAt(_score,v);
   if(!note||tick<start||tick>=end||track<first||track>=last||velocities.contains(note))return {{"error","invalid, duplicate or changed note"}};
-  int target=v.value("target",-1).toInt(),base=NoteVelocity::referenceBase(note);
+  int target=v.value("target",-1).toInt(),base=NoteVelocity::referenceBase(note,mscore?mscore->synthesizerState().method():1);
   if(target<1||target>127||!v.contains("oldType")||!v.contains("oldRaw")||!v.contains("oldBase")||int(note->veloType())!=v["oldType"].toInt()||note->veloOffset()!=v["oldRaw"].toInt()||base!=v["oldBase"].toInt())return {{"error","changed velocity or playback base"}};
   bool protectedNote=note->veloType()!=Ms::Note::ValueType::OFFSET_VAL||note->veloOffset()!=0||note->chord()->playEventType()==PlayEventType::User||(v.contains("graceIndex")&&v["graceIndex"].isValid()&&!v["graceIndex"].isNull());
   if(protectedNote&&!v.value("unlock").toBool())return {{"error","protected note has not been explicitly unlocked"}};
@@ -117,7 +117,7 @@ QVariantMap ScoreObserver::applyExpression(const QVariantMap& candidate){
  if(!tempoValues.isEmpty())for(auto value:candidate.value("tempoNodes").toList()){const int tick=value.toInt();if(tick>=start&&tick<=end)appliedTempos.append(QVariantMap{{"tick",tick},{"bpm",_score->tempomap()->tempo(tick)*60}});}
  if(appliedTempos.isEmpty())appliedTempos=tempoValues;
  QVariantList appliedValues;
- for(auto value:values){auto item=value.toMap();auto note=noteAt(_score,item);item["oldType"]=int(note->veloType());item["oldRaw"]=note->veloOffset();item["oldBase"]=NoteVelocity::referenceBase(note);appliedValues.append(item);}
+ for(auto value:values){auto item=value.toMap();auto note=noteAt(_score,item);item["oldType"]=int(note->veloType());item["oldRaw"]=note->veloOffset();item["oldBase"]=NoteVelocity::referenceBase(note,mscore?mscore->synthesizerState().method():1);appliedValues.append(item);}
  return {{"ok",true},{"changed",velocities.size()+bpm.size()},{"durationError",error},{"duration",newDuration},{"revision",analysisRevision()},{"appliedVelocity",appliedValues},{"appliedTempos",appliedTempos}};
 }
 QVariantMap ScoreObserver::copyWorkflowScore(const QString& destination,const QString& expected,bool overwrite){

@@ -16,7 +16,7 @@
 
 AI怎样读取当前谱、标题和图片，见[当前实现与后续安排](docs/AI_WORKFLOW_REVIEW_20261024.md)。当前旧画谱入口会根据音符重新排版；MuseScore原生选段图片与数据一起提供的功能安排在E阶段。
 
-本文对应个人版本：**0.117.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+本文对应正在检查的个人版本：**0.118.0**（已安装版本0.117.0） · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
 
 从完整MIDI寻找选段、分别选择两音改对应、撤销重做及使用力度，见[演奏表达操作](docs/EXPRESSION_096_GUIDE.md)。采用演奏中的快慢、分范围使用速度与长休止录制，见[速度与录制](docs/EXPRESSION_097_GUIDE.md)。
 
@@ -320,6 +320,8 @@ Ctrl+Z撤销，编辑菜单中的“重做”可恢复这一步。节点位置�
 
 ## 10. 编配检查
 
+低音排列的发声设置、装饰音对应与修改力度后的更新，见[操作与例子](docs/ARRANGEMENT_118_GUIDE.md)。
+
 长伴奏转旋律、选区之前的谱内和弦及修改后的更新，见[操作例子](docs/ARRANGEMENT_117_GUIDE.md)。
 
 复音后的单音线、装饰音和主音选择，见[具体操作](docs/ARRANGEMENT_116_GUIDE.md)。
@@ -436,6 +438,8 @@ Ctrl+Z撤销，编辑菜单中的“重做”可恢复这一步。节点位置�
 
 
 ## 12. 演奏表达：把演奏力度用到谱子
+
+同音装饰音现可分别对应、强调和采用，见[装饰音例子](docs/ARRANGEMENT_118_GUIDE.md)。
 
 从“视图 → 演奏表达”打开，按 **目标谱段 → 导入／录制 → 比较试听 → 使用力度／使用速度** 操作。顶部始终显示目标小节和谱表；“当前选区”和“全谱”可以直接改范围。
 

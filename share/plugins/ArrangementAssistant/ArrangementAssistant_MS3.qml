@@ -182,7 +182,7 @@ MuseScore {
         if(!task) {
             if(!snapshot.rangeDone) {
             var page=observer.analysisRange(snapshot.contextStart,snapshot.scope.end,snapshot.scope.firstTrack,snapshot.scope.endTrack,snapshot.next,16,revision)
-            if(page.error) {cancel();status="读取暂停："+page.error;stale=true;return}
+            if(page.error) {cancel();stale=true;if(page.error==="rendering") {status=config.autoRefresh?"等待播放准备完成…":"播放准备完成后，点击更新结果继续";if(config.autoRefresh && activeSurface)refresh.restart()}else status="读取暂停："+page.error;return}
             var names=["notes","rests","meters","harmonies","hands","pedals","parts","keys","tempos"]
             for(var i=0;i<names.length;++i)Array.prototype.push.apply(snapshot[names[i]],page[names[i]]||[])
             snapshot.next=page.nextTick

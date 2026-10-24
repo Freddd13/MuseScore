@@ -512,3 +512,7 @@ CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件�
 局部音型	share/plugins/ArrangementAssistant/Rules.js	stepTexture	118	分批辨认音型与恢复单音线	arrangementMixedTexture117
 前文和弦	mscore/plugin/api/arrangementsnapshot.cpp	ScoreObserver::analysisHarmonyContext	69	分页、所属乐器与版本	arrangementPrefixContext117 / arrangementPrefixParts117
 局部资料合并	share/plugins/ArrangementAssistant/Context.js	merge	41	更新和弦、分手及范围外资料	test-context-117.cjs
+完整演奏音符	mscore/workflow/scoreworkflow.cpp	QVariantMap ScoreObserver::performanceRange	80	单次读取装饰音、独立力度与旧编号	expressionGraceRows118
+装饰音定位	mscore/plugin/api/scoreobserver.cpp	Ms::Note* ScoreObserver::resolve	396	装饰音身份与独立预览	expressionGraceRows118
+力度资料	mscore/plugin/api/arrangementsnapshot.cpp	struct VelocityCache	102	按修改刷新并供分页复用	arrangementVelocitySnapshot118
+发声音筛选	share/plugins/ArrangementAssistant/Rules.js	function lowVoicing	11	低音排列排除不播放音	arrangementAudibleRows118 / test-sounding-118.cjs

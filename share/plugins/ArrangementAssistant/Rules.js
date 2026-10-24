@@ -9,7 +9,7 @@ var lowIntervalLimits={"1":52,"2":51,"3":48,"4":46,"5":46,"6":46,"7":34,"8":43,"
 var lowIntervalNames={"1":"小二度","2":"大二度","3":"小三度","4":"大三度","5":"纯四度","6":"三全音","7":"纯五度","8":"小六度","9":"大六度","10":"小七度","11":"大七度","13":"小九度","14":"大九度","15":"小十度","16":"大十度"};
 function pitchLabel(n){return Harmony.spelledName(n.tpc,n.pitch,false)+(Math.floor(n.pitch/12)-1);}
 function lowVoicing(s,frame){
-    var held=frame.notes.filter(function(n){return !n.grace&&n.piano!==false&&(n.soundingEnd===undefined?n.logicalEnd:n.soundingEnd)>frame.tick;}),notes=[],reasons=[],keys=[],byKey={};
+    var held=frame.notes.filter(function(n){return !n.grace&&n.play!==false&&n.piano!==false&&(n.soundingEnd===undefined?n.logicalEnd:n.soundingEnd)>frame.tick;}),notes=[],reasons=[],keys=[],byKey={};
     held.forEach(function(n){
         var part=n.partId===undefined?s.data.scope.firstTrack:n.partId,key=part+":"+n.pitch,group=byKey[key];
         if(!group){group={part:part,pitch:n.pitch,notes:[],latest:n.attackTick};byKey[key]=group;keys.push(group);}

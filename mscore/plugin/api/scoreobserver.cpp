@@ -403,7 +403,15 @@ Ms::Note* ScoreObserver::resolve(const QVariantMap& value, const QHash<int, Ms::
       if (!segment) return nullptr;
       auto element = segment->element(track);
       if (!element || !element->isChord()) return nullptr;
-      const auto& notes = toChord(element)->notes();
+      auto chord=toChord(element);
+      const auto grace=value.value("graceIndex");
+      if(grace.isValid() && !grace.isNull()) {
+            bool valid=false;const int index=grace.toInt(&valid);
+            if(!valid || index< -1 || (index<0 && value.value("grace").toBool()))return nullptr;
+            if(index>=0){if(index>=chord->graceNotes().size())return nullptr;chord=chord->graceNotes()[index];}
+            }
+      else if(value.value("grace").toBool())return nullptr;
+      const auto& notes = chord->notes();
       if (index >= int(notes.size())) return nullptr;
       auto note = notes[index];
       if (note->pitch() != value.value("writtenPitch", value.value("pitch")).toInt() ||
