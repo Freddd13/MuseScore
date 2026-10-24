@@ -184,7 +184,7 @@ Tap 入口	mscore/taptempo/taptempo.cpp	QWidget* TapTempo::createButton	75	菜�
 MIDI 裁剪	audio/exports/midigate.h	class MidiGateProcessor	54	值副本释放保护与可复现微随机	mtest/mscore/p0native
 MIDI 最终事件	audio/exports/midigatefile.cpp	MidiGateData midiGateSnapshot	9	正常导出事件配对及踏板控制保护	mtest/mscore/p0native
 MIDI 对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare	209	可取消后台计算及可见范围卷帘	mtest/mscore/p0native
-编配完整分页	mscore/plugin/api/arrangementsnapshot.cpp	QVariantMap ScoreObserver::analysisRange	68	版本保护的完整复调值数据	mtest/mscore/p0native
+编配完整分页	mscore/plugin/api/arrangementsnapshot.cpp	QVariantMap ScoreObserver::analysisRange	69	版本保护的完整复调值数据	mtest/mscore/p0native
 只读 JS 任务	mscore/plugin/api/readonlyanalysisjob.cpp	void ReadOnlyAnalysisJob::start	22	独立可取消 JS 引擎	mtest/mscore/p0native
 编配插件	share/plugins/ArrangementAssistant/Rules.js	function defaults()	38	音乐规则与可校正角色	mtest/mscore/p0native
 Tap 工作区迁移	mscore/workspace.cpp	if (uiVersion < 4)	1113	一次性添加共享入口，保留后续用户自定义	mtest/mscore/p0native
@@ -224,7 +224,7 @@ MIDI导出	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::voiceSelection	200	�
 自由圆滑线	libmscore/freeslur.cpp	bool SlurSegment::displayedFreeNode(double	380	从当前显示位置添加和锁定节点	mtest/mscore/performanceeditor
 分手标记	mscore/handbracketsettings.cpp	void addHandBracketDefaultControls(	47	四种个人默认形状、设置读写与面板按钮	mtest/mscore/performanceeditor;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 分手标记	mscore/handbracketsettings.cpp	void completeHandBracketPalette(	69	四种格子补齐与缩小显示	mtest/mscore/performanceeditor;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
-分手标记	mscore/plugin/api/arrangementsnapshot.cpp	auto handData	81	完整分手含义与附着音信息	mtest/mscore/performanceeditor;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
+分手标记	mscore/plugin/api/arrangementsnapshot.cpp	auto handData	82	完整分手含义与附着音信息	mtest/mscore/performanceeditor;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 琴键与松手	libmscore/pianohands.h	inline Plan plan(	143	分手候选、个人跨度和指法约束	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 琴键与松手	libmscore/pianohands.h	inline bool releaseForHand(	57	有界保留音区搜索与少松键选择	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 分手范围	libmscore/handbracketanalysis.cpp	QHash<const Note*,int> assignments(	50	导出准备时读取分手语义和范围	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
@@ -380,7 +380,7 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	241	空列�
 演奏编辑设置	mscore/performanceeditor/editorsettings.cpp	void showPerformanceSettings(	30	按键、默认力度、旧记号更新、一次撤销、原生主题与统一滚动	mtest/mscore/performanceeditor/dynamic_defaults_082_tests.inc;../../muse3_plugins/P2/check_dynamic_defaults.py
 正常窗口绘制检查	mtest/mscore/nativeui/tst_nativeui.cpp	    void initialPanelsRender()	112	按正常绘制方式检查首次画面、保存和绘图警告	mtest/mscore/nativeui/tst_nativeui.cpp;../../muse3_plugins/P2/test_existing.py
 原曲关联与扒谱选择	share/workflow/panels/ReferencePlayer/ReferencePlayer.view.qml	 function identifiedAssociations(	84	为新旧关联保留稳定身份，检查播放器选段、首次打开和卷帘共同缩放	mtest/mscore/pluginhost/spectrum_078_tests.inc
-明确的对位音线	share/plugins/ArrangementAssistant/Rules.js	function roleFor(	115	用户选择音线后参与检查，显式关闭独立声部继续保留	mtest/mscore/pluginhost/arrangement_083_tests.inc;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
+明确的对位音线	share/plugins/ArrangementAssistant/Rules.js	function roleFor(	125	用户选择音线后参与检查，显式关闭独立声部继续保留	mtest/mscore/pluginhost/arrangement_083_tests.inc;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 低音同音加倍	share/plugins/ArrangementAssistant/Rules.js	function lowVoicing(	11	一个物理音程只列一次说明，保留全部谱面音	mtest/mscore/pluginhost/arrangement_083_tests.inc;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 编配当前项目与说明	share/plugins/ArrangementAssistant/ArrangementAssistant_MS3.qml	    function finishResult(	202	更新后保留当前提示，筛选和谱旁说明使用同一组问题	mtest/mscore/pluginhost/arrangement_083_tests.inc;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 原曲时间叠加缩放	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::editorTimelineZoomed(	1164	全曲、选区、参数区与卷帘共用叠加缩放，保留浏览时刻	mtest/mscore/pluginhost/spectrum_078_tests.inc
@@ -501,8 +501,11 @@ CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件�
 统一调性显示	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	displayInterpretation	990	级数、离调颜色及导出使用相同调性	harmonyLegacyAndFailure113 / harmonyScopedImport113
 按乐器处理分析	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	regionInScope	219	导入、导出和重新检测保留范围外记录	harmonyLegacyAndFailure113 / harmonyScopedImport113
 未确定和弦入口	share/workflow/panels/HarmonyAssistant/Timeline.js	evaluate	336	保留未确定复音与不同音组边界	harmonyUnknownAndPoints114 / test-unresolved.cjs
-非和弦音上下文	share/plugins/ArrangementAssistant/Rules.js	explained	191	同一连续音线、休止与准备音	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
-和声持续范围	share/plugins/ArrangementAssistant/Rules.js	harmonyEnd	205	当前解释与实际同时发声时间	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
-对位前后音	share/plugins/ArrangementAssistant/Rules.js	counterpoint	262	交叉、隐伏、具体音线与依据	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
-共享和声来源	share/plugins/ArrangementAssistant/Rules.js	sharedHarmony	414	保留自动及人工来源	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
+非和弦音上下文	share/plugins/ArrangementAssistant/Rules.js	explained	231	同一连续音线、休止与准备音	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
+和声持续范围	share/plugins/ArrangementAssistant/Rules.js	harmonyEnd	245	当前解释与实际同时发声时间	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
+对位前后音	share/plugins/ArrangementAssistant/Rules.js	counterpoint	327	交叉、隐伏、具体音线与依据	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
+共享和声来源	share/plugins/ArrangementAssistant/Rules.js	sharedHarmony	480	保留自动及人工来源	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
 人工修改后共享	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	publishRegions	225	谱内保存后发布当前解释	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
+局部声部检查	share/plugins/ArrangementAssistant/Rules.js	structuralLine	308	复音位置中断与单音恢复	arrangementVoiceContinuity116 / arrangementKeySnapshot116 / arrangementKeySpellingUI116
+各乐器调号	share/plugins/ArrangementAssistant/Rules.js	partsAt	181	实际键号与有序查找	arrangementVoiceContinuity116 / arrangementKeySnapshot116 / arrangementKeySpellingUI116
+主音拼写	share/plugins/ArrangementAssistant/Rules.js	tonicChoice	318	界面、算法与说明共用	arrangementVoiceContinuity116 / arrangementKeySnapshot116 / arrangementKeySpellingUI116

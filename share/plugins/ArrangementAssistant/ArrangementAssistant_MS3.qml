@@ -170,7 +170,7 @@ MuseScore {
             if(target.end<=target.start) {localRefresh=false;target=Rules.clone(scope)}
         }
         var context=Math.max(0,target.start-3840)
-        snapshot={scope:target,notes:[],rests:[],meters:[],harmonies:[],hands:[],pedals:[],parts:[],tempos:[],contextStart:context,next:context}
+        snapshot={scope:target,notes:[],rests:[],meters:[],harmonies:[],hands:[],pedals:[],parts:[],keys:[],tempos:[],contextStart:context,next:context}
         task=null;running=true;status="读取完整声部…";work.start()
     }
     function slice() {
@@ -180,7 +180,7 @@ MuseScore {
         if(!task) {
             var page=observer.analysisRange(snapshot.contextStart,snapshot.scope.end,snapshot.scope.firstTrack,snapshot.scope.endTrack,snapshot.next,16,revision)
             if(page.error) {cancel();status="读取暂停："+page.error;stale=true;return}
-            var names=["notes","rests","meters","harmonies","hands","pedals","parts","tempos"]
+            var names=["notes","rests","meters","harmonies","hands","pedals","parts","keys","tempos"]
             for(var i=0;i<names.length;++i)Array.prototype.push.apply(snapshot[names[i]],page[names[i]]||[])
             snapshot.next=page.nextTick
             if(page.done) {
@@ -211,6 +211,8 @@ MuseScore {
                     var begin=pendingData.contextStart,end=pendingData.scope.end
                     cachedData.notes=cachedData.notes.filter(function(n){return n.tick<begin || n.tick>=end}).concat(pendingData.notes)
                     cachedData.pedals=cachedData.pedals.filter(function(p){return p.end<=begin || p.tick>=end}).concat(pendingData.pedals)
+                    cachedData.keys=(cachedData.keys||[]).filter(function(k){return k.tick<begin || k.tick>=end}).concat(pendingData.keys||[])
+                    cachedData.parts=pendingData.parts
                 } else cachedData=pendingData
             }
             dirtyStart=-1;dirtyEnd=-1;pendingData=null
@@ -386,7 +388,7 @@ Flickable {
                 Layout.fillWidth:true
                 Label {text:"编配检查";font.bold:true;color:theme.text;Layout.fillWidth:true}
                 Desk.DeskButton {text:"顶部摘要";onClicked:{var c=Rules.clone(root.config);c.dualPanel=true;root.config=c;root.persist();if(root.ribbon)root.focusPanel();else root.showSummaryPanel(true)}}
-                Desk.DeskButton {iconName:"settings";text:"设置";onClicked:settings.open()}
+                Desk.DeskButton {objectName:"arrangementSettings";iconName:"settings";text:"设置";onClicked:settings.open()}
                 Desk.DeskButton {id:moreButton;objectName:"arrangementMore";text:"更多";onClicked:{var point=moreButton.mapToItem(details,0,moreButton.height);moreMenu.x=Math.max(0,Math.min(details.width-moreMenu.width,point.x));moreMenu.y=point.y;moreMenu.open()}}
             }
             Label {Layout.fillWidth:true;elide:Text.ElideRight;color:theme.text;text:root.requested?"检查范围：第 "+root.scope.firstMeasure+"–"+root.scope.lastMeasure+" 小节 · "+(root.scope.part||"钢琴"):"选择要检查的小节"}
@@ -497,7 +499,10 @@ Flickable {
                 }
                 Label {text:"只用于判断旧音是否可以松开，不改时值或导出最小长度。";color:theme.muted;font.pixelSize:11;wrapMode:Text.WordWrap;Layout.fillWidth:true}
                 Desk.DeskComboBox {model:["摘要左对齐","摘要居中","摘要右对齐"];currentIndex:root.config.alignment;onActivated:{var c=Rules.clone(root.config);c.alignment=currentIndex;root.config=c;root.persist()}}
-                Desk.DeskComboBox {model:["调性未确认"].concat(Harmony.rootNames);currentIndex:root.config.tonic<0?0:Harmony.rootPcs.indexOf(root.config.tonic)+1;onActivated:{var c=Rules.clone(root.config);c.tonic=currentIndex?Harmony.rootPcs[currentIndex-1]:-1;root.config=c;root.persist();root.markDirty()}}
+                RowLayout {
+                    Label {text:"主音";color:theme.text}
+                    Desk.DeskComboBox {objectName:"arrangementTonic";model:["调性未确认"].concat(Harmony.rootNames);currentIndex:Rules.tonicChoice(root.config)+1;onActivated:{var c=Rules.clone(root.config);c.tonic=currentIndex?Harmony.rootPcs[currentIndex-1]:-1;c.tonicSpelling=currentIndex?Harmony.rootNames[currentIndex-1]:"";root.config=c;root.persist();root.markDirty()}}
+                }
                 Desk.DeskSwitch {text:"已确认小调";enabled:root.config.tonic>=0;checked:root.config.minor;onClicked:{var c=Rules.clone(root.config);c.minor=checked;root.config=c;root.persist();root.markDirty()}}
                 Desk.DeskButton {text:"低音程参考表…";onClicked:intervalLimits.open()}
                 Label {text:"对位规则（预设可覆盖）";color:theme.text}
@@ -531,7 +536,7 @@ Flickable {
         ScrollView {id:rolesScroll;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:availableWidth
             ScrollBar.vertical:ScrollBar {id:rolesScrollBar;policy:ScrollBar.AsNeeded}
             ColumnLayout {width:Math.max(0,rolesScroll.availableWidth-rolesScrollBar.implicitWidth-4)
-                Label {text:roles.length?"按谱表和声部设置。选定旋律、低音或内声部后，检查所选音线的对位；加倍声部可关闭“独立声部”。":"点击更新结果后，这里会列出声部。";wrapMode:Text.WordWrap;Layout.fillWidth:true;color:theme.muted}
+                Label {text:roles.length?"按谱表和声部设置。复音处可指定最高音或最低音，清楚的单音段会继续检查。加倍同一旋律时关闭“独立声部”。":"点击更新结果后，这里会列出声部。";wrapMode:Text.WordWrap;Layout.fillWidth:true;color:theme.muted}
                 Repeater {model:root.roles
                     ColumnLayout {property int track:modelData.track;property var row:modelData
                         Label {text:"谱表"+(Math.floor(track/4)+1)+" · 声部 "+(track%4+1)+" · "+row.source+(row.uncertain?" · 待确认":"");color:theme.text;Layout.fillWidth:true;wrapMode:Text.WordWrap}

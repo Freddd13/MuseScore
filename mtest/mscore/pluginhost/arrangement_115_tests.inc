@@ -25,7 +25,7 @@ static QByteArray arrangementScore115(const QVariantList& notes,bool writtenHarm
     for(int staff=1;staff<=2;++staff)xml+="<Staff id=\""+QByteArray::number(staff)+"\"><StaffType group=\"pitched\"/></Staff>";
     xml+="<trackName>Piano</trackName><Instrument id=\"piano\"><Channel/></Instrument></Part>";
     for(int track:{0,4}) {
-        xml+="<Staff id=\""+QByteArray::number(track/4+1)+"\"><Measure><voice><Clef><concertClefType>"+(track?QByteArray("F"):QByteArray("G"))+"</concertClefType></Clef><TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>";
+        const auto clef=track?QByteArray("F"):QByteArray("G");xml+="<Staff id=\""+QByteArray::number(track/4+1)+"\"><Measure><voice><Clef><concertClefType>"+clef+"</concertClefType><transposingClefType>"+clef+"</transposingClefType></Clef><TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>";
         QMap<int,QVariantList> groups;
         for(const auto& value:notes){auto row=value.toList();if(row[3].toInt()==track)groups[row[1].toInt()].append(value);}
         int current=0;

@@ -39,7 +39,7 @@ function defaults() {
     return {schema:1,style:0,autoRefresh:true,dualPanel:true,alignment:1,
         harmony:true,counterpoint:true,playability:true,lowIntervalLimits:clone(lowIntervalLimits),
         scoreHints:false,left:{comfort:14,maximum:15,white:16},right:{comfort:14,maximum:15,white:16},
-        roles:{},ruleOverrides:{},handOverrides:[],ignored:[],chords:[],tonic:-1,minor:false,minimumHoldMs:120};
+        roles:{},ruleOverrides:{},handOverrides:[],ignored:[],chords:[],tonic:-1,tonicSpelling:"",minor:false,minimumHoldMs:120};
 }
 function clone(v) {return JSON.parse(JSON.stringify(v));}
 function white(p) {return [0,2,4,5,7,9,11].indexOf(Harmony.mod12(p))>=0;}
@@ -55,11 +55,21 @@ function perfect(a,b) {
 }
 function create(data,config,imported) {
     return {data:data,config:clone(config),imported:imported||[],phase:0,index:0,byTick:{},ticks:[],byTrack:{},
-        frames:[],active:[],pedalNotes:[],roles:[],issues:[],previousHands:{},previousLines:{},pairState:{},regions:[],seen:{},logicalSeen:{},trackTicks:{},trackIndices:{},trackParts:{},handIndex:indexHands(data.hands||[])};
+        frames:[],active:[],pedalNotes:[],roles:[],issues:[],previousHands:{},previousLines:{},pairState:{},regions:[],seen:{},logicalSeen:{},trackTicks:{},trackIndices:{},trackParts:{},keyIndex:indexKeys(data.keys||[]),handIndex:indexHands(data.hands||[])};
+}
+function indexKeys(keys) {
+    var result={};keys.forEach(function(event){(result[event.track]||(result[event.track]=[])).push(event);});
+    for(var track in result)result[track].sort(function(a,b){return a.tick-b.tick;});
+    return result;
+}
+function precedingTick(list,tick,events) {
+    var lo=0,hi=list.length;
+    while(lo<hi){var mid=(lo+hi)>>1;if((events?list[mid].tick:list[mid])<=tick)lo=mid+1;else hi=mid;}
+    return lo-1;
 }
 function indexHands(marks) {
     var tracks={},out={};
-    for(var i=0;i<marks.length;++i)(tracks[marks[i].track]||(tracks[marks[i].track]=[])).push(marks[i]);
+    for(var i=0;i<marks.length;++i)if(!marks[i].grace)(tracks[marks[i].track]||(tracks[marks[i].track]=[])).push(marks[i]);
     for(var track in tracks) {
         var list=tracks[track].slice().sort(function(a,b){return a.tick-b.tick || (a.end===true||a.marker==="end"?1:0)-(b.end===true||b.marker==="end"?1:0);});
         var index={left:[],right:[],singles:{}},next={left:null,right:null},matched={};
@@ -159,19 +169,49 @@ function handFor(s,n,tick) {
     if(uncertain)return {hand:"auto",source:"分手标记之间有多个同时音，请确认所指声部"};
     return {hand:role && role.hand!=="auto"?role.hand:Math.floor(n.track/4)>Math.floor(s.data.scope.firstTrack/4)?"left":"right",source:"自动推断"};
 }
-function chordAt(s,tick) {
+function partFor(s,track) {
+    if(s.trackParts[track]!==undefined)return s.trackParts[track];
+    var parts=s.data.parts||[];
+    for(var i=0;i<parts.length;++i) {
+        var start=parts[i].firstTrack===undefined?parts[i].startTrack:parts[i].firstTrack;
+        if(track>=start && track<parts[i].endTrack)return start;
+    }
+    return s.data.scope.firstTrack;
+}
+function partsAt(s,tick) {
+    var input=s.data.parts||[],parts=[];
+    for(var i=0;i<input.length;++i) {
+        var start=input[i].firstTrack===undefined?input[i].startTrack:input[i].firstTrack;
+        if(start<s.data.scope.endTrack && input[i].endTrack>s.data.scope.firstTrack && !parts.some(function(p){return p.startTrack===start;}))
+            parts.push({startTrack:start,endTrack:input[i].endTrack});
+    }
+    if(!parts.length)parts=[{startTrack:s.data.scope.firstTrack,endTrack:s.data.scope.endTrack}];
+    for(i=0;i<parts.length;++i) {
+        var part=parts[i],staff=Math.floor(Math.max(part.startTrack,s.data.scope.firstTrack)/4)*4,latest=-Infinity,key=0;
+        var events=s.keyIndex[staff]||[],at=precedingTick(events,tick,true);
+        if(at>=0){latest=events[at].tick;key=events[at].key;}
+        if(latest===-Infinity)for(var track in s.byTrack)if(Math.floor(Number(track)/4)===Math.floor(staff/4)) {
+            var ticks=s.trackTicks[track]||[],index=precedingTick(ticks,tick,false),group=index<0?[]:s.byTrack[track][ticks[index]];
+            if(group.length && typeof group[0].key==="number" && ticks[index]>=latest){latest=ticks[index];key=group[0].key;}
+        }
+        part.keySignature=key;
+    }
+    return parts;
+}
+function chordAt(s,tick,part) {
+    if(part===undefined)part=s.data.scope.firstTrack;
     var lists=[s.config.chords,s.imported];
     for(var l=0;l<lists.length;++l)for(var i=lists[l].length-1;i>=0;--i) {
-        var c=lists[l][i];if(c.start<=tick && tick<c.end && (c.part===undefined || c.part===s.data.scope.firstTrack))return c;
+        var c=lists[l][i];if(c.start<=tick && tick<c.end && (c.part===undefined?part===s.data.scope.firstTrack:c.part===part))return c;
     }
     var harmonies=s.data.harmonies||[],native=null;
-    for(i=0;i<harmonies.length;++i)if(harmonies[i].tick<=tick && (!native || native.tick<=harmonies[i].tick))native=harmonies[i];
+    for(i=0;i<harmonies.length;++i)if((harmonies[i].track===undefined?part===s.data.scope.firstTrack:partFor(s,harmonies[i].track)===part) && harmonies[i].tick<=tick && (!native || native.tick<=harmonies[i].tick))native=harmonies[i];
     if(native && native.rootTpc>=0) {
         var suffix=native.name.replace(/^[A-Ga-g](?:[#♯b♭]*)/,"").split("/")[0].replace(/^M/,"maj");
         for(i=0;i<Harmony.defs.length;++i)if(Harmony.defs[i].suffix===suffix)return {root:Harmony.mod12((native.rootTpc-14)*7),definition:i,start:native.tick,source:"谱内和弦",alternatives:[]};
         return null; // Unparsed spelling is not silently replaced with a major triad.
     }
-    return Timeline.atTick(s.regions,tick,s.data.scope.firstTrack);
+    return Timeline.atTick(s.regions,tick,part);
 }
 function neighbours(s,n) {
     var groups=s.byTrack[n.track],ticks=s.trackTicks[n.track]||[],index=(s.trackIndices[n.track]||{})[n.attackTick],role=null;
@@ -197,32 +237,38 @@ function explained(s,n,tick,chord) {
         if(a.pitch===b.pitch)return "邻音";
     }
     if(n.attackTick<tick && chord.start>n.attackTick && chordTone(b,chord)) {
-        var preparation=chordAt(s,n.attackTick);
+        var preparation=chordAt(s,n.attackTick,partFor(s,n.track));
         if(!preparation || preparation.root<0 || chordTone(n,preparation))return "保持音的级进解决";
     }
     return "";
 }
-function harmonyEnd(s,tick,chord) {
+function harmonyEnd(s,tick,chord,part) {
+    if(part===undefined)part=s.data.scope.firstTrack;
     var until=Math.min(s.data.scope.end,chord.end===undefined?s.data.scope.end:chord.end);
     var lists=[s.config.chords,s.imported,s.data.harmonies||[],s.data.harmonyRegions||[]];
     for(var list=0;list<lists.length;++list)for(var i=0;i<lists[list].length;++i) {
         var candidate=lists[list][i],at=candidate.start===undefined?candidate.tick:candidate.start;
-        if(at<=tick || at>=until || candidate.part!==undefined && candidate.part!==s.data.scope.firstTrack)continue;
-        var following=chordAt(s,at);
+        var owner=candidate.part===undefined?(candidate.track===undefined?s.data.scope.firstTrack:partFor(s,candidate.track)):candidate.part;
+        if(at<=tick || at>=until || owner!==part)continue;
+        var following=chordAt(s,at,part);
         if(!following || following.root!==chord.root || following.definition!==chord.definition)until=at;
     }
     return until;
 }
 function harmonic(s,frame) {
     if(!s.config.harmony)return;
-    var tick=frame.tick,held=frame.notes.filter(function(n){return (n.soundingEnd===undefined?n.logicalEnd:n.soundingEnd)>tick;}),chord=chordAt(s,tick);
     lowVoicing(s,frame);
+    var parts=frame.parts||partsAt(s,frame.tick);
+    for(var p=0;p<parts.length;++p)harmonicPart(s,frame,parts[p].startTrack);
+}
+function harmonicPart(s,frame,part) {
+    var tick=frame.tick,held=frame.notes.filter(function(n){return partFor(s,n.track)===part && (n.soundingEnd===undefined?n.logicalEnd:n.soundingEnd)>tick;}),chord=chordAt(s,tick,part);
     var i;
     if(!chord || chord.root<0 || !Harmony.defs[chord.definition])return;
     var candidates=[chord].concat(chord.alternatives||[]);
     // Check a common finding across every complete interpretation.
     for(i=0;i<candidates.length;++i)if(candidates[i].root<0 || !Harmony.defs[candidates[i].definition])return;
-    var defined=chord.source && chord.source!=="auto",until=harmonyEnd(s,tick,chord);
+    var defined=chord.source && chord.source!=="auto",until=harmonyEnd(s,tick,chord,part);
     var names=candidates.map(function(c){return (c.rootSpelling||Harmony.sharpNames[Harmony.mod12(c.root)])+Harmony.defs[c.definition].suffix;});
     for(i=0;i<held.length;++i) {
         var n=held[i];if(Math.min(until,n.soundingEnd===undefined?n.logicalEnd:n.soundingEnd)-tick<480 || n.grace)continue;
@@ -259,13 +305,32 @@ function lineEvidence(a,b,previous) {
     return lineName(a.role)+"："+(previous?pitchLabel(previous.a)+" → ":"")+pitchLabel(a.note)+"；"+
         lineName(b.role)+"："+(previous?pitchLabel(previous.b)+" → ":"")+pitchLabel(b.note)+"。";
 }
+function structuralLine(s,role,pool) {
+    var note=choose(pool,role.line);if(!note)return null;
+    if(role.independent && !role.uncertain)return {note:note,role:role};
+    var explicit=s.config.roles[String(role.track)]||{};
+    if(!role.uncertain || role.role==="ignore" || explicit.role!==undefined || explicit.line!==undefined || typeof explicit.independent==="boolean" || role.source.indexOf("分解和弦")>=0 || role.source.indexOf("加倍")>=0)return null;
+    var group=s.byTrack[role.track][note.attackTick]||[];
+    if(pool.length!==1 || group.length!==1)return null;
+    var local=clone(role);local.independent=true;local.uncertain=false;local.source="自动推断（当前单音线）";
+    return {note:note,role:local};
+}
+function tonicChoice(config) {
+    if(config.tonic<0)return -1;
+    var choice=Harmony.rootNames.indexOf(config.tonicSpelling||"");
+    if(choice<0 || Harmony.rootPcs[choice]!==config.tonic)choice=Harmony.rootPcs.indexOf(config.tonic);
+    return choice;
+}
+function confirmedTonicTpc(config) {
+    var choice=tonicChoice(config);return choice<0?null:[14,21,9,16,23,11,18,13,20,8,15,22,10,17,24,12,19][choice];
+}
 function counterpoint(s,frame) {
     if(!s.config.counterpoint)return;
     var lines=[],tick=frame.tick;
     for(var i=0;i<s.roles.length;++i) {
         var role=s.roles[i];if(role.role==="ignore")continue;
-        var pool=frame.notes.filter(function(n){return n.track===role.track && n.logicalEnd>tick;});
-        var note=choose(pool,role.line);if(note)lines.push({note:note,role:role});
+        var pool=frame.notes.filter(function(n){return !n.grace && n.track===role.track && n.logicalEnd>tick;});
+        var selected=structuralLine(s,role,pool);if(selected)lines.push(selected);
     }
     var present={};for(i=0;i<lines.length;++i)present[lines[i].note.track]=true;
     for(var old in s.pairState)if(!present[s.pairState[old].a.track] || !present[s.pairState[old].b.track])delete s.pairState[old];
@@ -300,8 +365,9 @@ function counterpoint(s,frame) {
         if(!line.role.independent || line.role.uncertain)continue;
         if(ruleEnabled(s.config,"leaps") && previous && previous.attackTick!==line.note.attackTick && Math.abs(previous.pitch-line.note.pitch)>12)
             issue(s,"counterpoint","leap",tick,[previous,line.note],"声部出现大跳","跳跃 "+Math.abs(previous.pitch-line.note.pitch)+" 半音；可核对后续方向及旋律意图。","提示");
-        if(previous && previous.attackTick!==line.note.attackTick && s.config.tonic>=0 && ruleEnabled(s.config,"resolution") && Harmony.mod12(previous.pitch-s.config.tonic)===11 && line.note.pitch-previous.pitch!==1)
-            issue(s,"counterpoint","resolution",tick,[previous,line.note],"已确认调性下的导音去向",lineName(line.role)+"："+pitchLabel(previous)+" → "+pitchLabel(line.note)+"。当前主音为"+Harmony.sharpNames[s.config.tonic]+"，可核对导音去向与这条旋律的意图。",s.config.style===1?"注意":"提示");
+        var tonicTpc=confirmedTonicTpc(s.config);
+        if(previous && previous.attackTick!==line.note.attackTick && previous.pitch!==line.note.pitch && previous.logicalEnd>=line.note.attackTick && partFor(s,line.role.track)===s.data.scope.firstTrack && tonicTpc!==null && previous.tpc===tonicTpc+5 && ruleEnabled(s.config,"resolution") && Harmony.mod12(previous.pitch-s.config.tonic)===11 && line.note.pitch-previous.pitch!==1)
+            issue(s,"counterpoint","resolution",tick,[previous,line.note],"已确认调性下的导音去向",lineName(line.role)+"："+pitchLabel(previous)+" → "+pitchLabel(line.note)+"。当前主音为"+Harmony.rootNames[tonicChoice(s.config)]+"，可核对导音去向与这条旋律的意图。",s.config.style===1?"注意":"提示");
         s.previousLines[line.role.track]=line.note;
     }
 }
@@ -424,7 +490,7 @@ function step(s,budget) {
     do {
         if(s.phase===0) {
             if(s.index<s.data.notes.length) {
-                var n=clone(s.data.notes[s.index++]);
+                var n=clone(s.data.notes[s.index++]);if(n.grace)continue;
                 var tick=n.attackTick===undefined?n.tick:n.attackTick;
                 var logical=n.logicalId || n.track+":"+tick+":"+n.pitch+":"+(n.attackIndex===undefined?n.index:n.attackIndex);
                 if(s.logicalSeen[logical])continue;s.logicalSeen[logical]=true;
@@ -434,7 +500,7 @@ function step(s,budget) {
                 if(n.logicalEnd<s.data.scope.end && !s.byTick[n.logicalEnd])s.byTick[n.logicalEnd]=[];
                 var track=s.byTrack[n.track]||(s.byTrack[n.track]={});(track[tick]||(track[tick]=[])).push(n);
             } else {
-                var boundaries=[s.data.scope.start].concat((s.data.harmonies||[]).map(function(c){return c.tick;}),(s.data.meters||[]).map(function(m){return m.tick;}));
+                var boundaries=[s.data.scope.start].concat((s.data.harmonies||[]).map(function(c){return c.tick;}),(s.data.meters||[]).map(function(m){return m.tick;}),(s.data.keys||[]).map(function(k){return k.tick;}));
                 [s.config.chords||[],s.imported||[],s.data.harmonyRegions||[]].forEach(function(regions){regions.forEach(function(region){boundaries.push(region.start,region.end);});});
                 (s.data.pedals||[]).forEach(function(p){boundaries.push(p.tick,p.end);});
                 for(var boundary=0;boundary<boundaries.length;++boundary)if(boundaries[boundary]>=0 && boundaries[boundary]<s.data.scope.end && !s.byTick[boundaries[boundary]])s.byTick[boundaries[boundary]]=[];
@@ -470,11 +536,11 @@ function step(s,budget) {
                 }
                 var pool=s.active.slice();for(var i=0;i<s.pedalNotes.length;++i)if(pool.indexOf(s.pedalNotes[i])<0)pool.push(s.pedalNotes[i]);
                 var nativeFrame={tick:tick,notes:pool.map(function(n){var v=clone(n),p=pedal(s,tick,n.track);v.end=v.logicalEnd;v.soundingEnd=p && n.logicalEnd>p.tick?Math.max(n.logicalEnd,p.end):n.logicalEnd;return v;}),scoreEnd:s.data.scope.end,
-                    parts:[{startTrack:s.data.scope.firstTrack,endTrack:s.data.scope.endTrack}],bar:attacks.length?attacks[0].measure:1,beat:attacks.length?attacks[0].beat:1,
+                    parts:partsAt(s,tick),bar:attacks.length?attacks[0].measure:1,beat:attacks.length?attacks[0].beat:1,
                     pedalWindows:(s.data.pedals||[]).map(function(p){return {start:p.tick,end:p.end,firstTrack:p.firstTrack,endTrack:p.endTrack};})};
                 s.frames.push(nativeFrame);
             } else {
-                s.builder=Timeline.createBuilder(s.frames,{auto:true,pedal:true,pedalMode:0,manualKey:s.config.tonic>=0,keyTonic:Math.max(0,Harmony.rootPcs.indexOf(s.config.tonic)),keyMode:s.config.minor?1:0},s.data.scope.firstTrack);
+                s.builder=Timeline.createBuilder(s.frames,{auto:true,pedal:true,pedalMode:0,manualKey:s.config.tonic>=0,keyTonic:Math.max(0,tonicChoice(s.config)),keyMode:s.config.minor?1:0},s.data.scope.firstTrack);
                 s.phase=2;
             }
         } else if(s.phase===2) {

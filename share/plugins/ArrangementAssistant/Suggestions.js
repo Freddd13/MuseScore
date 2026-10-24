@@ -207,7 +207,7 @@ function counterpoint(state, config, settings) {
     var ns=state.data.notes;
     for(var i=0;i<ns.length && tested<96;++i) {
         var n=ns[i];if(!targetTicks[n.tick] || !canChange(n,settings))continue;
-        var chord=Rules.chordAt(state,n.tick), allowed=[];
+        var chord=Rules.chordAt(state,n.tick,Rules.partFor(state,n.track)), allowed=[];
         if(chord && chord.root>=0 && Harmony.defs[chord.definition])allowed=Harmony.defs[chord.definition].intervals.map(function(p){return pc(chord.root+p);});
         var sounding=ns.filter(function(a){return a.partId===n.partId && a.tick===n.tick && a.logicalEnd>n.tick;});
         for(var j=0;j<sounding.length;++j) {

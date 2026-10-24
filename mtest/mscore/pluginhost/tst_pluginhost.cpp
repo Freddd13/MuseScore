@@ -149,6 +149,9 @@ class TestPluginHost : public QObject {
       void arrangementKnownHandWithOtherFingerConflict();
       void arrangementCompletePanelFlow();
       void arrangementContextCorpus115();
+        void arrangementVoiceContinuity116();
+        void arrangementKeySnapshot116();
+        void arrangementKeySpellingUI116();
       void arrangementHarmonyAndCounterpointUI115();
       void arrangementUsesSharedHarmony115();
       void harmonyRangeWithoutSettings();
@@ -1428,6 +1431,7 @@ class TestPluginHost : public QObject {
 #include "layout_079_tests.inc"
 #include "arrangement_083_tests.inc"
 #include "arrangement_115_tests.inc"
+#include "arrangement_116_tests.inc"
 #include "vst_088_tests.inc"
 #include "pedal_106_audio_tests.inc"
 #include "source_sessions_107_tests.inc"
