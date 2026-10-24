@@ -65,6 +65,10 @@ function describe(result, notes, tick, tonic, minor, degreeMode, preferFlats, to
 }
 function signature(r) {return [r.root,r.definition,r.bass,r.tonic,r.minor,r.chord,r.degree].join(":");}
 function partsFor(frame, fallback) {return frame.parts && frame.parts.length?frame.parts:[{startTrack:fallback,endTrack:1024}];}
+function frameForPart(frame, part) {
+    if(typeof part.keySignature!=="number" || part.keySignature===frame.keySignature)return frame;
+    var local={};for(var key in frame)local[key]=frame[key];local.keySignature=part.keySignature;return local;
+}
 function tonicAt(frame, config) {
     if(config.manualKey)return Harmony.rootPcs[config.keyTonic];
     var major=[11,6,1,8,3,10,5,0,7,2,9,4,11,6,1];
@@ -295,10 +299,11 @@ function ingest(state, frame, end) {
     for(var p=0;p<parts.length;++p) {
         var part=parts[p].startTrack,notes=frame.notes.filter(function(n){return n.track>=part && n.track<parts[p].endTrack;});
         var rows=state.byPart[part]||(state.byPart[part]=[]),window=state.config.pedal?pedalAt(frame,part):null;
-        var row={frame:frame,notes:notes,start:frame.tick,end:end,pedal:window};rows.push(row);
+        var localFrame=frameForPart(frame,parts[p]);
+        var row={frame:localFrame,notes:notes,start:frame.tick,end:end,pedal:window};rows.push(row);
         if(window && state.config.pedalMode===1 && state.config.auto!==false && !frame.imported) {
             var contexts=state.contexts[part]||(state.contexts[part]=[]),context=contexts.length?contexts[contexts.length-1]:null;
-            var identity=window.start+":"+window.end+":"+tonicNameAt(frame,state.config);
+            var identity=window.start+":"+window.end+":"+tonicNameAt(localFrame,state.config);
             if(!context || context.identity!==identity || context.end!==frame.tick) {
                 context={identity:identity,start:frame.tick,end:end,rows:[],events:[],seen:{},floor:Infinity};contexts.push(context);
             }
@@ -530,6 +535,8 @@ function validEdits(edits) {
             tonic:NumberIsInteger(edit.tonic,0,11)?edit.tonic:0,minor:edit.minor===true};
         if(NumberIsInteger(edit.bassTpc,-1,33))out.bassTpc=edit.bassTpc;
         if(typeof edit.bassName==="string")out.bassName=edit.bassName.slice(0,12);
+        if(typeof edit.rootSpelling==="string")out.rootSpelling=edit.rootSpelling.slice(0,12);
+        if(typeof edit.tonicSpelling==="string")out.tonicSpelling=edit.tonicSpelling.slice(0,12);
         out.chord=typeof edit.chord==="string"?edit.chord.slice(0,64):"";
         out.degree=typeof edit.degree==="string"?edit.degree.slice(0,24):"";
         out.chromatic=Harmony.isChromatic(out.tonic,out.minor,out.root,out.definition);

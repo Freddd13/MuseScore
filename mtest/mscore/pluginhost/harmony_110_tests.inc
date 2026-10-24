@@ -25,7 +25,7 @@ void TestPluginHost::harmonyPedalContext110()
         score->startCmd();score->undoAddElement(pedal);score->endCmd();score->doLayout();
         score->select(toChord(score->firstMeasure()->first(SegmentType::ChordRest)->element(0))->notes().front());
         showHarmonyPanel(true);auto panel=harmonyPanel077();QVERIFY(panel);
-        auto config=panel->property("configuration").toMap();config["auto"]=true;config["manualKey"]=false;config["keyMode"]=0;config["pedal"]=true;config["pedalMode"]=0;
+        auto config=panel->property("configuration").value<QJSValue>().toVariant().toMap();QCOMPARE(config.value("schema").toInt(),1);config["auto"]=true;config["manualKey"]=false;config["keyMode"]=0;config["pedal"]=true;config["pedalMode"]=0;
         config["window"]=0;config["coloring"]=false;config["chordLabels"]=true;config["chordContent"]=2;config["resultMode"]=1;
         QVERIFY(QMetaObject::invokeMethod(panel,"applyPreferences",Q_ARG(QVariant,config)));
         QTRY_VERIFY_WITH_TIMEOUT(!panel->property("analysisDirty").toBool(),10000);

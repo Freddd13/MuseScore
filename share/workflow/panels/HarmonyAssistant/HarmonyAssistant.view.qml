@@ -735,7 +735,7 @@ MuseScore {
         chordDefinition = -1
         chordText = "—"
         degreeText = "—"
-        instantChordText="—";instantDegreeText="—";liveRoot=-1;liveDefinition=-1;liveRootSpelling=""
+        displayedLiveHarmony=null;lastLiveHarmony=null;liveRoot=-1;liveDefinition=-1;liveRootSpelling=""
         voicingText = "—"
         inversionText = "—"
         alternativesText = ""
@@ -849,9 +849,14 @@ MuseScore {
         if ((!observer && cacheDirty) || tick < 0) return
         var notes = [], pitches = []
         if (observer) {
-            nativeSnapshot = advancedNative ? observer.contextSnapshot(tick, firstTrack, endTrack,
+            var readFirst=firstTrack,readEnd=endTrack
+            if(scope.currentIndex===1)for(var partIndex=0;partIndex<curScore.parts.length;++partIndex) {
+                var part=curScore.parts[partIndex]
+                if(part.startTrack===focusedPart){readFirst=part.startTrack;readEnd=part.endTrack;break}
+            }
+            nativeSnapshot = advancedNative ? observer.contextSnapshot(tick, readFirst, readEnd,
                 pedalContext.checked, windowTicks(), lastPlaying && followPlayback.checked) :
-                observer.snapshot(tick, firstTrack, endTrack, lastPlaying && followPlayback.checked)
+                observer.snapshot(tick, readFirst, readEnd, lastPlaying && followPlayback.checked)
             notes = nativeSnapshot.notes || []
         } else {
             for (var t = 0; t < timeline.length; ++t) {

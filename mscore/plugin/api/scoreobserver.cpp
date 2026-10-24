@@ -315,7 +315,7 @@ QVariantList ScoreObserver::contextNotes(int tick, int firstTrack, int endTrack,
       ensureIndex(firstTrack, endTrack);
       const auto measure = std::upper_bound(_measureStarts.cbegin(), _measureStarts.cend(), tick);
       const int barStart = measure == _measureStarts.cbegin() ? 0 : *(measure-1);
-      QMap<int, QVariant> notes; // Retain the most recent spelling/anchor for each MIDI pitch.
+      QMap<QPair<int,int>, QVariant> notes; // Retain each instrument's most recent pitch anchor.
       for (int track = firstTrack; track < endTrack; ++track) {
             const auto& voice = _index[track - firstTrack];
             int start = qMax(barStart, tick - qBound(0, windowTicks, 1920));
@@ -335,7 +335,8 @@ QVariantList ScoreObserver::contextNotes(int tick, int firstTrack, int endTrack,
                         const auto descriptor = note.toMap();
                         if (!eligible && descriptor.value("end").toInt() <= tick) continue;
                         const int pitch = descriptor.value("pitch").toInt();
-                        if (!notes.contains(pitch)) notes.insert(pitch, descriptor);
+                        const auto key=qMakePair(_score->staff(track/VOICES)->part()->startTrack(),pitch);
+                        if (!notes.contains(key)) notes.insert(key, descriptor);
                         }
                   if (next->tick < start && next->end <= start) break;
                   }
@@ -352,15 +353,20 @@ QVariantMap ScoreObserver::contextSnapshot(int tick, int firstTrack, int endTrac
       auto context = contextNotes(tick, firstTrack, endTrack, pedal, windowTicks);
       // Actual playback events take precedence for instruments/transposed playback events.
       if (sounding && playing()) {
-            QMap<int, QVariant> merged;
-            for (const auto& note : context) merged.insert(note.toMap().value("pitch").toInt(), note);
-            for (const auto& note : result.value("notes").toList()) merged.insert(note.toMap().value("pitch").toInt(), note);
+            QMap<QPair<int,int>, QVariant> merged;
+            const auto key=[this](const QVariant& note) {
+                  const auto value=note.toMap();
+                  return qMakePair(_score->staff(value.value("track").toInt()/VOICES)->part()->startTrack(),value.value("pitch").toInt());
+                  };
+            for (const auto& note : context) merged.insert(key(note), note);
+            for (const auto& note : result.value("notes").toList()) merged.insert(key(note), note);
             context = merged.values();
             }
       result.insert("analysisNotes", context);
       QVariantList parts,windows;
       for (const auto part:_score->parts()) if (part->startTrack()<endTrack && part->endTrack()>firstTrack)
-            parts.append(QVariantMap{{"startTrack",part->startTrack()},{"endTrack",part->endTrack()}});
+            parts.append(QVariantMap{{"startTrack",part->startTrack()},{"endTrack",part->endTrack()},
+                  {"keySignature",int(_score->staff(qMax(firstTrack,part->startTrack())/VOICES)->key(Fraction::fromTicks(tick)))}});
       for (const auto part:_score->parts()) if (part->startTrack()<endTrack && part->endTrack()>firstTrack)
             if (const auto window=pedalWindow(tick,part->startTrack()))
                   windows.append(QVariantMap{{"start",window->start},{"end",window->end},{"firstTrack",window->firstTrack},{"endTrack",window->endTrack}});

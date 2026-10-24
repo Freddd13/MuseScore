@@ -162,6 +162,8 @@ class TestPluginHost : public QObject {
       void harmonyReferenceCorpus111();
       void harmonySegmentCorpus111();
       void harmonyCancelAndSwitch111();
+      void harmonyPartKeys112();
+      void harmonyWindow112();
       void chordHandlesStayAtMusicRange();
       void legacyVariantsSaveBeforeSwitch();
       void legacyVariantsFollowSaveAs();
@@ -1422,6 +1424,7 @@ class TestPluginHost : public QObject {
 #include "harmony_109_tests.inc"
 #include "harmony_110_tests.inc"
 #include "harmony_111_tests.inc"
+#include "harmony_112_tests.inc"
 #include "layout_089_tests.inc"
 #include "components_092_tests.inc"
 #include "workspace_093_tests.inc"

@@ -23,7 +23,7 @@ void TestPluginHost::harmonySpellingAcrossViews109()
         QTRY_VERIFY(observed->wrappedScore() && observed->wrappedScore()->score()==score);
         if(!row["specified"].toBool())
             QTRY_COMPARE_WITH_TIMEOUT(panel->property("summaryChordText").toString(),row["chord"].toString(),10000);
-        auto configuration=panel->property("configuration").toMap();
+        auto configuration=panel->property("configuration").value<QJSValue>().toVariant().toMap();QCOMPARE(configuration.value("schema").toInt(),1);
         configuration["schema"]=1;configuration["auto"]=true;configuration["manualKey"]=false;configuration["keyMode"]=row["minor"].toBool()?1:0;
         configuration["degreeMode"]=row.value("degreeMode",1);configuration["pedalMode"]=1;configuration["window"]=0;
         configuration["coloring"]=false;configuration["chordLabels"]=true;configuration["chordContent"]=2;configuration["holdLastHarmony"]=false;
@@ -66,6 +66,9 @@ void TestPluginHost::harmonySpellingAcrossViews109()
             QVERIFY(QMetaObject::invokeMethod(panel,"resizePanel",Q_ARG(int,380),Q_ARG(int,850)));QTest::qWait(80);
             QVERIFY(panel->window()->grabWindow().save(QDir(artifacts).filePath(QString("harmony-theory-%1-109-panel.png").arg(checked))));
         }
+        configuration["resultMode"]=0;QVERIFY(QMetaObject::invokeMethod(panel,"applyPreferences",Q_ARG(QVariant,configuration)));
+        if(!row["specified"].toBool()){QTRY_COMPARE(panel->property("summaryChordText").toString(),row["chord"].toString());QCOMPARE(panel->property("summaryDegreeText").toString(),row["degree"].toString());}
+        else {QTRY_COMPARE(panel->property("summaryChordText").toString(),panel->property("instantChordText").toString());QCOMPARE(panel->property("summaryDegreeText").toString(),panel->property("instantDegreeText").toString());}
         qInfo()<<"Harmony theory"<<row["name"].toString()<<row["chord"].toString()<<row["degree"].toString();
         QVERIFY(main->saveFile());showHarmonyPanel(false);main->closeScore(score);++checked;
     }

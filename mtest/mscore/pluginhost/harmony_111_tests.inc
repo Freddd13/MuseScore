@@ -66,7 +66,7 @@ void TestPluginHost::harmonySegmentCorpus111()
         score->startCmd();for(const auto& p:row["pedals"].toList()){const auto window=p.toMap();auto pedal=new Pedal(score);pedal->setTrack(4);pedal->setTrack2(4);pedal->setTick(Fraction::fromTicks(window["start"].toInt()));pedal->setTick2(Fraction::fromTicks(window["end"].toInt()));score->undoAddElement(pedal);}score->endCmd();score->doLayout();
         Note* first=nullptr;for(auto segment=score->firstSegment(SegmentType::ChordRest);segment&&!first;segment=segment->next1(SegmentType::ChordRest))for(int track=0;track<8&&!first;++track)if(auto e=segment->element(track))if(e->isChord())first=toChord(e)->notes().front();
         QVERIFY(first);score->select(first);showHarmonyPanel(true);auto panel=harmonyPanel077();QVERIFY(panel);
-        auto config=panel->property("configuration").toMap();config["auto"]=true;config["manualKey"]=false;config["keyMode"]=0;config["pedal"]=true;config["pedalMode"]=1;config["window"]=0;config["coloring"]=false;config["chordLabels"]=true;config["chordContent"]=2;config["resultMode"]=1;
+        auto config=panel->property("configuration").value<QJSValue>().toVariant().toMap();QCOMPARE(config.value("schema").toInt(),1);config["auto"]=true;config["manualKey"]=false;config["keyMode"]=0;config["pedal"]=true;config["pedalMode"]=1;config["window"]=0;config["coloring"]=false;config["chordLabels"]=true;config["chordContent"]=2;config["resultMode"]=1;
         QVERIFY(QMetaObject::invokeMethod(panel,"applyPreferences",Q_ARG(QVariant,config)));
         QTRY_VERIFY_WITH_TIMEOUT(!panel->property("analysisDirty").toBool(),10000);
         auto observer=panel->findChild<PluginAPI::ScoreObserver*>();QVERIFY(observer);
@@ -86,7 +86,7 @@ void TestPluginHost::harmonyCancelAndSwitch111()
     auto main=Ms::mscore;auto reference=main->readScore(path);QVERIFY(reference);main->setCurrentScoreView(main->appendScore(reference));main->show();
     Note* first=nullptr;for(auto segment=reference->firstSegment(SegmentType::ChordRest);segment&&!first;segment=segment->next1(SegmentType::ChordRest))for(int track=0;track<reference->nstaves()*VOICES&&!first;++track)if(auto e=segment->element(track))if(e->isChord())first=toChord(e)->notes().front();
     QVERIFY(first);reference->select(first);showHarmonyPanel(true);auto panel=harmonyPanel077();QVERIFY(panel);
-    auto config=panel->property("configuration").toMap();config["auto"]=true;config["manualKey"]=false;config["keyMode"]=0;config["pedal"]=true;config["pedalMode"]=1;config["window"]=0;config["chordLabels"]=true;config["resultMode"]=1;
+    auto config=panel->property("configuration").value<QJSValue>().toVariant().toMap();QCOMPARE(config.value("schema").toInt(),1);config["auto"]=true;config["manualKey"]=false;config["keyMode"]=0;config["pedal"]=true;config["pedalMode"]=1;config["window"]=0;config["chordLabels"]=true;config["resultMode"]=1;
     QElapsedTimer analysisClock;analysisClock.start();qint64 lastPulse=0;QVector<double> gaps;QVariantList slowPulses;QTimer pulse;pulse.setInterval(10);
     QObject::connect(&pulse,&QTimer::timeout,[&]{const auto now=analysisClock.elapsed();const auto gap=now-lastPulse;gaps.append(double(gap));if(gap>25)slowPulses.append(QVariantMap{{"at",now},{"gap",gap},{"nextTick",panel->property("analysisNextTick")},{"worker",panel->property("regionJobToken")},{"dirty",panel->property("analysisDirty")}});lastPulse=now;});pulse.start();
     QVERIFY(QMetaObject::invokeMethod(panel,"applyPreferences",Q_ARG(QVariant,config)));
