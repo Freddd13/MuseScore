@@ -8,9 +8,60 @@
 #include <QGuiApplication>
 #include <QScreen>
 #include <QWidget>
+#include <QMap>
+#include <QSet>
+#include <algorithm>
+#include <vector>
 namespace Ms {
 namespace VstHost {
 namespace {
+struct AriaNode {
+  QString name,text;
+  QMap<QString,QString> attributes;
+  std::vector<AriaNode> content;
+};
+AriaNode readAriaNode(QXmlStreamReader& reader) {
+  AriaNode node;node.name=reader.qualifiedName().toString();
+  for (const auto& attribute:reader.attributes())
+    node.attributes.insert(attribute.qualifiedName().toString(),attribute.value().toString());
+  for (const auto& ns:reader.namespaceDeclarations())
+    node.attributes.insert(ns.prefix().isEmpty()?QString("xmlns"):QString("xmlns:")+ns.prefix().toString(),ns.namespaceUri().toString());
+  while (!reader.atEnd()) {
+    reader.readNext();
+    if (reader.isEndElement()) break;
+    if (reader.isStartElement()) node.content.push_back(readAriaNode(reader));
+    else if (reader.isCharacters() && !reader.isWhitespace()) {
+      AriaNode text;text.text=reader.text().toString();node.content.push_back(std::move(text));
+    }
+  }
+  return node;
+}
+void writeComparableAria(AriaNode& node,QXmlStreamWriter& writer) {
+  if (node.name.isEmpty()) { writer.writeCharacters(node.text);return; }
+  writer.writeStartElement(node.name);
+  const bool counter=node.name=="Settings" || node.name=="Slot" || node.name=="EffectSlot";
+  for (auto it=node.attributes.cbegin();it!=node.attributes.cend();++it)
+    if (!(counter && it.key()=="sc")) writer.writeAttribute(it.key(),it.value());
+  if (node.name=="EffectSlot") {
+    // ARIA writes these named data attachments in instance-dependent order.
+    // Keep effect slots and all payloads intact; compare each Target by name.
+    std::vector<size_t> positions;QSet<QString> names;bool unique=true;
+    for (size_t i=0;i<node.content.size();++i) if (node.content[i].name=="Target") {
+      const auto name=node.content[i].attributes.value("name");
+      unique &= !name.isEmpty() && !names.contains(name);names.insert(name);positions.push_back(i);
+    }
+    if (unique && positions.size()>1) {
+      std::vector<AriaNode> targets;
+      for (const auto i:positions) targets.push_back(std::move(node.content[i]));
+      std::sort(targets.begin(),targets.end(),[](const AriaNode& a,const AriaNode& b) {
+        return a.attributes.value("name")<b.attributes.value("name");
+      });
+      for (size_t i=0;i<positions.size();++i) node.content[positions[i]]=std::move(targets[i]);
+    }
+  }
+  for (auto& child:node.content) writeComparableAria(child,writer);
+  writer.writeEndElement();
+}
 QVariantMap comparableUnit(QVariantMap unit) {
   const auto descriptor = unit.value("plugin").toMap();
   if (descriptor.value("format") != "VST2" ||
@@ -33,30 +84,12 @@ QVariantMap comparableUnit(QVariantMap unit) {
   QXmlStreamReader reader(xml);
   QByteArray normalized;
   QXmlStreamWriter writer(&normalized);
-  bool root = false;
-  while (!reader.atEnd()) {
-    reader.readNext();
-    if (reader.isStartElement()) {
-      if (!root) {
-        // CFX's ARIA payload increments sc on every state read. Keep the
-        // original payload for restoration; omit this counter only in comparison.
-        if (reader.name() != "AriaSave" || reader.attributes().value("productID") != "1016")
-          return unit;
-        root = true;
-      }
-      writer.writeStartElement(reader.qualifiedName().toString());
-      const bool counter = reader.name() == "Settings" || reader.name() == "Slot" ||
-                           reader.name() == "EffectSlot";
-      for (const auto& attribute : reader.attributes())
-        if (!(counter && attribute.name() == "sc"))
-          writer.writeAttribute(attribute.qualifiedName().toString(), attribute.value().toString());
-    } else if (reader.isEndElement())
-      writer.writeEndElement();
-    else if (reader.isCharacters() && !reader.isWhitespace())
-      writer.writeCharacters(reader.text().toString());
-  }
-  if (!root || reader.hasError())
-    return unit;
+  if (!reader.readNextStartElement() || reader.name()!="AriaSave" ||
+      reader.attributes().value("productID")!="1016") return unit;
+  auto root=readAriaNode(reader);
+  while (!reader.atEnd()) reader.readNext();
+  if (reader.hasError()) return unit;
+  writeComparableAria(root,writer);
   saved["chunk"] = QString::fromLatin1(normalized.toBase64());
   unit["state"] = QString::fromLatin1(
       QJsonDocument::fromVariant(saved).toJson(QJsonDocument::Compact).toBase64());

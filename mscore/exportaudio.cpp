@@ -83,6 +83,7 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
       synth->setSampleRate(sampleRate);
 
       const SynthesizerState state = useCurrentSynthesizerState ? mscore->synthesizerState() : score->synthesizerState();
+      prepareVstForScore(synth,score);
       const bool setStateOk = synth->setState(state);
       routeVstChannels(synth,score);
 
@@ -355,6 +356,7 @@ bool MuseScore::saveAudio(Score* score, const QString& name)
       synth->init();
       int sampleRate = preferences.getInt(PREF_EXPORT_AUDIO_SAMPLERATE);
       synth->setSampleRate(sampleRate);
+      prepareVstForScore(synth,score);
       bool r = synth->setState(score->synthesizerState());
       routeVstChannels(synth,score);
       if (!r)

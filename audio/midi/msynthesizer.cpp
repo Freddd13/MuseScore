@@ -33,6 +33,7 @@ MasterSynthesizer::MasterSynthesizer()
    : QObject(0)
       {
       defaultGainAsDecibels = convertGainToDecibels(defaultGain);
+      for (auto& target : _playbackRouting) target.store(-1);
       }
 
 //---------------------------------------------------------
@@ -93,10 +94,20 @@ void MasterSynthesizer::reset()
 
 void MasterSynthesizer::play(const NPlayEvent& event, unsigned syntiIdx)
       {
+      if (event.channel()>=0 && event.channel()<int(_playbackRouting.size())) {
+            const int target=_playbackRouting[event.channel()].load(std::memory_order_acquire);
+            if (target>=0) syntiIdx=unsigned(target);
+            }
       if (syntiIdx >= _synthesizer.size())
             return;
       _synthesizer[syntiIdx]->setActive(true);
       _synthesizer[syntiIdx]->play(event);
+      }
+
+void MasterSynthesizer::setPlaybackRouting(const QVector<int>& targets)
+      {
+      for (int i=0;i<int(_playbackRouting.size());++i)
+            _playbackRouting[i].store(i<targets.size()?targets[i]:-1,std::memory_order_release);
       }
 
 //---------------------------------------------------------

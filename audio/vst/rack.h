@@ -17,12 +17,14 @@ public:
   void selectSession(const QString& id, const QString& label, bool retain);
   void releaseSession(const QString& id);
   void releaseInactiveSessions();
+  void releaseCommonPianos();
   QVariantList retainedSessions() const;
   QVariantMap state();
   QVariantList instruments() const;
   QVariantList effects(int slot) const;
   Plugin *plugin(int slot, int effect = -1) const;
   bool takeChanges();
+  int takeChangedCommonPiano();
   bool hasOpenEditors() const;
   QStringList problems() const;
   int latency() const;

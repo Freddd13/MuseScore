@@ -169,6 +169,15 @@ class TestPluginHost : public QObject {
       void spectrumButtonsAndFirstOpenContent();
       void cfxLiveStateKeepsEditorInstance();
       void sourceSessionReuse107();
+      void commonPianoPool108();
+      void commonPianoCfxOrder108();
+      void commonPianoPanel108();
+      void commonPianoMixer108();
+      void commonPianoEffectsExport108();
+      void commonPianoFailure108();
+      void commonPianoExtensionOff108();
+      void commonPianoReal108_data();
+      void commonPianoReal108();
       void sourceSessionEffectTail107();
       void sourceSessionEffectTail107_data();
       void sourceSessionPanel107();
@@ -1404,6 +1413,7 @@ class TestPluginHost : public QObject {
 #include "vst_088_tests.inc"
 #include "pedal_106_audio_tests.inc"
 #include "source_sessions_107_tests.inc"
+#include "common_piano_108_tests.inc"
 #include "layout_089_tests.inc"
 #include "components_092_tests.inc"
 #include "workspace_093_tests.inc"

@@ -2,6 +2,7 @@
 #include "vstpanel.h"
 #include "vstparameters.h"
 #include "vstpresets.h"
+#include "sharedpiano.h"
 #ifdef KUMO_VST_HOST
 #include "audio/midi/midipatch.h"
 #include "audio/midi/msynthesizer.h"
@@ -15,6 +16,7 @@
 #include "mscore/seq.h"
 #include "mscore/shortcut.h"
 #include "mscore/workspace.h"
+#include "mscore/mixer/mixerdetails.h"
 #include "workspaceviews.h"
 #include "toolicons.h"
 #include "controlflowlayout.h"
@@ -90,6 +92,7 @@ class ChangeVstState final : public UndoCommand {
         seq->waitForStoppedRendering();
       }
       if (auto engine = backend()) {
+        prepareCommonPianos(synti,score,false);
         engine->setState(score->synthesizerState().group("KumoVST"));
         if (!score->synthesizerState().group("KumoVST").empty() &&
             engine->problems().isEmpty())
@@ -122,7 +125,10 @@ class Panel final : public QDockWidget {
   QPushButton *scan, *forget, *choose, *removeSource, *restoreSource, *openSource, *addEffect,
       *removeEffect, *up, *down, *openEffect, *loadPreset, *savePreset, *effectLoadPreset,
       *effectSavePreset;
-  QCheckBox *isolate, *retainSources;
+  QCheckBox *isolate, *retainSources, *commonEnabled, *ownPiano;
+  QLineEdit *commonName;
+  QPushButton *adoptCommon;
+  QLabel *commonState;
   QPushButton *releaseInactive;
   QLabel *retainedState;
   QProcess scanner;
@@ -133,6 +139,8 @@ class Panel final : public QDockWidget {
   QList<Channel *> channels;
   bool updating = false, savePending = false, closing = false;
   quint64 lastRevision = 0;
+  quint64 lastCommonRevision = 0;
+  QVariantMap removedCommon;
   QString lastProblems;
   bool syncChannels() {
     QList<Channel *> next;
@@ -179,16 +187,32 @@ class Panel final : public QDockWidget {
   }
   int selectedSlot() const {
     auto c = selected();
+    if (c && backend() && backend()->pianoSlot(c->channel())) return backend()->pianoSlot(c->channel());
     return c && c->synti() == "KumoVST" ? c->bank() : 0;
+  }
+  bool commonSlot(int id) const {
+    auto c=selected();return id && c && backend() && backend()->pianoSlot(c->channel())==id;
+  }
+  bool commonSelection() const {
+    return selected() && isPianoChannel(score,selected()) && !scoreUsesOwnPiano(score)
+        && commonPianoSettings()["enabled"].toBool();
   }
   int targetSlot() const {
     return effectTarget->currentIndex() == 1 ? 0 : selectedSlot();
   }
   QVariantMap configuration() {
-    return backend() ? backend()->configuration() : QVariantMap();
+    return backend() ? (commonSlot(targetSlot())?backend()->runtimeConfiguration():backend()->configuration()) : QVariantMap();
+  }
+  QVariantMap applyPanelConfiguration(const QVariantMap& value,int id) {
+    if (commonSlot(id)) {
+      auto settings=commonPianoSettings();
+      for (const auto& row:value["slots"].toList()) if (row.toMap()["id"].toInt()==id) settings["instance"]=row;
+      return applyCommonPianoSettings(score,settings);
+    }
+    return applyVstConfiguration(score,value);
   }
   QVariantMap unit(int slot, int effect) {
-    auto c = backend() ? backend()->configuration(false) : QVariantMap();
+    auto c = backend() ? backend()->runtimeConfiguration(false) : QVariantMap();
     if (!slot) {
       auto list = c["masterEffects"].toList();
       return effect >= 0 && effect < list.size() ? list[effect].toMap()
@@ -209,7 +233,7 @@ class Panel final : public QDockWidget {
                 const std::function<void(QVariantMap &)> &edit) {
     if (!score)
       return;
-    auto value = configuration();
+    auto value = commonSlot(slot)?backend()->runtimeConfiguration():backend()->configuration();
     if (!slot) {
       auto list = value["masterEffects"].toList();
       if (effect < 0 || effect >= list.size())
@@ -241,7 +265,7 @@ class Panel final : public QDockWidget {
       }
       value["slots"] = instances;
     }
-    report(applyVstConfiguration(score, value));
+    report(applyPanelConfiguration(value,slot));
     refresh();
   }
   void report(const QVariantMap &result) {
@@ -316,7 +340,7 @@ class Panel final : public QDockWidget {
       return identity(unit(slot, -1)["plugin"].toMap()) == pluginId
                  ? backend()->rack().plugin(slot, -1)
                  : nullptr;
-    auto config = backend()->configuration(false);
+    auto config = backend()->runtimeConfiguration(false);
     QVariantList list;
     if (!slot)
       list = config["masterEffects"].toList();
@@ -335,6 +359,7 @@ class Panel final : public QDockWidget {
   void commitEdits() {
     if (closing || !score || !backend() || (seq && seq->isPlaying()))
       return;
+    captureCommonPianoEdits(score,selectedSlot());
     saveVstEdits(score);
     savePending = false;
     refreshVstParameterWindows();
@@ -433,7 +458,8 @@ class Panel final : public QDockWidget {
       commitEdits();
     }
     state->setText(save ? tr("%1预设已保存：%2").arg(label, QFileInfo(path).fileName())
-                        : tr("%1已载入预设 · Ctrl+Z撤销，保存乐谱后保留。").arg(label));
+                        : commonSlot(slot)?tr("%1已采用，参加共用的钢琴一起更新；Ctrl+Z撤销。").arg(label)
+                                          :tr("%1已载入预设 · Ctrl+Z撤销，保存乐谱后保留。").arg(label));
   }
   void editor(int slot, int effect) {
     if (!backend())
@@ -445,7 +471,8 @@ class Panel final : public QDockWidget {
     }
     QString error;
     if (plugin->openEditor(this, &error))
-      state->setText(tr("插件窗口已打开；修改的预设随乐谱保存。"));
+      state->setText(commonSlot(slot)?tr("已打开共用钢琴；修改的声音用于参加共用的乐谱。")
+                                    :tr("插件窗口已打开；修改的预设随乐谱保存。"));
     else {
       if (plugin->parameters().isEmpty()) {
         state->setText(error);
@@ -471,7 +498,7 @@ class Panel final : public QDockWidget {
         if (s["id"].toInt() == id) {
           auto effects = s["effects"].toList();
           edit(effects);
-          if (effects.isEmpty() && s["source"].toMap()["plugin"].toMap()["format"] == "SF2") {
+          if (!commonSlot(id) && effects.isEmpty() && s["source"].toMap()["plugin"].toMap()["format"] == "SF2") {
             removeSource->click();
             state->setText(tr("效果已移除，当前乐器继续使用原SF2音色。Ctrl+Z恢复效果。"));
             return;
@@ -482,7 +509,7 @@ class Panel final : public QDockWidget {
       }
       c["slots"] = list;
     }
-    report(applyVstConfiguration(score, c));
+    report(applyPanelConfiguration(c,id));
     refresh();
   }
   void refresh() {
@@ -493,12 +520,35 @@ class Panel final : public QDockWidget {
     const int id = selectedSlot();
     auto engine = backend();
     refreshRetained();
+    const bool shared=commonSlot(id);
+    const bool sharedDesired=commonSelection();
+    const auto common=commonPianoSettings();
+    {
+      QSignalBlocker a(commonEnabled),b(ownPiano),c(commonName);
+      commonEnabled->setChecked(common["enabled"].toBool());
+      ownPiano->setChecked(scoreUsesOwnPiano(score));
+      commonName->setText(common.value("name",tr("共用钢琴")).toString());
+    }
+    commonEnabled->setEnabled(common["enabled"].toBool() || !common["instance"].toMap().isEmpty() || isPianoChannel(score,c));
+    ownPiano->setEnabled(score && common["enabled"].toBool());
+    ownPiano->setVisible(common["enabled"].toBool() || scoreUsesOwnPiano(score));
+    adoptCommon->setEnabled(isPianoChannel(score,c));
+    const auto commonError=synti?synti->property("kumoCommonPianoError").toString():QString();
+    commonState->setText(!commonError.isEmpty()?tr("共用音源未载入 · 当前使用本谱音源")
+        :shared?tr("当前乐器使用共用钢琴")
+        :common["enabled"].toBool()?tr("当前乐器使用本谱音源"):tr("共用关闭 · 各谱使用自己的音源"));
+    commonState->setToolTip(commonError);
+    commonState->setVisible(common["enabled"].toBool() || !commonError.isEmpty());
+    choose->setText(commonSelection()?tr("用于共用钢琴"):tr("用作此乐器音源"));
+    removeSource->setText(sharedDesired?tr("使用内置SF2"):tr("使用原内置音源"));
+    restoreSource->setText(sharedDesired?tr("恢复上个共用音源"):tr("恢复刚才音源"));
     const auto patch = c && synti ? synti->getPatchInfo(c->synti(), c->bank(), c->program()) : nullptr;
-    const bool externalSource = c && c->synti() == "KumoVST" &&
+    const bool externalSource = c && (shared || c->synti() == "KumoVST") &&
         unit(id, -1)["plugin"].toMap()["format"].toString() != "SF2";
     current->setText(c ? tr("当前音源：%1\n音色：%2")
-                          .arg(externalSource ? tr("VST") : tr("内置 SF2／SF3"),
-                               patch ? patch->name : externalSource ? tr("音源文件待重新定位") : tr("乐谱中的内置音色"))
+                          .arg((shared?tr("共用钢琴 · "):QString())+(externalSource ? tr("VST") : tr("内置 SF2／SF3")),
+                               shared?unit(id,-1)["plugin"].toMap()["name"].toString()
+                                     :patch ? patch->name : externalSource ? tr("音源文件待重新定位") : tr("乐谱中的内置音色"))
                         : tr("打开乐谱后选择乐器。"));
     choose->setEnabled(c && !picked().isEmpty() &&
                        picked()["instrument"].toBool());
@@ -509,8 +559,8 @@ class Panel final : public QDockWidget {
     openSource->setEnabled(loaded && external);
     loadPreset->setEnabled(loaded && external);
     savePreset->setEnabled(loaded && external);
-    removeSource->setEnabled(id);
-    restoreSource->setEnabled(c && !id && removed.contains(c));
+    removeSource->setEnabled(id || sharedDesired);
+    restoreSource->setEnabled(sharedDesired?!removedCommon.isEmpty():c && !id && removed.contains(c));
     const int row = chain->currentRow();
     QSignalBlocker block(chain);
     chain->clear();
@@ -550,11 +600,13 @@ class Panel final : public QDockWidget {
   void refreshRetained() {
     QSignalBlocker blocked(retainSources); retainSources->setChecked(retainOpenSources());
     const auto rows=backend()?backend()->rack().retainedSessions():QVariantList{};
-    int instances=0; QStringList names;
-    for (const auto& row:rows) { const auto value=row.toMap(); instances+=value["instances"].toInt(); names.append(value["label"].toString()); }
+    int instances=0,scores=0,pianos=0; QStringList names;
+    for (const auto& row:rows) { const auto value=row.toMap(); instances+=value["instances"].toInt(); names.append(value["label"].toString());
+      if(value["commonPiano"].toBool()) ++pianos; else ++scores; }
     releaseInactive->setEnabled(!rows.isEmpty());
     retainedState->setText(rows.isEmpty()?tr("当前没有闲置音源")
-        :tr("保留%1份谱的%2个音源／效果").arg(rows.size()).arg(instances));
+        :pianos?tr("保留%1份谱、%2架闲置钢琴").arg(scores).arg(pianos)
+               :tr("保留%1份谱的%2个音源／效果").arg(scores).arg(instances));
     retainedState->setToolTip(names.join('\n'));
   }
   void persistEdits() {
@@ -599,6 +651,56 @@ public:
     current->setWordWrap(true);
     current->setFixedHeight(fontMetrics().lineSpacing() * 2);
     sourceLayout->addWidget(current);
+    commonEnabled=new QCheckBox(tr("所有谱子的钢琴自动共用"),body);
+    commonEnabled->setObjectName("kumoVstCommonPianoEnabled");
+    commonEnabled->setToolTip(tr("各谱钢琴自动采用同一套音源和预设；多架钢琴分别处理按键与踏板。"));
+    sourceLayout->addWidget(commonEnabled);
+    ownPiano=new QCheckBox(tr("本谱使用自己的钢琴音源"),body);
+    ownPiano->setObjectName("kumoVstOwnPiano");sourceLayout->addWidget(ownPiano);
+    commonState=new QLabel(body);commonState->setObjectName("kumoVstCommonPianoState");
+    commonState->setFixedHeight(fontMetrics().lineSpacing());sourceLayout->addWidget(commonState);
+    auto commonDetailsButton=new QToolButton(body);commonDetailsButton->setText(tr("共用设置"));
+    commonDetailsButton->setObjectName("kumoVstCommonPianoDetailsToggle");
+    commonDetailsButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    commonDetailsButton->setArrowType(Qt::RightArrow);commonDetailsButton->setCheckable(true);
+    sourceLayout->addWidget(commonDetailsButton,0,Qt::AlignLeft);
+    auto commonDetails=new QWidget(body);auto commonLayout=new QVBoxLayout(commonDetails);
+    commonLayout->setContentsMargins(0,0,0,0);commonLayout->setSpacing(6);
+    auto nameRow=new QHBoxLayout;nameRow->addWidget(new QLabel(tr("名称"),body));
+    commonName=new QLineEdit(body);commonName->setObjectName("kumoVstCommonPianoName");nameRow->addWidget(commonName);
+    commonLayout->addLayout(nameRow);
+    adoptCommon=new QPushButton(componentToolIcon("keyboard"),tr("采用当前钢琴声音"),body);
+    adoptCommon->setObjectName("kumoVstCommonPianoAdopt");
+    auto commonActions=new ControlFlowLayout;commonActions->addWidget(adoptCommon);commonLayout->addLayout(commonActions);
+    sourceLayout->addWidget(commonDetails);commonDetails->setVisible(false);
+    const bool detailsShown=QSettings().value("kumo/vst/commonPianoDetails",false).toBool();
+    connect(commonDetailsButton,&QToolButton::toggled,this,[commonDetails,commonDetailsButton](bool shown) {
+      commonDetails->setVisible(shown);commonDetailsButton->setArrowType(shown?Qt::DownArrow:Qt::RightArrow);
+      QSettings().setValue("kumo/vst/commonPianoDetails",shown);
+    });
+    commonDetailsButton->setChecked(detailsShown);
+    connect(commonEnabled,&QCheckBox::toggled,this,[this](bool enabled) {
+      if(updating) return;
+      commitEdits();auto settings=commonPianoSettings();settings["enabled"]=enabled;
+      if(enabled && settings["instance"].toMap().isEmpty()) settings["instance"]=commonPianoFromCurrent(score,selected());
+      if(!settings.contains("name")) settings["name"]=tr("共用钢琴");
+      state->setText(enabled?tr("正在准备共用钢琴…"):tr("正在恢复各谱音源…"));
+      QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+      report(applyCommonPianoSettings(score,settings));refresh();
+    });
+    connect(ownPiano,&QCheckBox::toggled,this,[this](bool own) {
+      if(updating) return;commitEdits();report(setScoreOwnPiano(score,own));refresh();
+    });
+    connect(adoptCommon,&QPushButton::clicked,this,[this] {
+      commitEdits();auto settings=commonPianoSettings();settings["instance"]=commonPianoFromCurrent(score,selected());
+      settings["enabled"]=true;report(applyCommonPianoSettings(score,settings));refresh();
+    });
+    connect(commonName,&QLineEdit::editingFinished,this,[this] {
+      auto settings=commonPianoSettings();auto name=commonName->text().trimmed();
+      if(name.isEmpty()) {name=tr("共用钢琴");commonName->setText(name);}
+      if(name==settings.value("name",tr("共用钢琴")).toString()) return;
+      settings["name"]=name;report(applyCommonPianoSettings(score,settings));refresh();
+    });
     retainSources=new QCheckBox(tr("换谱时保留已加载音源"),body);
     retainSources->setObjectName("kumoVstRetainSources");
     retainSources->setToolTip(tr("返回已打开的乐谱时复用音源与效果。闲置时停止声音处理，关闭乐谱后释放。"));
@@ -802,16 +904,25 @@ public:
         return;
       state->setText(tr("正在载入 %1…").arg(picked()["name"].toString()));
       QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
-      report(assignVstInstrument(score, selected(), picked(),
-                                 isolate->isChecked()));
+      if (commonSelection()) {
+        auto settings=commonPianoSettings();auto piano=settings["instance"].toMap();
+        piano["source"]=QVariantMap{{"plugin",picked()},{"isolated",isolate->isChecked()}};
+        settings["instance"]=piano;report(applyCommonPianoSettings(score,settings));
+      } else report(assignVstInstrument(score, selected(), picked(),isolate->isChecked()));
       refresh();
     });
     connect(openSource, &QPushButton::clicked, this,
             [this] { editor(selectedSlot(), -1); });
     connect(removeSource, &QPushButton::clicked, this, [this] {
       auto c = selected();
-      if (!c || !selectedSlot())
+      if (!c)
         return;
+      if (commonSelection()) {
+        auto settings=commonPianoSettings();removedCommon=settings["instance"].toMap();
+        settings["instance"]=commonPianoFromCurrent(score,c,true);
+        report(applyCommonPianoSettings(score,settings));refresh();return;
+      }
+      if (!selectedSlot()) return;
       const auto config = configuration();
       QVariantMap original;
       for (const auto &s : config["slots"].toList())
@@ -860,6 +971,10 @@ public:
     });
     connect(restoreSource, &QPushButton::clicked, this, [this] {
       auto c = selected();
+      if (commonSelection() && !removedCommon.isEmpty()) {
+        auto settings=commonPianoSettings();settings["instance"]=removedCommon;
+        report(applyCommonPianoSettings(score,settings));refresh();return;
+      }
       if (!c || selectedSlot() || !removed.contains(c))
         return;
       const auto remembered = removed.value(c);
@@ -1010,6 +1125,9 @@ public:
         refresh();
       persistEdits();
       refreshRetained();
+      if (lastCommonRevision!=commonPianoRevision()) {
+        lastCommonRevision=commonPianoRevision();refresh();
+      }
       if (backend() && (backend()->revision() != lastRevision ||
                         backend()->problems().join("\n") != lastProblems)) {
         lastProblems = backend()->problems().join("\n");
@@ -1060,11 +1178,15 @@ public:
 };
 QPointer<Panel> panel;
 } // namespace
+void prepareVstForScore(MasterSynthesizer* master,Score* score) {
+  prepareCommonPianos(master,score,false);
+}
 void routeVstChannels(MasterSynthesizer *master, Score *score) {
   auto engine = master ? static_cast<VstSynth *>(master->synthesizer("KumoVST"))
                        : nullptr;
   if (!engine)
     return;
+  prepareCommonPianos(master,score,true);
   QVector<int> banks(256, 0);
   if (score)
     for (const auto &m : score->masterScore()->midiMapping()) {
@@ -1072,11 +1194,15 @@ void routeVstChannels(MasterSynthesizer *master, Score *score) {
       if (c && c->synti() == "KumoVST" && c->channel() < banks.size())
         banks[c->channel()] = c->bank();
     }
+  routeCommonPianos(master,score,banks);
   engine->setRouting(banks);
+  if (master==synti && mscore)
+    for (auto details:mscore->findChildren<MixerDetails*>()) details->refreshPlaybackSource();
 }
 void restoreVstForScore(Score *score) {
   if (auto engine = backend()) {
     selectSourceSession(score);
+    prepareCommonPianos(synti,score,false);
     if (score)
       engine->setState(
           score->masterScore()->synthesizerState().group("KumoVST"));
@@ -1208,17 +1334,16 @@ QVariantMap copyVstInstrument(Score *score, Channel *channel, int bank) {
   }
   return {{"error", QObject::tr("请重新选择这份音源。")}};
 }
-void saveVstEdits(Score *score) {
+void saveVstEdits(Score *score,bool fileSave) {
   if (!score || !mscore || !mscore->currentScore() ||
       mscore->currentScore()->masterScore() != score->masterScore() ||
       !personalFeaturesEnabled() || !backend())
     return;
+  captureCommonPianoEdits(score);
   const auto value = backend()->configuration();
-  if (value.isEmpty())
-    return;
   const auto group = score->masterScore()->synthesizerState().group("KumoVST");
-  if (group.empty() || !VstHost::sameConfiguration(value,
-      QJsonDocument::fromJson(group.front().data.toUtf8()).toVariant().toMap())) {
+  if (!value.isEmpty() && (group.empty() || !VstHost::sameConfiguration(value,
+      QJsonDocument::fromJson(group.front().data.toUtf8()).toVariant().toMap()))) {
     auto state = score->masterScore()->synthesizerState();
     if (state.isDefault())
       state = synti->state();
@@ -1226,6 +1351,20 @@ void saveVstEdits(Score *score) {
     score->undo(new ChangeVstState(score->masterScore(), withConfiguration(state, value), true));
     score->endCmd();
     updateVstHistory(score);
+  }
+  bool commonActive=false;
+  if (fileSave) for (const auto& mapping:score->masterScore()->midiMapping())
+    if (backend()->pianoSlot(mapping.articulation()->channel())) {commonActive=true;break;}
+  if (fileSave && commonActive && commonPianoSettings()["enabled"].toBool() && !scoreUsesOwnPiano(score)) {
+    const auto settings=commonPianoSettings();
+    auto c=backend()->configuration(false);
+    const QVariantMap snapshot{{"schema",1},{"name",settings.value("name",QObject::tr("共用钢琴"))},
+                               {"instance",settings["instance"]}};
+    c["commonPianoSnapshot"]=snapshot;c["schema"]=1;
+    // The last-used sound is saved alongside the local settings. Saving this
+    // auxiliary copy does not add an undo step or change the channel's patch.
+    score->masterScore()->setSynthesizerState(withConfiguration(score->masterScore()->synthesizerState(),c));
+    backend()->rememberPianoSnapshot(snapshot);
   }
 }
 void showVstPanel(Channel *channel) {
@@ -1282,9 +1421,10 @@ namespace Ms {
 void addVstPanelAction(QMenu *) {}
 void showVstPanel(Channel *) {}
 void restoreVstForScore(Score *) {}
-void saveVstEdits(Score *) {}
+void saveVstEdits(Score *,bool) {}
 QVariantMap copyVstInstrument(Score *, Channel *, int) { return {}; }
 void routeVstChannels(MasterSynthesizer *, Score *) {}
+void prepareVstForScore(MasterSynthesizer *, Score *) {}
 QVariantMap applyVstConfiguration(Score *, const QVariantMap &) {
   return {{"error", QStringLiteral("此平台尚未提供 VST。")}};
 }

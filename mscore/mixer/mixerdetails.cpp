@@ -31,6 +31,8 @@
 #include "synthcontrol.h"
 #include "audio/midi/msynthesizer.h"
 #include "mscore/workflow/vstpanel.h"
+#include "mscore/workflow/sharedpiano.h"
+#include "mscore/workflow/featuregate.h"
 #include "preferences.h"
 
 namespace Ms {
@@ -171,44 +173,7 @@ void MixerDetails::updateFromTrack()
       drumkitCheck->setEnabled(!isHarmonyChannel);
       drumkitCheck->blockSignals(false);
 
-      //Populate patch combo
-      patchCombo->blockSignals(true);
-      patchCombo->clear();
-      const auto& pl = synti->getPatchInfo();
-      int patchIndex = 0;
-
-      // Order by program number instead of bank, so similar instruments
-      // appear next to each other, but ordered primarily by soundfont
-      std::map<int, std::map<int, std::vector<const MidiPatch*>>> orderedPl;
-
-      for (const MidiPatch* p : pl)
-            orderedPl[p->sfid][p->prog].push_back(p);
-
-      std::vector<QString> usedNames;
-      for (auto const& sf : orderedPl) {
-            for (auto const& pn : sf.second) {
-                  for (const MidiPatch* p : pn.second) {
-                        if (p->drum == drum || p->synti != "Fluid") {
-                              QString pName = p->name;
-                              if (std::find(usedNames.begin(), usedNames.end(), p->name) != usedNames.end()) {
-                                    QString addNum = QString(" (%1)").arg(p->sfid);
-                                    pName.append(addNum);
-                                    }
-                              else
-                                    usedNames.push_back(p->name);
-
-                              patchCombo->addItem(pName, QVariant::fromValue<void*>((void*)p));
-                              if (p->synti == chan->synti() &&
-                                  p->bank == chan->bank() &&
-                                  p->prog == chan->program())
-                                    patchIndex = patchCombo->count() - 1;
-                              }
-                        }
-                  }
-            }
-      patchCombo->setCurrentIndex(patchIndex);
-
-      patchCombo->blockSignals(false);
+      updatePatchCombo();
 
       QString partName = part->partName();
       if (!chan->name().isEmpty())
@@ -313,6 +278,85 @@ void MixerDetails::setVoiceMute(int staffIdx, int voice, bool shouldMute)
             }
       }
 
+
+//---------------------------------------------------------
+//   updatePatchCombo
+//---------------------------------------------------------
+
+void MixerDetails::updatePatchCombo()
+      {
+      if (!_mti || !synti)
+            return;
+      Part* part=_mti->part();
+      Channel* chan=_mti->focusedChan();
+      const bool drum=_mti->midiMap()->part()->instrument()->useDrumset() && !chan->isHarmonyChannel();
+      //Populate patch combo
+      patchCombo->blockSignals(true);
+      patchCombo->clear();
+      const auto& pl = synti->getPatchInfo();
+      int patchIndex = 0;
+
+      // Order by program number instead of bank, so similar instruments
+      // appear next to each other, but ordered primarily by soundfont
+      std::map<int, std::map<int, std::vector<const MidiPatch*>>> orderedPl;
+
+      for (const MidiPatch* p : pl)
+            orderedPl[p->sfid][p->prog].push_back(p);
+
+      std::vector<QString> usedNames;
+      for (auto const& sf : orderedPl) {
+            for (auto const& pn : sf.second) {
+                  for (const MidiPatch* p : pn.second) {
+                        if (p->drum == drum || p->synti != "Fluid") {
+                              QString pName = p->name;
+                              if (std::find(usedNames.begin(), usedNames.end(), p->name) != usedNames.end()) {
+                                    QString addNum = QString(" (%1)").arg(p->sfid);
+                                    pName.append(addNum);
+                                    }
+                              else
+                                    usedNames.push_back(p->name);
+
+                              patchCombo->addItem(pName, QVariant::fromValue<void*>((void*)p));
+                              if (p->synti == chan->synti() &&
+                                  p->bank == chan->bank() &&
+                                  p->prog == chan->program())
+                                    patchIndex = patchCombo->count() - 1;
+                              }
+                        }
+                  }
+            }
+      const auto commonName=activeCommonPianoName(part->score(),chan);
+      if (!commonName.isEmpty()) {
+            if (!patchCombo->property("kumoCommonOriginalComboPolicy").isValid())
+                  patchCombo->setProperty("kumoCommonOriginalComboPolicy",int(patchCombo->sizeAdjustPolicy()));
+            patchCombo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+            patchCombo->insertItem(0,tr("共用：%1").arg(commonName));
+            patchIndex=0;
+            patchCombo->setToolTip(tr("当前使用共用钢琴：%1。选择下面的音色后，本谱改用自己的钢琴音源。").arg(commonName));
+            }
+      else {
+            if (patchCombo->property("kumoCommonOriginalComboPolicy").isValid()) {
+                  patchCombo->setSizeAdjustPolicy(QComboBox::SizeAdjustPolicy(patchCombo->property("kumoCommonOriginalComboPolicy").toInt()));
+                  patchCombo->setProperty("kumoCommonOriginalComboPolicy",QVariant());
+                  }
+            patchCombo->setToolTip(tr("Sound name"));
+            }
+      patchCombo->setCurrentIndex(patchIndex);
+
+      patchCombo->blockSignals(false);
+
+      }
+
+void MixerDetails::refreshPlaybackSource()
+      {
+      if (isVisible()) updatePatchCombo();
+      }
+
+void MixerDetails::showEvent(QShowEvent* event)
+      {
+      QWidget::showEvent(event);
+      updatePatchCombo();
+      }
 
 //---------------------------------------------------------
 //   partNameChanged
@@ -498,9 +542,14 @@ void MixerDetails::patchChanged(int n)
       Part* part = _mti->midiMap()->part();
       Channel* channel = _mti->midiMap()->articulation();
       Score* score = part->score();
+      const MidiPatch chosen=*p;p=&chosen;
+      const int undoStart=score?score->undoStack()->getCurIdx():0;
+      if (score && personalFeaturesEnabled() && commonPianoSettings()["enabled"].toBool() && !scoreUsesOwnPiano(score) && isPianoChannel(score,channel))
+            setScoreOwnPiano(score,true);
       if(score && p->synti=="KumoVST" && (channel->synti()!=p->synti||channel->bank()!=p->bank)) {
             const auto result=copyVstInstrument(score,channel,p->bank);
             if(result.contains("error"))mscore->showMessage(result["error"].toString(),6000);
+            if(score->undoStack()->getCurIdx()>undoStart+1) score->undoStack()->mergeCommands(undoStart);
             return;
             }
       if (score) {
@@ -510,6 +559,7 @@ void MixerDetails::patchChanged(int n)
             score->setLayoutAll();
             score->endCmd();
             routeVstChannels(synti,score);
+            if(score->undoStack()->getCurIdx()>undoStart+1) score->undoStack()->mergeCommands(undoStart);
             }
       }
 

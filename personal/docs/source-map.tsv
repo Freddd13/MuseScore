@@ -472,3 +472,10 @@ AI读谱与取图安排	personal/docs/AI_WORKFLOW_REVIEW_20261024.md	当前实�
 效果尾音清理	audio/vst/rack.cpp	Unit::resetAudio / Impl::quiet	64	保留预设、清理处理历史与短延迟	sourceSessionEffectTail107
 独立音源重置	audio/vst/hostmain.cpp	resetAudio	168	取消旧块、松键与踏板、保留参数	sourceSessionEffectTail107 / sourceSessionPianos107
 音源保留入口	mscore/workflow/vstpanel.cpp	selectSourceSession / refreshRetained	43	本谱所属、默认保留设置与闲置数量	sourceSessionPanel107
+共用钢琴管理	mscore/workflow/sharedpiano.cpp	prepareCommonPianos / captureCommonPianoEdits	1	所有谱子自动共用、每谱自用与预设	commonPianoPanel108 / commonPianoReal108
+共用实例保留	audio/vst/rack.cpp	Rack::load / commonPianos	400	多架钢琴分开处理、换谱复用和闲置释放	commonPianoPool108
+演奏通道音源	audio/midi/msynthesizer.cpp	setPlaybackRouting / play	95	当前钢琴使用共用声音，原音色保存	commonPianoPanel108
+共用声音随谱保存	mscore/workflow/vstpanel.cpp	saveVstEdits	1300	最近声音快照与原音色一起保存	commonPianoPanel108
+共用音源混音器	mscore/mixer/mixerdetails.cpp	updatePatchCombo / patchChanged	275	原音色框显示实际声音、切回及一次撤销	commonPianoMixer108
+CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件顺序与效果链顺序分别核对	commonPianoCfxOrder108 / commonPianoReal108
+共用效果与导出	mtest/mscore/pluginhost/common_piano_108_tests.inc	commonPianoEffectsExport108	220	实际预设、排序删除、输出及MIDI保持	commonPianoEffectsExport108

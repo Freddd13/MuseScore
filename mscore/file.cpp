@@ -530,7 +530,7 @@ bool MuseScore::saveFile(MasterScore* score)
 #ifdef SCRIPT_INTERFACE
       flushReferencePanelForScore(score);
 #endif
-      saveVstEdits(score);
+      saveVstEdits(score,true);
       if (score == 0)
             return false;
       if (score->created()) {
@@ -1921,7 +1921,7 @@ bool MuseScore::saveAs(Score* cs_, bool saveCopy, const QString& path, const QSt
 #ifdef SCRIPT_INTERFACE
       flushReferencePanelForScore(cs_);
 #endif
-      saveVstEdits(cs_);
+      saveVstEdits(cs_,ext=="mscx" || ext=="mscz");
       bool rv = false;
       QString suffix = "." + ext;
       QString fn(path);

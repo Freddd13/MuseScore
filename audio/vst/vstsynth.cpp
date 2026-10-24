@@ -10,6 +10,7 @@ VstSynth::VstSynth(bool offline, Synthesizer *source, bool on)
     : _rack(offline, VstHost::createFluidSource), fallback(source),
       enabled(on) {
   _clock.offline = offline;
+  for (auto& bank:pianoBanks) bank.store(0);
 }
 VstSynth::~VstSynth() { qDeleteAll(patches); }
 void VstSynth::init(float rate) {
@@ -59,15 +60,16 @@ void VstSynth::setMasterTuning(double value) {
 }
 void VstSynth::play(const PlayEvent &event) {
   const int c = event.channel();
-  if (event.type() == ME_CONTROLLER && event.controller() == CTRL_HBANK)
+  const int fixed = pianoSlot(c);
+  if (!fixed && event.type() == ME_CONTROLLER && event.controller() == CTRL_HBANK)
     bankHi[c] = event.value() & 127;
-  if (event.type() == ME_CONTROLLER && event.controller() == CTRL_LBANK)
+  if (!fixed && event.type() == ME_CONTROLLER && event.controller() == CTRL_LBANK)
     bankLo[c] = event.value() & 127;
-  const int id = (bankHi[c] << 7) | bankLo[c];
+  const int id = fixed ? fixed : (bankHi[c] << 7) | bankLo[c];
   const bool bankChange =
       event.type() == ME_CONTROLLER &&
       (event.controller() == CTRL_HBANK || event.controller() == CTRL_LBANK);
-  if (enabled && bankChange)
+  if (enabled && bankChange && !fixed)
     _rack.midi(c, event.type(), event.dataA(), event.dataB(),
                event.tuning() + tuningCents.load(std::memory_order_acquire));
   if (enabled && available[id]) {
@@ -96,7 +98,7 @@ void VstSynth::play(const PlayEvent &event) {
   fallback->play(output);
 }
 void VstSynth::clearState() {
-  if (!config.isEmpty())
+  if (!config.isEmpty() || !pianoInstances.isEmpty() || hasGraph.load(std::memory_order_acquire))
     setConfiguration({});
 }
 SynthesizerGroup VstSynth::state() const {
@@ -129,11 +131,10 @@ bool VstSynth::setConfiguration(const QVariantMap &value) {
   originalBank.fill(0);
   originalProgram.fill(0);
   if (enabled)
-    _rack.load(value, _sampleRate, &_problems);
+    _rack.load(playbackConfiguration(value), _sampleRate, &_problems);
   auto oldPatches = patches;
   patches.clear();
-  const auto instruments =
-      enabled ? _rack.instruments() : value["slots"].toList();
+  const auto instruments = enabled ? _rack.instruments() : value["slots"].toList();
   for (const auto &v : instruments) {
     const auto c = v.toMap();
     const int id = c["id"].toInt();
@@ -143,6 +144,8 @@ bool VstSynth::setConfiguration(const QVariantMap &value) {
     originalBank[id] = original["bank"].toInt();
     originalProgram[id] = qBound(0, original["program"].toInt(), 127);
     available[id] = enabled && c["available"].toBool();
+    if (!c["commonPiano"].toString().isEmpty())
+      continue;
     MidiPatch *patch = nullptr;
     for (int i = 0; i < oldPatches.size(); ++i)
       if (oldPatches[i]->bank == id) {
@@ -161,14 +164,51 @@ bool VstSynth::setConfiguration(const QVariantMap &value) {
     patches.append(patch);
   }
   qDeleteAll(oldPatches);
-  hasGraph.store(!value["slots"].toList().isEmpty() ||
+  hasGraph.store(!instruments.isEmpty() ||
                      !value["masterEffects"].toList().isEmpty(),
                  std::memory_order_release);
   return true;
 }
 QVariantMap VstSynth::configuration(bool snapshot) {
-  if (enabled && snapshot && !config.isEmpty())
-    config = _rack.state();
+  if (enabled && snapshot) {
+    const auto actual = runtimeConfiguration(true);
+    auto rows = config["slots"].toList();
+    for (auto &row : rows) {
+      const int id=row.toMap()["id"].toInt();
+      if (suppressedSlots.contains(id)) continue;
+      for (const auto &played : actual["slots"].toList())
+        if (played.toMap()["id"].toInt()==id && played.toMap()["commonPiano"].toString().isEmpty())
+          row=played;
+    }
+    if (config.contains("slots") || !rows.isEmpty()) config["slots"]=rows;
+    if (config.contains("masterEffects")) config["masterEffects"]=actual["masterEffects"];
+  }
   return config;
+}
+QVariantMap VstSynth::playbackConfiguration(const QVariantMap& value) const {
+  if (pianoInstances.isEmpty() && suppressedSlots.isEmpty()) return value;
+  auto result=value; QVariantList rows;
+  for (const auto &row : value["slots"].toList())
+    if (!suppressedSlots.contains(row.toMap()["id"].toInt())) rows.append(row);
+  rows.append(pianoInstances); result["slots"]=rows;
+  return result;
+}
+QVariantMap VstSynth::runtimeConfiguration(bool snapshot) {
+  const auto value=enabled && snapshot ? _rack.state() : playbackConfiguration(config);
+  if (snapshot && !pianoInstances.isEmpty()) {
+    QVariantList current;
+    for (const auto& row:value["slots"].toList())
+      if (!row.toMap()["commonPiano"].toString().isEmpty()) current.append(row);
+    pianoInstances=current;
+  }
+  return value;
+}
+void VstSynth::setPianoRouting(const QVariantList& instances,const QVector<int>& banks,
+                              const QSet<int>& suppress,bool refresh) {
+  if (VstHost::sameConfiguration({{"slots",pianoInstances}},{{"slots",instances}}) &&
+      configuredPianoBanks==banks && suppressedSlots==suppress) return;
+  pianoInstances=instances; configuredPianoBanks=banks; suppressedSlots=suppress;
+  for (int i=0;i<int(pianoBanks.size());++i) pianoBanks[i].store(banks.value(i),std::memory_order_release);
+  if (refresh) setConfiguration(config);
 }
 } // namespace Ms

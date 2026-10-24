@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "rack.h"
 #include <QJsonDocument>
+#include <QSet>
 #include <algorithm>
 #include <cmath>
 #include <thread>
@@ -77,6 +78,19 @@ struct Unit {
     r.fill(0);
     return true;
   }
+  bool restoreSource(const QVariantMap& value,const Clock& clock) {
+    if (!processor || !value.contains("state") || config.value("plugin")!=value["plugin"] ||
+        config.value("isolated").toBool()!=value["isolated"].toBool()) return false;
+    QString error;
+    std::array<Midi,132> release{};
+    release[0]={0,0xb0,64,0};release[1]={0,0xb0,66,0};release[2]={0,0xb0,123,0};release[3]={0,0xb0,120,0};
+    for(int pitch=0;pitch<128;++pitch) release[pitch+4]={0,0x80,static_cast<unsigned char>(pitch),64};
+    const std::array<float,64> zero{};
+    if (!processor->process(64,zero.data(),zero.data(),l.data(),r.data(),release.data(),int(release.size()),clock) ||
+        !resetAudio(clock)) return false;
+    if (!processor->restore(QByteArray::fromBase64(value["state"].toByteArray()),&error)) return false;
+    config=value;bypass=value["bypass"].toBool();dryDelay.clear();return true;
+  }
   QVariantMap save() {
     auto value = config;
     if (processor) {
@@ -110,6 +124,24 @@ struct Message {
   int channel = 0, type = 0, first = 0, second = 0;
   float tuning = 0;
 };
+QVariantMap localConfiguration(QVariantMap value) {
+  QVariantList local;
+  for (const auto &row : value["slots"].toList())
+    if (row.toMap()["commonPiano"].toString().isEmpty())
+      local.append(row);
+  value["slots"] = local;
+  return value;
+}
+bool sameSlot(const QVariantMap& a,const QVariantMap& b) {
+  return sameConfiguration({{"slots",QVariantList{a}}},{{"slots",QVariantList{b}}});
+}
+bool sameUnit(const QVariantMap& a,const QVariantMap& b) {
+  return sameSlot({{"source",a}},{{"source",b}});
+}
+bool sameCommonPiano(QVariantMap a,QVariantMap b) {
+  a.remove("id"); b.remove("id"); a.remove("label"); b.remove("label");
+  return sameSlot(a,b);
+}
 } // namespace
 struct Rack::Impl {
   bool offline = false;
@@ -119,13 +151,14 @@ struct Rack::Impl {
   int suspendDepth = 0;
   QVariantMap config;
   Rack::InternalFactory factory;
-  std::vector<std::unique_ptr<Slot>> slots;
+  std::vector<std::shared_ptr<Slot>> slots;
+  std::map<QString, std::shared_ptr<Slot>> commonPianos;
   std::vector<std::unique_ptr<Unit>> master;
   struct Stored {
     QString label;
     QVariantMap config;
     double rate = 44100;
-    std::vector<std::unique_ptr<Slot>> slots;
+    std::vector<std::shared_ptr<Slot>> slots;
     std::vector<std::unique_ptr<Unit>> master;
   };
   std::map<QString, Stored> stored;
@@ -136,6 +169,7 @@ struct Rack::Impl {
   Queue<Message, 8192> queue;
   Delay existingDelay;
   int maxLatency = 0;
+  int changedCommonPiano = 0;
   std::atomic<int> totalLatency{0};
   std::array<float, Block> l{}, r{};
   explicit Impl(bool value, Rack::InternalFactory internal)
@@ -305,29 +339,31 @@ struct Rack::Impl {
     return true;
   }
   void leave() { readers.fetch_sub(1, std::memory_order_release); }
+  bool quietSlot(Slot& slot,bool closeEditors,int samples,const Clock& clock) {
+    std::array<Midi,132> notes{};
+    notes[0]={0,0xb0,64,0};notes[1]={0,0xb0,66,0};
+    notes[2]={0,0xb0,123,0};notes[3]={0,0xb0,120,0};int count=4;
+    for (int pitch=0;pitch<128;++pitch) if (slot.held[pitch])
+      notes[count++]={0,0x80,static_cast<unsigned char>(pitch),64};
+    slot.held.fill(false);slot.count=0;slot.enabled=false;
+    std::fill_n(l.data(),samples,0);std::fill_n(r.data(),samples,0);
+    slot.source.process(samples,l.data(),r.data(),notes.data(),count,clock);
+    if (!closeEditors) return true;
+    if (slot.source.processor) slot.source.processor->closeEditor();
+    bool reset=slot.source.resetAudio(clock);
+    for (auto& unit:slot.effects) {
+      if (unit->processor) unit->processor->closeEditor();
+      reset=unit->resetAudio(clock) && reset;
+    }
+    slot.compensation.clear();return reset;
+  }
   bool quiet(bool closeEditors, int samples = 0) {
     // Drain messages before closing this material; no queued key press may
     // become a key press in the next score.
     messages();
-    const Midi release[] = {{0,0xb0,64,0},{0,0xb0,66,0},{0,0xb0,123,0},{0,0xb0,120,0}};
     Clock clock; clock.rate = rate; clock.offline = offline;
     bool reset = true;
-    for (auto& slot : slots) {
-      std::array<Midi,132> notes{}; std::copy_n(release,4,notes.data()); int count=4;
-      for (int pitch=0; pitch<128; ++pitch) if (slot->held[pitch])
-        notes[count++]={0,0x80,static_cast<unsigned char>(pitch),64};
-      slot->held.fill(false); slot->count=0; slot->enabled=false;
-      std::fill_n(l.data(),samples,0); std::fill_n(r.data(),samples,0);
-      slot->source.process(samples,l.data(),r.data(),notes.data(),count,clock);
-      if (closeEditors) {
-        if (slot->source.processor) slot->source.processor->closeEditor();
-        for (auto& unit : slot->effects) if (unit->processor) unit->processor->closeEditor();
-        reset = slot->source.resetAudio(clock) && reset;
-        for (auto &unit : slot->effects)
-          reset = unit->resetAudio(clock) && reset;
-        slot->compensation.clear();
-      }
-    }
+    for (auto& slot : slots) reset=quietSlot(*slot,closeEditors,samples,clock) && reset;
     if (closeEditors) for (auto& unit : master) if (unit->processor) unit->processor->closeEditor();
     if (closeEditors) {
       for (auto &unit : master)
@@ -353,43 +389,74 @@ void Rack::resume() {
 }
 bool Rack::load(const QVariantMap &value, double rate, QStringList *problems) {
   suspend();
-  if (d->rate != rate) d->stored.clear();
+  if (d->rate != rate) { d->stored.clear(); d->commonPianos.clear(); }
   if (d->session != d->nextSession) {
     const bool reset = d->quiet(true,64);
     if (reset && d->retain && !d->offline && d->rate==rate && !d->session.isEmpty()
         && (!d->slots.empty() || !d->master.empty())) {
       Impl::Stored previous;
-      previous.label=d->sessionLabel; previous.config=d->config; previous.rate=d->rate;
+      previous.label=d->sessionLabel; previous.config=localConfiguration(d->config); previous.rate=d->rate;
       previous.slots=std::move(d->slots); previous.master=std::move(d->master);
-      d->stored[d->session]=std::move(previous);
+      previous.slots.erase(std::remove_if(previous.slots.begin(),previous.slots.end(),
+          [](const auto& slot) { return !slot->config.value("commonPiano").toString().isEmpty(); }),previous.slots.end());
+      if (!previous.slots.empty() || !previous.master.empty()) d->stored[d->session]=std::move(previous);
     } else { d->slots.clear(); d->master.clear(); }
     d->session=d->nextSession; d->sessionLabel=d->nextLabel; d->retain=d->nextRetain;
     d->banks.fill(0); d->hi.fill(0); d->lo.fill(0); d->volumes.fill(1); d->pans.fill(0);
     auto previous=d->stored.find(d->session);
     if (previous!=d->stored.end()) {
-      const bool compatible=previous->second.rate==rate && sameConfiguration(previous->second.config,value);
+      const bool compatible=previous->second.rate==rate && sameConfiguration(previous->second.config,localConfiguration(value));
       if (compatible) {
         d->slots=std::move(previous->second.slots); d->master=std::move(previous->second.master);
         d->config=std::move(previous->second.config); d->rate=rate; d->stored.erase(previous);
-        d->recalculate(); resume(); return true;
+        // Continue assembling this score's routing; common pianos are owned by
+        // their pool and can also be used by a score with no retained graph.
       }
-      d->stored.erase(previous);
+      else d->stored.erase(previous);
     }
   }
   if (d->rate != rate) { d->quiet(true,64); d->slots.clear(); d->master.clear(); }
   d->rate = rate;
   d->config = value;
+  Clock preparation;preparation.rate=rate;preparation.offline=d->offline;
+  // A score can switch from the common piano back to its own source without
+  // changing its session. Retire pooled voices before removing their routing.
+  QSet<QString> incoming;
+  for (const auto& row:value["slots"].toList()) incoming.insert(row.toMap()["commonPiano"].toString());
+  bool retiring=false;
+  for (auto& slot:d->slots) {
+    const auto key=slot->config.value("commonPiano").toString();
+    retiring|=!key.isEmpty() && !incoming.contains(key);
+  }
+  if (retiring) {
+    d->messages();
+    Clock stopped;stopped.rate=rate;stopped.offline=d->offline;
+    for (auto& slot:d->slots) {
+      const auto key=slot->config.value("commonPiano").toString();
+      d->quietSlot(*slot,!key.isEmpty() && !incoming.contains(key),64,stopped);
+    }
+  }
   // Reuse unchanged instances; changing a different effect does not reload a
   // sample library.
   auto old = std::move(d->slots);
   auto oldMaster = std::move(d->master);
   for (const auto &v : value["slots"].toList()) {
     const auto c = v.toMap();
-    auto slot = std::make_unique<Slot>();
+    auto slot = std::make_shared<Slot>();
     slot->config = c;
     slot->id = c["id"].toInt();
     if (slot->id < 1 || slot->id > 16383 || d->find(slot->id))
       continue;
+    const auto commonKey = c["commonPiano"].toString();
+    const auto common = d->commonPianos.find(commonKey);
+    if (!commonKey.isEmpty() && common != d->commonPianos.end() && common->second->source.processor &&
+        common->second->source.processor->status().isEmpty() &&
+        sameCommonPiano(common->second->config, c)) {
+      common->second->id = slot->id;
+      common->second->config = c;
+      d->slots.push_back(common->second);
+      continue;
+    }
     Slot *previous = nullptr;
     for (auto &s : old)
       if (s->id == slot->id) {
@@ -399,7 +466,7 @@ bool Rack::load(const QVariantMap &value, double rate, QStringList *problems) {
     const auto source = c["source"].toMap();
     slot->nativeControls =
         source["plugin"].toMap()["format"].toString() == "SF2";
-    if (previous && previous->source.config == source)
+    if (previous && (sameUnit(previous->source.config, source) || previous->source.restoreSource(source,preparation)))
       slot->source = std::move(previous->source);
     else {
       auto unit = d->make(source, problems);
@@ -410,7 +477,7 @@ bool Rack::load(const QVariantMap &value, double rate, QStringList *problems) {
       std::unique_ptr<Unit> unit;
       if (previous)
         for (auto &p : previous->effects)
-          if (p && p->config == config) {
+          if (p && sameUnit(p->config, config)) {
             unit = std::move(p);
             break;
           }
@@ -423,6 +490,10 @@ bool Rack::load(const QVariantMap &value, double rate, QStringList *problems) {
       slot->pan = previous->pan;
       slot->enabled = previous->enabled;
       slot->held = previous->held;
+    }
+    if (!commonKey.isEmpty()) {
+      if (slot->source.processor) d->commonPianos[commonKey] = slot;
+      else d->commonPianos.erase(commonKey);
     }
     d->slots.push_back(std::move(slot));
   }
@@ -452,7 +523,14 @@ void Rack::releaseSession(const QString& id) {
   if (d->session==id) d->retain=false;
   if (d->nextSession==id) d->nextRetain=false;
 }
-void Rack::releaseInactiveSessions() { d->stored.clear(); }
+void Rack::releaseInactiveSessions() {
+  d->stored.clear();
+  for (auto it=d->commonPianos.begin(); it!=d->commonPianos.end();)
+    if (std::find(d->slots.begin(),d->slots.end(),it->second)==d->slots.end())
+      it=d->commonPianos.erase(it);
+    else ++it;
+}
+void Rack::releaseCommonPianos() { d->commonPianos.clear(); }
 QVariantList Rack::retainedSessions() const {
   QVariantList result;
   for (const auto& row : d->stored) {
@@ -460,6 +538,10 @@ QVariantList Rack::retainedSessions() const {
     for (const auto& slot : row.second.slots) instances+=1+int(slot->effects.size());
     result.append(QVariantMap{{"id",row.first},{"label",row.second.label},{"instances",instances}});
   }
+  for (const auto& row : d->commonPianos)
+    if (std::find(d->slots.begin(),d->slots.end(),row.second)==d->slots.end())
+      result.append(QVariantMap{{"id",row.first},{"label",row.second->config.value("label")},
+                               {"instances",1+int(row.second->effects.size())},{"commonPiano",true}});
   return result;
 }
 QVariantMap Rack::state() {
@@ -526,16 +608,23 @@ Plugin *Rack::plugin(int id, int effect) const {
 bool Rack::takeChanges() {
   bool changed = false;
   for (auto &s : d->slots) {
+    bool instrumentChanged = false;
     if (s->source.processor)
-      changed |= s->source.processor->takeChanges();
+      instrumentChanged |= s->source.processor->takeChanges();
     for (auto &e : s->effects)
       if (e->processor)
-        changed |= e->processor->takeChanges();
+        instrumentChanged |= e->processor->takeChanges();
+    if (instrumentChanged && !s->config.value("commonPiano").toString().isEmpty())
+      d->changedCommonPiano = s->id;
+    changed |= instrumentChanged;
   }
   for (auto &e : d->master)
     if (e->processor)
       changed |= e->processor->takeChanges();
   return changed;
+}
+int Rack::takeChangedCommonPiano() {
+  const int id=d->changedCommonPiano; d->changedCommonPiano=0; return id;
 }
 bool Rack::hasOpenEditors() const {
   for (const auto &slot : d->slots) {

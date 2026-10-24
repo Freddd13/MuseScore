@@ -314,8 +314,19 @@ void TestPluginHost::cfxLiveStateKeepsEditorInstance() {
     QCOMPARE(engine->revision(), engineRevision);
     const int captured = score->undoStack()->getCurIdx();
     QCOMPARE(captured, undo + 1);
+    const auto captureFolder=qEnvironmentVariable("P2_TEST_CFX_CAPTURE");
+    auto recordCapture=[&](const QString& label) {
+        if(captureFolder.isEmpty()) return;
+        const auto group=score->synthesizerState().group("KumoVST");
+        const auto saved=group.empty()?QVariantMap():QJsonDocument::fromJson(group.front().data.toUtf8()).toVariant().toMap();
+        QFile file(QDir(captureFolder).filePath(label+".json"));
+        if(file.open(QIODevice::WriteOnly)) file.write(QJsonDocument::fromVariant(QVariantMap{{"saved",saved},{"actual",engine->configuration()}}).toJson());
+    };
+    recordCapture("first-capture");
     saveVstEdits(score);
+    recordCapture("second-capture");
     QCOMPARE(score->undoStack()->getCurIdx(), captured);
+    for(const auto& row:engine->configuration()["slots"].toList()) QVERIFY(!row.toMap().contains("commonPiano"));
     QCOMPARE(engine->rack().plugin(channel->bank()), plugin);
     qInfo() << "CFX live capture undo commands" << undo << captured
             << "engine revision unchanged" << engineRevision;

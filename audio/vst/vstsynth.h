@@ -2,6 +2,7 @@
 #pragma once
 #include "audio/midi/synthesizer.h"
 #include "rack.h"
+#include <QSet>
 namespace Ms {
 class VstSynth final : public Synthesizer {
   VstHost::Rack _rack;
@@ -18,6 +19,11 @@ class VstSynth final : public Synthesizer {
   std::array<int, 256> bankHi{}, bankLo{};
   std::array<int, 16384> originalBank{}, originalProgram{};
   std::array<bool, 16384> available{};
+  QVariantList pianoInstances;
+  QSet<int> suppressedSlots;
+  std::array<std::atomic<int>,256> pianoBanks;
+  QVector<int> configuredPianoBanks = QVector<int>(256,0);
+  QVariantMap playbackConfiguration(const QVariantMap&) const;
 
 public:
   explicit VstSynth(bool offline = false, Synthesizer *fallback = nullptr,
@@ -47,6 +53,15 @@ public:
   bool setState(const SynthesizerGroup &) override;
   bool setConfiguration(const QVariantMap &);
   QVariantMap configuration(bool snapshot = true);
+  QVariantMap runtimeConfiguration(bool snapshot = true);
+  void rememberPianoSnapshot(const QVariantMap& value) {
+    config["commonPianoSnapshot"]=value; config["schema"]=1;
+  }
+  void setPianoRouting(const QVariantList&,const QVector<int>&,const QSet<int>&,bool refresh=true);
+  int pianoSlot(int channel) const {
+    return channel>=0 && channel<int(pianoBanks.size())
+        ? pianoBanks[channel].load(std::memory_order_acquire):0;
+  }
   VstHost::Rack &rack() { return _rack; }
   void setRouting(const QVector<int> &banks) {
     bankHi.fill(0);

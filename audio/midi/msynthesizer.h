@@ -14,6 +14,7 @@
 #define __MSYNTHESIZER_H__
 
 #include <atomic>
+#include <array>
 #include "effects/effect.h"
 #include "libmscore/synthesizerstate.h"
 
@@ -53,6 +54,7 @@ class MasterSynthesizer : public QObject {
       std::atomic<bool> lock1      { false };
       std::atomic<bool> lock2      { true  };
       std::vector<Synthesizer*> _synthesizer;
+      std::array<std::atomic<int>,256> _playbackRouting;
       std::vector<Effect*> _effectList[MAX_EFFECTS];
       Effect* _effect[MAX_EFFECTS]  { nullptr, nullptr };
 
@@ -84,6 +86,7 @@ class MasterSynthesizer : public QObject {
 
       void process(unsigned, float*);
       void play(const NPlayEvent&, unsigned);
+      void setPlaybackRouting(const QVector<int>&);
       void setPlaybackContext(qint64, double, double, bool, int numerator=4, int denominator=4);
       int processingLatency() const;
       qint64 processingTail() const;

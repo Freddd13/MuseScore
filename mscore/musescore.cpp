@@ -8300,6 +8300,7 @@ bool MuseScore::saveMp3(Score* score, QIODevice* device, bool& wasCanceled)
       synth->setSampleRate(sampleRate);
 
       const SynthesizerState state = useCurrentSynthesizerState ? mscore->synthesizerState() : score->synthesizerState();
+      prepareVstForScore(synth,score);
       const bool setStateOk = synth->setState(state);
       routeVstChannels(synth,score);
 

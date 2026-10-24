@@ -1,6 +1,8 @@
 set(PERFORMANCEEDITOR_SRC
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/vstpanel.cpp
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/vstpanel.h
+      ${CMAKE_CURRENT_LIST_DIR}/../workflow/sharedpiano.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/../workflow/sharedpiano.h
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/vstparameters.cpp
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/vstparameters.h
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/vstpresets.cpp
