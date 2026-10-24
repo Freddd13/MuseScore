@@ -63,7 +63,11 @@ function describe(result, notes, tick, tonic, minor, degreeMode, preferFlats, to
     out.chromatic=Harmony.isChromatic(tonic,minor,out.root,out.definition);
     return out;
 }
-function signature(r) {return [r.root,r.definition,r.bass,r.tonic,r.minor,r.chord,r.degree].join(":");}
+function signature(r,notes) {
+    var key=[r.root,r.definition,r.bass,r.tonic,r.minor,r.chord,r.degree].join(":");
+    if(r.root<0){var mask=0;(notes||r.notes||[]).forEach(function(note){mask|=1<<Harmony.mod12(note.pitch);});key+=":"+mask;}
+    return key;
+}
 function partsFor(frame, fallback) {return frame.parts && frame.parts.length?frame.parts:[{startTrack:fallback,endTrack:1024}];}
 function frameForPart(frame, part) {
     if(typeof part.keySignature!=="number" || part.keySignature===frame.keySignature)return frame;
@@ -375,7 +379,11 @@ function evaluate(state, row, key) {
         if(row.frame.chord)result.chord=row.frame.chord;
         if(row.frame.degree)result.degree=row.frame.degree;
     }
-    if(result.root<0 && !(row.frame.imported && row.frame.chord)){row.pathOptions=[null];return;}
+    if(result.root<0 && !(row.frame.imported && row.frame.chord)){
+        var unresolvedMask=0;row.notes.forEach(function(note){unresolvedMask|=1<<Harmony.mod12(note.pitch);});
+        if(Harmony.bitCount(unresolvedMask)>=3){result.chord="?";row.pathOptions=[result];}else row.pathOptions=[null];
+        return;
+    }
     var choices=result.candidates||[];delete result.candidates;row.pathOptions=[result];
     if(!row.frame.imported && config.auto!==false && !(window && config.pedalMode===0))for(var c=0;c<choices.length;++c) {
         var candidate=choices[c];if(candidate.root===result.root && candidate.definition===result.definition)continue;
@@ -412,7 +420,7 @@ function scorePath(row,previous) {
 function emitRegion(state,row,key) {
     var result=row.chosen;if(!result){state.current=null;return;}
     var current=state.current,window=row.pedal,source=row.frame.imported?"imported":"auto";
-    var same=current && current.end===row.start && current.source===source && signature(current)===signature(result);
+    var same=current && current.end===row.start && current.source===source && signature(current,current.notes)===signature(result,row.notes);
     if(window && state.config.pedalMode===0 && current && current.end===row.start && current.pedalStart===window.start &&
        current.source==="auto" && source==="auto" && current.root===result.root && current.definition===result.definition &&
        current.tonicSpelling===result.tonicSpelling && current.minor===result.minor)same=true;

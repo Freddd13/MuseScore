@@ -104,7 +104,7 @@ rhythm-rules	libmscore/durationtype.cpp	std::vector<TDuration> toRhythmicDuratio
 restored-rhythm-menu	mscore/musescore.cpp	void MuseScore::updateMenus()	2837	Restore personal action into old workspace menus	mtest/mscore/pluginhost
 text-font-fallback	libmscore/textbase.cpp	QFont TextFragment::font(	851	ScoreText music font vs ordinary Qt font merging	mtest/libmscore/text
 music-text-fallback	libmscore/sym.cpp	const char* ScoreFont::fallbackTextFont()	7174	Bravura Text fallback; not CJK title fallback	-
-harmony-regions	share/workflow/panels/HarmonyAssistant/Timeline.js	function createBuilder	88	Numeric interval builder and manual overlays	mtest/mscore/scoreobserver
+harmony-regions	share/workflow/panels/HarmonyAssistant/Timeline.js	function createBuilder	92	Numeric interval builder and manual overlays	mtest/mscore/scoreobserver
 harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName:""harmonyRangeEditor"""	8	Range handles, ticks and independent history	mtest/mscore/pluginhost
 演奏界面	mscore/performanceeditor/performanceeditor.cpp	PerformanceEditor::PerformanceEditor	78	独立停靠参数面板	mtest/mscore/performanceeditor
 演奏快照	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::refresh()	411	内容快照/独立布局修复/原生选择同步	mtest/mscore/performanceeditor
@@ -231,7 +231,7 @@ MIDI导出	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::voiceSelection	200	�
 编配检查	mscore/plugin/api/pianohandanalysis.cpp	QVariantMap PianoHandAnalysis::analyse(	9	后台数字数据、各钢琴独立保持与转场	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 MIDI松手	audio/exports/midigate.h	QVector<MidiGateNote> process(	114	受保护事件副本、占手释放与成组随机	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	209	真实秒数、选音、说明和前后占用	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
-和弦上下文	share/workflow/panels/HarmonyAssistant/Timeline.js	function evaluate(	332	新低音、残音、级进与相邻解释	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
+和弦上下文	share/workflow/panels/HarmonyAssistant/Timeline.js	function evaluate(	336	新低音、残音、级进与相邻解释	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 和弦上下文	share/plugins/HarmonyAssistant/Harmony.js	function detectWeighted(	110	加权模板候选和歧义保留	mtest/mscore/p0native;../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 联合音频输出	mscore/workflow/referencebus.cpp	void mixReferenceAudio(	50	准备好的音频和临时时间对应	mtest/mscore/p1native;../../muse3_plugins/Repairs/tests/tst_referenceproject.cpp
 多音轨媒体	mscore/referenceaudio/mediaproject.cpp	QVariantMap ReferenceMediaProject::start(	71	固定缓冲、后台处理与整体播放	mtest/mscore/p1native;../../muse3_plugins/Repairs/tests/tst_referenceproject.cpp
@@ -252,7 +252,7 @@ MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	209	�
 Windows录制输入	audiodrivers/pm.cpp	void PortMidiDriver::read(	183	保留PortMidi时间的录制入口	mtest/mscore/p1native
 连续手位判断	libmscore/pianohands.h	inline Plan planWithContext(	149	保持音、候选分手和后两组音的比较	mtest/mscore/p0native
 MIDI松手说明	mscore/midicrop/midicroppanel.cpp	QString reasonText(	35	原长度、新长度、下一组音和按键占用	mtest/mscore/p0native
-和弦连续解释	share/workflow/panels/HarmonyAssistant/Timeline.js	function scorePath(	397	候选解释、分批回查与区间输出	../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs
+和弦连续解释	share/workflow/panels/HarmonyAssistant/Timeline.js	function scorePath(	405	候选解释、分批回查与区间输出	../../muse3_plugins/HarmonyAssistant/tests/test-context.cjs
 方案连线	libmscore/regionalconnections.cpp	QVariantList capture(	111	按逻辑端点保存与恢复延音线和圆滑线	mtest/mscore/p1native
 谱面方案按钮	mscore/workflow/regionalcontrols.cpp	void updateRegionalControls(	263	可隐藏的写法切换、定位面板和视口更新	mtest/mscore/p1native
 打开演奏对比	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::showEditorComparison(	168	展开对应轨、分配空间并切换到当前结果	mtest/mscore/p1native
@@ -362,7 +362,7 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	241	空列�
 完整谱工作区迁移	share/plugins/ArrangementVariants/ArrangementVariants_MS3.qml	function saveAt(url)	148	另存索引时保持已有材料路径，保存切换与删除恢复	mtest/mscore/pluginhost/variant_metadata_076_tests.inc
 和弦独立面板样式	share/workflow/panels/HarmonyAssistant/HarmonyStyleEditor.qml	Column {	5	摘要与详情分别调整内容、音乐字体、排列及间距	mtest/mscore/pluginhost/harmony_panel_077_tests.inc
 人工和弦随改音更新	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	function correctionStructure()	226	按小节与谱表结构判断人工范围，改音后保留解释	mtest/mscore/pluginhost/harmony_panel_077_tests.inc
-人工和弦当前音符	share/workflow/panels/HarmonyAssistant/Timeline.js	function refreshNotes(	493	按范围与声部读取当前音符，保留用户指定的和弦	mtest/mscore/pluginhost/harmony_panel_077_tests.inc
+人工和弦当前音符	share/workflow/panels/HarmonyAssistant/Timeline.js	function refreshNotes(	501	按范围与声部读取当前音符，保留用户指定的和弦	mtest/mscore/pluginhost/harmony_panel_077_tests.inc
 频谱时间范围	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::fitTimeRange(	608	完整音频与按谱片段、匹配显示、逐音轨选择保存	mtest/mscore/pluginhost/spectrum_078_tests.inc
 共同时间缩放	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::zoomTimeline(	202	卷帘和频谱共用缩放中心与时间滚动范围	mtest/mscore/pluginhost/spectrum_078_tests.inc
 独立工具与当前页	mscore/workflow/editorareas.cpp	void keepInlinePage(	56	唤回独立工具时保留当前编辑器页，恢复导航和时间滚动	mtest/mscore/pluginhost/layout_079_tests.inc
@@ -483,20 +483,21 @@ CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件�
 拼写级数	share/workflow/panels/HarmonyAssistant/Harmony.js	roman	202	按根音和主音字母得到级数及转位	harmonySpellingAcrossViews109
 统一和弦描述	share/workflow/panels/HarmonyAssistant/Timeline.js	describe / tonicNameAt	49	名称、低音、级数及调性拼写共同传递	harmonySpellingAcrossViews109
 关谱后重新读取	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	ownsCurrentScore / changeScore	671	实际读取对象与当前谱一起核对	harmonySpellingAcrossViews109
-踏板中的调性解释	share/workflow/panels/HarmonyAssistant/Timeline.js	evaluate	332	同一踏板按所在调性更新级数	harmonyPedalContext110 / test-pedal-context.cjs
-踏板中的明确边界	share/workflow/panels/HarmonyAssistant/Timeline.js	emitRegion	412	按来源保留导入边界，自动分解和弦继续合并	harmonyPedalContext110
-连续和弦候选	share/workflow/panels/HarmonyAssistant/Timeline.js	segmentJob	95	踏板内按低音、起音和音高变化比较区间	harmonySegmentCorpus111 / test-segments.cjs
-连续和弦评分	share/workflow/panels/HarmonyAssistant/Timeline.js	rankSegment	142	构成音覆盖、扩展时长和有界缓存	harmonySegmentCorpus111 / test-segments.cjs
-分批和弦区间	share/workflow/panels/HarmonyAssistant/Timeline.js	stepSegment	225	每步一个候选，保留真变化并合并重复解释	harmonySegmentCorpus111 / test-segments.cjs
+踏板中的调性解释	share/workflow/panels/HarmonyAssistant/Timeline.js	evaluate	336	同一踏板按所在调性更新级数	harmonyPedalContext110 / test-pedal-context.cjs
+踏板中的明确边界	share/workflow/panels/HarmonyAssistant/Timeline.js	emitRegion	420	按来源保留导入边界，自动分解和弦继续合并	harmonyPedalContext110
+连续和弦候选	share/workflow/panels/HarmonyAssistant/Timeline.js	segmentJob	99	踏板内按低音、起音和音高变化比较区间	harmonySegmentCorpus111 / test-segments.cjs
+连续和弦评分	share/workflow/panels/HarmonyAssistant/Timeline.js	rankSegment	146	构成音覆盖、扩展时长和有界缓存	harmonySegmentCorpus111 / test-segments.cjs
+分批和弦区间	share/workflow/panels/HarmonyAssistant/Timeline.js	stepSegment	229	每步一个候选，保留真变化并合并重复解释	harmonySegmentCorpus111 / test-segments.cjs
 后台和弦描述	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	frameSnapshot / applyFrameDescriptions	505	分批读取，后台统一识别并返回逐帧名称	harmonySpellingAcrossViews109 / test-deferred.cjs
-乐器调性	share/workflow/panels/HarmonyAssistant/Timeline.js	frameForPart	68	各乐器分别采用所属调号	harmonyPartKeys112 / test-part-keys.cjs
-人工和弦拼写	share/workflow/panels/HarmonyAssistant/Timeline.js	validEdits	527	保存根音与主音的升降号拼写	harmonyPartKeys112 / test-part-keys.cjs
+乐器调性	share/workflow/panels/HarmonyAssistant/Timeline.js	frameForPart	72	各乐器分别采用所属调号	harmonyPartKeys112 / test-part-keys.cjs
+人工和弦拼写	share/workflow/panels/HarmonyAssistant/Timeline.js	validEdits	535	保存根音与主音的升降号拼写	harmonyPartKeys112 / test-part-keys.cjs
 即时摘要更新	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	clearDisplay / displayTick	780	清空结果后继续更新，读取当前乐器	harmonyWindow112 / harmonySpellingAcrossViews109
 分乐器上下文	mscore/plugin/api/scoreobserver.cpp	contextNotes / contextSnapshot	313	保留各乐器同音与调号	harmonyPartKeys112 / harmonyWindow112
-导入区间整理	share/workflow/panels/HarmonyAssistant/Timeline.js	importEdits	556	导入、人工与隐藏合为有效范围，重复导入保持数量	harmonyImportRoundTrip113 / test-analysis-roundtrip.cjs
+导入区间整理	share/workflow/panels/HarmonyAssistant/Timeline.js	importEdits	564	导入、人工与隐藏合为有效范围，重复导入保持数量	harmonyImportRoundTrip113 / test-analysis-roundtrip.cjs
 谱内分析写入	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	writeCorrections	268	成功保存后更新面板，一次原生撤销	harmonyImportRoundTrip113 / test-analysis-roundtrip.cjs
 分析文件操作	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	exchangeFile	621	完整检查、旧帧转区间及按钮旁反馈	harmonyImportRoundTrip113 / test-analysis-roundtrip.cjs
 重新自动检测	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	reanalyseImported	287	移除导入来源，保留人工修改及撤销	harmonyImportRoundTrip113 / test-analysis-roundtrip.cjs
 导入调性	share/workflow/panels/HarmonyAssistant/Analysis.js	interpretationConfig	38	旧帧沿用文件调性，保留当前外观设置	harmonyLegacyAndFailure113 / harmonyScopedImport113
 统一调性显示	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	displayInterpretation	986	级数、离调颜色及导出使用相同调性	harmonyLegacyAndFailure113 / harmonyScopedImport113
 按乐器处理分析	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	regionInScope	219	导入、导出和重新检测保留范围外记录	harmonyLegacyAndFailure113 / harmonyScopedImport113
+未确定和弦入口	share/workflow/panels/HarmonyAssistant/Timeline.js	evaluate	336	保留未确定复音与不同音组边界	harmonyUnknownAndPoints114 / test-unresolved.cjs

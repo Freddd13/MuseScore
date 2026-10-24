@@ -416,7 +416,7 @@ MuseScore {
         var d=JSON.parse(JSON.stringify(note))
         if(fixedChordNative) {
             d.chord=configuration.chordContent===1 ? "" : frame.chord || (frame.notes.length?"?":"")
-            d.degree=configuration.chordContent===0 ? "" : frame.degree || (frame.root<0 && frame.notes.length && configuration.chordContent===1?"?":"")
+            d.degree=configuration.chordContent===0 ? "" : frame.root<0 ? (frame.notes.length && configuration.chordContent===1?"?":"") : frame.degree
             d.chordTick=frame.start===undefined?frame.tick:frame.start;d.chordUntil=frame.end===undefined?frame.tick:frame.end
             d.chordOrder=configuration.chordOrder;d.chordScale=configuration.chordScale/100
             d.chordFont=["","Edwin","Arial"][configuration.chordFont]
