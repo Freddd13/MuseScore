@@ -8,12 +8,31 @@
 var lowIntervalLimits={"1":52,"2":51,"3":48,"4":46,"5":46,"6":46,"7":34,"8":43,"9":41,"10":41,"11":41,"13":40,"14":39,"15":36,"16":34};
 var lowIntervalNames={"1":"小二度","2":"大二度","3":"小三度","4":"大三度","5":"纯四度","6":"三全音","7":"纯五度","8":"小六度","9":"大六度","10":"小七度","11":"大七度","13":"小九度","14":"大九度","15":"小十度","16":"大十度"};
 function pitchLabel(n){return Harmony.spelledName(n.tpc,n.pitch,false)+(Math.floor(n.pitch/12)-1);}
+function timingClock(data) {
+    var points={};
+    function add(tick,seconds,bpm) {
+        if(typeof seconds!=="number" || !isFinite(seconds))return;
+        var row={tick:tick,seconds:seconds};if(bpm>0)row.bpm=bpm;points[tick]=row;
+    }
+    var tempos=data.tempos||[],scope=data.scope||{},complete=tempos.some(function(t){return t.tick<=scope.start&&t.bpm>0;})&&tempos.some(function(t){return t.tick>=scope.end&&t.bpm>0;});
+    if(!complete)(data.notes||[]).forEach(function(n){if(!n.grace){add(n.attackTick===undefined?n.tick:n.attackTick,n.onSeconds);add(n.logicalEnd===undefined?n.end:n.logicalEnd,n.endSeconds);}});
+    tempos.forEach(function(t){add(t.tick,t.seconds,t.bpm);});
+    return Object.keys(points).map(function(t){return points[t];}).sort(function(a,b){return a.tick-b.tick;});
+}
+function timeAt(clock,tick) {
+    if(!clock.length)return null;
+    var index=precedingTick(clock,tick,true),point=clock[Math.max(0,index)];
+    if(point.tick===tick)return point.seconds;
+    if(point.bpm>0)return point.seconds+(tick-point.tick)/(8*point.bpm);
+    var other=index+1<clock.length?clock[index+1]:clock[Math.max(0,index-1)];
+    return other.tick!==point.tick?point.seconds+(tick-point.tick)*(other.seconds-point.seconds)/(other.tick-point.tick):null;
+}
 function lowVoicing(s,frame){
-    var held=frame.notes.filter(function(n){return !n.grace&&n.play!==false&&n.piano!==false&&(n.soundingEnd===undefined?n.logicalEnd:n.soundingEnd)>frame.tick;}),notes=[],reasons=[],keys=[],byKey={};
+    var held=frame.notes.filter(function(n){return !n.grace&&n.play!==false&&n.piano!==false&&(n.soundingEnd===undefined?n.logicalEnd:n.soundingEnd)>frame.tick;}),keys=[],byKey={},parts={};
     held.forEach(function(n){
         var part=n.partId===undefined?s.data.scope.firstTrack:n.partId,key=part+":"+n.pitch,group=byKey[key];
-        if(!group){group={part:part,pitch:n.pitch,notes:[],latest:n.attackTick};byKey[key]=group;keys.push(group);}
-        group.notes.push(n);group.latest=Math.max(group.latest,n.attackTick);
+        if(!group){group={part:part,pitch:n.pitch,notes:[],latest:n.attackTick,begin:n.attackTick,end:0};byKey[key]=group;keys.push(group);}
+        group.notes.push(n);group.latest=Math.max(group.latest,n.attackTick);group.begin=Math.min(group.begin,n.attackTick);group.end=Math.max(group.end,n.soundingEnd===undefined?n.logicalEnd:n.soundingEnd);
     });
     var limits=s.config.lowIntervalLimits||lowIntervalLimits;
     for(var i=0;i<keys.length;++i)for(var j=i+1;j<keys.length;++j){
@@ -21,11 +40,23 @@ function lowVoicing(s,frame){
         var distance=Math.abs(a.pitch-b.pitch),limit=limits[String(distance)];
         if(limit===undefined||Math.min(a.pitch,b.pitch)>=limit)continue;
         var pair=a.pitch<b.pitch?[a,b]:[b,a];
-        var residual=pair.some(function(group){return group.notes.every(function(n){return n.logicalEnd<=frame.tick;});}),arpeggio=pair[0].latest!==pair[1].latest;
-        reasons.push(pitchLabel(pair[0].notes[0])+"–"+pitchLabel(pair[1].notes[0])+"（"+lowIntervalNames[String(distance)]+"），低端音低于参考 "+Harmony.sharpNames[limit%12]+(Math.floor(limit/12)-1)+"。"+(residual?"其中有踏板保留的声音。":arpeggio?"两音来自先后起音，目前仍同时发声。":"两音同时按下。"));
-        pair.forEach(function(group){group.notes.forEach(function(n){if(notes.indexOf(n)<0)notes.push(n);});});
+        var from=Math.max(s.data.scope.start,pair[0].begin,pair[1].begin),until=Math.min(s.data.scope.end,pair[0].end,pair[1].end);
+        if(until<=from)continue;
+        var beginSeconds=timeAt(s.clock,from),endSeconds=timeAt(s.clock,until),seconds=beginSeconds===null||endSeconds===null?null:Math.max(0,endSeconds-beginSeconds);
+        var residual=pair.some(function(group){return group.end>Math.max.apply(null,group.notes.map(function(n){return n.logicalEnd;}));}),arpeggio=pair[0].latest!==pair[1].latest;
+        var velocities=pair.map(function(group){var values=group.notes.filter(function(n){return n.attackTick===group.latest&&typeof n.velocity==="number";}).map(function(n){return n.velocity;});return values.length?Math.max.apply(null,values):null;});
+        var description=pitchLabel(pair[0].notes[0])+"–"+pitchLabel(pair[1].notes[0])+"（"+lowIntervalNames[String(distance)]+"），低端音低于参考 "+Harmony.sharpNames[limit%12]+(Math.floor(limit/12)-1)+"。";
+        description+=(residual?"含踏板保持。":arpeggio?"先后起音。":"同时起音。")+"共同持续 "+(seconds===null?Number(((until-from)/480).toFixed(2))+" 四分拍":Math.round(seconds*1000)+" ms");
+        if(velocities[0]!==null&&velocities[1]!==null)description+="，起音力度 "+velocities[0]+" / "+velocities[1];
+        var result=parts[a.part]||(parts[a.part]={notes:[],details:[]});
+        result.details.push({start:from,end:until,seconds:seconds,velocities:velocities,source:residual?"pedal":arpeggio?"arpeggio":"together",pitches:[pair[0].pitch,pair[1].pitch],description:description+"。"});
+        pair.forEach(function(group){group.notes.forEach(function(n){if(result.notes.indexOf(n)<0)result.notes.push(n);});});
     }
-    if(notes.length)issue(s,"harmony","low-cluster",frame.tick,notes,"低音排列可能较浑浊",reasons.join("\n")+"\n可试听这组音的清晰程度，再考虑拉开排列。参考表可在设置中调整。","提示");
+    for(var part in parts) {
+        var found=parts[part];found.details.sort(function(a,b){return (b.seconds||0)-(a.seconds||0) || Math.min.apply(null,b.velocities)-Math.min.apply(null,a.velocities);});
+        var reported=issue(s,"harmony","low-cluster",frame.tick,found.notes,"低音排列可能较浑浊",found.details.map(function(detail){return detail.description;}).join("\n")+"\n持续时间按谱上时值与踏板计算。可试听这组音的清晰程度，再考虑拉开排列。参考表可在设置中调整。","提示");
+        if(reported){reported.lowDetails=found.details;reported.lowKey=part+":"+found.details.map(function(detail){return detail.pitches.join("-");}).sort().join(",");}
+    }
 }
 function onsetSpans(s,frame){
     var groups={};frame.notes.forEach(function(n){if(n.attackTick!==frame.tick||n.grace||n.piano===false)return;var h=handFor(s,n,frame.tick);if(h.hand!=="left"&&h.hand!=="right")return;var k=(n.partId===undefined?0:n.partId)+":"+h.hand;(groups[k]||(groups[k]={hand:h.hand,notes:[],certain:true})).notes.push(n);groups[k].certain=groups[k].certain&&h.source.indexOf("自动推断")<0;});
@@ -55,7 +86,7 @@ function perfect(a,b) {
 }
 function create(data,config,imported) {
     return {data:data,config:clone(config),imported:imported||[],phase:0,index:0,byTick:{},ticks:[],byTrack:{},
-        frames:[],active:[],pedalNotes:[],roles:[],issues:[],previousHands:{},previousLines:{},pairState:{},regions:[],seen:{},logicalSeen:{},trackTicks:{},trackIndices:{},trackParts:{},trackTextures:{},trackProfiles:{},trackKeys:null,roleIndex:0,textureJob:null,keyIndex:indexKeys(data.keys||[]),handIndex:indexHands(data.hands||[])};
+        frames:[],active:[],pedalNotes:[],roles:[],issues:[],previousHands:{},previousLines:{},pairState:{},regions:[],seen:{},logicalSeen:{},trackTicks:{},trackIndices:{},trackParts:{},trackTextures:{},trackProfiles:{},trackKeys:null,roleIndex:0,textureJob:null,clock:timingClock(data),keyIndex:indexKeys(data.keys||[]),handIndex:indexHands(data.hands||[])};
 }
 function indexKeys(keys) {
     var result={};keys.forEach(function(event){(result[event.track]||(result[event.track]=[])).push(event);});
@@ -94,8 +125,9 @@ function issue(s,type,code,tick,notes,title,basis,severity) {
     var id=type+":"+code+":"+anchor+":"+ids.join(",");
     if(s.seen[id] || s.config.ignored.indexOf(id)>=0)return;
     var meter=null;for(var m=0;m<(s.data.meters||[]).length;++m)if(s.data.meters[m].tick<=tick && tick<s.data.meters[m].end) {meter=s.data.meters[m];break;}
-    s.seen[id]=true;s.issues.push({id:id,type:type,code:code,tick:tick,notes:notes,title:title,basis:basis,
-        severity:severity||"提示",bar:meter?meter.measure:notes.length?notes[0].measure:0,beat:meter?1+(tick-meter.tick)/(480*4/meter.denominator):notes.length?notes[0].beat:1});
+    var result={id:id,type:type,code:code,tick:tick,notes:notes,title:title,basis:basis,
+        severity:severity||"提示",bar:meter?meter.measure:notes.length?notes[0].measure:0,beat:meter?1+(tick-meter.tick)/(480*4/meter.denominator):notes.length?notes[0].beat:1};
+    s.seen[id]=true;s.issues.push(result);return result;
 }
 function pedal(s,tick,track) {
     var windows=s.data.pedals||[];

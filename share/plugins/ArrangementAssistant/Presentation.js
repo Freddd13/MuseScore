@@ -26,3 +26,18 @@ function filter(issues, mask, severity) {
         return !!(mask & bits[issue.type]) && (!severity || issue.severity === ["","需核查","注意","提示"][severity]);
     });
 }
+
+function rows(issues) {
+    var result=[],byKey={};
+    issues.forEach(function(issue){
+        var key=issue.lowKey?"low:"+issue.lowKey:"id:"+issue.id,row=byKey[key];
+        if(!row){row={id:issue.id,title:issue.title,type:issue.type,tick:issue.tick,bar:issue.bar,beat:issue.beat,severity:issue.severity,occurrences:[]};byKey[key]=row;result.push(row);}
+        row.occurrences.push(issue);
+    });
+    return result;
+}
+function rowFor(rows,issue) {
+    if(!issue)return null;
+    for(var i=0;i<rows.length;++i)if(rows[i].occurrences.some(function(item){return item.id===issue.id;}))return rows[i];
+    return null;
+}

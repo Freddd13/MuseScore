@@ -189,7 +189,11 @@ QVariantMap ScoreObserver::analysisRange(int start,int end,int firstTrack,int en
                   const auto part=_score->staff(s->staffIdx())->part();if(part->endTrack()<=firstTrack || part->startTrack()>=endTrack)continue;
                   pedals.append(QVariantMap{{"tick",s->tick().ticks()},{"end",s->tick2().ticks()},{"firstTrack",part->startTrack()},{"endTrack",part->endTrack()}});
                   }
-            for(const auto& entry:*_score->tempomap())if(entry.first>=start && entry.first<end)tempos.append(QVariantMap{{"tick",entry.first},{"seconds",_score->tempomap()->tick2time(entry.first)}});
+            const auto clock=_score->tempomap();
+            auto appendTempo=[&](int at){tempos.append(QVariantMap{{"tick",at},{"seconds",clock->tick2time(at)},{"bpm",clock->tempo(at)*clock->relTempo()*60.}});};
+            appendTempo(start);
+            for(auto it=clock->upper_bound(start);it!=clock->end() && it->first<end;++it)appendTempo(it->first);
+            if(end>start)appendTempo(end);
             }
       return {{"revision",revision},{"notes",notes},{"rests",rests},{"meters",meters},{"harmonies",harmonies},{"hands",hands},{"pedals",pedals},{"parts",parts},{"keys",keys},{"tempos",tempos},
             {"nextTick",segment?segment->tick().ticks():end},{"done",!segment || segment->tick().ticks()>=end},{"milliseconds",preparationMilliseconds+double(timer.nsecsElapsed())/1000000.},{"preparationMilliseconds",preparationMilliseconds},{"coverage",QString("%1–%2; tracks %3–%4").arg(start).arg(end).arg(firstTrack).arg(endTrack)}};

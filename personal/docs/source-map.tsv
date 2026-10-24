@@ -186,7 +186,7 @@ MIDI 最终事件	audio/exports/midigatefile.cpp	MidiGateData midiGateSnapshot	9
 MIDI 对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare	209	可取消后台计算及可见范围卷帘	mtest/mscore/p0native
 编配完整分页	mscore/plugin/api/arrangementsnapshot.cpp	QVariantMap ScoreObserver::analysisRange	92	版本保护的完整复调值数据	mtest/mscore/p0native
 只读 JS 任务	mscore/plugin/api/readonlyanalysisjob.cpp	void ReadOnlyAnalysisJob::start	22	独立可取消 JS 引擎	mtest/mscore/p0native
-编配插件	share/plugins/ArrangementAssistant/Rules.js	function defaults()	38	音乐规则与可校正角色	mtest/mscore/p0native
+编配插件	share/plugins/ArrangementAssistant/Rules.js	function defaults()	69	音乐规则与可校正角色	mtest/mscore/p0native
 Tap 工作区迁移	mscore/workspace.cpp	if (uiVersion < 4)	1113	一次性添加共享入口，保留后续用户自定义	mtest/mscore/p0native
 谱带自动位置	mscore/performanceeditor/performanceoverlay.cpp	QRectF PerformanceEditor::scoreBandLane	204	最低可见谱表墨迹／下一行空位／越界回退	mtest/mscore/performanceeditor
 谱面力度横坐标	mscore/performanceeditor/performanceeditor.cpp	double PerformanceEditor::xForNote	856	原生音头中心／镜像倚音offset／共享绘制命中	mtest/mscore/performanceeditor
@@ -289,7 +289,7 @@ MIDI音长绘制	mscore/midicrop/gateroll.inc	class GateRoll final	2	原新轮�
 分手文字	libmscore/symbol.cpp	Symbol::handFont	121	表情文字样式与第四拖动点	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
 谱内工作流记录	mscore/workflow/workflowdocument.cpp	ScoreObserver::setWorkflowData	17	标准元数据保存与原生撤销	mtest/mscore/pluginhost/tst_pluginhost.cpp
 临时和弦排版	mscore/workflow/harmonytypography.h	alignTemporaryHarmonyBass	6	面板和谱面的斜杠低音对齐	mtest/mscore/pluginhost/tst_pluginhost.cpp
-低音程参考	share/plugins/ArrangementAssistant/Rules.js	lowVoicing	11	实际音程与参考低端音	../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
+低音程参考	share/plugins/ArrangementAssistant/Rules.js	lowVoicing	30	实际音程与参考低端音	../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 内置原曲参考	mscore/workflow/referencepanel.cpp	showReferencePanel	20	菜单与插件共用面板	mtest/mscore/p1native/tst_p1native.cpp
 原曲项目保存	share/plugins/ReferencePlayer/ReferencePlayer.view.qml	saveScoreProject	35	相对路径与每谱项目	mtest/mscore/p1native/tst_p1native.cpp
 演奏力度对比	mscore/performanceeditor/expressioncompare.cpp	comparisonDisplayTick	44	同音、实际时间与候选编辑	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
@@ -380,8 +380,8 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	241	空列�
 演奏编辑设置	mscore/performanceeditor/editorsettings.cpp	void showPerformanceSettings(	30	按键、默认力度、旧记号更新、一次撤销、原生主题与统一滚动	mtest/mscore/performanceeditor/dynamic_defaults_082_tests.inc;../../muse3_plugins/P2/check_dynamic_defaults.py
 正常窗口绘制检查	mtest/mscore/nativeui/tst_nativeui.cpp	    void initialPanelsRender()	112	按正常绘制方式检查首次画面、保存和绘图警告	mtest/mscore/nativeui/tst_nativeui.cpp;../../muse3_plugins/P2/test_existing.py
 原曲关联与扒谱选择	share/workflow/panels/ReferencePlayer/ReferencePlayer.view.qml	 function identifiedAssociations(	84	为新旧关联保留稳定身份，检查播放器选段、首次打开和卷帘共同缩放	mtest/mscore/pluginhost/spectrum_078_tests.inc
-明确的对位音线	share/plugins/ArrangementAssistant/Rules.js	function roleFor(	144	用户选择音线后参与检查，显式关闭独立声部继续保留	mtest/mscore/pluginhost/arrangement_083_tests.inc;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
-低音同音加倍	share/plugins/ArrangementAssistant/Rules.js	function lowVoicing(	11	一个物理音程只列一次说明，保留全部谱面音	mtest/mscore/pluginhost/arrangement_083_tests.inc;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
+明确的对位音线	share/plugins/ArrangementAssistant/Rules.js	function roleFor(	176	用户选择音线后参与检查，显式关闭独立声部继续保留	mtest/mscore/pluginhost/arrangement_083_tests.inc;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
+低音同音加倍	share/plugins/ArrangementAssistant/Rules.js	function lowVoicing(	30	一个物理音程只列一次说明，保留全部谱面音	mtest/mscore/pluginhost/arrangement_083_tests.inc;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 编配当前项目与说明	share/plugins/ArrangementAssistant/ArrangementAssistant_MS3.qml	    function finishResult(	202	更新后保留当前提示，筛选和谱旁说明使用同一组问题	mtest/mscore/pluginhost/arrangement_083_tests.inc;../../muse3_plugins/ArrangementAssistant/tests/test-rules.cjs
 原曲时间叠加缩放	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::editorTimelineZoomed(	1164	全曲、选区、参数区与卷帘共用叠加缩放，保留浏览时刻	mtest/mscore/pluginhost/spectrum_078_tests.inc
 圆滑线共同参考曲线	libmscore/freeslur.cpp	std::array<QPointF,4> SlurSegment::freeBaseControls(	198	统一绘图、锁点与整理的端点和坐标	mtest/mscore/performanceeditor/engraving_085_tests.inc
@@ -501,18 +501,22 @@ CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件�
 统一调性显示	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	displayInterpretation	990	级数、离调颜色及导出使用相同调性	harmonyLegacyAndFailure113 / harmonyScopedImport113
 按乐器处理分析	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	regionInScope	219	导入、导出和重新检测保留范围外记录	harmonyLegacyAndFailure113 / harmonyScopedImport113
 未确定和弦入口	share/workflow/panels/HarmonyAssistant/Timeline.js	evaluate	336	保留未确定复音与不同音组边界	harmonyUnknownAndPoints114 / test-unresolved.cjs
-非和弦音上下文	share/plugins/ArrangementAssistant/Rules.js	explained	251	同一连续音线、休止与准备音	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
-和声持续范围	share/plugins/ArrangementAssistant/Rules.js	harmonyEnd	265	当前解释与实际同时发声时间	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
-对位前后音	share/plugins/ArrangementAssistant/Rules.js	counterpoint	349	交叉、隐伏、具体音线与依据	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
-共享和声来源	share/plugins/ArrangementAssistant/Rules.js	sharedHarmony	502	保留自动及人工来源	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
+非和弦音上下文	share/plugins/ArrangementAssistant/Rules.js	explained	283	同一连续音线、休止与准备音	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
+和声持续范围	share/plugins/ArrangementAssistant/Rules.js	harmonyEnd	297	当前解释与实际同时发声时间	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
+对位前后音	share/plugins/ArrangementAssistant/Rules.js	counterpoint	381	交叉、隐伏、具体音线与依据	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
+共享和声来源	share/plugins/ArrangementAssistant/Rules.js	sharedHarmony	534	保留自动及人工来源	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
 人工修改后共享	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	publishRegions	225	谱内保存后发布当前解释	arrangementContextCorpus115 / arrangementUsesSharedHarmony115
-局部声部检查	share/plugins/ArrangementAssistant/Rules.js	structuralLine	328	复音位置中断与单音恢复	arrangementVoiceContinuity116 / arrangementKeySnapshot116 / arrangementKeySpellingUI116
-各乐器调号	share/plugins/ArrangementAssistant/Rules.js	partsAt	201	实际键号与有序查找	arrangementVoiceContinuity116 / arrangementKeySnapshot116 / arrangementKeySpellingUI116
-主音拼写	share/plugins/ArrangementAssistant/Rules.js	tonicChoice	340	界面、算法与说明共用	arrangementVoiceContinuity116 / arrangementKeySnapshot116 / arrangementKeySpellingUI116
-局部音型	share/plugins/ArrangementAssistant/Rules.js	stepTexture	118	分批辨认音型与恢复单音线	arrangementMixedTexture117
+局部声部检查	share/plugins/ArrangementAssistant/Rules.js	structuralLine	360	复音位置中断与单音恢复	arrangementVoiceContinuity116 / arrangementKeySnapshot116 / arrangementKeySpellingUI116
+各乐器调号	share/plugins/ArrangementAssistant/Rules.js	partsAt	233	实际键号与有序查找	arrangementVoiceContinuity116 / arrangementKeySnapshot116 / arrangementKeySpellingUI116
+主音拼写	share/plugins/ArrangementAssistant/Rules.js	tonicChoice	372	界面、算法与说明共用	arrangementVoiceContinuity116 / arrangementKeySnapshot116 / arrangementKeySpellingUI116
+局部音型	share/plugins/ArrangementAssistant/Rules.js	stepTexture	150	分批辨认音型与恢复单音线	arrangementMixedTexture117
 前文和弦	mscore/plugin/api/arrangementsnapshot.cpp	ScoreObserver::analysisHarmonyContext	69	分页、所属乐器与版本	arrangementPrefixContext117 / arrangementPrefixParts117
 局部资料合并	share/plugins/ArrangementAssistant/Context.js	merge	41	更新和弦、分手及范围外资料	test-context-117.cjs
 完整演奏音符	mscore/workflow/scoreworkflow.cpp	QVariantMap ScoreObserver::performanceRange	80	单次读取装饰音、独立力度与旧编号	expressionGraceRows118
 装饰音定位	mscore/plugin/api/scoreobserver.cpp	Ms::Note* ScoreObserver::resolve	396	装饰音身份与独立预览	expressionGraceRows118
 力度资料	mscore/plugin/api/arrangementsnapshot.cpp	struct VelocityCache	102	按修改刷新并供分页复用	arrangementVelocitySnapshot118
-发声音筛选	share/plugins/ArrangementAssistant/Rules.js	function lowVoicing	11	低音排列排除不播放音	arrangementAudibleRows118 / test-sounding-118.cjs
+发声音筛选	share/plugins/ArrangementAssistant/Rules.js	function lowVoicing	30	低音排列排除不播放音	arrangementAudibleRows118 / test-sounding-118.cjs
+低音共同持续	share/plugins/ArrangementAssistant/Rules.js	function lowVoicing	30	音对、时间、力度及来源	test-low-119.cjs / arrangementRepeatedHints119
+分析时间边界	mscore/plugin/api/arrangementsnapshot.cpp	auto appendTempo	193	范围起止与有效BPM	arrangementTiming119
+反复显示行	share/plugins/ArrangementAssistant/Presentation.js	function rows	30	保留每处资料并合并列表	test-low-119.cjs
+逐处定位	share/plugins/ArrangementAssistant/ArrangementAssistant_MS3.qml	function occurrenceStep	57	同一排列的下一处与单独忽略	arrangementRepeatedHints119
