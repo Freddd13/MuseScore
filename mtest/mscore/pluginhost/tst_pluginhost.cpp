@@ -148,6 +148,9 @@ class TestPluginHost : public QObject {
       void spectrumTuningTransposeAndComparison();
       void arrangementKnownHandWithOtherFingerConflict();
       void arrangementCompletePanelFlow();
+      void arrangementContextCorpus115();
+      void arrangementHarmonyAndCounterpointUI115();
+      void arrangementUsesSharedHarmony115();
       void harmonyRangeWithoutSettings();
       void harmonyManualSurvivesPitchEdit();
       void harmonyStyleSurfacesAndRestore();
@@ -1424,6 +1427,7 @@ class TestPluginHost : public QObject {
 #include "spectrum_102_tests.inc"
 #include "layout_079_tests.inc"
 #include "arrangement_083_tests.inc"
+#include "arrangement_115_tests.inc"
 #include "vst_088_tests.inc"
 #include "pedal_106_audio_tests.inc"
 #include "source_sessions_107_tests.inc"

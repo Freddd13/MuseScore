@@ -220,6 +220,9 @@ MuseScore {
     function rebuildRegions() {
         var edits=manualNeedsReview?[]:refreshedOverrides
         analysisRegions=Timeline.overlay(Timeline.overlay(automaticRegions.filter(root.regionInScope),importedRegions.filter(root.regionInScope)),edits.filter(root.regionInScope)).map(root.displayInterpretation)
+        publishRegions()
+    }
+    function publishRegions() {
         if(!analysisDirty && observer && typeof observer.publishHarmonyAnalysis==="function")
             observer.publishHarmonyAnalysis({snapshotId:observer.analysisContentRevision(),regions:analysisRegions,source:"HarmonyAssistant",schema:1})
     }
@@ -279,6 +282,7 @@ MuseScore {
         if(inScore&&typeof observer.setWorkflowData==="function"){
             var data={schema:2,fingerprint:loadedFingerprint,structure:loadedStructure,overrides:manualOverrides,positions:manualPositions}
             if(!writeCorrections(data))return false
+            publishRegions()
         }
         var embedded=nativeCorrectionsJSON.length && JSON.parse(nativeCorrectionsJSON).schema===2
         if(!observer.saveConfiguration("HarmonyAssistant-regions-"+loadedFingerprint,{schema:1,fingerprint:loadedFingerprint,overrides:manualOverrides,positions:manualPositions,inScore:embedded}))noticeText="人工范围保存失败。"

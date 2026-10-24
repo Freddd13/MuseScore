@@ -33,7 +33,15 @@ function validate(source) {
             degree:typeof f.degree==="string"?f.degree.slice(0,24):"",notes:notes});
         last=f.tick;
     }
-    return {frames:frames,fingerprint:source.fingerprint,regions:source.schema===2?source.regions||[]:[],overrides:source.schema===2?source.overrides||[]:[],positions:source.schema===2?source.positions||[]:[]};
+    return {frames:frames,fingerprint:source.fingerprint,configuration:source.configuration,regions:source.schema===2?source.regions||[]:[],overrides:source.schema===2?source.overrides||[]:[],positions:source.schema===2?source.positions||[]:[]};
+}
+function interpretationConfig(source,current) {
+    var config={};for(var field in current)config[field]=current[field];
+    if(!source || typeof source!=="object")return config;
+    if(source.keyMode!==undefined){if(source.keyMode!==0&&source.keyMode!==1)throw Error("分析文件中的调式格式有误");config.keyMode=source.keyMode;}
+    if(source.keyTonic!==undefined){if(typeof source.keyTonic!=="number"||source.keyTonic<0||source.keyTonic>16||Math.floor(source.keyTonic)!==source.keyTonic)throw Error("分析文件中的主音格式有误");config.keyTonic=source.keyTonic;}
+    if(source.manualKey!==undefined){if(typeof source.manualKey!=="boolean")throw Error("分析文件中的主音选择格式有误");if(source.manualKey&&source.keyTonic===undefined)throw Error("分析文件缺少指定主音");config.manualKey=source.manualKey;}
+    return config;
 }
 function atTick(frames, tick) {
     var lo=0,hi=frames.length;
