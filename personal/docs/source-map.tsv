@@ -453,3 +453,4 @@ QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this
 
 自动分声部	mscore/performanceeditor/rollnotation.cpp	buildRollEdit	135	分配后只写入实际变化的声部	rollOverlapVoiceLocksAndRetry
 节奏对应选择	mscore/performanceeditor/rhythmpane.cpp	RhythmSourceDelegate	84	按音名和原谱拍位校正、忽略与撤销	rhythmCorrectByNamedSourceAndUndo
+AI读谱与取图安排	personal/docs/AI_WORKFLOW_REVIEW_20261024.md	当前实现与E1/E2任务	1	核对标题来源、随包MCP和原生选段图计划	源码／部署校验ai-20261024-source-audit.json
