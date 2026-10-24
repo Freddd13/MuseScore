@@ -20,6 +20,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QTableWidget>
+#include <QStyledItemDelegate>
 #include <QHeaderView>
 #include <QGridLayout>
 #include <QVBoxLayout>
@@ -80,6 +81,47 @@ double number(QString text, bool *valid) {
         a && b && parts.size() <= 2 && std::isfinite(x) && std::isfinite(y) && y != 0 && qAbs(x / y) < 100000;
     return *valid ? x / y : 0;
 }
+class RhythmSourceDelegate final : public QStyledItemDelegate {
+    QTableWidget* _table;
+    std::function<void(int)> _confirm;
+public:
+    RhythmSourceDelegate(QTableWidget* table, std::function<void(int)> confirm)
+        : QStyledItemDelegate(table), _table(table), _confirm(std::move(confirm)) {}
+    QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem&, const QModelIndex&) const override {
+        auto combo = new QComboBox(parent);
+        combo->setObjectName("rhythmSourceChoice");
+        combo->setMinimumWidth(240);
+        combo->addItem(tr("跳过这次敲击"), 0);
+        for (const auto& value : _table->property("rhythmSourceChoices").toList()) {
+            const auto choice = value.toMap();
+            combo->addItem(choice["text"].toString(), choice["number"]);
+        }
+        auto self = const_cast<RhythmSourceDelegate*>(this);
+        connect(combo, QOverload<int>::of(&QComboBox::activated), self, [self, combo] {
+            combo->setProperty("rhythmSourceConfirmed", true);
+            emit self->commitData(combo);
+            emit self->closeEditor(combo);
+        });
+        QTimer::singleShot(0, combo, &QComboBox::showPopup);
+        return combo;
+    }
+    void setEditorData(QWidget* editor, const QModelIndex& index) const override {
+        auto combo = qobject_cast<QComboBox*>(editor);
+        combo->setCurrentIndex(qMax(0, combo->findData(index.data(Qt::EditRole).toInt())));
+    }
+    void setModelData(QWidget* editor, QAbstractItemModel* model, const QModelIndex& index) const override {
+        auto combo = qobject_cast<QComboBox*>(editor);
+        const auto value = QString::number(combo->currentData().toInt());
+        const bool confirmed = combo->property("rhythmSourceConfirmed").toBool();
+        combo->setProperty("rhythmSourceConfirmed", false);
+        if (index.data(Qt::EditRole).toString() == value) {
+            if (confirmed)
+                _confirm(index.row());
+        }
+        else
+            model->setData(index, value, Qt::EditRole);
+    }
+};
 } // namespace
 namespace {
 class RhythmEdit final : public QUndoCommand {
@@ -389,13 +431,14 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     _table->setHorizontalHeaderLabels(
         {tr("音序"), tr("音高"), tr("起音（四分拍）"), tr("时值（四分拍）"), tr("力度"), tr("说明")});
     _table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    _table->setItemDelegateForColumn(0, new RhythmSourceDelegate(_table, [this](int row) { editCell(row, 0); }));
     _table->setMinimumHeight(50);
     _table->verticalHeader()->hide();
     _table->verticalHeader()->setDefaultSectionSize(24);
     _table->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     _table->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Stretch);
     _table->setToolTip(
-        tr("音序从1开始，0表示跳过这次敲击。起音从选段第1拍算起；时值显示实际长度，可输入1/3等分数。时值填0会按下一次起音重新估计。"));
+        tr("双击音序可按音名和原谱拍位选择对应。起音从选段第1拍算起；时值可输入1/3等分数，填0会按下一次起音重新估计。"));
     split->addWidget(_table);
     if (!split->restoreState(QSettings().value("performanceEditor/rhythmDraftLayout").toByteArray()))
         split->setSizes({160, 150});
@@ -421,6 +464,27 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     setComponentToolIcon(_apply, "apply");
     _apply->setEnabled(false);
     actions->addWidget(_apply);
+    auto choose = new QPushButton(tr("修改对应…"));
+    choose->setObjectName("rhythmChooseSource");
+    setComponentToolIcon(choose, "select");
+    choose->setToolTip(tr("为选中这一行选择谱中的音或和弦组，列表中显示音名与原谱拍位。"));
+    actions->addWidget(choose);
+    connect(choose, &QPushButton::clicked, this, [this] {
+        if (auto item = _table->item(_table->currentRow(), 0)) {
+            _table->setCurrentItem(item);
+            _table->editItem(item);
+        }
+    });
+    auto ignore = new QPushButton(tr("忽略敲击"));
+    ignore->setObjectName("rhythmIgnoreTap");
+    setComponentToolIcon(ignore, "close");
+    ignore->setToolTip(tr("这次多敲的音保留在录音里，写节奏时跳过。Ctrl+Z可恢复。"));
+    actions->addWidget(ignore);
+    connect(ignore, &QPushButton::clicked, this, [this] {
+        if (auto item = _table->item(_table->currentRow(), 0))
+            item->setData(Qt::EditRole, QStringLiteral("0"));
+        _table->setFocus(Qt::OtherFocusReason);
+    });
     layout->addWidget(actionHost);
     _status = new QLabel(tr("选择一条声部，用任意琴键敲它的节奏和力度。录完后可拖动草稿，再试听和采用。"));
     _status->setObjectName("rhythmStatus");
@@ -456,7 +520,7 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     connect(_endMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this] { _duration->setVisible(_endMode->currentData() == "duration"); });
     connect(_table, &QTableWidget::cellChanged, this, &RhythmPane::editCell);
-    connect(_table, &QTableWidget::currentCellChanged, this, [this](int row, int, int, int) { selectRow(row); });
+    connect(_table, &QTableWidget::currentCellChanged, this, [this](int row, int, int, int) { selectRow(row); updateActions(); });
     connect(workflowContext(), &WorkflowContext::auditionChanged, this, &RhythmPane::updateActions);
     connect(&_observer, &PluginAPI::ScoreObserver::scoreChanged, this, &RhythmPane::sourceChanged);
     connect(&_capture, &MidiCaptureSession::changed, this, &RhythmPane::recordingChanged);
@@ -774,6 +838,17 @@ void RhythmPane::fillTable() {
     const int selected = _table->currentRow();
     _table->setRowCount(_rows.size());
     auto groups = _draft["sourceGroups"].toList();
+    QVariantList choices;
+    for (int i = 0; i < groups.size(); ++i) {
+        const auto group = groups[i].toMap();
+        QStringList pitches;
+        for (const auto& note : group["notes"].toList())
+            pitches.append(pitchName(note.toMap()["pitch"].toInt()));
+        const double beat = 1. + (group["time"].toDouble() - _data["scope"].toMap()["start"].toInt()) / 480.;
+        choices.append(QVariantMap{{"number", i + 1},
+                                   {"text", tr("%1 · %2 · 原谱第%3拍").arg(i + 1).arg(pitches.join(" ")).arg(beat, 0, 'g', 7)}});
+    }
+    _table->setProperty("rhythmSourceChoices", choices);
     for (int i = 0; i < _rows.size(); ++i) {
         auto row = _rows[i].toMap();
         int index = row["sourceIndex"].toInt();
@@ -786,13 +861,15 @@ void RhythmPane::fillTable() {
                           QString::number(1. + row["start"].toInt() / 480., 'g', 7),
                           QString::number(row.value("effectiveDuration", row.value("duration", 0)).toInt() / 480., 'g', 7),
                           QString::number(row["velocity"].toInt()),
-                          row["status"].toString()};
+                          row["ignored"].toBool() && index < 0 ? tr("已忽略这次敲击") : row["status"].toString()};
         for (int col = 0; col < texts.size(); ++col) {
             auto item = new QTableWidgetItem(texts[col]);
             if (col == 1 || col == 5)
                 item->setFlags(item->flags() & ~Qt::ItemIsEditable);
             if (row["estimated"].toBool())
                 item->setForeground(palette().link());
+            else if (row["ignored"].toBool() && index < 0)
+                item->setForeground(palette().mid());
             _table->setItem(i, col, item);
         }
         if (index >= 0 && index < groups.size()) {
@@ -829,9 +906,10 @@ void RhythmPane::editCell(int row, int col) {
         _candidate.clear();
         return;
     }
-    if (col == 0)
+    if (col == 0) {
         value["sourceIndex"] = qRound(n) - 1;
-    else if (col == 2)
+        value["ignored"] = qRound(n) == 0;
+    } else if (col == 2)
         value["start"] = quantize(qRound((n - 1) * 480));
     else if (col == 3) {
         value["duration"] = n > 0 ? quantize(qRound(n * 480)) : 0;
@@ -1006,6 +1084,15 @@ void RhythmPane::updateActions() {
     const bool recording = capture["recording"].toBool();
     const bool saving = capture["stopping"].toBool() || capture["saving"].toBool();
     const bool busy = recording || saving || _loadingMidi || !_ready;
+    const int selected = _table->currentRow();
+    const bool hasRow = selected >= 0 && selected < _rows.size();
+    if (auto choose = findChild<QPushButton*>("rhythmChooseSource"))
+        choose->setEnabled(!busy && !_calculating && hasRow);
+    if (auto ignore = findChild<QPushButton*>("rhythmIgnoreTap")) {
+        const auto row = hasRow ? _rows[selected].toMap() : QVariantMap{};
+        ignore->setEnabled(!busy && !_calculating && hasRow && row["sourceIndex"].toInt() >= 0 &&
+                           !row["fromScore"].toBool() && !row["estimated"].toBool() && !row.contains("estimatedFor"));
+    }
     const bool valid = !busy && _pendingAction.isEmpty() && !_rows.isEmpty() && !_draft["voices"].toList().isEmpty() && _draft["errors"].toStringList().isEmpty();
     const bool own = _score && !_candidate.isEmpty() && playbackPreviewPrepared(_score, _candidate);
     const bool proposed = own && playbackPreviewActive(_score, true);

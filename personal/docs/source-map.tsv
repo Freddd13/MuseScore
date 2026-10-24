@@ -450,3 +450,6 @@ QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this
 
 写音中断	mscore/performanceeditor/rollwriting.cpp	RollWritingBar::eventFilter	393	播放、换窗口和鼠标转交时恢复未完成的写音	workspace_093_tests.inc / writing_103_tests.inc
 延音边界写音	mscore/performanceeditor/rollwritingmodel.cpp	RollWritingBar::finishRead	158	读取范围内的延音部分并保留外部连接	rollWritingBesideBoundaryTie / rollWritingBetweenBoundaryTies
+
+自动分声部	mscore/performanceeditor/rollnotation.cpp	buildRollEdit	135	分配后只写入实际变化的声部	rollOverlapVoiceLocksAndRetry
+节奏对应选择	mscore/performanceeditor/rhythmpane.cpp	RhythmSourceDelegate	84	按音名和原谱拍位校正、忽略与撤销	rhythmCorrectByNamedSourceAndUndo

@@ -76,7 +76,7 @@ void TestPerformanceEditor::rollWritingBesideBoundaryTie()
     QTest::qWait(80);
     auto pitchScroll = canvas->findChild<QScrollBar *>();
     QVERIFY(pitchScroll);
-    pitchScroll->setValue((127 - 78) * 100);
+    pitchScroll->setValue(qRound((127 - 72 - qMin(6., pitchScroll->pageStep()/200.) + .5) * 100));
     QTest::qWait(30);
     const double row = canvas->height() * 100. / pitchScroll->pageStep(),
                  top = 127 - pitchScroll->value() / 100.;
@@ -234,7 +234,7 @@ void TestPerformanceEditor::rollWritingBetweenBoundaryTies()
     editor->fit(false);
     QTest::qWait(80);
     auto pitchScroll = canvas->findChild<QScrollBar *>();
-    pitchScroll->setValue((127 - 74) * 100);
+    pitchScroll->setValue(qRound((127 - 69.5 - qMin(4., pitchScroll->pageStep()/200.) + .5) * 100));
     QTest::qWait(30);
     const double row = canvas->height() * 100. / pitchScroll->pageStep(),
                  top = 127 - pitchScroll->value() / 100., x = bar->state()["fromX"].toDouble(),

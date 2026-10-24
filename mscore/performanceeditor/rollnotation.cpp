@@ -210,6 +210,37 @@ QVariantMap buildRollEdit(const QVariantList &current,
   }
   auto result =
       buildRollNotation(notes, scope, measures, tuplets, settings, cancel);
+  if (!result.contains("error") && !result.value("cancelled").toBool()) {
+    // Automatic voice allocation can move every new note away from the requested
+    // voice. Rebuild only the voices that actually changed after allocation.
+    for (auto value : result["notes"].toList()) {
+      if (cancelled())
+        return {{"cancelled", true}};
+      const auto row = value.toMap();
+      if (!row["contextOnly"].toBool())
+        after[row["id"].toString()] = row;
+    }
+    changed.clear();
+    for (auto i = before.cbegin(); i != before.cend(); ++i)
+      if (after.value(i.key()) != i.value())
+        changed.insert(i.value()["track"].toInt());
+    for (auto i = after.cbegin(); i != after.cend(); ++i)
+      if (before.value(i.key()) != i.value())
+        changed.insert(i.value()["track"].toInt());
+    tracks.clear();
+    for (int track : changed)
+      tracks.append(track);
+    QVariantList voices;
+    int eventCount = 0;
+    for (auto value : result["voices"].toList())
+      if (changed.contains(value.toMap()["track"].toInt())) {
+        voices.append(value);
+        eventCount += value.toMap()["events"].toList().size();
+      }
+    result["voices"] = voices;
+    result["eventCount"] = eventCount;
+    settings["tracks"] = tracks;
+  }
   result["changedTracks"] = tracks;
   result["baseSettings"] = baseSettings;
   result["settings"] = settings;
@@ -269,7 +300,7 @@ QVariantMap buildRollNotation(const QVariantList &input,
       return problem(
           QObject::tr("有一个音的位置或声部已经变化，请重新读取这段。"));
     ids.insert(row["id"].toString());
-    if (row["edited"].toBool() && !row.value("quantized", false).toBool()) {
+    if (row.value("edited").toBool() && !row.value("quantized", false).toBool()) {
       if (locked.contains(track))
         return problem(
             QObject::tr("谱表 %1 的声部 %2 已锁定，可在“声部锁定”中解锁。 ")
