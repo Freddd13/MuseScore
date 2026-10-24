@@ -441,3 +441,6 @@ QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this
 原曲反复	mscore/workflow/referenceworkflow.cpp	QVariantMap ScoreObserver::referencePlan	60	对应展开反复位置并解释不存在的遍次	reference_100_tests.inc
 
 原曲保存	mscore/workflow/referencepanel.cpp	flushReferencePanelForScore	22	原曲资料接入普通保存、另存与关窗检查	referenceImmediateSaveIncludesAssociations
+
+频谱输入位置	mscore/performanceeditor/spectrumpane.cpp	SpectrumPane::updateInputTarget	863	跟随谱面选音与连续输入更新目的位置	spectrum_101_tests.inc
+长录音频谱	mtest/mscore/spectrum/tst_spectrum.cpp	longSourceBrowseAndReuse	248	三格式、末尾浏览、内存与磁盘重用、取消后换源	SPECTRUM_101_CHECKS.md

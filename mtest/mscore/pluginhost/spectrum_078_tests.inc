@@ -98,6 +98,7 @@ void TestPluginHost::spectrumInitialSourceAndChoice()
     QTRY_COMPARE(choice->count(),2);
     QCOMPARE(choice->currentIndex(),0);
     auto session=pane->findChild<QObject*>("transcriptionSpectrumSession");QVERIFY(session);
+    QTRY_COMPARE_WITH_TIMEOUT(session->property("info").toMap().value("sourcePath").toString(),path,10000);
     QTRY_VERIFY_WITH_TIMEOUT(!qvariant_cast<QImage>(session->property("image")).isNull(),10000);
     QVERIFY(session->property("info").toMap().value("from").toDouble()<1000);
     auto fit=pane->findChild<QToolButton*>("spectrumFitTime");QVERIFY(fit);

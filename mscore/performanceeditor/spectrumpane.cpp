@@ -11,6 +11,8 @@
 #include "../workflow/workflowcontext.h"
 #include "../workflow/toolicons.h"
 #include "libmscore/input.h"
+#include "libmscore/chordrest.h"
+#include "libmscore/select.h"
 #include "libmscore/note.h"
 #include "libmscore/undo.h"
 #include "performanceeditor.h"
@@ -862,20 +864,27 @@ void SpectrumPane::updateInputTarget() {
     if (!_target)
         return;
     auto score = _editor->score();
-    if (!score || !score->inputState().segment()) {
+    auto segment = score ? score->inputState().segment() : nullptr;
+    int track = score ? score->inputState().track() : -1;
+    if (score && !score->noteEntryMode()) {
+        const auto selected = score->selection().firstChordRest();
+        segment = selected ? selected->segment() : nullptr;
+        track = selected ? selected->track() : -1;
+    }
+    if (!score || !segment || track < 0) {
         _target->setText(tr("写入位置：先在乐谱中选择音符或休止符。"));
         return;
     }
     const auto &input = score->inputState();
-    auto measure = input.segment()->measure();
-    const int track = input.track();
+    auto measure = segment->measure();
     const QString text = tr("写入：第 %1 小节 · 谱表 %2 · 声部 %3 · %4")
                              .arg(measure ? measure->no() + 1 : 1)
                              .arg(track / 4 + 1)
                              .arg(track % 4 + 1)
                              .arg(_durationFromMark && _durationFromMark->isChecked()
                                       ? tr("按标注长度估计时值")
-                                      : input.duration().durationTypeUserName());
+                                      : input.duration().type() == TDuration::DurationType::V_INVALID
+                                            ? tr("输入时选择时值") : input.duration().durationTypeUserName());
     _target->setText(text);
     _target->setToolTip(text);
 }
@@ -1853,6 +1862,7 @@ void SpectrumPane::insertPitches() {
     const auto durationName =
         (writtenDuration.dots() ? tr("附点 ") : QString()) + writtenDuration.durationTypeUserName();
     setStatus(tr("已输入 %1 个音高 · %2 · Ctrl+Z 撤销").arg(pitches.size()).arg(durationName));
+    updateInputTarget();
 }
 void SpectrumPane::cacheSettings() {
     auto values = _session->property("cacheOptions").toMap();

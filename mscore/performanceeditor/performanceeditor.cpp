@@ -560,6 +560,9 @@ void PerformanceEditor::updateSelection()
       findChild<QPushButton*>("performanceConvertRelative")->setEnabled(_parameter->currentIndex() == 0 && !_snapshotDegraded);
       findChild<QPushButton*>("performanceConvertAbsolute")->setEnabled(_parameter->currentIndex() == 0 && !_snapshotDegraded);
       syncExpressionComparison();updateSurfaces(); status();
+#ifdef SCRIPT_INTERFACE
+      if (_spectrum && _spectrum->isVisible()) _spectrum->updateInputTarget();
+#endif
       if(_workflowPanel&&_workflowPanel->isVisible()&&!_selectedIndices.isEmpty()&&workflowContext()->current(_score)){
             auto selected=_notes[_selectedIndices.front()];auto data=workflowContext()->expression();auto matches=data.value("result").toMap().value("displayMatches").toList();
             auto it=std::lower_bound(matches.cbegin(),matches.cend(),selected.tick,[](const QVariant& v,int tick){return v.toMap().value("tick").toInt()<tick;});

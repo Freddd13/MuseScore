@@ -1,0 +1,56 @@
+// Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
+void TestPluginHost::spectrumLongBrowseAndMark()
+{
+    const auto folder=qEnvironmentVariable("P2_REFERENCE_LONG_AUDIO");
+    QVERIFY(!folder.isEmpty());
+    auto score=spectrumScore078();QVERIFY(score);
+    const auto path=QDir(folder).filePath("long.wav");QVERIFY(QFileInfo::exists(path));
+    QVERIFY(spectrumTracks078(score,path));
+    auto main=Ms::mscore;main->showPerformanceEditor(true);auto editor=main->performanceEditor();
+    auto tabs=editor->findChild<QTabBar*>("workflowExpressionTabs");QVERIFY(tabs);tabs->setCurrentIndex(2);
+    auto pane=editor->findChild<QWidget*>("transcriptionSpectrumPane");QVERIFY(pane);
+    auto choice=pane->findChild<QComboBox*>("transcriptionClips");QVERIFY(choice);QTRY_COMPARE(choice->count(),2);choice->setCurrentIndex(0);
+    auto display=pane->findChild<QComboBox*>("transcriptionDisplay");QVERIFY(display);display->setCurrentIndex(0);
+    editor->findChild<QAction*>("editorArea/float/transcriptionSpectrumPane")->trigger();
+    auto separate=main->findChild<QDockWidget*>("kumoEditorArea/transcriptionSpectrumPane");QVERIFY(separate);separate->resize(920,700);
+    auto canvas=pane->findChild<QWidget*>("transcriptionSpectrumCanvas");QVERIFY(canvas);
+    auto session=pane->findChild<QObject*>("transcriptionSpectrumSession");QVERIFY(session);
+    auto timeScroll=pane->findChild<QScrollBar*>("spectrumTimeScroll");QVERIFY(timeScroll);
+    QTRY_VERIFY_WITH_TIMEOUT(timeScroll->maximum()>170000,10000);
+    QTRY_COMPARE_WITH_TIMEOUT(session->property("info").toMap()["sourcePath"].toString(),path,10000);
+    QTRY_VERIFY_WITH_TIMEOUT(!session->property("busy").toBool()&&!qvariant_cast<QImage>(session->property("image")).isNull(),10000);
+    timeScroll->setFocus();QTest::keyClick(timeScroll,Qt::Key_End);
+    QTRY_VERIFY_WITH_TIMEOUT(session->property("info").toMap()["from"].toDouble()>171000,10000);
+    QTRY_VERIFY_WITH_TIMEOUT(!session->property("busy").toBool(),10000);
+    QVERIFY(session->property("info").toMap()["until"].toDouble()>=179900);
+    spectrumWheel078(canvas,canvas->rect().center(),120);
+    QTest::qWait(150);QTRY_VERIFY_WITH_TIMEOUT(!session->property("busy").toBool(),10000);
+    QCOMPARE(session->property("info").toMap()["computedBlocks"].toInt(),0);
+    const auto zoomed=session->property("info").toMap();QVERIFY(zoomed["until"].toDouble()-zoomed["from"].toDouble()>6000.);
+    const auto before=score->undoStack()->getCurIdx();
+    auto tool=pane->findChild<QComboBox*>("transcriptionTool");QVERIFY(tool);tool->setCurrentIndex(0);
+    auto options=pane->findChild<QToolButton*>("spectrumDisplaySettings");QVERIFY(options);
+    auto optionsScroll=pane->findChild<QScrollArea*>("spectrumOptionsScroll");QVERIFY(optionsScroll);
+    if(optionsScroll->isVisible())QTest::mouseClick(options,Qt::LeftButton);
+    QTest::qWait(80);
+    QTest::mouseClick(canvas,Qt::LeftButton,Qt::NoModifier,QPoint(canvas->width()/2,qRound((108.5-64.)/88.*canvas->height())));
+    auto mark=pane->findChild<QToolButton*>("transcriptionMark");QVERIFY(mark&&mark->isEnabled());QTest::mouseClick(mark,Qt::LeftButton);
+    QTRY_COMPARE(score->undoStack()->getCurIdx(),before+1);
+    auto document=QJsonDocument::fromJson(score->metaTag("kumo.transcription").toUtf8()).toVariant().toMap();
+    auto marks=document["pitches"].toList();QCOMPARE(marks.size(),1);
+    auto picked=marks.front().toMap();QCOMPARE(picked["pitch"].toInt(),64);QVERIFY(picked["pickedMs"].toDouble()>172000);
+    QVERIFY(qAbs(picked["originalFrequency"].toDouble()-330.)<12.);
+    auto rows=pane->findChild<QListWidget*>("transcriptionMarks");QVERIFY(rows);QTRY_COMPARE(rows->count(),1);rows->item(0)->setSelected(true);
+    auto rest=score->findCR(Fraction(),0);QVERIFY(rest&&rest->isRest());score->select(rest);main->currentScoreView()->cmd("note-input");score->inputState().setDuration(TDuration(TDuration::DurationType::V_QUARTER));
+    auto input=pane->findChild<QToolButton*>("transcriptionInput");QVERIFY(input&&input->isEnabled());QTest::mouseClick(input,Qt::LeftButton);
+    QTRY_VERIFY(score->findCR(Fraction(),0)->isChord());QCOMPARE(toChord(score->findCR(Fraction(),0))->notes().front()->pitch(),64);
+    auto target=pane->findChild<QLabel*>("spectrumInputTarget");QVERIFY(target);QTRY_VERIFY2(target->text().contains("1"),qUtf8Printable(target->text()));
+    QTest::mouseClick(input,Qt::LeftButton);QTRY_VERIFY(score->findCR(Fraction::fromTicks(480),0)->isChord());QCOMPARE(toChord(score->findCR(Fraction::fromTicks(480),0))->notes().front()->pitch(),64);
+    auto media=referenceProject();const auto volume=media->property("volume").toDouble();media->setProperty("volume",0.);
+    struct Stop {QObject* media;double volume;~Stop(){QMetaObject::invokeMethod(media,"stop");media->setProperty("volume",volume);}} stop{media,volume};
+    canvas->setFocus();QTest::keyClick(canvas,Qt::Key_Space);QTRY_VERIFY_WITH_TIMEOUT(media->property("playing").toBool(),10000);QTest::keyClick(canvas,Qt::Key_Space);QTRY_VERIFY(!media->property("playing").toBool());
+    const auto out=QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path()));QVERIFY(separate->grab().save(out.filePath("spectrum-long-end-101.png")));
+    const auto file=_settings.filePath("spectrum-long-mark-101.mscz");QFileInfo fileInfo(file);QVERIFY(score->saveCompressedFile(fileInfo,false,false));std::unique_ptr<MasterScore> reopened(main->readScore(file));QVERIFY(reopened);QCOMPARE(reopened->metaTag("kumo.transcription"),score->metaTag("kumo.transcription"));
+    getAction("undo")->trigger();QTRY_VERIFY(score->findCR(Fraction::fromTicks(480),0)->isRest());getAction("undo")->trigger();QTRY_VERIFY(score->findCR(Fraction(),0)->isRest());getAction("undo")->trigger();QTRY_VERIFY(QJsonDocument::fromJson(score->metaTag("kumo.transcription").toUtf8()).toVariant().toMap()["pitches"].toList().isEmpty());
+    editor->findChild<QAction*>("editorArea/restore/transcriptionSpectrumPane")->trigger();tabs->setCurrentIndex(0);main->currentScoreView()->cmd("escape");
+}

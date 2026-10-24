@@ -143,6 +143,7 @@ class TestPluginHost : public QObject {
       void engravingFirstUseLeavesScoreSpace();
       void spectrumInitialSourceAndChoice();
       void spectrumLinkedZoomAndScroll();
+      void spectrumLongBrowseAndMark();
       void arrangementKnownHandWithOtherFingerConflict();
       void arrangementCompletePanelFlow();
       void harmonyRangeWithoutSettings();
@@ -1385,6 +1386,7 @@ class TestPluginHost : public QObject {
 #include "variants_091_tests.inc"
 #include "harmony_panel_077_tests.inc"
 #include "spectrum_078_tests.inc"
+#include "spectrum_101_tests.inc"
 #include "layout_079_tests.inc"
 #include "arrangement_083_tests.inc"
 #include "vst_088_tests.inc"

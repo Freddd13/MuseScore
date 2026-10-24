@@ -240,6 +240,78 @@ class TestSpectrum : public QObject {
         QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
         QVERIFY(image().isNull());
     }
+    void longSourceBrowseAndReuse_data() {
+        QTest::addColumn<QString>("format");
+        for (const auto& format : {"wav", "mp3", "flac"})
+            QTest::newRow(format) << QString(format);
+    }
+    void longSourceBrowseAndReuse() {
+        QFETCH(QString, format);
+        const auto folder = qEnvironmentVariable("P2_REFERENCE_LONG_AUDIO");
+        if (folder.isEmpty())
+            QSKIP("Provide the generated three-minute audio directory.");
+        const auto path = QDir(folder).filePath("long." + format);
+        QVERIFY(QFileInfo::exists(path));
+        auto value = options(path);
+        value["from"] = 88000.; value["until"] = 96000.;
+        QElapsedTimer timer; timer.start();
+        request(value);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 20000);
+        auto info = _session->property("info").toMap();
+        QCOMPARE(info["sourcePath"].toString(), path);
+        QVERIFY(qAbs(info["duration"].toDouble() - 180000.) < 100.);
+        QVERIFY2(!image().isNull(), qUtf8Printable(_session->property("status").toString()));
+        int peak = 0, row = 0;
+        for (int y = 0; y < image().height(); ++y)
+            if (image().constScanLine(y)[48] > peak) { peak = image().constScanLine(y)[48]; row = y; }
+        const double pitch = 108.5 - (row + .5) / image().height() * 88.;
+        QVERIFY(qAbs(pitch - (69. + 12. * std::log2(330. / 440.))) < .6);
+        qInfo() << "Long spectrum" << format << "first viewport ms" << timer.elapsed() << "peak pitch" << pitch;
+        value["from"] = 90000.; value["until"] = 94000.; value["columns"] = 384;
+        timer.restart(); request(value);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 20000);
+        info = _session->property("info").toMap();
+        QCOMPARE(info["computedBlocks"].toInt(), 0); QCOMPARE(info["cachedBlocks"].toInt(), 2);
+        qInfo() << "Long spectrum" << format << "cached zoom ms" << timer.elapsed();
+        value["from"] = 60000.; value["until"] = 180000.; value["columns"] = 1024;
+        timer.restart(); request(value);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 30000);
+        info = _session->property("info").toMap();
+        QVERIFY2(!image().isNull(), qUtf8Printable(_session->property("status").toString()));
+        QCOMPARE(info["requestedBlocks"].toInt(), 30);
+        QVERIFY(_session->property("cacheOptions").toMap()["usedMemoryKiB"].toInt() <= 8192);
+        qInfo() << "Long spectrum" << format << "120 seconds ms" << timer.elapsed()
+                << "memory KiB" << _session->property("cacheOptions").toMap()["usedMemoryKiB"];
+        const auto expected = image();
+        auto factory = qobject_cast<KumoSpectrumFactory*>(_loader.instance());
+        QScopedPointer<QObject> reopened(factory->createSpectrum(this));
+        QMetaObject::invokeMethod(reopened.data(), "setCacheOptions", Q_ARG(QString, _dir.path()), Q_ARG(int, 8), Q_ARG(int, 8));
+        QMetaObject::invokeMethod(reopened.data(), "request", Q_ARG(QVariantMap, value));
+        QTRY_VERIFY_WITH_TIMEOUT(!reopened->property("busy").toBool(), 10000);
+        QCOMPARE(qvariant_cast<QImage>(reopened->property("image")), expected);
+        QCOMPARE(reopened->property("info").toMap()["computedBlocks"].toInt(), 0);
+        QCOMPARE(reopened->property("info").toMap()["cachedBlocks"].toInt(), 30);
+    }
+    void cancelAndChangeLongSource() {
+        const auto folder = qEnvironmentVariable("P2_REFERENCE_LONG_AUDIO");
+        if (folder.isEmpty()) QSKIP("Provide the generated three-minute audio directory.");
+        auto value = options(QDir(folder).filePath("long.wav"));
+        value["from"] = 0.; value["until"] = 120000.; value["fftSize"] = 32768;
+        value["columns"] = 1024; value["refresh"] = true;
+        QElapsedTimer timer; timer.start(); request(value);
+        QTest::qWait(20);
+        QVERIFY(QMetaObject::invokeMethod(_session, "cancel"));
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 3000);
+        qInfo() << "Cancel long spectrum ms" << timer.elapsed();
+        request(value);
+        const auto next = options(tone("after-long-change", 48000, 2, false, 880.));
+        request(next);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 15000);
+        QCOMPARE(_session->property("info").toMap()["sourcePath"].toString(), next["path"].toString());
+        QVERIFY(!image().isNull());
+        const int row = qRound((108.5 - 81.) / 88. * image().height());
+        QVERIFY(image().constScanLine(row)[48] > 190);
+    }
     void pulseTempoAndCancellation(){
         const auto path=tone("pulse-120",44100,1,false,440,false,0,true);QSignalSpy ready(_session,SIGNAL(tempoReady(QVariantMap)));
         QVariantMap request{{"path",path},{"from",0.},{"until",8000.}};
