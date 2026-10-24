@@ -8,7 +8,8 @@ var rootPcs = [0,1,1,2,3,3,4,5,6,6,7,8,8,9,10,10,11];
 var sharpNames = ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"];
 var flatNames = ["C","D♭","D","E♭","E","F","G♭","G","A♭","A","B♭","B"];
 function def(name, suffix, intervals, labels, minor, roman) {
-    return {name:name, suffix:suffix, intervals:intervals, labels:labels, minor:!!minor, roman:roman || ""};
+    return {name:name, suffix:suffix, intervals:intervals, labels:labels,
+        steps:labels.map(function(label){return (parseInt(label.replace(/[♯♭]/g,""),10)-1)%7;}),minor:!!minor, roman:roman || ""};
 }
 var defs = [
     def("大三和弦","",[0,4,7],["1","3","5"]),
@@ -54,6 +55,41 @@ function spelledName(tpc, pitch, flats) {
     var accidental=Math.floor((tpc+1)/7)-2;
     return letter+(accidental<0?new Array(-accidental+1).join("♭"):new Array(accidental+1).join("♯"));
 }
+function spelling(name) {
+    var match=/^([A-G])([♯♭#b]*)$/.exec(name || "");
+    if(!match)return null;
+    var step="CDEFGAB".indexOf(match[1]),alter=0;
+    for(var i=0;i<match[2].length;++i)alter+=match[2].charAt(i)==="♯" || match[2].charAt(i)==="#"?1:-1;
+    return {step:step,pc:mod12([0,2,4,5,7,9,11][step]+alter),name:name};
+}
+function spellingEvidence(notes, weights) {
+    var byPc=[],count=0;
+    for(var i=0;i<12;++i)byPc.push([]);
+    for(i=0;i<(notes||[]).length;++i) {
+        var note=notes[i];
+        if(typeof note.tpc!=="number" || note.tpc!==Math.floor(note.tpc) || note.tpc<-1 || note.tpc>33)continue;
+        var name=spelledName(note.tpc,note.pitch,false),written=spelling(name),pc=mod12(note.pitch);
+        if(!written || written.pc!==pc)continue;
+        if(byPc[pc].some(function(item){return item.name===name;}))continue;
+        byPc[pc].push(written);++count;
+    }
+    return count?{byPc:byPc,weights:weights}:null;
+}
+function spellingFit(evidence, root, definition) {
+    if(!evidence || !evidence.byPc[root].length)return {cost:0,name:""};
+    var d=defs[definition],roots=evidence.byPc[root],best=Infinity,name="";
+    for(var r=0;r<roots.length;++r) {
+        var cost=0;
+        for(var i=0;i<d.intervals.length;++i) {
+            var pc=mod12(root+d.intervals[i]),notes=evidence.byPc[pc];
+            var step=d.steps[i];
+            for(var n=0;n<notes.length;++n)if((notes[n].step-roots[r].step+7)%7!==step)
+                cost+=.5*(evidence.weights?evidence.weights[pc]:1)/notes.length;
+        }
+        if(cost<best){best=cost;name=roots[r].name;}
+    }
+    return {cost:best,name:name};
+}
 function role(label) {
     var degree=String(label).replace(/[♭♯]/g,"");
     // Suspensions and sixth chords keep their musical labels; use the related extension palette.
@@ -75,12 +111,12 @@ for(var tr=0;tr<12;++tr) for(var td=0;td<defs.length;++td) {
     }
     templates.push({root:tr,definition:td,mask:mask,fifth:fifth});
 }
-function detect(pitches) {
+function detect(pitches, notes) {
     var mask=0,bass=128;
     for(var i=0;i<pitches.length;++i){mask|=1<<mod12(pitches[i]);bass=Math.min(bass,pitches[i]);}
     var count=bitCount(mask);bass=mod12(bass);
     if(count<2)return {root:-1,definition:-1,kind:count?"单音":"空拍",alternatives:[]};
-    var candidates=[];
+    var candidates=[],evidence=spellingEvidence(notes);
     for(var t=0;t<templates.length;++t) {
         var template=templates[t],missing=template.mask&~mask,extra=mask&~template.mask;
         if(count===2 && !(defs[template.definition].suffix==="5" && !missing && !extra))continue;
@@ -89,7 +125,11 @@ function detect(pitches) {
         if(missing & template.fifth)cost-=3.7;
         if(missing & (1<<template.root))cost-=1.5;
         if(template.root===bass)cost-=0.3;
-        candidates.push({root:template.root,definition:template.definition,cost:cost,missingMask:missing,extraMask:extra});
+        // Above 5.5 + the alternative margin, a nonnegative spelling cost
+        // cannot produce an accepted result or a displayed alternative.
+        if(cost>6.3)continue;
+        var fit=spellingFit(evidence,template.root,template.definition);cost+=fit.cost;
+        candidates.push({root:template.root,definition:template.definition,rootSpelling:fit.name,cost:cost,missingMask:missing,extraMask:extra});
     }
     candidates.sort(function(a,b){return a.cost-b.cost || a.definition-b.definition || a.root-b.root;});
     if(!candidates.length || candidates[0].cost>5.5)
@@ -116,7 +156,8 @@ function detectWeighted(notes, weights, previous, tonic, minorKey, tick, hint) {
     if(!maximum)return {root:-1,definition:-1,kind:"空拍",alternatives:[]};
     var normalized=[];
     for(var i=0;i<12;++i){normalized[i]=(weights[i]||0)/maximum;if(normalized[i]>=.15)mask|=1<<i;}
-    if(bitCount(mask)<3)return detect(notes.filter(function(n){return normalized[mod12(n.pitch)]>=.15;}).map(function(n){return n.pitch;}));
+    if(bitCount(mask)<3){var selected=notes.filter(function(n){return normalized[mod12(n.pitch)]>=.15;});return detect(selected.map(function(n){return n.pitch;}),selected);}
+    var evidence=spellingEvidence(notes,normalized);
     var ranked=[],scale=minorKey?[0,2,3,5,7,8,10]:[0,2,4,5,7,9,11];
     for(var t=0;t<templates.length;++t) {
         var candidate=templates[t],definition=defs[candidate.definition],hits=bitCount(mask&candidate.mask);
@@ -135,7 +176,11 @@ function detectWeighted(notes, weights, previous, tonic, minorKey, tick, hint) {
         }
         if(previous && previous.root===candidate.root)cost-=previous.definition===candidate.definition?.65:.3;
         if(scale.indexOf(mod12(candidate.root-tonic))<0)cost+=.12;
-        ranked.push({root:candidate.root,definition:candidate.definition,cost:cost,rawCost:cost});
+        // Include the acceptance limit, .8 alternative margin and .12 context
+        // adjustment. Distant templates cannot re-enter after spelling.
+        if(cost>7.1)continue;
+        var fit=spellingFit(evidence,candidate.root,candidate.definition);cost+=fit.cost;
+        ranked.push({root:candidate.root,definition:candidate.definition,rootSpelling:fit.name,cost:cost,rawCost:cost});
     }
     ranked.sort(function(a,b){return a.cost-b.cost || a.definition-b.definition || a.root-b.root;});
     var initial=ranked.length?ranked[0].cost:Infinity;
@@ -149,17 +194,24 @@ function detectWeighted(notes, weights, previous, tonic, minorKey, tick, hint) {
     var best=ranked[0],runner=ranked[1];
     if(!best || best.cost>6)return {root:-1,definition:-1,kind:"未确定和弦",alternatives:[]};
     best.alternatives=runner && runner.cost-best.cost<.65?[runner]:[];
-    if(hint && hint.collect)best.candidates=ranked.slice(0,4).filter(function(c){return c.rawCost-ranked[0].rawCost<.8;}).map(function(c){return {root:c.root,definition:c.definition,cost:c.rawCost,rawCost:c.rawCost};});
+    if(hint && hint.collect)best.candidates=ranked.slice(0,4).filter(function(c){return c.rawCost-ranked[0].rawCost<.8;}).map(function(c){return {root:c.root,definition:c.definition,rootSpelling:c.rootSpelling,cost:c.rawCost,rawCost:c.rawCost};});
     best.kind=best.alternatives.length?"自动识别 · 有其他解释":"自动识别";
     if(best.context)best.kind+=" · "+best.context;
     return best;
 }
-function roman(tonic, minorKey, chordRoot, definition, degreeMode, bass, bassName) {
+function roman(tonic, minorKey, chordRoot, definition, degreeMode, bass, bassName, rootName, tonicName) {
     if(chordRoot<0 || definition<0) return "—";
     // Conventional Roman numerals reference the parallel major: A minor uses ♭III, ♭VI, ♭VII.
     var map=["I","♭II","II","♭III","III","IV","♯IV","V","♭VI","VI","♭VII","VII"];
     if(minorKey && degreeMode===0)map=["I","♭II","II","III","♯III","IV","♯IV","V","VI","♯VI","VII","♯VII"];
     var d=defs[definition], base=map[mod12(chordRoot-tonic)];
+    var rootSpelling=spelling(rootName),tonicSpelling=spelling(tonicName);
+    if(rootSpelling && tonicSpelling && rootSpelling.pc===chordRoot && tonicSpelling.pc===tonic) {
+        var step=(rootSpelling.step-tonicSpelling.step+7)%7;
+        var scale=minorKey && degreeMode===0?[0,2,3,5,7,8,10]:[0,2,4,5,7,9,11];
+        var alter=mod12(chordRoot-tonic-scale[step]+6)-6;
+        base=(alter<0?new Array(-alter+1).join("♭"):new Array(alter+1).join("♯"))+["I","II","III","IV","V","VI","VII"][step];
+    }
     var numeral=(d.minor?base.toLowerCase():base), suffix=d.roman;
     if(bass===undefined || bass<0 || mod12(bass)===chordRoot)return numeral+suffix;
     var label=labelFor(bass,chordRoot,definition), seventh=d.labels.some(function(v){return /7$/.test(v);});

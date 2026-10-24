@@ -479,3 +479,7 @@ AI读谱与取图安排	personal/docs/AI_WORKFLOW_REVIEW_20261024.md	当前实�
 共用音源混音器	mscore/mixer/mixerdetails.cpp	updatePatchCombo / patchChanged	275	原音色框显示实际声音、切回及一次撤销	commonPianoMixer108
 CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件顺序与效果链顺序分别核对	commonPianoCfxOrder108 / commonPianoReal108
 共用效果与导出	mtest/mscore/pluginhost/common_piano_108_tests.inc	commonPianoEffectsExport108	220	实际预设、排序删除、输出及MIDI保持	commonPianoEffectsExport108
+和弦拼写比较	share/workflow/panels/HarmonyAssistant/Harmony.js	spellingEvidence / spellingFit	65	谱上字母与升降号参与根音候选	harmonySpellingAcrossViews109 / test-theory-corpus.cjs
+拼写级数	share/workflow/panels/HarmonyAssistant/Harmony.js	roman	202	按根音和主音字母得到级数及转位	harmonySpellingAcrossViews109
+统一和弦描述	share/workflow/panels/HarmonyAssistant/Timeline.js	describe / tonicNameAt	49	名称、低音、级数及调性拼写共同传递	harmonySpellingAcrossViews109
+关谱后重新读取	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	ownsCurrentScore / changeScore	607	实际读取对象与当前谱一起核对	harmonySpellingAcrossViews109

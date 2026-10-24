@@ -157,6 +157,7 @@ class TestPluginHost : public QObject {
       void valueLabelsKeepNotesClear();
       void realScoreValuesAndBand();
       void harmonyDisplayAndHold();
+      void harmonySpellingAcrossViews109();
       void chordHandlesStayAtMusicRange();
       void legacyVariantsSaveBeforeSwitch();
       void legacyVariantsFollowSaveAs();
@@ -1414,6 +1415,7 @@ class TestPluginHost : public QObject {
 #include "pedal_106_audio_tests.inc"
 #include "source_sessions_107_tests.inc"
 #include "common_piano_108_tests.inc"
+#include "harmony_109_tests.inc"
 #include "layout_089_tests.inc"
 #include "components_092_tests.inc"
 #include "workspace_093_tests.inc"

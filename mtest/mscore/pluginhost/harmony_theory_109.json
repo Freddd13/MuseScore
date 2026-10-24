@@ -1,0 +1,32 @@
+{
+  "description": "人工核对的和弦、低音、音名拼写和级数；四分音符480tick。",
+  "sources": [
+    "https://music21.org/music21docs/moduleReference/moduleRoman.html",
+    "https://music21.org/music21docs/moduleReference/moduleChord.html"
+  ],
+  "cases": [
+    {"name":"C增第一转位", "pitches":[52,56,60], "tpc":[18,22,14], "key":0, "chord":"C+/E", "degree":"I+⁶", "root":0, "definition":8},
+    {"name":"C减七第一转位", "pitches":[51,54,57,60], "tpc":[11,8,5,14], "key":0, "chord":"Cdim7/E♭", "degree":"i°⁶₅", "root":0, "definition":6},
+    {"name":"C减七第二转位", "pitches":[54,57,60,63], "tpc":[8,5,14,11], "key":0, "chord":"Cdim7/G♭", "degree":"i°⁴₃", "root":0, "definition":6},
+    {"name":"C减七第三转位", "pitches":[57,60,63,66], "tpc":[5,14,11,8], "key":0, "chord":"Cdim7/B♭♭", "degree":"i°⁴₂", "root":0, "definition":6},
+    {"name":"G升减七第一转位", "pitches":[47,50,53,56], "tpc":[19,16,13,22], "key":0, "minor":true, "chord":"G♯dim7/B", "degree":"vii°⁶₅", "root":8, "definition":6},
+    {"name":"G升减七自然小调级数", "pitches":[47,50,53,56], "tpc":[19,16,13,22], "key":0, "minor":true, "degreeMode":0, "chord":"G♯dim7/B", "degree":"♯vii°⁶₅", "root":8, "definition":6},
+    {"name":"C调升二级", "pitches":[51,55,58], "tpc":[23,27,24], "key":0, "chord":"D♯", "degree":"♯II", "root":3, "definition":0},
+    {"name":"C调降三级", "pitches":[51,55,58], "tpc":[11,15,12], "key":0, "chord":"E♭", "degree":"♭III", "root":3, "definition":0},
+    {"name":"C升调降四级", "pitches":[53,57,60], "tpc":[13,17,14], "key":7, "chord":"F", "degree":"♭IV", "root":5, "definition":0},
+    {"name":"C升调三级", "pitches":[53,57,60], "tpc":[25,29,26], "key":7, "chord":"E♯", "degree":"III", "root":5, "definition":0},
+    {"name":"B属七原位", "pitches":[47,51,54,57], "tpc":[19,23,20,17], "key":6, "chord":"B7", "degree":"IV7", "root":11, "definition":2},
+    {"name":"B属七第一转位", "pitches":[51,54,57,59], "tpc":[23,20,17,19], "key":6, "chord":"B7/D♯", "degree":"IV⁶₅", "root":11, "definition":2},
+    {"name":"B属七第二转位", "pitches":[54,57,59,63], "tpc":[20,17,19,23], "key":6, "chord":"B7/F♯", "degree":"IV⁴₃", "root":11, "definition":2},
+    {"name":"B属七第三转位", "pitches":[45,47,51,54], "tpc":[17,19,23,20], "key":6, "chord":"B7/A", "degree":"IV⁴₂", "root":11, "definition":2},
+    {"name":"C大七第三转位", "pitches":[47,48,52,55], "tpc":[19,14,18,15], "key":0, "chord":"Cmaj7/B", "degree":"Imaj⁴₂", "root":0, "definition":3},
+    {"name":"降二级大三", "pitches":[49,53,56], "tpc":[9,13,10], "key":0, "chord":"D♭", "degree":"♭II", "root":1, "definition":0},
+    {"name":"小七与六和弦的人工解释", "pitches":[51,55,58,60], "tpc":[11,15,12,14], "key":-3, "specified":true, "chord":"Cm7/E♭", "degree":"vi⁶₅", "root":0, "definition":4},
+    {"name":"外音低音单独列名", "pitches":[42,48,52,55], "tpc":[20,14,18,15], "key":0, "specified":true, "chord":"C/F♯", "degree":"I/F♯", "root":0, "definition":0},
+    {"name":"加九低音单独列名", "pitches":[50,60,64,67], "tpc":[16,14,18,15], "key":0, "specified":true, "chord":"Cadd9/D", "degree":"Iadd9/D", "root":0, "definition":13},
+    {"name":"自然小调三级", "pitches":[48,52,55], "tpc":[14,18,15], "key":0, "minor":true, "degreeMode":0, "chord":"C", "degree":"III", "root":0, "definition":0},
+    {"name":"同名大调为参照的小调三级", "pitches":[48,52,55], "tpc":[14,18,15], "key":0, "minor":true, "degreeMode":1, "chord":"C", "degree":"♭III", "root":0, "definition":0},
+    {"name":"C升小调导七", "pitches":[48,51,54,57], "tpc":[26,23,20,17], "key":4, "minor":true, "chord":"B♯dim7", "degree":"vii°7", "root":0, "definition":6},
+    {"name":"C降大调主和弦", "pitches":[47,51,54], "tpc":[7,11,8], "key":-7, "chord":"C♭", "degree":"I", "root":11, "definition":0}
+  ]
+}

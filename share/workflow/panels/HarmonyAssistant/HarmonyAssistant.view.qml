@@ -79,6 +79,7 @@ MuseScore {
     property string annotationSelectionKey: ""
     property int liveRoot: -1
     property int liveDefinition: -1
+    property string liveRootSpelling: ""
     property var displayedLiveHarmony:null
     property var lastLiveHarmony:null
     property string instantChordText:displayedLiveHarmony?displayedLiveHarmony.chord:"—"
@@ -306,11 +307,12 @@ MuseScore {
                         if(nearest)edit.notes=[Timeline.clone(nearest)]
                     }
                     if(command==="assign") {
-                        var info=Timeline.describe({root:Harmony.rootPcs[rootIndex],rootSpelling:Harmony.rootNames[rootIndex],definition:qualityIndex},edit.notes,start,Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,configuration.degreeMode)
+                        var info=Timeline.describe({root:Harmony.rootPcs[rootIndex],rootSpelling:Harmony.rootNames[rootIndex],definition:qualityIndex},edit.notes,start,Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,configuration.degreeMode,prefersFlats(),keySpelling())
                         if(bassIndex>0) {
                             info.bass=Harmony.rootPcs[bassIndex-1]
-                            info.chord=info.chord.split("/")[0]+(info.bass!==info.root?"/"+Harmony.rootNames[bassIndex-1]:"")
-                            info.degree=Harmony.roman(Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,info.root,info.definition,configuration.degreeMode,info.bass)
+                            info.bassName=Harmony.rootNames[bassIndex-1];delete info.bassTpc
+                            info.chord=info.chord.split("/")[0]+(info.bass!==info.root?"/"+info.bassName:"")
+                            info.degree=Harmony.roman(Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,info.root,info.definition,configuration.degreeMode,info.bass,info.bassName,info.rootSpelling,keySpelling())
                             info.inversion=Harmony.inversion(Harmony.labelFor(info.bass,info.root,info.definition))
                         }
                         for(var field in info)edit[field]=info[field]
@@ -466,26 +468,21 @@ MuseScore {
     function frameResult(frame) {
         var notes=frame.analysisNotes || frame.notes || []
         var pitches=notes.map(function(n){return n.pitch})
-        var result=!notes.length ? {root:-1,definition:-1} : autoChord.checked ? Harmony.detect(pitches) :
-            {root:Harmony.rootPcs[rootCombo.currentIndex],definition:qualityCombo.currentIndex}
+        var result=!notes.length ? {root:-1,definition:-1} : autoChord.checked ? Harmony.detect(pitches,notes) :
+            {root:Harmony.rootPcs[rootCombo.currentIndex],definition:qualityCombo.currentIndex,rootSpelling:Harmony.rootNames[rootCombo.currentIndex]}
         var imported=Analysis.atTick(importedRecords,frame.tick)
-        if(imported){result.root=imported.root;result.definition=imported.definition}
-        var chord="", degree="", tonic=Harmony.rootPcs[keyTonic.currentIndex]
+        if(imported)result={root:imported.root,definition:imported.definition,rootSpelling:imported.rootSpelling||""}
+        var tonic=Harmony.rootPcs[keyTonic.currentIndex]
         if(!manualKey) {
             var major=[11,6,1,8,3,10,5,0,7,2,9,4,11,6,1]
             tonic=major[(frame.keySignature || 0)+7]
             if(keyMode.currentIndex===1)tonic=Harmony.mod12(tonic+9)
         }
-        if(result.root>=0) {
-            var name=nameOf(result.root)
-            for(var i=0;i<notes.length;++i)if(Harmony.mod12(notes[i].pitch)===result.root){name=Harmony.spelledName(notes[i].tpc,notes[i].pitch,prefersFlats());break}
-            chord=name+Harmony.defs[result.definition].suffix
-            degree=Harmony.roman(tonic,keyMode.currentIndex===1,result.root,result.definition,configuration.degreeMode,notes.length?Math.min.apply(null,pitches):undefined)
-            if(notes.length && Harmony.mod12(Math.min.apply(null,pitches))!==result.root)chord+="/"+nameOf(Math.min.apply(null,pitches))
-        }
-        if(imported){if(typeof imported.chord==="string")chord=imported.chord;if(typeof imported.degree==="string")degree=imported.degree}
+        var described=Timeline.describe(result,notes,frame.tick,tonic,keyMode.currentIndex===1,configuration.degreeMode,prefersFlats(),keySpelling(frame))
+        if(imported){if(typeof imported.chord==="string")described.chord=imported.chord;if(typeof imported.degree==="string")described.degree=imported.degree}
         return {tick:frame.tick,bar:frame.bar,beat:frame.beat,root:result.root,definition:result.definition,
-            chord:chord,degree:degree,notes:notes,parts:frame.parts,pedalWindows:frame.pedalWindows,scoreEnd:frame.scoreEnd,keySignature:frame.keySignature,imported:!!imported,chromatic:Harmony.isChromatic(tonic,keyMode.currentIndex===1,result.root,result.definition,configuration.degreeMode)}
+            chord:described.chord,degree:described.degree,rootSpelling:described.rootSpelling,tonicSpelling:described.tonicSpelling,
+            notes:notes,parts:frame.parts,pedalWindows:frame.pedalWindows,scoreEnd:frame.scoreEnd,keySignature:frame.keySignature,imported:!!imported,chromatic:described.chromatic}
     }
     function buildAnalysisChunk() {
         if(!curScore || !surfaceActive || !needsAnalysis())return
@@ -607,6 +604,11 @@ MuseScore {
     }
 
     function same(a, b) { return a && b && a.is(b) }
+    function ownsCurrentScore() {
+        var observed=observer?observer.score:null
+        if(!curScore)return !ownerScore && (!observer || !observed)
+        return same(curScore,ownerScore) && (!observer || same(curScore,observed))
+    }
     function isOpen(score) {
         if (!score) return false
         var opened = scores
@@ -619,6 +621,9 @@ MuseScore {
                 (keyMode.currentIndex === 1 && ["D","G","C","F"].indexOf(name) >= 0)
     }
     function nameOf(pc) { return Harmony.pcName(pc, prefersFlats()) }
+    function keySpelling(frame) {
+        return Timeline.tonicNameAt(frame||nativeSnapshot,{manualKey:manualKey,keyTonic:keyTonic.currentIndex,keyMode:keyMode.currentIndex})
+    }
     function noteName(note) {
         var spelling = Harmony.spelledName(note.tpc, note.pitch, prefersFlats())
         // B♯3 and C♭4 have an octave different from their MIDI enharmonic spelling.
@@ -629,6 +634,7 @@ MuseScore {
     function rootName() {
         if (chordRoot < 0) return "—"
         if (!autoChord.checked) return Harmony.rootNames[rootCombo.currentIndex]
+        if (liveRoot===chordRoot && liveRootSpelling.length)return liveRootSpelling
         var namingNotes = contextNotes.length ? contextNotes : currentNotes
         for (var i = 0; i < namingNotes.length; ++i)
             if (Harmony.mod12(namingNotes[i].pitch) === chordRoot)
@@ -677,7 +683,7 @@ MuseScore {
         }
     }
     function changeScore() {
-        if (same(curScore, ownerScore)) return
+        if (ownsCurrentScore()) return
         saveCorrections()
         undoPause = false
         restoreColors(true)
@@ -715,7 +721,7 @@ MuseScore {
         chordDefinition = -1
         chordText = "—"
         degreeText = "—"
-        instantChordText="—";instantDegreeText="—";liveRoot=-1;liveDefinition=-1
+        instantChordText="—";instantDegreeText="—";liveRoot=-1;liveDefinition=-1;liveRootSpelling=""
         voicingText = "—"
         inversionText = "—"
         alternativesText = ""
@@ -771,7 +777,7 @@ MuseScore {
         buildTimer.start()
     }
     function buildChunk() {
-        if (!same(curScore, ownerScore) || !isOpen(ownerScore)) {
+        if (!ownsCurrentScore() || !isOpen(ownerScore)) {
             buildTimer.stop()
             requestRefresh(true)
             return
@@ -863,16 +869,18 @@ MuseScore {
     }
     function analyze() {
         alternativesText = ""
+        var detectedSpelling=""
         if (!contextNotes.length && !currentNotes.length) {
             chordRoot = -1
             chordDefinition = -1
             matchText = currentTick < 0 ? "请选择音符、和弦或休止符" : "空拍 · 没有持续音"
         } else if (autoChord.checked) {
             var contextPitches = contextNotes.map(function(n){return n.pitch})
-            var result = Harmony.detect(contextPitches.length ? contextPitches : currentPitches)
+            var result = Harmony.detect(contextPitches.length ? contextPitches : currentPitches,contextPitches.length ? contextNotes : currentNotes)
             var imported = Analysis.atTick(importedRecords, currentTick)
-            if (imported) result = {root:imported.root,definition:imported.definition,kind:"已导入的分析",alternatives:[]}
+            if (imported) result = {root:imported.root,definition:imported.definition,rootSpelling:imported.rootSpelling||"",kind:"已导入的分析",alternatives:[]}
             else if (contextPitches.length > currentPitches.length) result.kind += " · 踏板 / 琶音上下文"
+            detectedSpelling=result.rootSpelling||""
             chordRoot = result.root
             chordDefinition = result.definition
             matchText = result.kind
@@ -886,7 +894,7 @@ MuseScore {
                 }
                 if (names.length) alternativesText = "也可能是 " + names.join(" / ")
                 if(contextPitches.length>currentPitches.length) {
-                    var instant=Harmony.detect(currentPitches)
+                    var instant=Harmony.detect(currentPitches,currentNotes)
                     if(instant.root>=0 && (instant.root!==chordRoot || instant.definition!==chordDefinition))
                         alternativesText += (alternativesText.length?" · ":"")+"即时音："+nameOf(instant.root)+Harmony.defs[instant.definition].suffix
                 }
@@ -896,7 +904,7 @@ MuseScore {
             chordDefinition = qualityCombo.currentIndex
             matchText = "手动指定"
         }
-        liveRoot=chordRoot;liveDefinition=chordDefinition
+        liveRoot=chordRoot;liveDefinition=chordDefinition;liveRootSpelling=detectedSpelling
         updateTexts()
         updatePianoRange()
         repaintNotes()
@@ -907,7 +915,9 @@ MuseScore {
         var tonic=manualKey||region.tonic===undefined?Harmony.rootPcs[keyTonic.currentIndex]:region.tonic
         var minor=manualKey||region.minor===undefined?keyMode.currentIndex===1:region.minor
         var bassName=region.bassName||Harmony.spelledName(region.bassTpc,region.bass,prefersFlats())
-        return Harmony.roman(tonic,minor,region.root,region.definition,configuration.degreeMode,region.bass,bassName)
+        var named=/^[A-G][♯♭#b]*/.exec(region.chord||"")
+        return Harmony.roman(tonic,minor,region.root,region.definition,configuration.degreeMode,region.bass,bassName,
+            region.rootSpelling||(named?named[0]:""),manualKey?keySpelling():region.tonicSpelling||keySpelling())
     }
     function resultNotes(region) {
         return region && currentTick<region.end ? region.notes : contextNotes.length?contextNotes:currentNotes
@@ -915,7 +925,7 @@ MuseScore {
     function updateTexts() {
         chordRoot=liveRoot;chordDefinition=liveDefinition
         var liveNotes=resultNotes(null),tonic=Harmony.rootPcs[keyTonic.currentIndex],minor=keyMode.currentIndex===1
-        var live=Timeline.describe({root:liveRoot,definition:liveDefinition,rootSpelling:liveRoot>=0?rootName():""},liveNotes,currentTick,tonic,minor,configuration.degreeMode,prefersFlats())
+        var live=Timeline.describe({root:liveRoot,definition:liveDefinition,rootSpelling:liveRoot>=0?rootName():""},liveNotes,currentTick,tonic,minor,configuration.degreeMode,prefersFlats(),keySpelling())
         if(lastLiveHarmony && (lastLiveHarmony.part!==focusedPart || currentTick<lastLiveHarmony.tick))lastLiveHarmony=null
         var retained=false,canHold=configuration.holdLastHarmony&&!Timeline.isSuppressed(suppressedDisplayRanges,currentTick,focusedPart)&&!(ownedRegion&&ownedRegion.root<0&&ownedRegion.source!=="auto")
         if(live.root>=0) {
@@ -1075,7 +1085,7 @@ MuseScore {
     function blackMidi(index) {return pianoStart + Math.floor(index / 5) * 12 + [1,3,6,8,10][index % 5]}
     function blackX(index, w) {return (Math.floor(index / 5) * 7 + [0,1,3,4,5][index % 5] + 1) * w - w * 0.31}
     function pollHost() {
-        if (!same(curScore,ownerScore)) {requestRefresh(true); return}
+        if (!ownsCurrentScore()) {changeScore();requestRefresh(true); return}
         if (observer) return // Native position events replace playback polling.
         if (!playbackAvailable || !curScore) return
         var playing = curScore.harmonyPlaybackActive
@@ -1096,7 +1106,7 @@ MuseScore {
     }
     function followNativePosition() {
         if (!observer || !started || !surfaceActive) return
-        if (!same(curScore,ownerScore)) changeScore()
+        if (!ownsCurrentScore()) changeScore()
         var playing = observer.playing
         if (playing !== lastPlaying) {
             lastPlaying = playing

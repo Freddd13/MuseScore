@@ -46,17 +46,18 @@ function bass(notes, tick) {
     var pool=sounding.length?sounding:notes;
     return pool.length?pool.reduce(function(a,b){return a.pitch<=b.pitch?a:b;}):null;
 }
-function describe(result, notes, tick, tonic, minor, degreeMode, preferFlats) {
+function describe(result, notes, tick, tonic, minor, degreeMode, preferFlats, tonicSpelling) {
     var out=clone(result), b=bass(notes,tick), flats=typeof preferFlats==="boolean"?preferFlats:[1,3,5,8,10].indexOf(tonic)>=0;
     out.bass=b?Harmony.mod12(b.pitch):-1;out.bassTpc=b?b.tpc:-1;
     out.bassName=b?Harmony.spelledName(b.tpc,b.pitch,flats):"";
-    out.chord="";out.degree="";out.tonic=tonic;out.minor=minor;out.inversion="未指定和弦";
+    out.chord="";out.degree="";out.tonic=tonic;out.tonicSpelling=tonicSpelling||Harmony.pcName(tonic,flats);out.minor=minor;out.inversion="未指定和弦";
     if(out.root>=0) {
         var rootNote=null;
         for(var i=0;i<notes.length;++i)if(Harmony.mod12(notes[i].pitch)===out.root){rootNote=notes[i];break;}
-        out.chord=(out.rootSpelling|| (rootNote?Harmony.spelledName(rootNote.tpc,rootNote.pitch,flats):Harmony.pcName(out.root,flats)))+Harmony.defs[out.definition].suffix;
+        out.rootSpelling=out.rootSpelling|| (rootNote?Harmony.spelledName(rootNote.tpc,rootNote.pitch,flats):Harmony.pcName(out.root,flats));
+        out.chord=out.rootSpelling+Harmony.defs[out.definition].suffix;
         if(b && out.bass!==out.root)out.chord+="/"+Harmony.spelledName(b.tpc,b.pitch,flats);
-        out.degree=Harmony.roman(tonic,minor,out.root,out.definition,degreeMode,out.bass,out.bassName);
+        out.degree=Harmony.roman(tonic,minor,out.root,out.definition,degreeMode,out.bass,out.bassName,out.rootSpelling,out.tonicSpelling);
         out.inversion=b?Harmony.inversion(Harmony.labelFor(out.bass,out.root,out.definition)):"低音未确定";
     }
     out.chromatic=Harmony.isChromatic(tonic,minor,out.root,out.definition);
@@ -68,6 +69,12 @@ function tonicAt(frame, config) {
     if(config.manualKey)return Harmony.rootPcs[config.keyTonic];
     var major=[11,6,1,8,3,10,5,0,7,2,9,4,11,6,1];
     return Harmony.mod12(major[(frame.keySignature||0)+7]+(config.keyMode===1?9:0));
+}
+function tonicNameAt(frame, config) {
+    if(config.manualKey)return Harmony.rootNames[config.keyTonic];
+    var names=config.keyMode===1?["A♭","E♭","B♭","F","C","G","D","A","E","B","F♯","C♯","G♯","D♯","A♯"]:
+        ["C♭","G♭","D♭","A♭","E♭","B♭","F","C","G","D","A","E","B","F♯","C♯"];
+    return names[(frame.keySignature||0)+7] || Harmony.pcName(tonicAt(frame,config),false);
 }
 function pedalAt(frame, part) {
     var windows=frame.pedalWindows||[];
@@ -132,7 +139,7 @@ function evaluate(state, row, key) {
         if(!state.pedalResults[pedalKey]) {
             var evidence=state.evidence[pedalKey];
             result=Harmony.detectWeighted(evidence.all,evidence.weights,null,tonic,config.keyMode===1,row.start);
-            state.pedalResults[pedalKey]=describe(result,evidence.representative.length?evidence.representative:evidence.all,row.start,tonic,config.keyMode===1,config.degreeMode,flats);
+            state.pedalResults[pedalKey]=describe(result,evidence.representative.length?evidence.representative:evidence.all,row.start,tonic,config.keyMode===1,config.degreeMode,flats,tonicNameAt(row.frame,config));
             state.pedalResults[pedalKey].kind="踏板区间 · "+(result.kind||"综合识别");
         }
         result=state.pedalResults[pedalKey];
@@ -156,10 +163,10 @@ function evaluate(state, row, key) {
         result=Harmony.detectWeighted(row.notes,weights,null,tonic,config.keyMode===1,row.start,{bass:strongAttack?freshBass:null,collect:true});
         if(strongAttack && freshBass)result.harmonicBass=Harmony.mod12(freshBass.pitch);
     }
-    if(result.chord===undefined)result=describe(result,row.notes,row.start,tonic,config.keyMode===1,config.degreeMode,flats);
+    if(result.chord===undefined)result=describe(result,row.notes,row.start,tonic,config.keyMode===1,config.degreeMode,flats,tonicNameAt(row.frame,config));
     if(!row.notes.length && config.auto!==false && !row.frame.imported){row.pathOptions=[null];state.previous=null;return;}
     if(row.frame.imported) {
-        result=describe(row.frame,row.notes,row.start,tonic,config.keyMode===1,config.degreeMode,flats);
+        result=describe(row.frame,row.notes,row.start,tonic,config.keyMode===1,config.degreeMode,flats,tonicNameAt(row.frame,config));
         if(row.frame.chord)result.chord=row.frame.chord;
         if(row.frame.degree)result.degree=row.frame.degree;
     }
@@ -169,7 +176,7 @@ function evaluate(state, row, key) {
         var candidate=choices[c];if(candidate.root===result.root && candidate.definition===result.definition)continue;
         if(result.harmonicBass!==undefined)candidate.harmonicBass=result.harmonicBass;
         candidate.kind="结合前后和弦";
-        row.pathOptions.push(describe(candidate,row.notes,row.start,tonic,config.keyMode===1,config.degreeMode,flats));
+        row.pathOptions.push(describe(candidate,row.notes,row.start,tonic,config.keyMode===1,config.degreeMode,flats,tonicNameAt(row.frame,config)));
     }
     state.previous=result;
 }
