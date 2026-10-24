@@ -4,7 +4,7 @@
 
 本次补充的音源面板、换谱保留和两种踏板方式见[后续安排](docs/SOUND_PEDAL_PLAN.md)。这些选项随对应批次交付，当前音源操作见[使用步骤](docs/VST_088_GUIDE.md)。
 
-本文对应个人版本：**0.101.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+本文对应个人版本：**0.102.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
 
 从完整MIDI寻找选段、分别选择两音改对应、撤销重做及使用力度，见[演奏表达操作](docs/EXPRESSION_096_GUIDE.md)。采用演奏中的快慢、分范围使用速度与长休止录制，见[速度与录制](docs/EXPRESSION_097_GUIDE.md)。
 
@@ -33,6 +33,8 @@
 扒谱显示范围由时间下拉框选择：“整条录音 · 原曲时间”用于浏览整首；“按谱对齐”用于对照关联谱段，并与卷帘一起缩放。叠加显示时，编辑器的“全曲”“选区”和参数区缩放也会同步改变频谱范围。完整步骤见[频谱范围](docs/SPECTRUM_078_GUIDE.md)。乐谱保存与本次检查见[保存和范围检查](docs/SAVE_RANGE_0801_CHECKS.md)。
 
 从录音找音到写谱：在“扒谱”选轨、点“播放原曲”，用底部时间条找到要听的位置；点亮线后按“标注这个音”，再去乐谱选择输入位置、声部和时值，点“输入乐谱”。下方“写入”显示当前目的位置，写完会跟随输入光标更新。连续输入、长录音浏览及保存方法见[完整操作](docs/WORKSPACE_066_GUIDE.md)。
+
+循环听辨中可以直接调速度、均衡和选频，继续听当前位置；片段播完后也可以重新点选播放位置。A4调律、移调及列表中的“输入…”音名见同一章的[调律与移调](docs/WORKSPACE_066_GUIDE.md#录音的调律与写入的调性)。
 
 本轮[完整使用检查与返工进度](docs/USABILITY_REWORK_20261019.md)按功能逐项记录。
 

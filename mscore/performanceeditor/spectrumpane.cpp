@@ -1005,28 +1005,11 @@ bool SpectrumPane::sourceInPlayback() const {
 }
 int SpectrumPane::linkedTimelineWidth() const { return isVisible() && !_clip.isEmpty() ? sourceWidth() : -1; }
 double SpectrumPane::sourcePosition() const {
-    if (_media && _media->property("playing").toBool()) {
-        const double at = _media->property("position").toDouble();
-        const auto plan = _media->property("workflowPlaybackPlan").toMap();
-        for (auto value : plan.value("clips").toList()) {
-            const auto clip = value.toMap();
-            if(clip.contains("id")&&!_track.value("id").toString().isEmpty()&&clip.value("id")!=_track.value("id"))continue;
-            const auto path = QUrl(clip.value("path").toString()).isLocalFile()
-                                  ? QUrl(clip.value("path").toString()).toLocalFile()
-                                  : clip.value("path").toString();
-            if (QFileInfo(path).absoluteFilePath() != QFileInfo(_path).absoluteFilePath())
-                continue;
-            for (auto pieceValue : clip.value("pieces").toList()) {
-                const auto piece = pieceValue.toMap();
-                const double start = piece.value("at").toDouble(),
-                             duration = piece.value("duration").toDouble();
-                if (at >= start && at < start + duration)
-                    return piece.value("from").toDouble() +
-                           (at - start) / duration *
-                               (piece.value("until").toDouble() - piece.value("from").toDouble());
-            }
-        }
-    }
+    double at = -1;
+    if (_media && _media->property("available").toBool() &&
+        QMetaObject::invokeMethod(_media, "sourcePosition", Q_RETURN_ARG(double, at),
+                                  Q_ARG(QString, _path), Q_ARG(QString, _track.value("id").toString())) && at >= 0)
+        return at;
     if (ownsPlayback() && _media->property("playing").toBool())
         return qBound(_playStart, _playStart + _media->property("position").toDouble() * _playSpeed,
                       _playUntil);
@@ -1050,17 +1033,15 @@ void SpectrumPane::playSource() {
     const double until = _loop->isChecked() && _b > _a ? _b
                          : _clip.isEmpty()             ? _audio->property("duration").toDouble()
                                                        : _clip.value("until").toDouble();
-    double from = _loop->isChecked() ? begin : _cursorMs >= begin && _cursorMs < until ? _cursorMs : begin;
-    if (_media->property("completed").toBool())
-        from = begin;
-    _playStart = from;
+    const double from = _cursorMs >= begin && _cursorMs < until ? _cursorMs : begin;
+    _playStart = begin;
     _playUntil = until;
     _playSpeed = _speed->value() / 100.;
     _lastAudioMs = from;
-    const QVariantMap piece{{"from", from},
+    const QVariantMap piece{{"from", begin},
                             {"until", until},
                             {"at", 0.},
-                            {"duration", (until - from) / _playSpeed},
+                            {"duration", (until - begin) / _playSpeed},
                             {"fade", true}};
     const QVariantMap clip{{"id", _track.value("id")},
                            {"path", _path},
@@ -1072,6 +1053,7 @@ void SpectrumPane::playSource() {
                            {"clips", QVariantList{clip}},
                            {"joint", false},
                            {"loop", _loop->isChecked()},
+                           {"offset", (from - begin) / _playSpeed},
                            {"volume", 1.}};
     QVariantMap result;
     const bool called = QMetaObject::invokeMethod(_media, "start", Q_RETURN_ARG(QVariantMap, result),
@@ -1095,9 +1077,8 @@ void SpectrumPane::projectChanged() {
     const bool playing = _media->property("playing").toBool();
     _play->setText(playing ? tr("暂停原曲") : tr("播放原曲"));
     setComponentToolIcon(_play, playing ? "pause" : "play");
-    if (playing)
-        _lastAudioMs = sourcePosition();
-    else {
+    _lastAudioMs = sourcePosition();
+    if (!playing) {
         _cursorMs = _lastAudioMs;
         setStatus(_media->property("status").toString());
     }

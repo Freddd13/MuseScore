@@ -324,6 +324,25 @@ class TestSpectrum : public QObject {
         const double center=render(440,{{"selectedFrequency",true},{"frequency",440.},{"width",.5}}),outside=render(1760,{{"selectedFrequency",true},{"frequency",440.},{"width",.5}});QVERIFY(qAbs(center/original-1)<.02);QVERIFY(outside<center*.15);
         QVector<float> untouched{.1f,-.1f,.2f,-.2f},copy=untouched;KumoAudio::AuditionFilter bypass(48000,{{"enabled",false},{"middle",12.}});bypass.process(copy.data(),2);QCOMPARE(copy,untouched);
     }
+    void cacheCapacityAndEviction() {
+        const auto folder=qEnvironmentVariable("P2_REFERENCE_LONG_AUDIO");if(folder.isEmpty())QSKIP("Provide the generated three-minute audio directory.");
+        auto factory=qobject_cast<KumoSpectrumFactory*>(_loader.instance());QScopedPointer<QObject> session(factory->createSpectrum(this));QVERIFY(session);
+        QVERIFY(QMetaObject::invokeMethod(session.data(),"setCacheOptions",Q_ARG(QString,_dir.path()),Q_ARG(int,8),Q_ARG(int,0)));
+        auto value=options(QDir(folder).filePath("long.wav"));value["rows"]=1024;value["columns"]=1024;value["from"]=0.;value["until"]=120000.;
+        auto prepare=[&]{return QMetaObject::invokeMethod(session.data(),"request",Q_ARG(QVariantMap,value));};QVERIFY(prepare());QTRY_VERIFY_WITH_TIMEOUT(!session->property("busy").toBool(),30000);
+        QCOMPARE(session->property("info").toMap()["computedBlocks"].toInt(),30);
+        value["from"]=60000.;value["until"]=180000.;QVERIFY(prepare());QTRY_VERIFY_WITH_TIMEOUT(!session->property("busy").toBool(),30000);
+        auto info=session->property("info").toMap();QCOMPARE(info["cachedBlocks"].toInt(),15);QCOMPARE(info["computedBlocks"].toInt(),15);QVERIFY(session->property("cacheOptions").toMap()["usedMemoryKiB"].toInt()<=8192);
+        qInfo()<<"Spectrum cache after eviction KiB"<<session->property("cacheOptions").toMap()["usedMemoryKiB"];
+        value["from"]=0.;value["until"]=4000.;QVERIFY(prepare());QTRY_VERIFY_WITH_TIMEOUT(!session->property("busy").toBool(),10000);QCOMPARE(session->property("info").toMap()["computedBlocks"].toInt(),1);
+        const auto directory=_dir.filePath("capacity-check"),cache=QDir(directory).filePath("kumo-spectrum-v1");QVERIFY(QDir().mkpath(cache));
+        for(const auto letter:{'a','b'}){QFile old(QDir(cache).filePath(QString(64,QLatin1Char(letter))+".kspec"));QVERIFY(old.open(QIODevice::WriteOnly));QCOMPARE(old.write(QByteArray(700*1024,'x')),qint64(700*1024));}
+        const auto notePath=QDir(cache).filePath("notes.kspec");QFile notes(notePath);QVERIFY(notes.open(QIODevice::WriteOnly));QCOMPARE(notes.write("keep this file"),qint64(14));notes.close();
+        QVERIFY(QMetaObject::invokeMethod(session.data(),"setCacheOptions",Q_ARG(QString,directory),Q_ARG(int,8),Q_ARG(int,1)));
+        value["from"]=40000.;value["until"]=44000.;value["refresh"]=true;QVERIFY(prepare());QTRY_VERIFY_WITH_TIMEOUT(!session->property("busy").toBool(),10000);QVERIFY(!qvariant_cast<QImage>(session->property("image")).isNull());
+        qint64 bytes=0;for(const auto& file:QDir(cache).entryInfoList({"*.kspec"},QDir::Files))bytes+=file.size();QVERIFY(bytes<=1024*1024);QVERIFY(notes.open(QIODevice::ReadOnly));QCOMPARE(notes.readAll(),QByteArray("keep this file"));
+        qInfo()<<"Spectrum disk cache bytes"<<bytes;
+    }
     void cleanupTestCase() {
         delete _session;
         _session = nullptr;

@@ -144,7 +144,7 @@ QVariantMap ReferenceMediaProject::start(const QVariantMap& plan) {
                   if(!std::isfinite(from)||!std::isfinite(until)||!std::isfinite(at)||!std::isfinite(duration)||from<0||until<=from||at+0.01<previous||duration<=0||at+duration>86400000||speed<.499999||speed>1.500001)return {{"error",tr("对齐需要的保调速度超出 50–150%，或片段时间不正确；请调整对齐点。")}};
                   previous=at+duration;s->total=qMax(s->total,qint64(std::llround(previous*rate/1000)));}
             }
-      if(s->total<=0||(s->loop&&s->total<s->rate/5))return {{"error",tr("多音轨循环至少选择 0.2 秒的片段。更短的循环可使用单曲播放器。")}};
+      if(s->total<=0||(s->loop&&s->total<s->rate/5))return {{"error",tr("循环片段至少需要 0.2 秒。请拖长片段的结束位置。")}};
       const double offset=plan.value("offset",0).toDouble();
       if(!std::isfinite(offset)||offset<0||offset>=double(s->total)*1000/s->rate||(s->joint&&offset>0))return {{"error",tr("播放位置应在片段内。")}};
       s->offset=qint64(std::llround(offset*s->rate/1000));s->outputFrames=s->offset;s->consumedFrames=s->offset;_stoppedOutput=0;

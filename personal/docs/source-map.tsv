@@ -444,3 +444,6 @@ QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this
 
 频谱输入位置	mscore/performanceeditor/spectrumpane.cpp	SpectrumPane::updateInputTarget	863	跟随谱面选音与连续输入更新目的位置	spectrum_101_tests.inc
 长录音频谱	mtest/mscore/spectrum/tst_spectrum.cpp	longSourceBrowseAndReuse	248	三格式、末尾浏览、内存与磁盘重用、取消后换源	SPECTRUM_101_CHECKS.md
+
+频谱播放位置	mscore/performanceeditor/spectrumpane.cpp	SpectrumPane::sourcePosition	1007	共用原曲位置，循环调参、暂停和播完定位	spectrum_102_tests.inc
+频谱缓存容量	mtest/mscore/spectrum/tst_spectrum.cpp	cacheCapacityAndEviction	327	超出容量后淘汰旧块并保留其它文件	SPECTRUM_102_CHECKS.md
