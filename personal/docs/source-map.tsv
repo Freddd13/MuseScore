@@ -483,3 +483,5 @@ CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件�
 拼写级数	share/workflow/panels/HarmonyAssistant/Harmony.js	roman	202	按根音和主音字母得到级数及转位	harmonySpellingAcrossViews109
 统一和弦描述	share/workflow/panels/HarmonyAssistant/Timeline.js	describe / tonicNameAt	49	名称、低音、级数及调性拼写共同传递	harmonySpellingAcrossViews109
 关谱后重新读取	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	ownsCurrentScore / changeScore	607	实际读取对象与当前谱一起核对	harmonySpellingAcrossViews109
+踏板中的调性解释	share/workflow/panels/HarmonyAssistant/Timeline.js	evaluate	132	同一踏板按所在调性更新级数	harmonyPedalContext110 / test-pedal-context.cjs
+踏板中的明确边界	share/workflow/panels/HarmonyAssistant/Timeline.js	emitRegion	212	按来源保留导入边界，自动分解和弦继续合并	harmonyPedalContext110

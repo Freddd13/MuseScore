@@ -136,13 +136,14 @@ function evaluate(state, row, key) {
     var pedalKey=window?key+":"+window.start+":"+window.end:"";
     if(config.auto===false)result={root:Harmony.rootPcs[config.root],rootSpelling:Harmony.rootNames[config.root],definition:config.quality,kind:"手动指定"};
     else if(window && config.pedalMode===0) {
-        if(!state.pedalResults[pedalKey]) {
+        var resultKey=pedalKey+":"+tonicNameAt(row.frame,config)+":"+config.keyMode;
+        if(!state.pedalResults[resultKey]) {
             var evidence=state.evidence[pedalKey];
             result=Harmony.detectWeighted(evidence.all,evidence.weights,null,tonic,config.keyMode===1,row.start);
-            state.pedalResults[pedalKey]=describe(result,evidence.representative.length?evidence.representative:evidence.all,row.start,tonic,config.keyMode===1,config.degreeMode,flats,tonicNameAt(row.frame,config));
-            state.pedalResults[pedalKey].kind="踏板区间 · "+(result.kind||"综合识别");
+            state.pedalResults[resultKey]=describe(result,evidence.representative.length?evidence.representative:evidence.all,row.start,tonic,config.keyMode===1,config.degreeMode,flats,tonicNameAt(row.frame,config));
+            state.pedalResults[resultKey].kind="踏板区间 · "+(result.kind||"综合识别");
         }
-        result=state.pedalResults[pedalKey];
+        result=state.pedalResults[resultKey];
     } else {
         var weights={},heldNotes=row.notes.filter(function(n){return n.end===undefined||n.end>row.start;});
         var attacks=heldNotes.filter(function(n){return (n.attackTick===undefined?n.tick:n.attackTick)===row.start;});
@@ -206,12 +207,15 @@ function scorePath(row,previous) {
 }
 function emitRegion(state,row,key) {
     var result=row.chosen;if(!result){state.current=null;return;}
-    var current=state.current,window=row.pedal,same=current && current.end===row.start && signature(current)===signature(result);
-    if(window && state.config.pedalMode===0 && current && current.pedalStart===window.start)same=true;
+    var current=state.current,window=row.pedal,source=row.frame.imported?"imported":"auto";
+    var same=current && current.end===row.start && current.source===source && signature(current)===signature(result);
+    if(window && state.config.pedalMode===0 && current && current.end===row.start && current.pedalStart===window.start &&
+       current.source==="auto" && source==="auto" && current.root===result.root && current.definition===result.definition &&
+       current.tonicSpelling===result.tonicSpelling && current.minor===result.minor)same=true;
     if(same)current.end=row.end;
     else {
         current=clone(result);current.start=row.start;current.end=row.end;current.part=Number(key);
-        current.id=key+":"+row.start;current.source=row.frame.imported?"imported":"auto";
+        current.id=key+":"+row.start;current.source=source;
         current.notes=clone(row.notes);current.bar=row.frame.bar;current.beat=row.frame.beat;
         current.pedalStart=window?window.start:-1;state.regions.push(current);state.current=current;
     }
