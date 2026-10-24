@@ -114,7 +114,8 @@ QVariantMap ScoreObserver::musicalPosition(int tick) const
       const int end=_score->lastMeasure()->endTick().ticks();auto measure=_score->tick2measure(Fraction::fromTicks(qBound(0,tick,qMax(0,end-1))));if(!measure)return {};
       const qreal beat=1.+(tick-measure->tick().ticks())/(480.*4/qMax(1,measure->timesig().denominator()));
       const QString text=tick>=end?tr("乐谱结尾"):tr("第 %1 小节 · 第 %2 拍").arg(measure->no()+1).arg(QString::number(beat,'g',4));
-      return {{"tick",tick},{"measure",measure->no()+1},{"beat",beat},{"text",text}};
+      return {{"tick",tick},{"measure",measure->no()+1},{"beat",beat},{"text",text},{"measureStart",measure->tick().ticks()},{"measureEnd",measure->endTick().ticks()},
+            {"numerator",measure->timesig().numerator()},{"denominator",measure->timesig().denominator()}};
       }
 QVariantMap ScoreObserver::scoreLocation(int tick,int track) const
       {

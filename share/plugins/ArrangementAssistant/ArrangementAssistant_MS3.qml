@@ -8,6 +8,7 @@ import "../HarmonyAssistant" as Desk
 import "../HarmonyAssistant/Analysis.js" as Analysis
 import "../HarmonyAssistant/Harmony.js" as Harmony
 import "Rules.js" as Rules
+import "Context.js" as Context
 import "Presentation.js" as Presentation
 
 MuseScore {
@@ -170,7 +171,8 @@ MuseScore {
             if(target.end<=target.start) {localRefresh=false;target=Rules.clone(scope)}
         }
         var context=Math.max(0,target.start-3840)
-        snapshot={scope:target,notes:[],rests:[],meters:[],harmonies:[],hands:[],pedals:[],parts:[],keys:[],tempos:[],contextStart:context,next:context}
+        if(typeof observer.musicalPosition==="function") {var position=observer.musicalPosition(context);if(typeof position.measureStart==="number")context=position.measureStart}
+        snapshot={scope:target,notes:[],rests:[],meters:[],harmonies:[],hands:[],pedals:[],parts:[],keys:[],tempos:[],contextStart:context,next:context,rangeDone:false,contextJob:null}
         task=null;running=true;status="读取完整声部…";work.start()
     }
     function slice() {
@@ -178,12 +180,25 @@ MuseScore {
         if(observer.analysisRevision()!==revision) {cancel();markDirty();return}
         var began=Date.now()
         if(!task) {
+            if(!snapshot.rangeDone) {
             var page=observer.analysisRange(snapshot.contextStart,snapshot.scope.end,snapshot.scope.firstTrack,snapshot.scope.endTrack,snapshot.next,16,revision)
             if(page.error) {cancel();status="读取暂停："+page.error;stale=true;return}
             var names=["notes","rests","meters","harmonies","hands","pedals","parts","keys","tempos"]
             for(var i=0;i<names.length;++i)Array.prototype.push.apply(snapshot[names[i]],page[names[i]]||[])
             snapshot.next=page.nextTick
-            if(page.done) {
+            if(page.done)snapshot.rangeDone=true
+            } else {
+                if(!snapshot.contextJob) {
+                    snapshot.contextJob=Context.create(snapshot.contextStart,snapshot.scope.firstTrack,snapshot.scope.endTrack,snapshot.parts,snapshot.harmonies)
+                    if(typeof observer.analysisHarmonyContext!=="function")snapshot.contextJob.done=true
+                }
+                if(!snapshot.contextJob.done) {
+                    var previous=observer.analysisHarmonyContext(snapshot.contextStart,snapshot.scope.firstTrack,snapshot.scope.endTrack,snapshot.contextJob.next,32,revision)
+                    var error=Context.take(snapshot.contextJob,previous)
+                    if(error) {cancel();status=error==="no-progress"?"读取前面的和弦时未能继续，请更新结果":"读取暂停："+error;stale=true;return}
+                    status="读取前面的和弦 · 第 "+Math.max(1,observer.musicalPosition(snapshot.contextJob.next).measure||1)+" 小节"
+                } else {
+                Array.prototype.push.apply(snapshot.harmonies,Context.previous(snapshot.contextJob));delete snapshot.contextJob
                 if(typeof observer.arrangementState==="function") {
                     var shared=observer.arrangementState({scope:snapshot.scope}).harmonyAnalysis
                     if(shared && shared.freshness==="current")snapshot.harmonyRegions=shared.regions||[]
@@ -193,6 +208,7 @@ MuseScore {
                 if(typeof observer.startReadOnlyJob==="function" && workerSource.length) {
                     work.stop();workerToken=observer.startReadOnlyJob(workerSource,{data:snapshot,config:config,imported:imported});snapshot=null
                 } else task=Rules.create(snapshot,config,imported)
+                }
             }
         } else if(Rules.step(task,2)) {
             finishResult({issues:task.issues,roles:task.roles})
@@ -209,10 +225,7 @@ MuseScore {
             if(pendingData) {
                 if(localRefresh && cachedData) {
                     var begin=pendingData.contextStart,end=pendingData.scope.end
-                    cachedData.notes=cachedData.notes.filter(function(n){return n.tick<begin || n.tick>=end}).concat(pendingData.notes)
-                    cachedData.pedals=cachedData.pedals.filter(function(p){return p.end<=begin || p.tick>=end}).concat(pendingData.pedals)
-                    cachedData.keys=(cachedData.keys||[]).filter(function(k){return k.tick<begin || k.tick>=end}).concat(pendingData.keys||[])
-                    cachedData.parts=pendingData.parts
+                    cachedData=Context.merge(cachedData,pendingData,begin,end)
                 } else cachedData=pendingData
             }
             dirtyStart=-1;dirtyEnd=-1;pendingData=null

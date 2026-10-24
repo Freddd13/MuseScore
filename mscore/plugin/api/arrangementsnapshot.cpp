@@ -66,6 +66,29 @@ QVariantMap ScoreObserver::analysisScope(bool whole) const {
             {"part",part->instrumentName()},{"piano",part->instrumentId().contains("piano",Qt::CaseInsensitive)},
             {"noncontiguous",noncontiguous},{"firstMeasure",whole?_score->firstMeasure()->no()+1:measure?measure->no()+1:1},{"lastMeasure",whole?_score->lastMeasure()->no()+1:last?last->no()+1:1}};
       }
+QVariantMap ScoreObserver::analysisHarmonyContext(int before,int firstTrack,int endTrack,int fromTick,int limit,const QString& expected) {
+      const QString contentRevision=analysisRevision();
+      if(!_score || contentRevision.isEmpty())return {{"error","no-score"}};
+      if(!expected.isEmpty() && expected!=contentRevision)return {{"error","stale"},{"revision",contentRevision}};
+      if(playing())return {{"error","playing"},{"revision",contentRevision}};
+      const int scoreEnd=_score->lastMeasure()?_score->lastMeasure()->endTick().ticks():0;
+      before=qBound(0,before,scoreEnd);fromTick=qBound(0,fromTick,before);limit=qBound(1,limit,64);
+      firstTrack=qBound(0,firstTrack,_score->ntracks());endTrack=qBound(firstTrack,endTrack,_score->ntracks());
+      QVariantList harmonies;QElapsedTimer timer;timer.start();int count=0,next=0;
+      const auto measure=fromTick?_score->tick2measure(Fraction::fromTicks(fromTick-1)):nullptr;
+      auto segment=measure?measure->last():nullptr;
+      while(segment && (!segment->isChordRestType() || segment->tick().ticks()>=fromTick))segment=segment->prev1(SegmentType::ChordRest);
+      while(segment) {
+            const int at=segment->tick().ticks();
+            for(const auto e:segment->annotations())if(e->isHarmony() && e->track()>=firstTrack && e->track()<endTrack) {
+                  const auto h=toHarmony(e);const auto part=_score->staff(e->staffIdx())->part();
+                  harmonies.append(QVariantMap{{"tick",at},{"track",e->track()},{"part",part->startTrack()},{"name",h->harmonyName()},{"rootTpc",h->rootTpc()},{"bassTpc",h->baseTpc()}});
+                  }
+            next=at;segment=segment->prev1(SegmentType::ChordRest);++count;
+            if(count>=limit || timer.nsecsElapsed()>=2000000)break;
+            }
+      return {{"revision",contentRevision},{"harmonies",harmonies},{"nextTick",segment?next:0},{"done",!segment},{"milliseconds",double(timer.nsecsElapsed())/1000000.}};
+      }
 QVariantMap ScoreObserver::analysisRange(int start,int end,int firstTrack,int endTrack,int fromTick,int limit,const QString& expected) {
       const QString revision=analysisRevision();
       if(!_score || revision.isEmpty())return {{"error","no-score"}};

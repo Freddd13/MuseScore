@@ -55,7 +55,7 @@ function perfect(a,b) {
 }
 function create(data,config,imported) {
     return {data:data,config:clone(config),imported:imported||[],phase:0,index:0,byTick:{},ticks:[],byTrack:{},
-        frames:[],active:[],pedalNotes:[],roles:[],issues:[],previousHands:{},previousLines:{},pairState:{},regions:[],seen:{},logicalSeen:{},trackTicks:{},trackIndices:{},trackParts:{},keyIndex:indexKeys(data.keys||[]),handIndex:indexHands(data.hands||[])};
+        frames:[],active:[],pedalNotes:[],roles:[],issues:[],previousHands:{},previousLines:{},pairState:{},regions:[],seen:{},logicalSeen:{},trackTicks:{},trackIndices:{},trackParts:{},trackTextures:{},trackProfiles:{},trackKeys:null,roleIndex:0,textureJob:null,keyIndex:indexKeys(data.keys||[]),handIndex:indexHands(data.hands||[])};
 }
 function indexKeys(keys) {
     var result={};keys.forEach(function(event){(result[event.track]||(result[event.track]=[])).push(event);});
@@ -107,26 +107,46 @@ function choose(group,line) {
     if(line==="single" && group.length!==1)return null;
     return group.reduce(function(a,b){return line==="bottom"?(a.pitch<b.pitch?a:b):(a.pitch>b.pitch?a:b);});
 }
-function brokenChordTexture(groups) {
-    var ticks=Object.keys(groups).map(Number).sort(function(a,b){return a-b;});if(ticks.length<6)return false;
-    var checked=0,broken=0;
-    for(var i=0;i+5<ticks.length && checked<128;++i) {
-        var pcs={},low=128,high=-1,leaps=0,minGap=Infinity,maxGap=0,valid=true;
-        for(var j=0;j<6;++j) {
-            var group=groups[ticks[i+j]];if(group.length!==1){valid=false;break;}
-            var pitch=group[0].pitch;pcs[Harmony.mod12(pitch)]=true;low=Math.min(low,pitch);high=Math.max(high,pitch);
-            if(j) {var previous=groups[ticks[i+j-1]][0],distance=Math.abs(pitch-previous.pitch),gap=ticks[i+j]-ticks[i+j-1];leaps+=distance>=3 && distance<=12;minGap=Math.min(minGap,gap);maxGap=Math.max(maxGap,gap);}
-        }
-        if(!valid)continue;++checked;
-        if(Object.keys(pcs).length<=4 && leaps>=4 && high-low>=7 && maxGap<=minGap*2)++broken;
+function createTexture(groups) {
+    var ticks=Object.keys(groups).map(Number).sort(function(a,b){return a-b;}),pitches=[],invalid=[0],leaps=[0];
+    for(var i=0;i<ticks.length;++i) {
+        var group=groups[ticks[i]],pitch=group.length?group[0].pitch:0;pitches.push(pitch);invalid.push(invalid[i]+(group.length===1?0:1));
+        if(i){var distance=Math.abs(pitch-pitches[i-1]);leaps.push(leaps[i-1]+(distance>=3 && distance<=12?1:0));}
     }
-    return checked>0 && broken/checked>=.5;
+    return {ticks:ticks,pitches:pitches,invalid:invalid,leaps:leaps,index:0,profile:{checked:0,broken:0,onsets:{}}};
+}
+function stepTexture(job,count) {
+    var ticks=job.ticks,profile=job.profile,limit=count||32;
+    for(var checked=0;job.index+5<ticks.length && checked<limit;++job.index,++checked) {
+        var i=job.index;
+        if(job.invalid[i+6]!==job.invalid[i])continue;++profile.checked;
+        if(job.leaps[i+5]-job.leaps[i]<4)continue;
+        var pcs={},low=128,high=-1,minGap=Infinity,maxGap=0;
+        for(var j=0;j<6;++j) {
+            var pitch=job.pitches[i+j];pcs[Harmony.mod12(pitch)]=true;low=Math.min(low,pitch);high=Math.max(high,pitch);
+            if(j) {var gap=ticks[i+j]-ticks[i+j-1];minGap=Math.min(minGap,gap);maxGap=Math.max(maxGap,gap);}
+        }
+        if(Object.keys(pcs).length<=4 && high-low>=7 && maxGap<=minGap*2) {
+            ++profile.broken;
+            var start=Math.abs(job.pitches[i]-job.pitches[i+1])<=2?1:0;
+            var end=Math.abs(job.pitches[i+4]-job.pitches[i+5])<=2?5:6;
+            for(j=start;j<end;++j)profile.onsets[ticks[i+j]]=true;
+        }
+    }
+    return job.index+5>=ticks.length;
+}
+function textureProfile(groups) {
+    var job=createTexture(groups);while(!stepTexture(job,128)){}return job.profile;
+}
+function brokenChordTexture(groups) {
+    var profile=textureProfile(groups);return profile.checked>0 && profile.broken/profile.checked>=.5;
 }
 function roleFor(s,track) {
     var user=s.config.roles[String(track)],groups=s.byTrack[track],poly=false;
     for(var key in groups)if(groups[key].length>1){poly=true;break;}
     var bottom=Math.floor(track/4)>Math.floor((s.trackParts[track]===undefined?s.data.scope.firstTrack:s.trackParts[track])/4);
-    var broken=!poly && brokenChordTexture(groups);
+    var profile=(s.trackProfiles||{})[track]||textureProfile(groups);s.trackTextures[track]=profile.onsets;
+    var broken=!poly && profile.checked>0 && profile.broken/profile.checked>=.5;
     var automatic={track:Number(track),role:bottom?"bass":"melody",hand:bottom?"left":"right",
         line:poly?(bottom?"bottom":"top"):"single",source:broken?"自动建议（分解和弦）":"自动推断",independent:!poly&&!broken,uncertain:poly||broken};
     if(user) {
@@ -307,9 +327,11 @@ function lineEvidence(a,b,previous) {
 }
 function structuralLine(s,role,pool) {
     var note=choose(pool,role.line);if(!note)return null;
-    if(role.independent && !role.uncertain)return {note:note,role:role};
     var explicit=s.config.roles[String(role.track)]||{};
-    if(!role.uncertain || role.role==="ignore" || explicit.role!==undefined || explicit.line!==undefined || typeof explicit.independent==="boolean" || role.source.indexOf("分解和弦")>=0 || role.source.indexOf("加倍")>=0)return null;
+    var confirmed=explicit.role!==undefined || explicit.line!==undefined || typeof explicit.independent==="boolean";
+    if(confirmed)return role.independent && !role.uncertain?{note:note,role:role}:null;
+    if(role.role==="ignore" || role.source.indexOf("加倍")>=0 || (s.trackTextures[role.track]||{})[note.attackTick])return null;
+    if(role.independent && !role.uncertain)return {note:note,role:role};
     var group=s.byTrack[role.track][note.attackTick]||[];
     if(pool.length!==1 || group.length!==1)return null;
     var local=clone(role);local.independent=true;local.uncertain=false;local.source="自动推断（当前单音线）";
@@ -499,16 +521,21 @@ function step(s,budget) {
                 var group=s.byTick[tick]||(s.byTick[tick]=[]);group.push(n);
                 if(n.logicalEnd<s.data.scope.end && !s.byTick[n.logicalEnd])s.byTick[n.logicalEnd]=[];
                 var track=s.byTrack[n.track]||(s.byTrack[n.track]={});(track[tick]||(track[tick]=[])).push(n);
-            } else {
+            } else if(s.trackKeys===null) {
                 var boundaries=[s.data.scope.start].concat((s.data.harmonies||[]).map(function(c){return c.tick;}),(s.data.meters||[]).map(function(m){return m.tick;}),(s.data.keys||[]).map(function(k){return k.tick;}));
                 [s.config.chords||[],s.imported||[],s.data.harmonyRegions||[]].forEach(function(regions){regions.forEach(function(region){boundaries.push(region.start,region.end);});});
                 (s.data.pedals||[]).forEach(function(p){boundaries.push(p.tick,p.end);});
                 for(var boundary=0;boundary<boundaries.length;++boundary)if(boundaries[boundary]>=0 && boundaries[boundary]<s.data.scope.end && !s.byTick[boundaries[boundary]])s.byTick[boundaries[boundary]]=[];
                 s.ticks=Object.keys(s.byTick).map(Number).sort(function(a,b){return a-b;});
-                for(var key in s.byTrack) {
-                    s.roles.push(roleFor(s,key));var ordered=Object.keys(s.byTrack[key]).map(Number).sort(function(a,b){return a-b;});s.trackTicks[key]=ordered;s.trackIndices[key]={};
-                    for(var oi=0;oi<ordered.length;++oi)s.trackIndices[key][ordered[oi]]=oi;
+                s.trackKeys=Object.keys(s.byTrack);
+            } else if(s.roleIndex<s.trackKeys.length) {
+                var key=s.trackKeys[s.roleIndex];
+                if(!s.textureJob) {
+                    s.textureJob=createTexture(s.byTrack[key]);s.trackTicks[key]=s.textureJob.ticks;s.trackIndices[key]={};
+                    for(var oi=0;oi<s.textureJob.ticks.length;++oi)s.trackIndices[key][s.textureJob.ticks[oi]]=oi;
                 }
+                if(stepTexture(s.textureJob,32)) {s.trackProfiles[key]=s.textureJob.profile;s.roles.push(roleFor(s,key));s.textureJob=null;++s.roleIndex;}
+            } else {
                 for(var a=0;a<s.roles.length;++a)for(var b=a+1;b<s.roles.length;++b) {
                     var first=s.roles[a],second=s.roles[b],left=s.byTrack[first.track],right=s.byTrack[second.track],ta=Object.keys(left).sort(),tb=Object.keys(right).sort();
                     function confirmed(role) {return role && (role.role!==undefined || role.line!==undefined || typeof role.independent==="boolean");}

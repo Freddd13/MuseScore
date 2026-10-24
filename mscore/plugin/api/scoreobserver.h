@@ -150,6 +150,7 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QVariantMap navigateWorkflow(const QVariantMap& range,bool audition = false);
       Q_INVOKABLE QVariantMap analysisScope(bool whole = false) const;
       Q_INVOKABLE QVariantMap analysisRange(int start, int end, int firstTrack, int endTrack, int fromTick, int limit, const QString& expected = QString());
+      Q_INVOKABLE QVariantMap analysisHarmonyContext(int before, int firstTrack, int endTrack, int fromTick, int limit, const QString& expected = QString());
       Q_INVOKABLE QVariantMap snapshot(int tick, int firstTrack, int endTrack, bool sounding = false);
       Q_INVOKABLE void setNotePreviewColors(const QVariantList& notes);
       Q_INVOKABLE void clearNotePreviewColors();
