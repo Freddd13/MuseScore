@@ -34,7 +34,7 @@
 
 旧操作实际检查了首次空列表扫描、内置SF2切回与恢复、两件乐器的选择、独立效果预设、参数输入及撤销、主输出与乐器效果列表，以及增删乐器后的更新。CFX厂商窗口的定时刷新和参数保存也通过。
 
-原始结果位于插件工作区`P2/out/sources-107-final-pluginhost.txt`和`sources-107-old-controls-pluginhost.txt`。主程序、独立音源进程及测试程序已重新编译；安装后继续记录程序校验。
+原始结果位于插件工作区`P2/out/sources-107-final-pluginhost.txt`和`sources-107-old-controls-pluginhost.txt`。主程序、独立音源进程及测试程序已重新编译，0.107已安装。程序与随包音源进程的SHA256和编译材料一致，kumo.ini保持原值；关于页与启动画面的个人版本、作者和说明链接已通过原生窗口检查。源码c369489ca，发布定位personal-v0.107.0。
 
 ## 后续顺序
 
