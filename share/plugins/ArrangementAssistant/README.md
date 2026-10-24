@@ -65,4 +65,4 @@
 [0.115和声与声部提示例子](https://github.com/Freddd13/MuseScore/blob/3.x/personal/docs/ARRANGEMENT_115_GUIDE.md)
 
 
-0.118修复装饰音重复及定位，读取各谱表力度与播放设置；低音排列提示排除关闭播放的音。具体操作见[本批说明](../P2/native/personal/docs/ARRANGEMENT_118_GUIDE.md)。
+0.118修复装饰音重复及定位，读取各谱表力度与播放设置；低音排列提示排除关闭播放的音。具体操作见“帮助 → 个人功能说明”的编配检查章节。
