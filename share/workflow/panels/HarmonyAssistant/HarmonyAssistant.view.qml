@@ -466,11 +466,14 @@ MuseScore {
         analysisTimer.start()
     }
     function frameResult(frame) {
+        return frameSnapshot(frame,false)
+    }
+    function frameSnapshot(frame,deferDetection) {
         var notes=frame.analysisNotes || frame.notes || []
         var pitches=notes.map(function(n){return n.pitch})
-        var result=!notes.length ? {root:-1,definition:-1} : autoChord.checked ? Harmony.detect(pitches,notes) :
-            {root:Harmony.rootPcs[rootCombo.currentIndex],definition:qualityCombo.currentIndex,rootSpelling:Harmony.rootNames[rootCombo.currentIndex]}
         var imported=Analysis.atTick(importedRecords,frame.tick)
+        var result=!notes.length || deferDetection || imported ? {root:-1,definition:-1} : autoChord.checked ? Harmony.detect(pitches,notes) :
+            {root:Harmony.rootPcs[rootCombo.currentIndex],definition:qualityCombo.currentIndex,rootSpelling:Harmony.rootNames[rootCombo.currentIndex]}
         if(imported)result={root:imported.root,definition:imported.definition,rootSpelling:imported.rootSpelling||""}
         var tonic=Harmony.rootPcs[keyTonic.currentIndex]
         if(!manualKey) {
@@ -480,9 +483,19 @@ MuseScore {
         }
         var described=Timeline.describe(result,notes,frame.tick,tonic,keyMode.currentIndex===1,configuration.degreeMode,prefersFlats(),keySpelling(frame))
         if(imported){if(typeof imported.chord==="string")described.chord=imported.chord;if(typeof imported.degree==="string")described.degree=imported.degree}
-        return {tick:frame.tick,bar:frame.bar,beat:frame.beat,root:result.root,definition:result.definition,
+        var output={tick:frame.tick,bar:frame.bar,beat:frame.beat,root:result.root,definition:result.definition,
             chord:described.chord,degree:described.degree,rootSpelling:described.rootSpelling,tonicSpelling:described.tonicSpelling,
             notes:notes,parts:frame.parts,pedalWindows:frame.pedalWindows,scoreEnd:frame.scoreEnd,keySignature:frame.keySignature,imported:!!imported,chromatic:described.chromatic}
+        if(deferDetection && !imported)output.deferredDescription=true
+        return output
+    }
+    function applyFrameDescriptions(descriptions) {
+        for(var i=0;i<descriptions.length && i<analysisRecords.length;++i) {
+            var described=descriptions[i],frame=analysisRecords[i]
+            if(!described || described.tick!==frame.tick)continue
+            for(var key in described)if(key!=="tick")frame[key]=described[key]
+            delete frame.deferredDescription
+        }
     }
     function buildAnalysisChunk() {
         if(!curScore || !surfaceActive || !needsAnalysis())return
@@ -491,7 +504,8 @@ MuseScore {
         var batch=observer.analysisFrames(analysisNextTick,observer.playing?8:32,firstTrack,endTrack,pedalContext.checked,windowTicks())
         analysisFingerprint=batch.fingerprint || ""
         var frames=batch.frames || []
-        for(var i=0;i<frames.length;++i)pendingRecords.push(frameResult(frames[i]))
+        var defer=regionWorkerSource.length && typeof observer.startReadOnlyJob==="function" && autoChord.checked && !importedRecords.length
+        for(var i=0;i<frames.length;++i)pendingRecords.push(frameSnapshot(frames[i],defer))
         analysisNextTick=batch.nextTick
         if(analysisNextTick>=0) {analysisTimer.start(); return}
         analysisRecords=pendingRecords;pendingRecords=[];correctionParts=readCorrectionParts();loadCorrections()
@@ -519,7 +533,7 @@ MuseScore {
                 var marker=chordDescriptor(anchor,region);markers[region.part+":"+region.start]=marker
             }
         }
-        for(var i=0;i<analysisRecords.length;++i) {
+        if(showFunctions.checked || scoreColoring.checked && allColor.checked)for(var i=0;i<analysisRecords.length;++i) {
             var frame=analysisRecords[i]
             for(var n=0;n<frame.notes.length;++n) {
                 var note=frame.notes[n]
@@ -1133,7 +1147,7 @@ MuseScore {
             } else settingsStore.active=true
         }
         if(observer && typeof observer.startReadOnlyJob==="function" && typeof observer.readTextFile==="function") {
-            try {regionWorkerSource=Timeline.workerBundle({harmony:observer.readTextFile(String(Qt.resolvedUrl("Harmony.js"))),timeline:observer.readTextFile(String(Qt.resolvedUrl("Timeline.js")))})}
+            try {regionWorkerSource=Timeline.workerBundle({harmony:observer.readTextFile(String(Qt.resolvedUrl("Harmony.js"))),timeline:observer.readTextFile(String(Qt.resolvedUrl("Timeline.js"))),packed:true})}
             catch(error){noticeText="后台和弦计算未启用："+error;regionWorkerSource=""}
         }
         syncDetailPanel()
@@ -1267,7 +1281,9 @@ MuseScore {
             root.regionJobToken=0
             if(!root.surfaceActive || !curScore || firstTrack!==root.regionFirstTrack || endTrack!==root.regionEndTrack || observer.analysisRevision()!==root.regionRevision) {root.analysisDirty=true;root.scheduleAnalysis();return}
             if(result.error){root.analysisDirty=true;root.matchText="分析未完成";root.noticeText="和弦计算未完成："+result.error;return}
-            root.finishRegions(result.regions||[])
+            var completed=result.payload?JSON.parse(result.payload):result
+            root.applyFrameDescriptions(completed.descriptions||[])
+            root.finishRegions(completed.regions||[])
         }
     }
     Connections {target:root; ignoreUnknownSignals:true; onPanelDetailClosed:root.detailPanelClosed();onPanelSummaryClosed:root.detailPanelClosed()}

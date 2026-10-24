@@ -48,6 +48,9 @@ void TestPluginHost::harmonySpellingAcrossViews109()
         QCOMPARE(panel->property("chordText").toString(),row["chord"].toString());
         QCOMPARE(panel->property("degreeText").toString(),row["degree"].toString());
         auto observer=panel->findChild<PluginAPI::ScoreObserver*>();QVERIFY(observer);
+        QVariant direct;QVERIFY(QMetaObject::invokeMethod(panel,"frameResult",Q_RETURN_ARG(QVariant,direct),Q_ARG(QVariant,observer->contextSnapshot(0,0,4,true,0,false))));
+        const auto records=panel->property("analysisRecords").value<QJSValue>().toVariant().toList();QVERIFY(!records.isEmpty());
+        for(const auto& field:{"root","definition","chord","degree","rootSpelling","tonicSpelling","chromatic"})QCOMPARE(records.front().toMap()[field],direct.toMap()[field]);
         const auto published=observer->arrangementState().value("harmonyAnalysis").toMap().value("regions").toList();
         QVERIFY(!published.isEmpty());QCOMPARE(published.front().toMap()["chord"].toString(),row["chord"].toString());
         QCOMPARE(published.front().toMap()["degree"].toString(),row["degree"].toString());

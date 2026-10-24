@@ -83,7 +83,188 @@ function pedalAt(frame, part) {
 }
 function createBuilder(frames, config, fallbackPart) {
     return {frames:frames,config:clone(config),fallbackPart:fallbackPart,byPart:{},keys:[],
-        evidence:{},pedalResults:{},ornaments:{},regions:[],phase:0,frameIndex:0,partIndex:0,rowIndex:0,partPass:"score",traceIndex:-1,traceChoice:0,previous:null,current:null};
+        evidence:{},pedalResults:{},ornaments:{},contexts:{},segmentDetections:{},segmentDetectionCount:0,segmentProfiles:{},segmentProfileCount:0,regions:[],phase:0,frameIndex:0,partIndex:0,rowIndex:0,contextIndex:0,segmentJob:null,partPass:"segments",traceIndex:-1,traceChoice:0,previous:null,current:null};
+}
+var primaryLabels={"1":true,"2":true,"♭3":true,"3":true,"4":true,"♭5":true,"5":true,"♯5":true};
+// Jointly compare complete arpeggio spans. One edge is evaluated per step so
+// the existing GUI fallback can yield between candidates just like the worker.
+function segmentJob(context) {
+    context.events.sort(function(a,b){return a.attackTick-b.attackTick||a.track-b.track||a.pitch-b.pitch;});
+    return {context:context,bounds:[0],states:[[null]],target:1,from:0,pending:{},phase:"prepare",prepareIndex:0,selected:[],applyIndex:0,rowIndex:0};
+}
+function prepareSegment(state,job,key) {
+    var rows=job.context.rows,bounds=job.bounds,floor=job.context.floor,i=job.prepareIndex++;
+    if(i<rows.length) {
+        var attacks=rows[i].notes.filter(function(n){return (n.attackTick===undefined?n.tick:n.attackTick)===rows[i].start;});
+        var low=attacks.length?bass(attacks,rows[i].start):null;
+        rows[i].freshCount=Harmony.unique(attacks.map(function(n){return n.pitch;})).length;
+        rows[i].lowEntry=!!low && low.pitch<=floor+12;
+        var actual=bass(rows[i].notes.filter(function(n){return n.end===undefined||n.end>rows[i].start;}),rows[i].start);
+        if(job.stableBass===undefined && actual)job.stableBass=Harmony.mod12(actual.pitch);
+        rows[i].structuralBass=!!low && rows[i].lowEntry && actual && actual.pitch===low.pitch &&
+            low.end-rows[i].start>=480 && Harmony.mod12(low.pitch)!==job.stableBass &&
+            (rows[i].freshCount>=3 || !ornament(state,rows[i],key,low));
+        if(rows[i].structuralBass)job.stableBass=Harmony.mod12(low.pitch);
+        var previous=rows[i-1],held=previous?previous.notes.filter(function(n){return n.end===undefined||n.end>previous.start;}):[];
+        var previousPcs=Harmony.unique(held.map(function(n){return n.pitch;}));
+        var changedPitch=attacks.some(function(n){return previousPcs.indexOf(Harmony.mod12(n.pitch))<0;});
+        if(rows[i].lowEntry && rows[i].freshCount>=3) {
+            var onset=Harmony.detect(attacks.map(function(n){return n.pitch;}),attacks);
+            if(onset.root>=0 && !onset.extra.length)rows[i].onsetRoots=[onset.root].concat((onset.alternatives||[]).map(function(c){return c.root;}));
+        }
+        if(i>0 && (rows[i].lowEntry || rows[i].freshCount>=3 || changedPitch))bounds.push(i);
+    }
+    if(job.prepareIndex>=rows.length){bounds.push(rows.length);job.phase="score";}
+}
+function segmentDurations(notes,start,end,weights) {
+    var intervals=[],result={};for(var pc=0;pc<12;++pc)intervals.push([]);
+    notes.forEach(function(note){
+        var onset=note.attackTick===undefined?note.tick:note.attackTick;
+        var left=Math.max(start,onset),right=Math.min(end,note.end===undefined?end:note.end);
+        if(right>left)intervals[Harmony.mod12(note.pitch)].push({start:left,end:right});
+    });
+    for(pc=0;pc<12;++pc) {
+        var rows=intervals[pc].sort(function(a,b){return a.start-b.start;}),length=0,left=-1,right=-1;
+        rows.forEach(function(row){
+            if(left<0){left=row.start;right=row.end;}
+            else if(row.start<=right)right=Math.max(right,row.end);
+            else {length+=right-left;left=row.start;right=row.end;}
+        });
+        if(left>=0)length+=right-left;
+        result[pc]=(weights[pc]||0)*length/Math.max(1,end-start);
+    }
+    return result;
+}
+function rankSegment(state,notes,weights,durations,hint,frame,start) {
+    var spellings={},weightKey=[],maximum=0;
+    notes.forEach(function(note){spellings[Harmony.mod12(note.pitch)+":"+note.tpc]=true;});
+    for(var i=0;i<12;++i){weightKey.push(weights[i]||0,durations[i]||0);maximum=Math.max(maximum,weights[i]||0);}
+    var spellingKey=[];for(var name in spellings)spellingKey.push(name);spellingKey.sort();
+    var tonic=tonicAt(frame,state.config),minor=state.config.keyMode===1;
+    var detectionKey=tonic+":"+minor+":"+(hint?Harmony.mod12(hint.pitch):-1)+":"+weightKey.join(",")+":"+spellingKey.join(",");
+    if(state.segmentDetections[detectionKey])return state.segmentDetections[detectionKey];
+    var byId={};
+    function profileResult(profile) {
+        var normalized=[],maximum=0;for(var i=0;i<12;++i)maximum=Math.max(maximum,profile[i]||0);
+        for(i=0;i<12;++i)normalized.push(maximum?(profile[i]||0)/maximum:0);
+        var profileKey=tonic+":"+minor+":"+(hint?Harmony.mod12(hint.pitch):-1)+":"+normalized.join(",")+":"+spellingKey.join(",");
+        if(state.segmentProfiles[profileKey])return state.segmentProfiles[profileKey];
+        var detected=Harmony.detectWeighted(notes,profile,null,tonic,minor,start,{bass:hint,collect:true});
+        if(state.segmentProfileCount>=4096){state.segmentProfiles={};state.segmentProfileCount=0;}
+        state.segmentProfiles[profileKey]=detected;++state.segmentProfileCount;return detected;
+    }
+    function addProfile(profile) {
+        var detected=profileResult(profile);
+        if(detected.root>=0)byId[detected.root+":"+detected.definition]=detected;
+        (detected.candidates||[]).forEach(function(option){byId[option.root+":"+option.definition]=option;});
+    }
+    addProfile(weights);
+    var needsDuration=false;
+    for(var id in byId) {
+        var option=byId[id],definition=Harmony.defs[option.definition];
+        for(i=0;i<definition.intervals.length;++i) {
+            var pc=Harmony.mod12(option.root+definition.intervals[i]);
+            if(!primaryLabels[definition.labels[i]] && (durations[pc]||0)<.5*(weights[pc]||0))needsDuration=true;
+        }
+    }
+    if(needsDuration)addProfile(durations);
+    var ranked=[],evidence=Harmony.spellingEvidence(notes,weights);
+    for(var id in byId) {
+        var option=clone(byId[id]),definition=Harmony.defs[option.definition],cost=.23*Math.max(0,definition.intervals.length-3),template={};
+        for(i=0;i<definition.intervals.length;++i) {
+            var pc=Harmony.mod12(option.root+definition.intervals[i]),label=definition.labels[i];template[pc]=true;
+            // Primary chord tones need to occur in the span; colour tones and
+            // non-chord notes also use their actual share of sounding time.
+            var primary=primaryLabels[label];
+            var amount=maximum?(primary?(weights[pc]||0):(durations[pc]||0))/maximum:0;
+            cost+=(1-amount)*(definition.intervals[i]===7?.45:pc===option.root?1.8:3.2);
+        }
+        for(i=0;i<12;++i)if(!template[i])cost+=(durations[i]||0)/Math.max(.001,maximum)*3;
+        if(hint)cost-=Harmony.mod12(hint.pitch)===option.root?.6:template[Harmony.mod12(hint.pitch)]?.22:0;
+        var fit=Harmony.spellingFit(evidence,option.root,option.definition);cost+=fit.cost;
+        option.rootSpelling=fit.name||option.rootSpelling;option.cost=cost;option.rawCost=cost;delete option.candidates;
+        if(cost<=6)ranked.push(option);
+    }
+    ranked.sort(function(a,b){return a.rawCost-b.rawCost||a.definition-b.definition||a.root-b.root;});ranked=ranked.slice(0,4);
+    if(!ranked.length)ranked=[{root:-1,definition:-1,rawCost:6,kind:"未确定和弦"}];
+    ranked.forEach(function(option){option.alternatives=ranked.filter(function(other){return other!==option&&other.rawCost-option.rawCost<.8;}).map(function(other){return {root:other.root,definition:other.definition,cost:other.rawCost};});});
+    if(state.segmentDetectionCount>=4096){state.segmentDetections={};state.segmentDetectionCount=0;}
+    state.segmentDetections[detectionKey]=ranked;++state.segmentDetectionCount;return ranked;
+}
+function segmentEvidence(state,job,from,to,key) {
+    var context=job.context,rows=context.rows,first=rows[job.bounds[from]],last=rows[job.bounds[to]-1];
+    var start=first.start,end=last.end,notes=[],weights={},active=first.notes.filter(function(n){return (n.attackTick===undefined?n.tick:n.attackTick)<start && (n.end===undefined||n.end>start);});
+    var events=context.events,lo=0,hi=events.length;
+    while(lo<hi){var mid=(lo+hi)>>1;if(events[mid].attackTick<start)lo=mid+1;else hi=mid;}
+    for(var i=lo;i<events.length && events[i].attackTick<end;++i)notes.push(events[i]);
+    var fresh=Harmony.unique(notes.map(function(n){return n.pitch;})).length;
+    function weigh(note,held) {
+        var weight=1;
+        if(held)weight*=first.lowEntry && fresh>=3?.15:1;
+        if(ornament(state,first,key,note))weight*=.18;
+        var pc=Harmony.mod12(note.pitch);weights[pc]=Math.max(weights[pc]||0,weight);
+    }
+    notes.forEach(function(note){weigh(note,false);});active.forEach(function(note){weigh(note,true);notes.push(note);});
+    var harmonicBass=notes.length?notes.reduce(function(a,b){return a.pitch<=b.pitch?a:b;}):null;
+    var freshBass=context.events.filter(function(n){return n.attackTick===start;});
+    var hint=first.lowEntry && freshBass.length?bass(freshBass,start):harmonicBass;
+    var options=rankSegment(state,notes,weights,segmentDurations(notes,start,end,weights),hint,first.frame,start);
+    return options.map(function(option){
+        var sounding=first.notes.filter(function(n){return (n.attackTick===undefined?n.tick:n.attackTick)<=start && (n.end===undefined||n.end>start);});
+        var out=describe(option,sounding.length?sounding:notes,start,tonicAt(first.frame,state.config),state.config.keyMode===1,state.config.degreeMode,undefined,tonicNameAt(first.frame,state.config));
+        delete out.candidates;out.kind="分解伴奏 · "+(option.alternatives.length?"有其他解释":"结合前后和弦");out.notes=notes;out.segmentStart=start;out.segmentEnd=end;
+        if(first.lowEntry && hint && Harmony.unique(freshBass.map(function(n){return n.pitch;})).length>=3)out.harmonicBass=Harmony.mod12(hint.pitch);
+        out.rawCost=typeof option.rawCost==="number"?option.rawCost:typeof option.cost==="number"?option.cost:6;
+        return out;
+    });
+}
+function stepSegment(state,job,key) {
+    var rows=job.context.rows,bounds=job.bounds;
+    if(job.phase==="prepare"){prepareSegment(state,job,key);return false;}
+    if(job.phase==="score") {
+        var from=job.from++,to=job.target,first=rows[bounds[from]],last=rows[bounds[to]-1];
+        var bassChange=false;for(var b=from+1;b<to;++b)if(rows[bounds[b]].structuralBass)bassChange=true;
+        if(!bassChange && (last.end-first.start<=3840 || from===to-1)) {
+            var options=segmentEvidence(state,job,from,to,key),parents=job.states[from]||[];
+            for(var c=0;c<options.length;++c)for(var p=0;p<parents.length;++p) {
+                var option=options[c],parent=parents[p],previous=parent&&parent.result,penalty=0;
+                if(from>0)penalty=previous && previous.root===option.root && previous.definition===option.definition?.35:
+                    first.lowEntry?(first.freshCount>=3?.45:.65):1.4;
+                var changes=0;
+                for(var b=from+1;b<to;++b) {
+                    var boundary=rows[bounds[b]];
+                    if(boundary.onsetRoots && boundary.onsetRoots.indexOf(option.root)<0)changes+=.8*Math.max(.25,(rows[bounds[b+1]-1].end-boundary.start)/480);
+                }
+                var cost=(parent?parent.cost:0)+option.rawCost*Math.max(.25,(last.end-first.start)/480)+penalty+changes+.2;
+                var id=option.root+":"+option.definition,best=job.pending[id];
+                if(!best || cost<best.cost-1e-9)job.pending[id]={cost:cost,result:option,from:from,to:to,back:parent};
+            }
+        }
+        if(job.from>=to) {
+            var ranked=[];for(var id in job.pending)ranked.push(job.pending[id]);
+            ranked.sort(function(a,b){return a.cost-b.cost;});job.states[to]=ranked.slice(0,4);job.pending={};
+            if(++job.target>=bounds.length) {
+                var chosen=job.states[to][0];while(chosen){job.selected.unshift(chosen);chosen=chosen.back;}
+                var merged=[];
+                job.selected.forEach(function(span){
+                    var previous=merged.length?merged[merged.length-1]:null;
+                    if(previous && previous.result.root===span.result.root && previous.result.definition===span.result.definition && rows[bounds[span.from]].freshCount<3 && !rows[bounds[span.from]].structuralBass) {
+                        previous.to=span.to;previous.result.segmentEnd=span.result.segmentEnd;
+                        var seen={};previous.result.notes.forEach(function(n){seen[n.track+":"+n.tick+":"+n.index+":"+n.pitch]=true;});
+                        span.result.notes.forEach(function(n){var id=n.track+":"+n.tick+":"+n.index+":"+n.pitch;if(!seen[id]){previous.result.notes.push(n);seen[id]=true;}});
+                    } else merged.push(span);
+                });
+                job.selected=merged;
+                job.phase="apply";
+            } else job.from=Math.max(0,job.target-8);
+        }
+        return false;
+    }
+    if(job.applyIndex>=job.selected.length)return true;
+    var span=job.selected[job.applyIndex],index=Math.max(bounds[span.from],job.rowIndex);
+    rows[index].segmentResult=span.result;job.rowIndex=index+1;
+    if(job.rowIndex>=bounds[span.to])++job.applyIndex;
+    return false;
 }
 function ornament(state,row,key,note) {
     var onset=note.attackTick===undefined?note.tick:note.attackTick;
@@ -114,7 +295,21 @@ function ingest(state, frame, end) {
     for(var p=0;p<parts.length;++p) {
         var part=parts[p].startTrack,notes=frame.notes.filter(function(n){return n.track>=part && n.track<parts[p].endTrack;});
         var rows=state.byPart[part]||(state.byPart[part]=[]),window=state.config.pedal?pedalAt(frame,part):null;
-        rows.push({frame:frame,notes:notes,start:frame.tick,end:end,pedal:window});
+        var row={frame:frame,notes:notes,start:frame.tick,end:end,pedal:window};rows.push(row);
+        if(window && state.config.pedalMode===1 && state.config.auto!==false && !frame.imported) {
+            var contexts=state.contexts[part]||(state.contexts[part]=[]),context=contexts.length?contexts[contexts.length-1]:null;
+            var identity=window.start+":"+window.end+":"+tonicNameAt(frame,state.config);
+            if(!context || context.identity!==identity || context.end!==frame.tick) {
+                context={identity:identity,start:frame.tick,end:end,rows:[],events:[],seen:{},floor:Infinity};contexts.push(context);
+            }
+            context.rows.push(row);context.end=end;
+            for(var n=0;n<notes.length;++n) {
+                var note=notes[n],onset=note.attackTick===undefined?note.tick:note.attackTick;
+                if(onset<context.start)continue;
+                var id=note.track+":"+onset+":"+note.pitch+":"+note.tpc;
+                if(!context.seen[id]){context.seen[id]=true;var event=clone(note);event.attackTick=onset;context.events.push(event);context.floor=Math.min(context.floor,note.pitch);}
+            }
+        }
         if(window && state.config.pedalMode===0) {
             var key=part+":"+window.start+":"+window.end;
             var evidence=state.evidence[key]||(state.evidence[key]={weights:{},all:[],seen:{},representative:[]});
@@ -130,6 +325,9 @@ function ingest(state, frame, end) {
     }
 }
 function evaluate(state, row, key) {
+    if(row.segmentResult) {
+        row.pathOptions=row.segmentResult.root>=0?[row.segmentResult]:[null];return;
+    }
     var config=state.config,tonic=tonicAt(row.frame,config),window=row.pedal,result;
     var keyName=Harmony.rootNames[config.keyTonic]||Harmony.pcName(tonic,false),flats=config.manualKey?
         keyName.indexOf("♭")>=0 || keyName.indexOf("♯")<0 && (config.keyMode===1?[0,2,5,7].indexOf(tonic)>=0:tonic===5):(row.frame.keySignature||0)<0;
@@ -151,11 +349,12 @@ function evaluate(state, row, key) {
         var heldBass=bass(heldNotes,row.start);
         // Upper extensions alone must not demote a held accompaniment and invent a new root.
         var bassAttack=freshBass && (!heldBass || freshBass.pitch<=heldBass.pitch+12);
-        var strongAttack=bassAttack && (attacks.length>=3 || heldNotes.some(function(n){return n.pitch>freshBass.pitch+12;}));
+        var freshCount=Harmony.unique(attacks.map(function(n){return n.pitch;})).length;
+        var strongAttack=bassAttack && freshCount>=3;
         for(var n=0;n<row.notes.length;++n) {
             var note=row.notes[n],pc=Harmony.mod12(note.pitch),active=note.end===undefined||note.end>row.start;
             var oldAttack=(note.attackTick===undefined?note.tick:note.attackTick)<row.start;
-            var weight=active?(strongAttack && attacks.length>=3 && oldAttack?.3:1):(strongAttack?.12:.3);
+            var weight=active?(strongAttack && oldAttack?.3:1):(strongAttack?.12:.3);
             // A stepwise passing/neighbor tone does not automatically rename the accompaniment.
             if(active && note.pitch>(heldBass?heldBass.pitch:note.pitch)+12 && ornament(state,row,key,note))weight*=.18;
             weights[pc]=Math.max(weights[pc]||0,weight);
@@ -216,7 +415,7 @@ function emitRegion(state,row,key) {
     else {
         current=clone(result);current.start=row.start;current.end=row.end;current.part=Number(key);
         current.id=key+":"+row.start;current.source=source;
-        current.notes=clone(row.notes);current.bar=row.frame.bar;current.beat=row.frame.beat;
+        current.notes=clone(result.notes||row.notes);current.bar=row.frame.bar;current.beat=row.frame.beat;
         current.pedalStart=window?window.start:-1;state.regions.push(current);state.current=current;
     }
 }
@@ -225,6 +424,7 @@ function step(state, limit) {
         if(state.phase===0) {
             if(state.frameIndex<state.frames.length) {
                 var i=state.frameIndex++,frame=state.frames[i];
+                if(frame.deferredDescription)completeFrame(frame,state.config);
                 ingest(state,frame,i+1<state.frames.length?state.frames[i+1].tick:(frame.scoreEnd||frame.tick+480));
                 continue;
             }
@@ -235,7 +435,13 @@ function step(state, limit) {
             state.regions.sort(function(a,b){return a.start-b.start||a.part-b.part;});state.phase=2;return true;
         }
         key=state.keys[state.partIndex];var rows=state.byPart[key];
-        if(state.partPass==="score") {
+        if(state.partPass==="segments") {
+            var contexts=state.contexts[key]||[];
+            if(state.contextIndex<contexts.length) {
+                if(!state.segmentJob)state.segmentJob=segmentJob(contexts[state.contextIndex]);
+                if(stepSegment(state,state.segmentJob,key)){state.segmentJob=null;++state.contextIndex;}
+            } else state.partPass="score";
+        } else if(state.partPass==="score") {
             if(state.rowIndex<rows.length) {
                 var index=state.rowIndex++;evaluate(state,rows[index],key);scorePath(rows[index],index?rows[index-1]:null);
             } else {
@@ -254,7 +460,7 @@ function step(state, limit) {
                 state.traceChoice=row.pathBack[state.traceChoice];
             } else {state.partPass="emit";state.rowIndex=0;state.current=null;}
         } else if(state.rowIndex<rows.length)emitRegion(state,rows[state.rowIndex++],key);
-        else {state.partIndex++;state.rowIndex=0;state.partPass="score";state.previous=null;state.current=null;}
+        else {state.partIndex++;state.rowIndex=0;state.partPass="segments";state.contextIndex=0;state.segmentJob=null;state.previous=null;state.current=null;}
     }
     return state.phase===2;
 }
@@ -351,13 +557,27 @@ function restore(edits, start, end, part) {
     return result;
 }
 function NumberIsInteger(value,min,max) {return typeof value==="number" && isFinite(value) && Math.floor(value)===value && value>=min && value<=max;}
+function frameDescription(frame) {
+    return {tick:frame.tick,root:frame.root,definition:frame.definition,chord:frame.chord,degree:frame.degree,
+        rootSpelling:frame.rootSpelling,tonicSpelling:frame.tonicSpelling,chromatic:frame.chromatic};
+}
+function completeFrame(frame,config) {
+    var names=tonicNameAt(frame,config),tonic=tonicAt(frame,config),flats=config.manualKey?names.indexOf("♭")>=0 || names.indexOf("♯")<0 && (config.keyMode===1?[0,2,5,7].indexOf(tonic)>=0:tonic===5):(frame.keySignature||0)<0;
+    var result=Harmony.detect(frame.notes.map(function(n){return n.pitch;}),frame.notes);
+    var described=describe(result,frame.notes,frame.tick,tonic,config.keyMode===1,config.degreeMode,flats,names);
+    for(var key in frameDescription(described))if(key!=="tick")frame[key]=described[key];
+    delete frame.deferredDescription;
+}
 function workerBundle(sources) {
     function module(name,source) {
         var clean=source.replace(/^\.(pragma|import).*$/gm,""),names=[],match,pattern=/^(?:function|var)\s+([A-Za-z_$][\w$]*)/gm;
         while((match=pattern.exec(clean)))if(names.indexOf(match[1])<0)names.push(match[1]);
         return "var "+name+"=(function(){\n"+clean+"\nreturn {"+names.map(function(n){return n+":"+n}).join(",")+"};})();\n";
     }
-    return "(function(){\n"+module("Harmony",sources.harmony)+module("Timeline",sources.timeline)+"return {regions:Timeline.build(input.frames,input.config,input.part,[])};})()";
+    return "(function(){\n"+module("Harmony",sources.harmony)+module("Timeline",sources.timeline)+
+        "var deferred=input.frames.map(function(f){return !!f.deferredDescription;});var regions=Timeline.build(input.frames,input.config,input.part,[]);"+
+        "var output={regions:regions,descriptions:input.frames.map(function(f,i){return deferred[i]?Timeline.frameDescription(f):null;})};"+
+        (sources.packed?"return {payload:JSON.stringify(output)};":"return output;")+"})()";
 }
 
 // Move a boundary together with the neighboring harmony, keeping a continuous timeline.
