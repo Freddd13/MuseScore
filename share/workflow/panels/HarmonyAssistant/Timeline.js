@@ -474,7 +474,7 @@ function build(frames, config, fallbackPart, overrides) {
     while(!step(state,128)){}
     return overlay(state.regions,overrides||[]);
 }
-function overlay(regions, overrides) {
+function overlay(regions, overrides, includeSuppressed) {
     if(!overrides.length)return regions.slice();
     var out=clone(regions);
     for(var i=0;i<overrides.length;++i) {
@@ -485,7 +485,7 @@ function overlay(regions, overrides) {
             if(region.start<edit.start){var left=clone(region);left.end=edit.start;next.push(left);}
             if(region.end>edit.end){var right=clone(region);right.start=edit.end;right.id=right.part+":"+right.start;next.push(right);}
         }
-        if(!edit.suppressed){var manual=clone(edit);manual.id=manual.part+":"+manual.start;manual.source=edit.source==="imported"?"imported":"manual";next.push(manual);}
+        if(!edit.suppressed || includeSuppressed){var manual=clone(edit);manual.id=manual.part+":"+manual.start;manual.source=edit.source==="imported"?"imported":"manual";next.push(manual);}
         out=next;
     }
     out.sort(function(a,b){return a.start-b.start||a.part-b.part;});return out;
@@ -540,7 +540,7 @@ function validEdits(edits) {
         out.chord=typeof edit.chord==="string"?edit.chord.slice(0,64):"";
         out.degree=typeof edit.degree==="string"?edit.degree.slice(0,24):"";
         out.chromatic=Harmony.isChromatic(out.tonic,out.minor,out.root,out.definition);
-        if(edit.source==="imported")out.source="imported";
+        if(edit.source==="imported" || edit.source==="manual")out.source=edit.source;
         if(edit.notes!==undefined && (!Array.isArray(edit.notes)||edit.notes.length>512))throw Error("人工区间音符无效");
         out.notes=(edit.notes||[]).map(function(n){
             if(!n || !NumberIsInteger(n.tick,0,2147483647) || !NumberIsInteger(n.track,0,1023) || !NumberIsInteger(n.index,0,127) ||
@@ -552,6 +552,10 @@ function validEdits(edits) {
         });
         return out;
     });
+}
+function importEdits(regions, overrides) {
+    var imported=validEdits(regions).map(function(region){region.source="imported";return region;});
+    return validEdits(overlay(imported,validEdits(overrides),true));
 }
 function restore(edits, start, end, part) {
     var result=[];

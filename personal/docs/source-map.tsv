@@ -78,7 +78,7 @@ MIDI左右手拆分	importexport/midiimport/importmidi_lrhand.h	void splitIntoLe
 插件实时观察	mscore/plugin/api/scoreobserver.cpp	ScoreObserver::ScoreObserver(	54	GUI 心跳与生命周期；不修改音频回调	mtest/mscore/scoreobserver
 持续音缓存	mscore/plugin/api/scoreobserver.cpp	void ScoreObserver::ensureIndex(	172	内容状态/范围失效，每声部二分持续音	mtest/mscore/scoreobserver
 屏幕临时音符颜色	mscore/scoreview.cpp	void ScoreView::setNotePreviewColors(	5765	按 owner 隔离的屏幕色层，旧新局部重绘	mtest/mscore/scoreobserver
-和声辅助插件	share/plugins/HarmonyAssistant/HarmonyAssistant.view.qml	    function followNativePosition()	1126	插件音乐解释、级数、功能音和 GUI 播放合并	mtest/mscore/scoreobserver
+和声辅助插件	share/plugins/HarmonyAssistant/HarmonyAssistant.view.qml	    function followNativePosition()	1189	插件音乐解释、级数、功能音和 GUI 播放合并	mtest/mscore/scoreobserver
 踏板/琶音上下文	mscore/plugin/api/scoreobserver.cpp	QVariantMap ScoreObserver::contextSnapshot(	343	即时音/上下文分离，小节/休止/踏板边界	mtest/mscore/scoreobserver
 谱面屏幕标注	mscore/plugin/api/scoreobserver.cpp	void ScoreObserver::applyPreview(	423	独立和声变化标记、原谱优先与两层避让	mtest/mscore/pluginhost
 插件停靠状态	mscore/plugin/qmlplugin.cpp	void QmlPlugin::attachPanelDock(	64	实际区域/悬浮通知，可选横条高度	mtest/mscore/pluginhost
@@ -361,7 +361,7 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	241	空列�
 插件控件识别	mscore/plugin/mscorePlugins.cpp	static bool personalSupportComponent(	534	元信息扫描跳过本项目公共界面控件，保留真实插件	mtest/mscore/pluginhost/variant_metadata_076_tests.inc
 完整谱工作区迁移	share/plugins/ArrangementVariants/ArrangementVariants_MS3.qml	function saveAt(url)	148	另存索引时保持已有材料路径，保存切换与删除恢复	mtest/mscore/pluginhost/variant_metadata_076_tests.inc
 和弦独立面板样式	share/workflow/panels/HarmonyAssistant/HarmonyStyleEditor.qml	Column {	5	摘要与详情分别调整内容、音乐字体、排列及间距	mtest/mscore/pluginhost/harmony_panel_077_tests.inc
-人工和弦随改音更新	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	function correctionStructure()	222	按小节与谱表结构判断人工范围，改音后保留解释	mtest/mscore/pluginhost/harmony_panel_077_tests.inc
+人工和弦随改音更新	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	function correctionStructure()	226	按小节与谱表结构判断人工范围，改音后保留解释	mtest/mscore/pluginhost/harmony_panel_077_tests.inc
 人工和弦当前音符	share/workflow/panels/HarmonyAssistant/Timeline.js	function refreshNotes(	493	按范围与声部读取当前音符，保留用户指定的和弦	mtest/mscore/pluginhost/harmony_panel_077_tests.inc
 频谱时间范围	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::fitTimeRange(	608	完整音频与按谱片段、匹配显示、逐音轨选择保存	mtest/mscore/pluginhost/spectrum_078_tests.inc
 共同时间缩放	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::zoomTimeline(	202	卷帘和频谱共用缩放中心与时间滚动范围	mtest/mscore/pluginhost/spectrum_078_tests.inc
@@ -482,14 +482,21 @@ CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件�
 和弦拼写比较	share/workflow/panels/HarmonyAssistant/Harmony.js	spellingEvidence / spellingFit	65	谱上字母与升降号参与根音候选	harmonySpellingAcrossViews109 / test-theory-corpus.cjs
 拼写级数	share/workflow/panels/HarmonyAssistant/Harmony.js	roman	202	按根音和主音字母得到级数及转位	harmonySpellingAcrossViews109
 统一和弦描述	share/workflow/panels/HarmonyAssistant/Timeline.js	describe / tonicNameAt	49	名称、低音、级数及调性拼写共同传递	harmonySpellingAcrossViews109
-关谱后重新读取	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	ownsCurrentScore / changeScore	621	实际读取对象与当前谱一起核对	harmonySpellingAcrossViews109
+关谱后重新读取	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	ownsCurrentScore / changeScore	671	实际读取对象与当前谱一起核对	harmonySpellingAcrossViews109
 踏板中的调性解释	share/workflow/panels/HarmonyAssistant/Timeline.js	evaluate	332	同一踏板按所在调性更新级数	harmonyPedalContext110 / test-pedal-context.cjs
 踏板中的明确边界	share/workflow/panels/HarmonyAssistant/Timeline.js	emitRegion	412	按来源保留导入边界，自动分解和弦继续合并	harmonyPedalContext110
 连续和弦候选	share/workflow/panels/HarmonyAssistant/Timeline.js	segmentJob	95	踏板内按低音、起音和音高变化比较区间	harmonySegmentCorpus111 / test-segments.cjs
 连续和弦评分	share/workflow/panels/HarmonyAssistant/Timeline.js	rankSegment	142	构成音覆盖、扩展时长和有界缓存	harmonySegmentCorpus111 / test-segments.cjs
 分批和弦区间	share/workflow/panels/HarmonyAssistant/Timeline.js	stepSegment	225	每步一个候选，保留真变化并合并重复解释	harmonySegmentCorpus111 / test-segments.cjs
-后台和弦描述	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	frameSnapshot / applyFrameDescriptions	471	分批读取，后台统一识别并返回逐帧名称	harmonySpellingAcrossViews109 / test-deferred.cjs
+后台和弦描述	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	frameSnapshot / applyFrameDescriptions	505	分批读取，后台统一识别并返回逐帧名称	harmonySpellingAcrossViews109 / test-deferred.cjs
 乐器调性	share/workflow/panels/HarmonyAssistant/Timeline.js	frameForPart	68	各乐器分别采用所属调号	harmonyPartKeys112 / test-part-keys.cjs
 人工和弦拼写	share/workflow/panels/HarmonyAssistant/Timeline.js	validEdits	527	保存根音与主音的升降号拼写	harmonyPartKeys112 / test-part-keys.cjs
-即时摘要更新	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	clearDisplay / displayTick	729	清空结果后继续更新，读取当前乐器	harmonyWindow112 / harmonySpellingAcrossViews109
+即时摘要更新	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	clearDisplay / displayTick	780	清空结果后继续更新，读取当前乐器	harmonyWindow112 / harmonySpellingAcrossViews109
 分乐器上下文	mscore/plugin/api/scoreobserver.cpp	contextNotes / contextSnapshot	313	保留各乐器同音与调号	harmonyPartKeys112 / harmonyWindow112
+导入区间整理	share/workflow/panels/HarmonyAssistant/Timeline.js	importEdits	556	导入、人工与隐藏合为有效范围，重复导入保持数量	harmonyImportRoundTrip113 / test-analysis-roundtrip.cjs
+谱内分析写入	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	writeCorrections	268	成功保存后更新面板，一次原生撤销	harmonyImportRoundTrip113 / test-analysis-roundtrip.cjs
+分析文件操作	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	exchangeFile	621	完整检查、旧帧转区间及按钮旁反馈	harmonyImportRoundTrip113 / test-analysis-roundtrip.cjs
+重新自动检测	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	reanalyseImported	287	移除导入来源，保留人工修改及撤销	harmonyImportRoundTrip113 / test-analysis-roundtrip.cjs
+导入调性	share/workflow/panels/HarmonyAssistant/Analysis.js	interpretationConfig	38	旧帧沿用文件调性，保留当前外观设置	harmonyLegacyAndFailure113 / harmonyScopedImport113
+统一调性显示	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	displayInterpretation	986	级数、离调颜色及导出使用相同调性	harmonyLegacyAndFailure113 / harmonyScopedImport113
+按乐器处理分析	share/workflow/panels/HarmonyAssistant/HarmonyAssistant.view.qml	regionInScope	219	导入、导出和重新检测保留范围外记录	harmonyLegacyAndFailure113 / harmonyScopedImport113

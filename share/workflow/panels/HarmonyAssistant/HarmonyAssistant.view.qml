@@ -48,7 +48,7 @@ MuseScore {
     property bool fixedChordNative: observer && typeof observer.setActiveScorePreview === "function"
     property bool dualDetailActive:ribbon && configuration.dualPanel && typeof root.detailPanelVisible==="boolean" && root.detailPanelVisible
     property bool dualSummaryActive:!ribbon && configuration.dualPanel && typeof root.summaryPanelVisible==="boolean" && root.summaryPanelVisible
-    property bool chromaticChord: Harmony.isChromatic(Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,chordRoot,chordDefinition)
+    property bool chromaticChord: Harmony.isChromatic(tonicForRegion(configuration.detailMode===1?summaryRegion:null),minorForRegion(configuration.detailMode===1?summaryRegion:null),chordRoot,chordDefinition)
     property color chordInk:configuration.chromaticAccent && chromaticChord ? configuration.chromaticColor : configuration.detailColor || ink
     property var contextNotes: []
     property var analysisRecords: []
@@ -97,12 +97,13 @@ MuseScore {
     property string summaryDegreeText: !summaryRegion ? instantDegreeText : degreeForRegion(summaryRegion)
     property int summaryRoot: !summaryRegion ? displayedLiveHarmony?displayedLiveHarmony.root:-1 : summaryRegion.root
     property int summaryDefinition: !summaryRegion ? displayedLiveHarmony?displayedLiveHarmony.definition:-1 : summaryRegion.definition
-    property color summaryInk: configuration.chromaticAccent && Harmony.isChromatic(Harmony.rootPcs[keyTonic.currentIndex],keyMode.currentIndex===1,summaryRoot,summaryDefinition) ? configuration.chromaticColor : configuration.summaryColor || ink
+    property color summaryInk: configuration.chromaticAccent && Harmony.isChromatic(tonicForRegion(summaryRegion),minorForRegion(summaryRegion),summaryRoot,summaryDefinition) ? configuration.chromaticColor : configuration.summaryColor || ink
     property var summaryToneRows:makeToneRows(summaryRoot,summaryDefinition,resultNotes(summaryRegion))
     property int analysisEnd: analysisRecords.length ? (analysisRecords[analysisRecords.length-1].scoreEnd || analysisRecords[analysisRecords.length-1].tick+480) : 1920
     property var pendingRecords: []
     property var importedRecords: []
     property var importedRegions: []
+    readonly property bool usingImportedAnalysis:importedRecords.length>0 || importedRegions.some(function(region){return root.regionInScope(region)}) || manualOverrides.some(function(region){return region.source==="imported"&&root.regionInScope(region)})
     property string analysisFingerprint: ""
     property int analysisNextTick: 0
     property bool analysisDirty: true
@@ -161,6 +162,8 @@ MuseScore {
     property string scopeText: "当前乐器 · 包含全部声部"
     property string positionText: "—"
     property string noticeText: ""
+    property string fileNotice: ""
+    property string fileNoticeKind: "analysis"
     property string placementNotice: ""
     property color ink: theme.text
     property color muted: theme.muted
@@ -213,9 +216,10 @@ MuseScore {
         return firstTrack
     }
     function highlightedTick() {return lastPlaying && followPlayback.checked ? currentTick : annotationTick>=0 ? annotationTick : currentTick}
+    function regionInScope(region){return region.part>=firstTrack&&region.part<endTrack}
     function rebuildRegions() {
         var edits=manualNeedsReview?[]:refreshedOverrides
-        analysisRegions=Timeline.overlay(Timeline.overlay(automaticRegions,importedRegions),edits).map(function(region){region.degree=root.degreeForRegion(region);return region})
+        analysisRegions=Timeline.overlay(Timeline.overlay(automaticRegions.filter(root.regionInScope),importedRegions.filter(root.regionInScope)),edits.filter(root.regionInScope)).map(root.displayInterpretation)
         if(!analysisDirty && observer && typeof observer.publishHarmonyAnalysis==="function")
             observer.publishHarmonyAnalysis({snapshotId:observer.analysisContentRevision(),regions:analysisRegions,source:"HarmonyAssistant",schema:1})
     }
@@ -248,7 +252,7 @@ MuseScore {
             }
         }
         var saved=observer.loadConfiguration("HarmonyAssistant-regions-"+analysisFingerprint)
-        if(saved.schema===1 && saved.fingerprint===analysisFingerprint) {
+        if(saved.schema===1 && saved.fingerprint===analysisFingerprint && !saved.inScore) {
             try{manualOverrides=Timeline.validEdits(saved.overrides);manualPositions=AnnotationEdits.positions(saved.positions)}catch(error){noticeText="人工范围未读取："+error}
         }
     }
@@ -256,19 +260,49 @@ MuseScore {
         if(nativeCorrectionWrite||!observer||typeof observer.workflowData!=="function")return
         var saved=observer.workflowData("harmony"),json=JSON.stringify(saved)
         if(!nativeCorrectionsJSON.length||json===nativeCorrectionsJSON)return
-        nativeCorrectionsJSON=json;manualOverrides=Timeline.validEdits(saved.overrides||[]);manualPositions=AnnotationEdits.positions(saved.positions||[])
+        nativeCorrectionsJSON=json;fileNotice="";manualOverrides=Timeline.validEdits(saved.overrides||[]);manualPositions=AnnotationEdits.positions(saved.positions||[])
         loadedStructure=saved.structure||correctionStructure();manualNeedsReview=loadedStructure!==correctionStructure()
         loadedFingerprint=analysisFingerprint
         rebuildRegions();applyScorePreview();syncScoreRangeEditor()
     }
+    function writeCorrections(data) {
+        var result
+        nativeCorrectionWrite=true
+        try {result=observer.setWorkflowData("harmony",data)}
+        finally {nativeCorrectionWrite=false}
+        if(result.error){noticeText=result.error;return false}
+        nativeCorrectionsJSON=JSON.stringify(observer.workflowData("harmony"))
+        return true
+    }
     function saveCorrections(inScore) {
-        if(!advancedNative || !loadedFingerprint.length || manualNeedsReview)return
+        if(!advancedNative || !loadedFingerprint.length || manualNeedsReview)return false
         if(inScore&&typeof observer.setWorkflowData==="function"){
             var data={schema:2,fingerprint:loadedFingerprint,structure:loadedStructure,overrides:manualOverrides,positions:manualPositions}
-            nativeCorrectionWrite=true;var result=observer.setWorkflowData("harmony",data);nativeCorrectionWrite=false
-            if(result.error){noticeText=result.error;return}nativeCorrectionsJSON=JSON.stringify(observer.workflowData("harmony"))
+            if(!writeCorrections(data))return false
         }
-        if(!observer.saveConfiguration("HarmonyAssistant-regions-"+loadedFingerprint,{schema:1,fingerprint:loadedFingerprint,overrides:manualOverrides,positions:manualPositions}))noticeText="人工范围保存失败。"
+        var embedded=nativeCorrectionsJSON.length && JSON.parse(nativeCorrectionsJSON).schema===2
+        if(!observer.saveConfiguration("HarmonyAssistant-regions-"+loadedFingerprint,{schema:1,fingerprint:loadedFingerprint,overrides:manualOverrides,positions:manualPositions,inScore:embedded}))noticeText="人工范围保存失败。"
+        return true
+    }
+    function reanalyseImported() {
+        var next=manualOverrides.filter(function(region){return region.source!=="imported"||!root.regionInScope(region)})
+        fileNoticeKind="analysis"
+        if(next.length===manualOverrides.length&&!importedRecords.length&&!importedRegions.length){optionsChanged();fileNotice="已开始重新检测。";return}
+        var data={schema:2,fingerprint:analysisFingerprint,structure:correctionStructure(),overrides:next,positions:manualPositions}
+        if(!writeCorrections(data)){fileNotice=noticeText;noticeText="";return}
+        manualOverrides=next;importedRecords=[];importedRegions=[];loadedFingerprint=data.fingerprint;loadedStructure=data.structure
+        saveCorrections();rebuildRegions();optionsChanged();fileNotice="已改用自动检测，手动修改继续保留。"
+    }
+    function regionsFromImportedFrames(frames,context,configuration) {
+        var matching=analysisFingerprint===context.fingerprint
+        var rows=frames.filter(function(frame){return frame.tick<context.scoreEnd}).map(function(frame){
+            var out=Timeline.clone(frame),current=matching?Analysis.atTick(analysisRecords,frame.tick):null
+            if(!current || current.tick!==frame.tick)current=observer.contextSnapshot(frame.tick,firstTrack,endTrack,false,0,false)
+            out.parts=current.parts;out.keySignature=current.keySignature;out.scoreEnd=context.scoreEnd;out.imported=true
+            var named=/^[A-G][♯♭#b]*/.exec(out.chord||"");if(named)out.rootSpelling=named[0]
+            return out
+        })
+        return Timeline.build(rows,Analysis.interpretationConfig(configuration,collectPreferences()),firstTrack,[])
     }
     function editRange(command,start,end,rootIndex,qualityIndex,bassIndex) {
         if(analysisDirty){noticeText="正在更新和声区间，请稍候。";return}
@@ -585,36 +619,52 @@ MuseScore {
     }
     function chooseFile(action) {pendingFileAction=action; exchangeDialog.open()}
     function exchangeFile(path) {
+        fileNoticeKind=pendingFileAction.indexOf("config")>=0?"config":"analysis"
         try {
             var action=pendingFileAction, content=""
             if(action.indexOf("import")===0) {
                 content=observer.readTextFile(path)
                 if(!content.length)throw Error("文件为空、超过 16 MiB 或无法读取")
                 var parsed=JSON.parse(content)
-                if(action==="import-config") {applyPreferences(Preferences.clean(parsed));savePreferences();noticeText="配置已导入并保存。"}
+                if(action==="import-config") {applyPreferences(Preferences.clean(parsed));savePreferences();fileNotice="配置已导入并保存。"}
                 else {
                     var imported=Analysis.validate(parsed)
                     // Validate every section before changing memory or persisted corrections.
-                    var overrides=Timeline.validEdits(imported.overrides||[]),regions=Timeline.validEdits(imported.regions||[])
+                    var overrides=Timeline.validEdits(imported.overrides||[]),regions=Timeline.validEdits(imported.regions||[]),positions=AnnotationEdits.positions(imported.positions)
                     setScope()
                     var context=observer.contextSnapshot(0,firstTrack,endTrack,pedalContext.checked,windowTicks(),false),fingerprint=context.fingerprint
-                    if(imported.fingerprint!==fingerprint)throw Error("分析与当前乐谱 / 乐器范围不一致，未应用")
+                    if(imported.fingerprint!==fingerprint)throw Error("请切回导出时的乐谱与识别范围，再导入这个文件。")
+                    imported.frames.forEach(function(frame){
+                        if(frame.tick>context.scoreEnd || frame.tick===context.scoreEnd&&(frame.root>=0||frame.notes.length))throw Error("分析位置超出乐谱范围")
+                        frame.notes.forEach(function(note){if(note.track<firstTrack||note.track>=endTrack||note.tick>=context.scoreEnd)throw Error("分析音符超出当前乐器范围")})
+                    })
+                    if(!regions.length&&imported.frames.length)regions=regionsFromImportedFrames(imported.frames,context,imported.configuration)
                     overrides.concat(regions).forEach(function(r){if((context.scoreEnd && r.end>context.scoreEnd) || r.part<firstTrack || r.part>=endTrack || partForTrack(r.part)!==r.part)throw Error("分析区间超出乐谱 / 乐器范围")})
-                    manualOverrides=overrides;manualPositions=AnnotationEdits.positions(imported.positions);loadedFingerprint=fingerprint;loadedStructure=correctionStructure();manualNeedsReview=false;editUndo=[];editRedo=[];saveCorrections(true)
-                    importedRegions=regions;importedRegions.forEach(function(r){r.source="imported"})
-                    importedRecords=importedRegions.length?[]:imported.frames; analysisDirty=true; scheduleAnalysis(); requestRefresh(false)
-                    noticeText="已导入 "+imported.frames.length+" 个分析切片。"
+                    positions.forEach(function(position){if(position.tick>=context.scoreEnd||position.part<firstTrack||position.part>=endTrack||partForTrack(position.part)!==position.part)throw Error("记号位置超出当前乐器范围")})
+                    var next=Timeline.importEdits(regions,overrides),structure=correctionStructure()
+                    var saved=observer.workflowData("harmony")
+                    var previousEdits=saved.schema===2?Timeline.validEdits(saved.overrides||[]):manualOverrides
+                    var previousPositions=saved.schema===2?AnnotationEdits.positions(saved.positions||[]):manualPositions
+                    var retainedEdits=previousEdits.filter(function(region){return !root.regionInScope(region)})
+                    var retainedPositions=previousPositions.filter(function(position){return !root.regionInScope(position)})
+                    if((retainedEdits.length||retainedPositions.length)&&saved.structure&&saved.structure!==structure)throw Error("其他乐器的人工范围需要复核。请先在「修改和弦与范围」完成复核，再导入。")
+                    var allEdits=retainedEdits.concat(next),allPositions=retainedPositions.concat(positions)
+                    if(!writeCorrections({schema:2,fingerprint:fingerprint,structure:structure,overrides:allEdits,positions:allPositions})){var reason=noticeText;noticeText="";throw Error(reason)}
+                    manualOverrides=allEdits;manualPositions=allPositions;loadedFingerprint=fingerprint;loadedStructure=structure;manualNeedsReview=false;editUndo=[];editRedo=[]
+                    importedRecords=[];importedRegions=[];saveCorrections();rebuildRegions();optionsChanged()
+                    var visibleCount=next.filter(function(region){return !region.suppressed}).length,hiddenCount=next.length-visibleCount
+                    noticeText="";fileNotice="已导入 "+visibleCount+" 段和弦解释"+(hiddenCount?"、"+hiddenCount+" 处隐藏":"")+"。保存乐谱后保留。"
                 }
             } else {
                 content=action==="export-config" ? JSON.stringify(collectPreferences(),null,2) :
                     action==="csv" ? Analysis.csvRegions(analysisRegions) :
-                    JSON.stringify(Analysis.document(analysisRecords,analysisFingerprint,collectPreferences(),analysisRegions,manualOverrides,manualPositions),null,2)
+                    JSON.stringify(Analysis.document(analysisRecords,analysisFingerprint,collectPreferences(),analysisRegions,manualOverrides.filter(root.regionInScope).map(root.displayInterpretation),manualPositions.filter(root.regionInScope)),null,2)
                 var suffix=action==="csv"?".csv":".json"
                 if(path.toLowerCase().slice(-suffix.length)!==suffix)path+=suffix
                 if(!observer.writeTextFile(path,content))throw Error("无法写入文件")
-                noticeText="已导出："+decodeURIComponent(path)
+                fileNotice="已导出："+decodeURIComponent(path)
             }
-        } catch(error) {noticeText="操作未完成："+String(error)}
+        } catch(error) {fileNotice="操作未完成："+String(error)}
     }
 
     function same(a, b) { return a && b && a.is(b) }
@@ -704,6 +754,7 @@ MuseScore {
         buildTimer.stop()
         buildSegment = null
         ownerScore = curScore
+        fileNotice="";fileNoticeKind="analysis"
         lastLiveHarmony=null;displayedLiveHarmony=null
         if (observer) observer.score = curScore
         colorLedger = []
@@ -929,14 +980,22 @@ MuseScore {
         repaintNotes()
         scheduleAnalysis()
     }
+    function tonicForRegion(region){return manualKey||!region||region.tonic===undefined?Harmony.rootPcs[keyTonic.currentIndex]:region.tonic}
+    function minorForRegion(region){return manualKey||!region||region.minor===undefined?keyMode.currentIndex===1:region.minor}
+    function tonicNameForRegion(region){return manualKey||!region||region.tonic===undefined?keySpelling():region.tonicSpelling||Harmony.pcName(region.tonic,prefersFlats())}
+    function displayInterpretation(region){
+        var shown={};for(var field in region)shown[field]=region[field]
+        shown.tonic=tonicForRegion(region);shown.minor=minorForRegion(region);shown.tonicSpelling=tonicNameForRegion(region)
+        shown.degree=degreeForRegion(shown);shown.chromatic=Harmony.isChromatic(shown.tonic,shown.minor,shown.root,shown.definition)
+        return shown
+    }
     function degreeForRegion(region) {
         if(!region)return "—"
-        var tonic=manualKey||region.tonic===undefined?Harmony.rootPcs[keyTonic.currentIndex]:region.tonic
-        var minor=manualKey||region.minor===undefined?keyMode.currentIndex===1:region.minor
+        var tonic=tonicForRegion(region),minor=minorForRegion(region)
         var bassName=region.bassName||Harmony.spelledName(region.bassTpc,region.bass,prefersFlats())
         var named=/^[A-G][♯♭#b]*/.exec(region.chord||"")
         return Harmony.roman(tonic,minor,region.root,region.definition,configuration.degreeMode,region.bass,bassName,
-            region.rootSpelling||(named?named[0]:""),manualKey?keySpelling():region.tonicSpelling||keySpelling())
+            region.rootSpelling||(named?named[0]:""),tonicNameForRegion(region))
     }
     function resultNotes(region) {
         return region && currentTick<region.end ? region.notes : contextNotes.length?contextNotes:currentNotes
@@ -967,7 +1026,11 @@ MuseScore {
         if(configuration.detailMode===1 && summaryRegion) {
             chordRoot=summaryRegion.root;chordDefinition=summaryRegion.definition
             chordText=summaryRegion.chord;degreeText=degreeForRegion(summaryRegion)
-            matchText=(currentTick>=summaryRegion.end?"保留上一和弦 · ":"所属和弦 · ")+(summaryRegion.source==="manual"?"人工修正":summaryRegion.kind||"已识别")
+            var sourceLabel=summaryRegion.source==="manual"?"人工修正":summaryRegion.source==="imported"?"导入分析":summaryRegion.kind||"已识别"
+            if(summaryRegion.source==="imported"){
+                sourceLabel+=" · "+tonicNameForRegion(summaryRegion)+(minorForRegion(summaryRegion)?"小调":"大调")
+            }
+            matchText=(currentTick>=summaryRegion.end?"保留上一和弦 · ":"所属和弦 · ")+sourceLabel
             inversionText=(summaryRegion.inversion||Harmony.inversion(Harmony.labelFor(summaryRegion.bass,chordRoot,chordDefinition)))+(summaryRegion.bass>=0?" · 低音 "+Harmony.pcName(summaryRegion.bass,prefersFlats()):"")
             var candidates=summaryRegion.alternatives||[]
             alternativesText=candidates.length?"也可能是 "+candidates.map(function(a){return nameOf(a.root)+Harmony.defs[a.definition].suffix}).join(" / "):""
@@ -1160,7 +1223,7 @@ MuseScore {
         requestRefresh(true)
     }
     onScoreStateChanged: {
-        if (!started || internalChange) return
+        if (!started || internalChange || nativeCorrectionWrite) return
         syncNativeCorrections()
         if (state.undoRedo && !observer) {
             // Never change the score from an undo/redo callback. Keep the inspector read-only.
@@ -1531,7 +1594,7 @@ Flickable {
                     UiLabel {
                         width:parent.width; font.pixelSize:10; color:muted; wrapMode:Text.Wrap
                         visible:settingsExpanded || !playbackAvailable
-                        text:observer?"跟随音序器发声音；选中状态与播放标记保持可见。":playbackAvailable?"读取真实播放位置；播放中仅更新面板。":"当前主程序没有提供播放位置接口，暂时跟随选区。"
+                        text:observer?"播放时显示当前位置的和弦，原有选音继续可见。":playbackAvailable?"面板跟随实际播放位置更新。":"当前主程序按选区更新显示。"
                     }
                     DeskSwitch {
                             font.family: theme.fontFamily;
@@ -1544,7 +1607,7 @@ Flickable {
                     UiLabel {
                         width:parent.width; font.pixelSize:10; color:muted; wrapMode:Text.Wrap
                         visible:scoreColoring.checked || settingsExpanded
-                        text:observer?"仅屏幕预览，不改音符原色、撤销记录或保存 / 导出内容。":"开启会修改谱面颜色并产生撤销记录。保存 / 导出前请恢复原色；面板配色始终可用。"
+                        text:observer?"临时功能色和音旁文字用于屏幕分析。打印、PDF采用原谱颜色。":"谱面配色记录在乐谱里。点「恢复原色」还原，面板配色可继续使用。"
                     }
                     Flow {
                         width:parent.width;spacing:6
@@ -1564,21 +1627,24 @@ Flickable {
                         DeskButton {iconName:"save";text:"导出配置";enabled:advancedNative;onClicked:chooseFile("export-config")}
                     }
                     UiLabel {width:parent.width; text:"设置自动保存，下次启动自动读取。"; color:muted; font.pixelSize:10; wrapMode:Text.Wrap}
+                    StableLabel {reservedLines:2;text:root.fileNoticeKind==="config"?root.fileNotice:"";visible:root.fileNoticeKind==="config"&&root.fileNotice.length>0;color:muted;font.pixelSize:10}
                 }
 
                 PanelCard {
-                    heading:"全谱和弦分析";collapsed:configuration.collapsedSections.indexOf("exchange")>=0;onToggleRequested:root.toggleSection("exchange")
+                    objectName:"harmonyExchangeCard"
+                    heading:"分析文件";collapsed:configuration.collapsedSections.indexOf("exchange")>=0;onToggleRequested:root.toggleSection("exchange")
                     width:root.expanded ? (panel.width-10)/2 : panel.width
                     visible:settingsExpanded
 
                     Flow {
                         width:parent.width; spacing:6
-                        DeskButton {iconName:"save";text:"导出 JSON"; enabled:advancedNative; onClicked:prepareExport("json")}
-                        DeskButton {text:"导出 CSV"; enabled:advancedNative; onClicked:prepareExport("csv")}
-                        DeskButton {text:"导入 JSON"; enabled:advancedNative; onClicked:chooseFile("import-analysis")}
-                        DeskButton {text:"重新检测"; enabled:advancedNative; onClicked:{importedRecords=[];importedRegions=[]; optionsChanged()}}
+                        DeskButton {iconName:"save";text:"导出 JSON"; enabled:advancedNative&&!!root.ownerScore; onClicked:prepareExport("json")}
+                        DeskButton {text:"导出 CSV"; enabled:advancedNative&&!!root.ownerScore; onClicked:prepareExport("csv")}
+                        DeskButton {text:"导入 JSON"; enabled:advancedNative&&!!root.ownerScore; onClicked:chooseFile("import-analysis")}
+                        DeskButton {objectName:"harmonyReanalyseImported";text:"重新检测"; enabled:advancedNative&&!!root.ownerScore; onClicked:root.reanalyseImported();ToolTip.visible:hovered;ToolTip.text:"移除导入的解释，按当前音符重新分析；手动修改继续保留。"}
                     }
-                    UiLabel {width:parent.width; text:root.analysisStatus+(importedRecords.length?" · 使用导入分析":""); color:muted; font.pixelSize:11; wrapMode:Text.Wrap}
+                    UiLabel {width:parent.width; text:root.analysisStatus+(root.usingImportedAnalysis?" · 含导入解释":""); color:muted; font.pixelSize:11; wrapMode:Text.Wrap}
+                    StableLabel {reservedLines:2;text:root.fileNoticeKind==="analysis"?root.fileNotice:"";color:muted;font.pixelSize:10}
                 }
             }
         }
