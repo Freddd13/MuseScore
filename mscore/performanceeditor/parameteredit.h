@@ -24,6 +24,10 @@ bool restoreTempo(Score*, int tick, QString* error = nullptr, const TempoText* p
 bool editTempoCurve(TextLine*, const QMap<Pid, QVariant>&, QString* error = nullptr);
 bool detachTempoCurve(TextLine*, QString* error = nullptr);
 bool pedal(Score*, int track, int from, int until, Pedal* target, QString* error = nullptr);
+// Paint a held interval or an up gap without altering notes or unrelated instruments.
+bool paintPedal(Score*, int track, int from, int until, bool down, QString* error = nullptr);
+bool splitPedal(Score*, Pedal*, int tick, QString* error = nullptr);
+bool removePedal(Score*, Pedal*, QString* error = nullptr);
 }
 }
 #endif

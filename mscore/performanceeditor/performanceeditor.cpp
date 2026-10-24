@@ -127,10 +127,20 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _staffMenu = new QMenu(staffButton); staffButton->setMenu(_staffMenu); row->addWidget(staffButton);
       connect(_staffMenu, &QMenu::aboutToShow, this, &PerformanceEditor::rebuildStaffMenu);
       _tool = combo({tr("拖动"), tr("铅笔"), tr("直线")}, "performanceTool");
+      _pedalTool = combo({tr("选择／拖动"), tr("画踩下段"), tr("画抬起间隙"), tr("分开")}, "performancePedalTool");
+      for (int i = 0; i < 4; ++i) _pedalTool->setItemIcon(i, componentToolIcon(QStringList{"select", "down", "up", "line"}[i]));
+      _pedalTool->hide();
+      _pedalTool->setToolTip(tr("选择：拖两端改时机，拖内部移动整段；空白处仍可画踩下段。画抬起间隙：划过已有踏板。分开：在段内点一下。"));
+      connect(_pedalTool, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { cancelGesture(); status(); updateSurfaces(); });
       _pedalGrid = combo({tr("踏板 1/16"), tr("踏板 1/32"), tr("踏板 1/64"), tr("踏板 1/128"), tr("踏板自由"), tr("踏板音符边界")}, "performancePedalGrid");
       _pedalGrid->setCurrentIndex(qBound(0, QSettings().value("performanceEditor/pedalGrid", 0).toInt(), 5)); _pedalGrid->hide();
       _pedalGrid->setToolTip(tr("按小节起点吸附细分；自由模式精确到 1 tick。不会添加音符或休止。"));
       connect(_pedalGrid, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int value) { cancelGesture(); QSettings().setValue("performanceEditor/pedalGrid", value); });
+      _pedalDelete = new QToolButton(this); _pedalDelete->setObjectName("performanceDeletePedal");
+      _pedalDelete->setText(tr("删除踏板")); _pedalDelete->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+      setComponentToolIcon(_pedalDelete, "delete"); _pedalDelete->setToolTip(tr("删除选中的踏板段，Delete也可使用；Ctrl+Z撤销。"));
+      _pedalDelete->hide(); _pedalDelete->setEnabled(false); row->addWidget(_pedalDelete);
+      connect(_pedalDelete, &QToolButton::clicked, this, &PerformanceEditor::deleteSelectedPedal);
       row->setAlignment(Qt::AlignLeft);
       toolLayout->addLayout(row);
       _playButton = new QToolButton(this); _playButton->setObjectName("performancePlay"); _playButton->setText(tr("播放"));
@@ -294,10 +304,12 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       for (auto box : {_axis, _parameter, _tool}) connect(box, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
             _visibleScoreRect=QRect();finishWheel(); cancelGesture(); _selectedCurve = nullptr; _curveIndex = -1;
             const bool velocity = _parameter->currentIndex() == 0;
-            _pedalGrid->setVisible(_parameter->currentIndex() == 2); _tool->setEnabled(_parameter->currentIndex() != 2);
+            _pedalGrid->setVisible(_parameter->currentIndex() == 2);
+            _pedalTool->setVisible(_parameter->currentIndex() == 2); _pedalDelete->setVisible(_parameter->currentIndex() == 2);
+            _tool->setVisible(_parameter->currentIndex() != 2); _tool->setEnabled(_parameter->currentIndex() != 2); syncPedalSelection();
             _tool->setItemText(0, _parameter->currentIndex() == 1 ? tr("节点 · 点按添加") : tr("拖动"));
             _parameterHint->setText(_parameter->currentIndex() == 1 ? tr("节点：空白点按添加，上下拖动改 BPM。rit.：拖首尾圆点或曲率菱形，右键解除关联后可自由画速度。时间尺定位播放。")
-                  : (_parameter->currentIndex() == 2 ? tr("踏板按乐器共享。空白水平拖动建立区间，拖两端改时机。开=127（顶端），关=0；菱形表示非音符边界。时间尺定位播放。") : QString()));
+                  : (_parameter->currentIndex() == 2 ? tr("踏板按乐器共享。向右三角为踩下，向左三角为抬起；拖两端改时机，拖内部移动整段。可画踩下段、抬起间隙或分开。时间尺定位播放。") : QString()));
             _parameterHint->hide();
             _parameter->setToolTip(_parameterHint->text()); _tool->setToolTip(_parameterHint->text()); _ruler->setToolTip(_parameterHint->text());
             _axis->setEnabled(velocity); _axis->setVisible(velocity);
@@ -324,7 +336,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             connect(seq, &Seq::heartBeat, this, [this](int, int, int) { syncTransport(); playbackNotes(); });
             }
       if (mscore) connect(mscore, &MuseScore::scoreStateChanged, this, [this](ScoreState state) {
-            if (state == STATE_PLAY) { cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); }
+            if (state == STATE_PLAY) { cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); } syncPedalSelection();
             });
       _playTimer.setParent(this); _playTimer.setObjectName("performancePlaybackTimer");
       _playTimer.setInterval(16); _playTimer.setTimerType(Qt::PreciseTimer);
@@ -367,7 +379,7 @@ void PerformanceEditor::setView(ScoreView* view)
       if (_view) { invalidateOverlay(); if (_trackingOwned) _view->setMouseTracking(_trackingBefore || _view->noteEntryMode() || _view->fotoMode()); _trackingOwned = false; _view->removeEventFilter(this); }
       if (_score) _score->removeViewer(this);
       disconnect(_scoreDestroyed);
-      _view = view; _score = next;
+      _view = view; _score = next; _selectedPedal = _pedalTarget = nullptr; syncPedalSelection();
       _velocityReferences.clear();
       for (auto& boundaries : _pedalBoundaries) boundaries.clear();
       _selectedTempoTick = _tempoPointTick = _unlockedTempo = -1;
@@ -481,7 +493,7 @@ void PerformanceEditor::refresh()
                   Element* element = segment->element(t);
                   if (!element || !element->isChordRest()) continue;
                   auto cr = toChordRest(element);
-                  _pedalBoundaries[0][t / VOICES].insert(tick); _pedalBoundaries[1][t / VOICES].insert((cr->tick() + cr->actualTicks()).ticks());
+                  _pedalBoundaries[0][_score->staff(t / VOICES)->part()].insert(tick); _pedalBoundaries[1][_score->staff(t / VOICES)->part()].insert((cr->tick() + cr->actualTicks()).ticks());
                   if (!element->isChord()) continue;
                   auto addChord = [this, tick, globalMethod, live, stablePlayback,&markNames](Chord* chord) {
                         for (Note* note : chord->notes()) {
@@ -519,6 +531,8 @@ void PerformanceEditor::refresh()
             if (span->isPedal())
                   _pedals.append({toPedal(span), span->tick().ticks(), span->tick2().ticks(), span->track()});
             }
+      if (_selectedPedal && std::none_of(_pedals.cbegin(), _pedals.cend(), [this](const PedalInfo& p) { return p.pedal == _selectedPedal; })) _selectedPedal = nullptr;
+      syncPedalSelection();
       _endTick = _score->lastMeasure() ? _score->lastMeasure()->endTick().ticks() : 1;
       if (!_segments.isEmpty()) {
             auto measure = _score->lastMeasure();
@@ -667,11 +681,19 @@ void PerformanceEditor::onElementDestruction(Element* element)
             cancelGesture(); _tempoCurves.clear(); _tempoPlot.clear(); _dirty = true; scheduleRefresh();
             }
       if (_pedalTarget == element) { cancelGesture(); _pedalTarget = nullptr; }
+      if (_selectedPedal == element) { _selectedPedal = nullptr; syncPedalSelection(); }
       _dirty = true; invalidateVisual();
       }
 
 void PerformanceEditor::status(const QString& message)
       {
+      if (message.isEmpty() && _score && _parameter->currentIndex() == 2) {
+            const int count = int(std::count_if(_pedals.cbegin(), _pedals.cend(), [this](const PedalInfo& p) { return pedalVisible(p); }));
+            const QString operation = _pedalTool->currentIndex() == 2 ? tr("水平拖出抬起间隙") : _pedalTool->currentIndex() == 1 ? tr("水平拖动画踩下段")
+                  : _pedalTool->currentIndex() == 3 ? tr("在踏板段内点一下分开") : _selectedPedal ? tr("已选踏板：拖两端改时机，拖内部移动，Delete删除") : tr("点三角选端点，拖段内移动；空白处可画踏板");
+            _status->setText(_dirty ? tr("正在读取踏板…") : tr("延音踏板 · 当前%1段 · %2 · Ctrl+Z撤销").arg(count).arg(operation));
+            return;
+            }
       const QString mode = _parameter->currentIndex() == 1 ? tr("四分音符 BPM · 实际速度阶梯")
             : (_parameter->currentIndex() == 2 ? tr("原生延音踏板 · CC64 开/关")
                   : (rangeKind()==1 ? tr("在原力度上增减百分比") : tr("MIDI 力度 1–127")));
@@ -975,28 +997,17 @@ void PerformanceEditor::beginGesture(QPointF point, QRectF rect, bool onScore, i
             for (const auto& tempo : _tempos)
                   if (QLineF(point, QPointF(xForTick(tempo.tick, onScore), yForValue(tempo.bpm, rect, onScore))).length() < 10) { _unlockedTempo = tempo.tick; _tempoOriginalBpm = tempo.bpm; }
             }
-      else {
-            _pedalTarget = nullptr;
-            _pedalFrom = _pedalUntil = tickForX(point.x(), onScore);
-            for (const auto& pedal : _pedals) {
-                  if (!pedalVisible(pedal) || std::abs(point.y() - yForValue(127, rect, onScore)) > 14) continue;
-                  if (std::abs(point.x() - xForTick(pedal.from, onScore)) < 10 || std::abs(point.x() - xForTick(pedal.until, onScore)) < 10) {
-                        _pedalTarget = pedal.pedal; _pedalFrom = pedal.from; _pedalUntil = pedal.until;
-                        _pedalEnd = std::abs(point.x() - xForTick(pedal.until, onScore)) < std::abs(point.x() - xForTick(pedal.from, onScore));
-                        break;
-                        }
-                  }
-            }
+      else if (!beginPedalGesture(point, rect, onScore)) { _dragging = false; return; }
       if (_parameter->currentIndex() == 2) {
             _pedalTrack = _pedalTarget ? _pedalTarget->track() : (_contextTrack / VOICES) * VOICES;
             _pedalStarts.clear(); _pedalEnds.clear();
-            if (!staffEnabled(_pedalTrack)) { _dragging = false; status(tr("当前谱表已被过滤；请启用它或在谱面选中目标谱表。")); return; }
-            _pedalStarts = _pedalBoundaries[0].value(_pedalTrack / VOICES).values().toVector();
-            _pedalEnds = _pedalBoundaries[1].value(_pedalTrack / VOICES).values().toVector();
+            if (!_pedalVisibleParts.contains(_score->staff(_pedalTrack / VOICES)->part())) { _dragging = false; status(tr("当前谱表已被过滤；请启用它或在谱面选中目标谱表。")); return; }
+            _pedalStarts = _pedalBoundaries[0].value(_score->staff(_pedalTrack / VOICES)->part()).values().toVector();
+            _pedalEnds = _pedalBoundaries[1].value(_score->staff(_pedalTrack / VOICES)->part()).values().toVector();
             for (auto grid : {&_pedalStarts, &_pedalEnds}) {
                   std::sort(grid->begin(), grid->end()); grid->erase(std::unique(grid->begin(), grid->end()), grid->end());
                   }
-            if (!_pedalTarget) { _pedalFrom = snap(_pedalFrom); _pedalUntil = snap(_pedalUntil, true); }
+            if (!_pedalTarget || _pedalTool->currentIndex() == 3) { _pedalFrom = snap(_pedalFrom); _pedalUntil = _pedalTool->currentIndex() == 3 ? _pedalFrom : snap(_pedalUntil, true); }
             }
       if (_parameter->currentIndex() == 1 && _curveIndex < 0) {
             _selectedTempoTick = _unlockedTempo >= 0 ? _unlockedTempo : _tempoPointTick;
@@ -1020,15 +1031,7 @@ void PerformanceEditor::moveGesture(QPointF point)
       QElapsedTimer gestureTimer; gestureTimer.start();
       if (_curveIndex >= 0) moveTempoCurve(point);
       else if (_parameter->currentIndex() == 2) {
-            const int tick = tickForX(point.x(), _scoreGesture);
-            if (_pedalTarget) {
-                  if (_pedalEnd) { const int end = snap(tick, true); if (end > _pedalFrom) _pedalUntil = end; }
-                  else { const int from = snap(tick); if (from < _pedalUntil) _pedalFrom = from; }
-                  }
-            else {
-                  const int pressed = tickForX(_press.x(), _scoreGesture);
-                  _pedalFrom = snap(qMin(pressed, tick)); _pedalUntil = snap(qMax(pressed, tick), true);
-                  }
+            movePedalGesture(point);
             }
       else if (_offsetDrag) {
             const auto range = (_scoreGesture ? _scoreViewport : _viewport).ranges[rangeKind()];
@@ -1099,7 +1102,21 @@ void PerformanceEditor::moveGesture(QPointF point)
             }
       if (qEnvironmentVariableIsSet("PERFORMANCE_BENCHMARK")) qInfo("Performance gesture %d editable targets: %.2f ms", _selectedIndices.size(), gestureTimer.nsecsElapsed() / 1e6);
       if (_parameter->currentIndex() == 1 && _curveIndex < 0) status(tr("预览 %1 BPM · 松开写入，Esc 取消").arg(_tempoDraft.value(_selectedTempoTick, valueForY(point.y(), _gestureLane, _scoreGesture)), 0, 'f', 2));
-      else if (_parameter->currentIndex() == 2) status(tr("踏板 %1 → %2 ticks · %3 · 松开写入，Esc 取消").arg(_pedalFrom).arg(_pedalUntil).arg(_pedalGrid->currentText()));
+      else if (_parameter->currentIndex() == 2) {
+            const auto position = [this](int tick) {
+                  if (tick >= _endTick) return tr("谱尾");
+                  auto after = std::upper_bound(_measures.cbegin(), _measures.cend(), tick, [](int t, const MeasureInfo& m) { return t < m.from; });
+                  if (after == _measures.cbegin()) return QString("1.1");
+                  const auto& measure = *(after - 1);
+                  const int offset = tick - measure.from, sub = offset % measure.beat;
+                  QString beat = QString::number(offset / measure.beat + 1);
+                  if (sub) { Fraction fraction(sub, measure.beat); fraction.reduce(); beat += "+" + fraction.toString(); }
+                  return QString("%1.%2").arg(measure.bar + 1).arg(beat);
+                  };
+            status(tr("%1 · %2 → %3（小节.拍） · 松开保存，Esc取消")
+                  .arg(_pedalTool->currentIndex() == 2 ? tr("抬起间隙") : _pedalTool->currentIndex() == 3 ? tr("分开踏板") : _pedalGrip == 0 ? tr("调整踩下") : _pedalGrip == 1 ? tr("调整抬起") : tr("踏板"))
+                  .arg(position(_pedalFrom), position(_pedalUntil)));
+            }
       _last = point; updateSurfaces(); if (_view) _view->update();
       }
 
@@ -1130,7 +1147,12 @@ void PerformanceEditor::finishGesture()
                   changed = ParameterEdit::tempos(_score, _tempoDraft, _unlockedTempo, &error);
                   }
             else {
-                  changed = ParameterEdit::pedal(_score, _pedalTrack, _pedalFrom, _pedalUntil, _pedalTarget, &error);
+                  const int tool = _pedalTool->currentIndex();
+                  if (tool == 3) changed = ParameterEdit::splitPedal(_score, _pedalTarget, _pedalFrom, &error);
+                  else if (_pedalUntil > _pedalFrom && (tool != 0 || !_pedalTarget))
+                        changed = ParameterEdit::paintPedal(_score, _pedalTrack, _pedalFrom, _pedalUntil, tool != 2, &error);
+                  else if (_pedalTarget)
+                        changed = ParameterEdit::pedal(_score, _pedalTrack, _pedalFrom, _pedalUntil, _pedalTarget, &error);
                   }
             _committing = false; _tempoDraft.clear(); if (changed) { _dirty = true; scheduleRefresh(); } else { updateSurfaces(); if (_view) _view->update(); } status(error);
             }
@@ -1155,6 +1177,7 @@ void PerformanceEditor::cancelGesture()
 bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       {
       if (!personalFeaturesEnabled()) return false;
+      if (pedalKeyEvent(object, event)) return true;
       QWidget* gestureOwner = nullptr;
       if (_comparisonDragging) gestureOwner = _canvas;
       else if (_bandResizing || _scoreRangePanning || (_dragging && _scoreGesture)) gestureOwner = _view;

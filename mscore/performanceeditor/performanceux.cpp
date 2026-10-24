@@ -87,6 +87,10 @@ void PerformanceEditor::setupUsabilityControls()
             connect(button,&QToolButton::clicked,this,[this,i]{_tool->setCurrentIndex(i);});
             connect(_tool,QOverload<int>::of(&QComboBox::currentIndexChanged),button,[button,i](int index){button->setChecked(index==i);});
             connect(_parameter,QOverload<int>::of(&QComboBox::currentIndexChanged),button,[button](int index){button->setEnabled(index!=2);});bar->addWidget(button,0,i);}
+      tools->setVisible(_parameter->currentIndex()!=2);
+      connect(_parameter,QOverload<int>::of(&QComboBox::currentIndexChanged),tools,[tools](int i){tools->setVisible(i!=2);});
+      sensitivity->setVisible(_parameter->currentIndex()==0);
+      connect(_parameter,QOverload<int>::of(&QComboBox::currentIndexChanged),sensitivity,[sensitivity](int i){sensitivity->setVisible(i==0);});
       add(tools);
       auto operations=new QToolButton(this);operations->setText(tr("操作设置…"));operations->setObjectName("performanceOperationSettings");setComponentToolIcon(operations,"settings");
       connect(operations,&QToolButton::clicked,this,[this]{showPerformanceSettings(_score,this,[this]{

@@ -454,3 +454,6 @@ QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this
 自动分声部	mscore/performanceeditor/rollnotation.cpp	buildRollEdit	135	分配后只写入实际变化的声部	rollOverlapVoiceLocksAndRetry
 节奏对应选择	mscore/performanceeditor/rhythmpane.cpp	RhythmSourceDelegate	84	按音名和原谱拍位校正、忽略与撤销	rhythmCorrectByNamedSourceAndUndo
 AI读谱与取图安排	personal/docs/AI_WORKFLOW_REVIEW_20261024.md	当前实现与E1/E2任务	1	核对标题来源、随包MCP和原生选段图计划	源码／部署校验ai-20261024-source-audit.json
+踏板范围绘制	mscore/performanceeditor/parameteredit.cpp	bool paintPedal	332	画踩下段与抬起间隙、分开、删除和一次撤销	pedalGapFillSplitLinked105 / pedalPaintInstrumentScope105
+踏板端点与取点	mscore/performanceeditor/performancecontrols.cpp	Pedal* PerformanceEditor::pedalHit	92	相接端点、整体移动与键盘微调	pedalAdjacentHandles105 / pedalGuiPaintMoveDelete105
+踏板谱表筛选	mscore/performanceeditor/performanceinteraction.cpp	void PerformanceEditor::rebuildFilter	41	上下谱表共用踏板、筛选后清除隐藏目标	pedalGuiPaintMoveDelete105 / pedalStripAndInterruptedGesture105

@@ -307,29 +307,57 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
             }
       else {
             const double y = yForValue(127, rect, onScore), bottom = yForValue(0, rect, onScore);
-            auto drawPedal = [&](int from, int until, int track, bool preview) {
+            auto drawPedal = [&](int from, int until, int track, bool preview, bool selected) {
                   const double x0 = xForTick(from, onScore), x1 = xForTick(until, onScore);
-                  if (until < tickForX(rect.left(), onScore) || from > tickForX(rect.right(), onScore)) return;
-                  QColor color = _appearance.colors[preview ? PerformanceAppearance::Preview : PerformanceAppearance::Pedal];
-                  painter.setPen(QPen(color, 2, preview ? Qt::DashLine : Qt::SolidLine));
-                  auto fill = color; fill.setAlpha(onScore ? 30 : 40); painter.fillRect(QRectF(QPointF(x0, y), QPointF(x1, bottom)), fill);
-                  painter.drawLine(QPointF(x0, bottom), QPointF(x0, y)); painter.drawLine(QPointF(x0, y), QPointF(x1, y)); painter.drawLine(QPointF(x1, y), QPointF(x1, bottom));
+                  if (until <= from || until < tickForX(rect.left(), onScore) || from > tickForX(rect.right(), onScore)) return;
+                  QColor color = _appearance.colors[preview ? PerformanceAppearance::Preview : selected ? PerformanceAppearance::Selection : PerformanceAppearance::Pedal];
+                  if (selected && onScore && !preview) color = MScore::selectColor[track % VOICES];
+                  painter.setPen(QPen(color, selected ? 3 : 2, preview ? Qt::DashLine : Qt::SolidLine));
+                  auto fill = color; fill.setAlpha(selected ? 65 : onScore ? 30 : 40);
+                  painter.fillRect(QRectF(QPointF(x0, y), QPointF(x1, bottom)), fill);
+                  painter.drawLine(QPointF(x0, bottom), QPointF(x0, y));
+                  painter.drawLine(QPointF(x0, y), QPointF(x1, y));
+                  painter.drawLine(QPointF(x1, y), QPointF(x1, bottom));
                   for (int side = 0; side < 2; ++side) {
-                        painter.setPen(QPen(color, 2));
-                        const double x = side ? x1 : x0;
+                        const double x = side ? x1 : x0, direction = side ? -1 : 1;
                         const bool offNote = !pedalBoundary(side ? until : from, track, side);
-                        painter.setBrush(color);
-                        if (offNote) { QPolygonF diamond; diamond << QPointF(x, y - 4) << QPointF(x + 4, y) << QPointF(x, y + 4) << QPointF(x - 4, y); painter.drawPolygon(diamond);
-                              painter.setPen(QPen(color, 1, Qt::DotLine)); painter.drawLine(QPointF(x, y + 5), QPointF(x, bottom)); }
-                        else painter.drawRect(QRectF(x - 3, y - 3, 6, 6));
+                        painter.setPen(QPen(color, selected ? 2 : 1)); painter.setBrush(color);
+                        QPolygonF triangle;
+                        triangle << QPointF(x, y - 4) << QPointF(x + direction * 9, y) << QPointF(x, y + 4);
+                        painter.drawPolygon(triangle);
+                        if (offNote) {
+                              painter.setPen(QPen(color, 1, Qt::DotLine));
+                              painter.drawLine(QPointF(x, y + 5), QPointF(x, bottom));
                         }
-                  };
+                  }
+            };
+            const int tool = _pedalTool->currentIndex();
             for (const auto& pedal : _pedals) {
                   if (!pedalVisible(pedal)) continue;
-                  const bool preview = _dragging && _pedalTarget == pedal.pedal;
-                  drawPedal(preview ? _pedalFrom : pedal.from, preview ? _pedalUntil : pedal.until, pedal.track, preview);
+                  const bool selected = pedal.pedal == _selectedPedal;
+                  const bool preview = _dragging && tool == 0 && _pedalTarget == pedal.pedal;
+                  const bool gap = _dragging && tool == 2 && _pedalUntil > _pedalFrom
+                        && _score->staff(_pedalTrack / VOICES)->part() == pedal.pedal->part();
+                  if (gap && pedal.from < _pedalUntil && pedal.until > _pedalFrom) {
+                        drawPedal(pedal.from, qMin(pedal.until, _pedalFrom), pedal.track, true, false);
+                        drawPedal(qMax(pedal.from, _pedalUntil), pedal.until, pedal.track, true, false);
                   }
-            if (_dragging && !_pedalTarget) drawPedal(_pedalFrom, _pedalUntil, _pedalTrack, true);
+                  else drawPedal(preview ? _pedalFrom : pedal.from, preview ? _pedalUntil : pedal.until, pedal.track, preview, selected);
+            }
+            if (_dragging && tool != 2 && tool != 3 && !_pedalTarget)
+                  drawPedal(_pedalFrom, _pedalUntil, _pedalTrack, true, false);
+            if (_dragging && (tool == 2 || tool == 3)) {
+                  const auto color = _appearance.colors[PerformanceAppearance::Preview];
+                  const double x0 = xForTick(_pedalFrom, onScore), x1 = xForTick(_pedalUntil, onScore);
+                  painter.setPen(QPen(color, 1, Qt::DashLine));
+                  painter.drawLine(QPointF(x0, y), QPointF(x0, bottom));
+                  if (tool == 2) {
+                        painter.drawLine(QPointF(x1, y), QPointF(x1, bottom));
+                        painter.setPen(QPen(color, 2)); painter.drawLine(QPointF(x0, bottom), QPointF(x1, bottom));
+                        if (qAbs(x1 - x0) > painter.fontMetrics().horizontalAdvance(tr("抬起")) + 8)
+                              painter.drawText(QRectF(x0, y + 10, x1 - x0, 20), Qt::AlignCenter, tr("抬起"));
+                  }
+            }
             }
       painter.restore();
       }
@@ -431,7 +459,7 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
       const int tick = _seeking ? _seekTick : _playTick;
       if (tick >= 0) { painter.setPen(QPen(c[_seeking ? PerformanceAppearance::Preview : PerformanceAppearance::Playhead], 1.5)); const double x = xForTick(comparisonPlayTick(tick), false); painter.drawLine(QPointF(x, surface == PerformanceSurface::Parameter ? laneRect().top() : 0), QPointF(x, surface == PerformanceSurface::Parameter ? laneRect().bottom() : widget->height())); }
       painter.restore();
-      if (_dragging && ((surface == PerformanceSurface::Parameter && !_noteGesture) || (surface == PerformanceSurface::Notes && _noteGesture))) {
+      if (_dragging && _parameter->currentIndex() != 2 && ((surface == PerformanceSurface::Parameter && !_noteGesture) || (surface == PerformanceSurface::Notes && _noteGesture))) {
             const QString value = _parameter->currentIndex() == 0 && _anchor >= 0 ? QString::number(noteValue(_anchor), 'f', 0) : QString::number(valueForY(_last.y(), _gestureLane), 'f', 0);
             QRectF badge(qBound(0.0, _last.x() + 10, double(widget->width() - 88)), qBound(0.0, _last.y() - 25, double(widget->height() - 24)), 84, 22);
             painter.fillRect(badge, c[PerformanceAppearance::Background]); painter.setPen(c[PerformanceAppearance::Preview]); painter.drawText(badge, Qt::AlignCenter, value + (rangeKind() == 1 ? " %" : (rangeKind() == 2 ? " BPM" : "")));

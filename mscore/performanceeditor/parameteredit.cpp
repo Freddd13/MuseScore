@@ -15,11 +15,28 @@
 #include "libmscore/undo.h"
 #include "libmscore/velocitybackup.h"
 #include <QRegularExpression>
+#include <QVector>
+#include <QSet>
+#include <algorithm>
 
 namespace Ms {
 namespace {
 bool editable(Score* score)
       { return score && !score->readOnly() && !score->isPlaying() && (!seq || (!seq->isPlaying() && seq->backgroundRenderingIdle())); }
+// Move the nearer boundary first so each linked-part update stays inside the score.
+void changePedalRange(Pedal* target, int from, int until)
+{
+    const auto start = QVariant::fromValue(Fraction::fromTicks(from));
+    const auto length = QVariant::fromValue(Fraction::fromTicks(until - from));
+    if (from > target->tick().ticks()) {
+        target->undoChangeProperty(Pid::SPANNER_TICKS, length);
+        target->undoChangeProperty(Pid::SPANNER_TICK, start);
+    }
+    else {
+        target->undoChangeProperty(Pid::SPANNER_TICK, start);
+        target->undoChangeProperty(Pid::SPANNER_TICKS, length);
+    }
+}
 // Paired boundaries wrap standard linked-element commands on apply, undo and redo.
 class TempoBoundary : public UndoCommand {
       Score* _score;
@@ -237,8 +254,7 @@ bool pedal(Score* score, int track, int from, int until, Pedal* target, QString*
       if (target && target->tick().ticks() == from && target->tick2().ticks() == until) return false;
       score->startCmd();
       if (target) {
-            target->undoChangeProperty(Pid::SPANNER_TICK, QVariant::fromValue(Fraction::fromTicks(from)));
-            target->undoChangeProperty(Pid::SPANNER_TICKS, QVariant::fromValue(Fraction::fromTicks(until - from)));
+            changePedalRange(target, from, until);
             }
       else {
             auto span = new Pedal(score);
@@ -250,5 +266,127 @@ bool pedal(Score* score, int track, int from, int until, Pedal* target, QString*
       score->endCmd();
       return true;
       }
+
+namespace {
+using PedalRange = QPair<int, int>;
+bool validPedalRange(Score* score, int track, int from, int until)
+{
+    return editable(score) && score->lastMeasure() && track >= 0 && track < score->nstaves() * VOICES
+        && from >= 0 && from < until && until <= score->lastMeasure()->endTick().ticks();
+}
+// Compute the complete replacement before opening the command. Exact intervals
+// retain their objects; resized ones retain their style and linked-part commands.
+bool applyPedalRanges(Score* score, int track, const QVector<Pedal*>& affected,
+                      const QVector<PedalRange>& ranges)
+{
+    struct Edit { Pedal* target; int from, until; bool added; };
+    QVector<Edit> edits;
+    QSet<Pedal*> used;
+    QMap<PedalRange, QVector<Pedal*>> exact;
+    for (auto old : affected) exact[{old->tick().ticks(), old->tick2().ticks()}].append(old);
+    for (const auto& range : ranges) {
+        Pedal* target = nullptr;
+        auto match = exact.find(range);
+        if (match != exact.end() && !match.value().isEmpty()) target = match.value().takeLast();
+        if (target) { used.insert(target); edits.append({target, range.first, range.second, false}); }
+        else edits.append({nullptr, range.first, range.second, false});
+    }
+    for (auto& edit : edits) {
+        if (edit.target) continue;
+        int best = -1;
+        for (auto old : affected) if (!used.contains(old)) {
+            const int overlap = qMin(edit.until, old->tick2().ticks()) - qMax(edit.from, old->tick().ticks());
+            if (overlap > best) { best = overlap; edit.target = old; }
+        }
+        if (edit.target) { used.insert(edit.target); continue; }
+        Pedal* prototype = nullptr;
+        for (auto old : affected)
+            if (!prototype || qAbs(old->tick().ticks() - edit.from) < qAbs(prototype->tick().ticks() - edit.from)) prototype = old;
+        edit.target = prototype ? prototype->clone() : new Pedal(score);
+        edit.added = true;
+        edit.target->setParent(nullptr);
+        edit.target->setScore(score);
+        edit.target->setTrack(prototype ? prototype->track() : track);
+        edit.target->setTrack2(edit.target->track());
+        edit.target->setStartElement(nullptr); edit.target->setEndElement(nullptr);
+        edit.target->setTick(Fraction::fromTicks(edit.from));
+        edit.target->setTicks(Fraction::fromTicks(edit.until - edit.from));
+    }
+    bool changed = used.size() != affected.size();
+    for (const auto& edit : edits)
+        changed |= edit.added || edit.target->tick().ticks() != edit.from || edit.target->tick2().ticks() != edit.until;
+    if (!changed) return false;
+    score->startCmd();
+    for (auto old : affected) if (!used.contains(old)) score->undoRemoveElement(old);
+    for (const auto& edit : edits) {
+        if (edit.added) score->undoAddElement(edit.target);
+        else {
+            changePedalRange(edit.target, edit.from, edit.until);
+        }
+    }
+    score->endCmd();
+    return true;
+}
+}
+
+bool paintPedal(Score* score, int track, int from, int until, bool down, QString* error)
+{
+    if (!validPedalRange(score, track, from, until)) {
+        if (error) *error = QObject::tr("请选择谱内的一段时间，并在停播后调整踏板。");
+        return false;
+    }
+    const auto part = score->staff(track / VOICES)->part();
+    QVector<Pedal*> affected;
+    QVector<PedalRange> ranges;
+    for (const auto& row : score->spannerMap().map()) {
+        auto span = row.second;
+        if (span->isPedal() && span->part() == part && span->tick().ticks() < until && span->tick2().ticks() > from)
+            affected.append(toPedal(span));
+    }
+    if (down) {
+        int first = from, last = until;
+        QSet<int> changes, starts;
+        for (auto span : affected) starts.insert(span->tick().ticks());
+        for (auto span : affected) {
+            first = qMin(first, span->tick().ticks()); last = qMax(last, span->tick2().ticks());
+            if (starts.contains(span->tick2().ticks())) changes.insert(span->tick2().ticks());
+        }
+        auto boundaries = changes.values(); std::sort(boundaries.begin(), boundaries.end());
+        for (int tick : boundaries) if (tick > first && tick < last) { ranges.append({first, tick}); first = tick; }
+        ranges.append({first, last});
+    }
+    else {
+        for (auto span : affected) {
+            if (span->tick().ticks() < from) ranges.append({span->tick().ticks(), from});
+            if (span->tick2().ticks() > until) ranges.append({until, span->tick2().ticks()});
+        }
+        if (affected.isEmpty()) {
+            if (error) *error = QObject::tr("这段时间已经抬起踏板。");
+            return false;
+        }
+    }
+    return applyPedalRanges(score, track, affected, ranges);
+}
+
+bool splitPedal(Score* score, Pedal* target, int tick, QString* error)
+{
+    if (!target || target->score() != score || !editable(score)) return false;
+    if (tick <= target->tick().ticks() || tick >= target->tick2().ticks()) {
+        if (error) *error = QObject::tr("请在踏板段内部点一下，分成前后两段。");
+        return false;
+    }
+    return applyPedalRanges(score, target->track(), {target},
+                            {{target->tick().ticks(), tick}, {tick, target->tick2().ticks()}});
+}
+
+bool removePedal(Score* score, Pedal* target, QString* error)
+{
+    if (!target || target->score() != score || !editable(score)) {
+        if (error) *error = QObject::tr("停播后选中要删除的踏板段。");
+        return false;
+    }
+    return applyPedalRanges(score, target->track(), {target}, {});
+}
+
 }
 }

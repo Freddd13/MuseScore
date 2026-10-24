@@ -43,6 +43,14 @@ void PerformanceEditor::rebuildFilter()
       if (!_score || !_score->nstaves()) return;
       _contextTrack = qBound(0, _contextTrack, _score->nstaves() * VOICES - 1);
       const Part* part = _score->staff(_contextTrack / VOICES)->part();
+      _pedalVisibleParts.clear();
+      for (int staff = 0; staff < _score->nstaves(); ++staff) {
+            const auto member = _score->staff(staff)->part();
+            if (staffEnabled(staff * VOICES) && (_scope->currentIndex() == 2 ||
+                  (_scope->currentIndex() == 1 ? staff == _contextTrack / VOICES : member == part)))
+                  _pedalVisibleParts.insert(member);
+            }
+      syncPedalSelection();
       bool changed = false;
       for (auto& note : _notes) {
             const bool oldScope = note.inScope, oldEnabled = note.enabled;
