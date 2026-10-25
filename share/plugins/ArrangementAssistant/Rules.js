@@ -1,6 +1,7 @@
 .pragma library
 .import "../HarmonyAssistant/Harmony.js" as Harmony
 .import "../HarmonyAssistant/Timeline.js" as Timeline
+.import "Playback.js" as Playback
 
 // Piano register references transcribed from https://nicechord.com/post/low-interval-limit/
 // Keys are actual semitone distance, including compound intervals; values are MIDI low notes.
@@ -56,6 +57,41 @@ function lowVoicing(s,frame){
         var found=parts[part];found.details.sort(function(a,b){return (b.seconds||0)-(a.seconds||0) || Math.min.apply(null,b.velocities)-Math.min.apply(null,a.velocities);});
         var reported=issue(s,"harmony","low-cluster",frame.tick,found.notes,"低音排列可能较浑浊",found.details.map(function(detail){return detail.description;}).join("\n")+"\n持续时间按谱上时值与踏板计算。可试听这组音的清晰程度，再考虑拉开排列。参考表可在设置中调整。","提示");
         if(reported){reported.lowDetails=found.details;reported.lowKey=part+":"+found.details.map(function(detail){return detail.pitches.join("-");}).sort().join(",");}
+    }
+}
+function playedLowVoicing(s,frame) {
+    var groups={},keys=[],parts={},range=frame.range;
+    frame.windows.forEach(function(window){
+        if(window.incomplete||window.end<=frame.utick||window.notes.every(function(note){return note.grace;}))return;
+        var key=window.part+":"+window.pitch,group=groups[key];
+        if(!group){group={part:window.part,pitch:window.pitch,notes:[],start:window.start,end:window.end,startSeconds:window.startSeconds,endSeconds:window.endSeconds,latest:window.start,velocity:window.velocity,pedal:false};groups[key]=group;keys.push(group);}
+        group.start=Math.min(group.start,window.start);group.end=Math.max(group.end,window.end);
+        group.startSeconds=Math.min(group.startSeconds,window.startSeconds);group.endSeconds=Math.max(group.endSeconds,window.endSeconds);
+        if(window.start>=group.latest){group.latest=window.start;group.velocity=window.velocity;}
+        group.pedal=group.pedal||window.end>window.keyEnd;
+        window.notes.forEach(function(note){if(!group.notes.some(function(n){return n.id===note.id;}))group.notes.push(note);});
+    });
+    var limits=s.config.lowIntervalLimits||lowIntervalLimits;
+    for(var i=0;i<keys.length;++i)for(var j=i+1;j<keys.length;++j){
+        var a=keys[i],b=keys[j];if(a.part!==b.part)continue;
+        var distance=Math.abs(a.pitch-b.pitch),limit=limits[String(distance)];
+        if(limit===undefined||Math.min(a.pitch,b.pitch)>=limit)continue;
+        var pair=a.pitch<b.pitch?[a,b]:[b,a],from=Math.max(range.start,a.start,b.start),until=Math.min(range.end,a.end,b.end);
+        var first=Math.max(range.startSeconds,a.startSeconds,b.startSeconds),last=Math.min(range.endSeconds,a.endSeconds,b.endSeconds);
+        if(until<=from||last<=first)continue;
+        var seconds=last-first,residual=a.pedal||b.pedal,arpeggio=a.latest!==b.latest;
+        var description=pitchLabel(pair[0].notes[0])+"–"+pitchLabel(pair[1].notes[0])+"（"+lowIntervalNames[String(distance)]+"），低端音低于参考 "+Harmony.sharpNames[limit%12]+(Math.floor(limit/12)-1)+"。";
+        description+=(residual?"含踏板保持。":arpeggio?"先后起音。":"同时起音。")+"实际共同持续 "+Math.round(seconds*1000)+" ms，起音力度 "+pair[0].velocity+" / "+pair[1].velocity;
+        var found=parts[a.part]||(parts[a.part]={notes:[],details:[]});
+        found.details.push({start:from-range.offset,end:until-range.offset,playbackStart:from,playbackEnd:until,seconds:seconds,
+            occurrence:range.occurrence||1,velocities:[pair[0].velocity,pair[1].velocity],source:residual?"pedal":arpeggio?"arpeggio":"together",pitches:[pair[0].pitch,pair[1].pitch],description:description+"。"});
+        pair.forEach(function(group){group.notes.forEach(function(note){if(!found.notes.some(function(n){return n.id===note.id;}))found.notes.push(note);});});
+    }
+    for(var part in parts){
+        var result=parts[part];result.details.sort(function(a,b){return b.seconds-a.seconds||Math.min.apply(null,b.velocities)-Math.min.apply(null,a.velocities);});
+        var instance=result.details.map(function(detail){return detail.pitches.join("-")+"@"+detail.playbackStart+"-"+detail.playbackEnd;}).sort().join(",");
+        var report=issue(s,"harmony","low-cluster",frame.tick,result.notes,"低音排列可能较浑浊",result.details.map(function(detail){return detail.description;}).join("\n")+"\n持续时间来自实际起音、松键与踏板事件。可试听清晰程度，再考虑拉开排列。","提示","play:"+instance);
+        if(report){report.lowDetails=result.details;report.lowKey=part+":"+result.details.map(function(detail){return detail.pitches.join("-");}).sort().join(",");report.occurrence=range.occurrence||1;report.utick=frame.utick;}
     }
 }
 function onsetSpans(s,frame){
@@ -117,13 +153,14 @@ function indexHands(marks) {
     }
     return out;
 }
-function issue(s,type,code,tick,notes,title,basis,severity) {
+function issue(s,type,code,tick,notes,title,basis,severity,instance) {
     if(tick<s.data.scope.start || tick>=s.data.scope.end)return;
     var ids=notes.map(function(n){return n.id || n.track+":"+n.tick+":"+n.index;}).sort();
     var continuous=type==="harmony" || type==="playability" && /^(span|keys|comfort|hand|fingering)-/.test(code);
     var anchor=continuous?notes.map(function(n){return n.track+":"+n.attackTick+":"+n.pitch;}).sort().join(","):tick;
     var id=type+":"+code+":"+anchor+":"+ids.join(",");
-    if(s.seen[id] || s.config.ignored.indexOf(id)>=0)return;
+    var previousId=id;if(instance)id+="@"+instance;
+    if(s.seen[id] || s.config.ignored.indexOf(id)>=0 || instance && s.config.ignored.indexOf(previousId)>=0)return;
     var meter=null;for(var m=0;m<(s.data.meters||[]).length;++m)if(s.data.meters[m].tick<=tick && tick<s.data.meters[m].end) {meter=s.data.meters[m];break;}
     var result={id:id,type:type,code:code,tick:tick,notes:notes,title:title,basis:basis,
         severity:severity||"提示",bar:meter?meter.measure:notes.length?notes[0].measure:0,beat:meter?1+(tick-meter.tick)/(480*4/meter.denominator):notes.length?notes[0].beat:1};
@@ -309,7 +346,7 @@ function harmonyEnd(s,tick,chord,part) {
 }
 function harmonic(s,frame) {
     if(!s.config.harmony)return;
-    lowVoicing(s,frame);
+    if(!s.data.playback)lowVoicing(s,frame);
     var parts=frame.parts||partsAt(s,frame.tick);
     for(var p=0;p<parts.length;++p)harmonicPart(s,frame,parts[p].startTrack);
 }
@@ -606,7 +643,14 @@ function step(s,budget) {
             if(Timeline.step(s.builder,1)) {s.regions=sharedHarmony(s.builder.regions,s.data.harmonyRegions);s.phase=3;s.index=0;}
         } else if(s.phase===3) {
             if(s.index<s.frames.length) {var frame=s.frames[s.index++];harmonic(s,frame);counterpoint(s,frame);playability(s,frame);}
-            else {s.issues.sort(function(a,b){return a.tick-b.tick || a.type.localeCompare(b.type);});s.phase=4;return true;}
+            else if(s.data.playback) {
+                s.playback=Playback.create(s.data.playback);
+                s.playbackState={data:{scope:s.data.playback.scope,meters:s.data.playback.meters},config:s.config,seen:s.seen,issues:s.issues};
+                s.phase=4;
+            } else {s.issues.sort(function(a,b){return a.tick-b.tick || a.type.localeCompare(b.type);});s.phase=5;return true;}
+        } else if(s.phase===4) {
+            if(Playback.step(s.playback)) {s.issues.sort(function(a,b){return a.tick-b.tick || (a.utick||0)-(b.utick||0) || a.type.localeCompare(b.type);});s.phase=5;return true;}
+            if(s.playback.frame && s.config.harmony)playedLowVoicing(s.playbackState,s.playback.frame);
         } else return true;
         ++operations;
     } while(operations<128 && Date.now()-began<limit);
@@ -621,5 +665,5 @@ function workerBundle(sources) {
         while((match=pattern.exec(clean)))if(names.indexOf(match[1])<0)names.push(match[1]);
         return "var "+name+"=(function(){\n"+clean+"\nreturn {"+names.map(function(n){return n+":"+n}).join(",")+"};})();\n";
     }
-    return "(function(){\n"+module("Harmony",sources.harmony)+module("Timeline",sources.timeline)+module("Rules",sources.rules)+"var result=Rules.run(input.data,input.config,input.imported);return {issues:result.issues,roles:result.roles};})()";
+    return "(function(){\n"+module("Harmony",sources.harmony)+module("Timeline",sources.timeline)+(sources.playback?module("Playback",sources.playback):"")+module("Rules",sources.rules)+"var result=Rules.run(input.data,input.config,input.imported);return {issues:result.issues,roles:result.roles};})()";
 }

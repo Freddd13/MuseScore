@@ -45,6 +45,7 @@ function merge(cached,pending,begin,end) {
     ["harmonies","hands","keys","tempos"].forEach(function(name){result[name]=mergeRows(cached[name],pending[name],begin,end,false);});
     ["rests","meters"].forEach(function(name){result[name]=mergeRows(cached[name],pending[name],begin,end,true);});
     result.parts=pending.parts;
+    if(pending.playback)result.playback=pending.playback;
     var regions=[];(cached.harmonyRegions||[]).forEach(function(region){
         if(region.end<=begin || region.start>=end){regions.push(region);return;}
         if(region.start<begin){var left={};for(var field in region)left[field]=region[field];left.end=begin;regions.push(left);}

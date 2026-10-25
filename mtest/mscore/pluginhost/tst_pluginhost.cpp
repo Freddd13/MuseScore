@@ -162,6 +162,11 @@ class TestPluginHost : public QObject {
         void arrangementVelocitySnapshot118();
         void arrangementAudibleRows118();
         void arrangementTiming119();
+        void arrangementPlaybackRows122();
+        void arrangementPlaybackPasses122();
+        void arrangementPlaybackLarge122();
+        void arrangementActualPanel122();
+        void midiEventPostprocessing122();
         void arrangementRepeatedHints119();
       void arrangementHarmonyAndCounterpointUI115();
       void arrangementUsesSharedHarmony115();
@@ -1446,6 +1451,7 @@ class TestPluginHost : public QObject {
 #include "arrangement_117_tests.inc"
 #include "arrangement_118_tests.inc"
 #include "arrangement_119_tests.inc"
+#include "arrangement_122_tests.inc"
 #include "vst_088_tests.inc"
 #include "pedal_106_audio_tests.inc"
 #include "source_sessions_107_tests.inc"

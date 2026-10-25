@@ -176,7 +176,7 @@ MuseScore {
         }
         var context=Math.max(0,target.start-3840)
         if(typeof observer.musicalPosition==="function") {var position=observer.musicalPosition(context);if(typeof position.measureStart==="number")context=position.measureStart}
-        snapshot={scope:target,notes:[],rests:[],meters:[],harmonies:[],hands:[],pedals:[],parts:[],keys:[],tempos:[],contextStart:context,next:context,rangeDone:false,contextJob:null}
+        snapshot={scope:target,notes:[],rests:[],meters:[],harmonies:[],hands:[],pedals:[],parts:[],keys:[],tempos:[],contextStart:context,next:context,rangeDone:false,contextJob:null,harmonyDone:false}
         task=null;running=true;status="读取完整声部…";work.start()
     }
     function slice() {
@@ -191,7 +191,7 @@ MuseScore {
             for(var i=0;i<names.length;++i)Array.prototype.push.apply(snapshot[names[i]],page[names[i]]||[])
             snapshot.next=page.nextTick
             if(page.done)snapshot.rangeDone=true
-            } else {
+            } else if(!snapshot.harmonyDone) {
                 if(!snapshot.contextJob) {
                     snapshot.contextJob=Context.create(snapshot.contextStart,snapshot.scope.firstTrack,snapshot.scope.endTrack,snapshot.parts,snapshot.harmonies)
                     if(typeof observer.analysisHarmonyContext!=="function")snapshot.contextJob.done=true
@@ -202,29 +202,62 @@ MuseScore {
                     if(error) {cancel();status=error==="no-progress"?"读取前面的和弦时未能继续，请更新结果":"读取暂停："+error;stale=true;return}
                     status="读取前面的和弦 · 第 "+Math.max(1,observer.musicalPosition(snapshot.contextJob.next).measure||1)+" 小节"
                 } else {
-                Array.prototype.push.apply(snapshot.harmonies,Context.previous(snapshot.contextJob));delete snapshot.contextJob
-                if(typeof observer.arrangementState==="function") {
-                    var shared=observer.arrangementState({scope:snapshot.scope}).harmonyAnalysis
-                    if(shared && shared.freshness==="current")snapshot.harmonyRegions=shared.regions||[]
+                    Array.prototype.push.apply(snapshot.harmonies,Context.previous(snapshot.contextJob));delete snapshot.contextJob
+                    if(typeof observer.arrangementState==="function") {
+                        var shared=observer.arrangementState({scope:snapshot.scope}).harmonyAnalysis
+                        if(shared && shared.freshness==="current")snapshot.harmonyRegions=shared.regions||[]
+                    }
+                    snapshot.harmonyDone=true
                 }
+            } else if(readPlayback()) {
                 pendingData=snapshot
                 status="检查和声、对位与手位…"
                 if(typeof observer.startReadOnlyJob==="function" && workerSource.length) {
                     work.stop();workerToken=observer.startReadOnlyJob(workerSource,{data:snapshot,config:config,imported:imported});snapshot=null
                 } else task=Rules.create(snapshot,config,imported)
-                }
             }
         } else if(Rules.step(task,2)) {
             finishResult({issues:task.issues,roles:task.roles})
         }
         worstBatch=Math.max(worstBatch,Date.now()-began)
     }
+    function readPlayback() {
+        if(typeof observer.analysisPlaybackPrepare!=="function")return true
+        if(!snapshot.playback)snapshot.playback={revision:observer.analysisPlaybackRevision(),events:[],prepared:false,next:-2147483648,scope:Rules.clone(scope)}
+        var data=snapshot.playback,page
+        if(!data.prepared) {
+            page=observer.analysisPlaybackPrepare(scope.start,scope.end,data.revision)
+            if(!page.error) {
+                status="准备实际演奏 · "+page.progress+"%"
+                if(!page.ready)return false
+                data.prepared=true;data.ranges=page.ranges;data.endTick=page.endTick;data.endSeconds=page.endSeconds
+                return false
+            }
+        } else {
+            page=observer.analysisPlaybackPage(data.next,scope.firstTrack,scope.endTrack,32,data.revision)
+            if(!page.error) {
+                Array.prototype.push.apply(data.events,page.events||[]);data.next=page.nextTick
+                status="读取实际演奏 · "+data.events.length+" 条音符与踏板事件"
+                if(!page.done)return false
+                var combined=localRefresh&&cachedData?Context.merge(cachedData,snapshot,snapshot.contextStart,snapshot.scope.end):snapshot
+                data.notes=combined.notes;data.meters=combined.meters
+                delete data.prepared;delete data.next
+                return true
+            }
+        }
+        var message=page.error
+        cancel();stale=true
+        if(message==="playing-or-rendering") {status="等待播放准备完成…";if(config.autoRefresh&&activeSurface)refresh.restart()}
+        else if(message==="stale") {status="乐谱已修改，正在重新读取";refresh.restart()}
+        else {status="实际演奏资料读取失败，请点击更新结果重试";console.warn("Arrangement playback read:",message)}
+        return false
+    }
     function finishResult(result) {
             var selectedId=current?current.id:""
             var output=result.issues
             if(localRefresh && pendingData) {
                 var from=pendingData.scope.start,until=pendingData.scope.end
-                output=issues.filter(function(i){return i.tick<from || i.tick>=until}).concat(output).sort(function(a,b){return a.tick-b.tick})
+                output=issues.filter(function(i){return (!pendingData.playback||i.code!=="low-cluster")&&(i.tick<from || i.tick>=until)}).concat(output).sort(function(a,b){return a.tick-b.tick})
             }
             if(pendingData) {
                 if(localRefresh && cachedData) {
@@ -339,6 +372,7 @@ MuseScore {
         if(observer && typeof observer.startReadOnlyJob==="function")workerSource=Rules.workerBundle({
             harmony:observer.readTextFile(String(Qt.resolvedUrl("../HarmonyAssistant/Harmony.js"))),
             timeline:observer.readTextFile(String(Qt.resolvedUrl("../HarmonyAssistant/Timeline.js"))),
+            playback:observer.readTextFile(String(Qt.resolvedUrl("Playback.js"))),
             rules:observer.readTextFile(String(Qt.resolvedUrl("Rules.js")))})
         newScore();syncDetail()
     }
@@ -453,7 +487,7 @@ Flickable {
                 Label {text:"当前问题的依据";font.bold:true;color:theme.text}
                 Item {Layout.fillWidth:true}
                 Desk.DeskButton {objectName:"arrangementPreviousOccurrence";text:"上一处";visible:!!root.currentRow&&root.currentRow.occurrences.length>1;enabled:root.occurrenceIndex>0;onClicked:root.occurrenceStep(-1)}
-                Label {objectName:"arrangementOccurrenceLabel";visible:!!root.currentRow&&root.currentRow.occurrences.length>1;text:(root.occurrenceIndex+1)+" / "+(root.currentRow?root.currentRow.occurrences.length:0);color:theme.muted}
+                Label {objectName:"arrangementOccurrenceLabel";visible:!!root.currentRow&&root.currentRow.occurrences.length>1;text:(root.occurrenceIndex+1)+" / "+(root.currentRow?root.currentRow.occurrences.length:0)+(root.current&&root.current.occurrence&&root.cachedData&&root.cachedData.playback&&root.cachedData.playback.ranges.length>1?" · 第"+root.current.occurrence+"遍":"");color:theme.muted}
                 Desk.DeskButton {objectName:"arrangementNextOccurrence";text:"下一处";visible:!!root.currentRow&&root.currentRow.occurrences.length>1;enabled:!!root.currentRow&&root.occurrenceIndex+1<root.currentRow.occurrences.length;onClicked:root.occurrenceStep(1)}
             }
             Flickable {

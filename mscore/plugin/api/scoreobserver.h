@@ -28,6 +28,7 @@ class ScoreView;
 class Page;
 namespace PluginAPI {
 class Score;
+struct AnalysisPlaybackRead;
 
 class ScoreObserver : public QObject {
       Q_OBJECT
@@ -57,6 +58,7 @@ class ScoreObserver : public QObject {
       const PedalWindow* pedalWindow(int tick,int track) const;
       QVariantList contextNotes(int tick, int firstTrack, int endTrack, bool pedal, int windowTicks);
 
+      std::shared_ptr<AnalysisPlaybackRead> _playbackRead;
       ScoreContentState _analysisState;
       quint64 _analysisRevision = 0;
       quint64 _analysisSession = 0;
@@ -151,6 +153,9 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QVariantMap analysisScope(bool whole = false) const;
       Q_INVOKABLE QVariantMap analysisRange(int start, int end, int firstTrack, int endTrack, int fromTick, int limit, const QString& expected = QString());
       Q_INVOKABLE QVariantMap analysisHarmonyContext(int before, int firstTrack, int endTrack, int fromTick, int limit, const QString& expected = QString());
+      Q_INVOKABLE QString analysisPlaybackRevision();
+      Q_INVOKABLE QVariantMap analysisPlaybackPrepare(int start,int end,const QString& expected);
+      Q_INVOKABLE QVariantMap analysisPlaybackPage(int fromTick,int firstTrack,int endTrack,int limit,const QString& expected);
       Q_INVOKABLE QVariantMap snapshot(int tick, int firstTrack, int endTrack, bool sounding = false);
       Q_INVOKABLE void setNotePreviewColors(const QVariantList& notes);
       Q_INVOKABLE void clearNotePreviewColors();

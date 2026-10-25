@@ -37,8 +37,8 @@ void TestPluginHost::arrangementRepeatedHints119()
     QVERIFY(click("arrangementUpdate"));QTRY_VERIFY_WITH_TIMEOUT(panel->property("analyzed").toBool()&&!panel->property("running").toBool(),10000);
     QCOMPARE(low().size(),4);QCOMPARE(value("issueRows").toList().size(),1);QCOMPARE(value("counts").toMap().value("harmony").toInt(),1);
     QCOMPARE(value("currentRow").toMap().value("occurrences").toList().size(),4);
-    QCOMPARE(low()[0].toMap().value("lowDetails").toList()[0].toMap().value("seconds").toDouble(),.5);
-    QCOMPARE(low()[2].toMap().value("lowDetails").toList()[0].toMap().value("seconds").toDouble(),1.);
+    QCOMPARE(low()[0].toMap().value("lowDetails").toList()[0].toMap().value("seconds").toDouble(),479./960);
+    QCOMPARE(low()[2].toMap().value("lowDetails").toList()[0].toMap().value("seconds").toDouble(),479./480);
     auto config=value("config").toMap();config["scoreHints"]=true;panel->setProperty("config",config);QVERIFY(QMetaObject::invokeMethod(panel,"publishMarkers"));QTRY_COMPARE(main->currentScoreView()->notePreviewMarkerBoxes().size(),4);
     QVERIFY(click("arrangementNextOccurrence"));QCOMPARE(value("current").toMap().value("tick").toInt(),480);
     QVERIFY(click("arrangementNextOccurrence"));QCOMPARE(value("current").toMap().value("tick").toInt(),960);QCOMPARE(panel->property("occurrenceIndex").toInt(),2);
@@ -55,7 +55,7 @@ void TestPluginHost::arrangementRepeatedHints119()
     auto segment=score->tick2segment(Fraction::fromTicks(960),false,SegmentType::ChordRest);TempoText* tempo=nullptr;
     for(auto element:segment->annotations())if(element->isTempoText())tempo=toTempoText(element);QVERIFY(tempo);
     auto lastDuration=[&]{for(const auto& value:low()){const auto issue=value.toMap();if(issue.value("tick").toInt()==1440)return issue.value("lowDetails").toList()[0].toMap().value("seconds").toDouble();}return -1.;};
-    score->startCmd();static_cast<Element*>(tempo)->undoChangeProperty(Pid::TEMPO,2.);score->endCmd();main->endCmd();QTRY_COMPARE_WITH_TIMEOUT(lastDuration(),.5,10000);
-    main->cmd(getAction("undo"));QTRY_COMPARE_WITH_TIMEOUT(lastDuration(),1.,10000);QTRY_VERIFY(!panel->property("running").toBool());
+    score->startCmd();static_cast<Element*>(tempo)->undoChangeProperty(Pid::TEMPO,2.);score->endCmd();main->endCmd();QTRY_COMPARE_WITH_TIMEOUT(lastDuration(),479./960,10000);
+    main->cmd(getAction("undo"));QTRY_COMPARE_WITH_TIMEOUT(lastDuration(),479./480,10000);QTRY_VERIFY(!panel->property("running").toBool());
     QVERIFY(main->saveFile());auto reopened=main->readScore(score->fileInfo()->absoluteFilePath());QVERIFY(reopened);QCOMPARE(reopened->tempomap()->tempo(960),1.);delete reopened;
 }

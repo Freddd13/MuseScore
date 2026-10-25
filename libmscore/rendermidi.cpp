@@ -2609,8 +2609,10 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       // TODO: avoid doing it multiple times for the same measures
       score->createPlayEvents(chunk.startMeasure(), chunk.endMeasure());
 
-      score->updateChannel();
-      score->updateVelo();
+      if (!ctx.playbackMapsReady) {
+            score->updateChannel();
+            score->updateVelo();
+            }
 
       SynthesizerState s = score->synthesizerState();
       int method = s.method();
@@ -2656,7 +2658,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
             sctx.renderHarmony = ctx.renderHarmony;
             renderStaffChunk(chunk, events, sctx);
             }
-      events->fixupMIDI();
+      if (ctx.finalizeEvents) events->fixupMIDI();
 
       // Prepare one following measure only when a pedal repedal needs its actual attack.
       // This keeps chunked playback and full export on the same onset data.
@@ -2679,26 +2681,11 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
 
       // NOTE:JT this is a temporary fix for duplicate events until polyphonic aftertouch support
       // can be implemented. This removes duplicate SND events.
-      int lastChannel = -1;
-      int lastController = -1;
-      int lastValue = -1;
-      for (auto i = events->begin(); i != events->end();) {
-            if (i->second.type() == ME_CONTROLLER) {
-                  auto& event = i->second;
-                  if (event.channel() == lastChannel &&
-                     event.controller() == lastController &&
-                     event.value() == lastValue) {
-                        i = events->erase(i);
-                        }
-                  else {
-                        lastChannel = event.channel();
-                        lastController = event.controller();
-                        lastValue = event.value();
-                        i++;
-                        }
-                  }
-            else {
-                  i++;
+      if (ctx.finalizeEvents) {
+            MidiControllerFilter filter;
+            for (auto it=events->begin();it!=events->end();) {
+                  if (filter.redundant(it->second)) it=events->erase(it);
+                  else ++it;
                   }
             }
       }

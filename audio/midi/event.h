@@ -15,6 +15,7 @@
 
 #include <map>
 #include <limits>
+#include <vector>
 
 namespace Ms {
 
@@ -357,6 +358,22 @@ class EventList : public QList<Event> {
    public:
       void insert(const Event&);
       void insertNote(int channel, Note*);
+      };
+
+// Shared streaming state for normal export and paged read-only inspection.
+class MidiEventFixup {
+      struct Channel {
+            NPlayEvent* event[128]{};
+            unsigned short playing[128]{};
+            };
+      std::vector<Channel> channels;
+   public:
+      void process(NPlayEvent&);
+      };
+class MidiControllerFilter {
+      int channel=-1, controller=-1, value=-1;
+   public:
+      bool redundant(const NPlayEvent&);
       };
 
 class EventMap : public std::multimap<int, NPlayEvent> {

@@ -105,6 +105,7 @@ void ScoreObserver::setScore(Score* wrapped)
       for (const auto& connection : _scoreConnections) disconnect(connection);
       _scoreConnections.clear();
       _score = score;
+      _playbackRead.reset();
       ++_analysisSession;
       _index.clear();
       _firstTrack = _endTrack = -1;
@@ -117,6 +118,7 @@ void ScoreObserver::setScore(Score* wrapped)
             _scoreConnections.append(connect(_score.data(), &QObject::destroyed, this, [this]() {
                   clearAllPreviews();
                   _score = nullptr;
+                  _playbackRead.reset();
                   _index.clear();
                   emit scoreChanged();
                   notifyPosition();

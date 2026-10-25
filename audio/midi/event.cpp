@@ -408,47 +408,33 @@ void EventList::insert(const Event& e)
 //   class EventMap::fixupMIDI
 //---------------------------------------------------------
 
+void MidiEventFixup::process(NPlayEvent& event)
+      {
+      if (event.type()!=ME_NOTEON || event.isMuted()) return;
+      const auto channel=event.channel();
+      if (size_t(channel)>=channels.size()) channels.resize(channel+1);
+      auto& info=channels[channel];const int pitch=event.pitch();
+      unsigned short np=info.playing[pitch];
+      if (!event.velo()) {
+            if (np==0 || --np>0) event.setDiscard(1);
+            else event.setOriginatingStaff(info.event[pitch]->getOriginatingStaff());
+            }
+      else {
+            if (++np>1) event.setDiscard(info.event[pitch]->getOriginatingStaff()+1);
+            info.event[pitch]=&event;
+            }
+      info.playing[pitch]=np;
+      }
+bool MidiControllerFilter::redundant(const NPlayEvent& event)
+      {
+      if (event.type()!=ME_CONTROLLER) return false;
+      if (channel==event.channel() && controller==event.controller() && value==event.value()) return true;
+      channel=event.channel();controller=event.controller();value=event.value();return false;
+      }
 void EventMap::fixupMIDI()
       {
-      /* track info for each of the 128 possible MIDI notes */
-      struct channelInfo {
-            /* which event the first ME_NOTEON came from */
-            NPlayEvent *event[128];
-            /* how often is the note on right now? */
-            unsigned short nowPlaying[128];
-            };
-
-      /* track info for each channel (on the heap, 0-initialised) */
-      struct channelInfo *info = (struct channelInfo *)calloc(_highestChannel + 1, sizeof(struct channelInfo));
-
-      auto it = begin();
-      while (it != end()) {
-            NPlayEvent& event = it->second;
-            /* ME_NOTEOFF is never emitted, no need to check for it */
-            if (event.type() == ME_NOTEON && !event.isMuted()) {
-                  unsigned short np = info[event.channel()].nowPlaying[event.pitch()];
-                  if (event.velo() == 0) {
-                        /* already off (should not happen) or still playing? */
-                        if (np == 0 || --np > 0)
-                              event.setDiscard(1);
-                        else {
-                              /* hoist NOTEOFF to same track as NOTEON */
-                              event.setOriginatingStaff(info[event.channel()].event[event.pitch()]->getOriginatingStaff());
-                              }
-                        }
-                  else {
-                        if (++np > 1)
-                              /* restrike, possibly on different track */
-                              event.setDiscard(info[event.channel()].event[event.pitch()]->getOriginatingStaff() + 1);
-                        info[event.channel()].event[event.pitch()] = &event;
-                        }
-                  info[event.channel()].nowPlaying[event.pitch()] = np;
-                  }
-
-            ++it;
-            }
-
-            free((void *)info);
+      MidiEventFixup fix;
+      for (auto& row:*this) fix.process(row.second);
       }
 
 }

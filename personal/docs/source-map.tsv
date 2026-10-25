@@ -526,3 +526,9 @@ CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件�
 谱行带尺寸与光标	mscore/performanceeditor/performanceoverlay.cpp	void PerformanceEditor::endBandResize	54	正常完成、取消与边缘光标	resizePanelsAfterPlayback121
 工具图标统一中心	mscore/workflow/workspaceviews.cpp	QIcon personalToolIcon	391	共用图形、中心与视觉尺寸	personalToolbarIcons121
 工具按钮跟随尺寸	mscore/musescore.cpp	button->setIconSize(tools->iconSize())	774	原生按钮图标尺寸与菜单动作	personalToolbarIcons121
+实际演奏版本	mscore/plugin/api/analysisplayback.cpp	QString ScoreObserver::analysisPlaybackRevision	44	修改、静音及播放设置的读取版本	arrangementPlaybackRows122
+实际演奏准备	mscore/plugin/api/analysisplayback.cpp	QVariantMap ScoreObserver::analysisPlaybackPrepare	61	按音乐块与事件分批准备	arrangementPlaybackLarge122
+实际演奏分页	mscore/plugin/api/analysisplayback.cpp	QVariantMap ScoreObserver::analysisPlaybackPage	113	原生tick、实际秒数、反复与音符身份	arrangementPlaybackRows122 / arrangementPlaybackPasses122
+共享MIDI去重	audio/midi/event.cpp	void MidiEventFixup::process	411	正常播放与只读查询共用事件处理	midiEventPostprocessing122
+按键与留声区间	share/plugins/ArrangementAssistant/Playback.js	function event	26	实际松键、踏板与同音重触	test-playback-122.cjs
+实际低音共同持续	share/plugins/ArrangementAssistant/Rules.js	function playedLowVoicing	62	实际音对、时间、力度及来源	arrangementActualPanel122 / arrangementRepeatedHints119

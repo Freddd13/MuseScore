@@ -125,6 +125,8 @@ class MidiRenderer {
             bool metronome{true};
             bool renderHarmony{false};
             bool pedalPlayback{true};
+            bool playbackMapsReady{false};
+            bool finalizeEvents{true};
             Context(const SynthesizerState& ss) : synthState(ss) {}
             };
 
