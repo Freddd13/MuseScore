@@ -411,16 +411,13 @@ QIcon personalToolIcon(const QString &key) {
     p.drawRoundedRect(QRectF(11, 13, 9, 8), 1, 1);
     p.drawArc(QRectF(13, 8, 5, 9), 0, 180 * 16);
   } else if (key == "kumo-vst") {
-    p.drawRoundedRect(QRectF(3, 11, 18, 10), 1, 1);
-    for (int x : {7, 11, 15, 19})
-      p.drawLine(x, 16, x, 21);
-    for (int x : {5, 9, 15})
-      p.fillRect(QRectF(x, 11, 2, 5), ink);
+    p.drawRoundedRect(QRectF(3, 10, 18, 11), 1, 1);
+    for (int x : {7, 11, 15, 19}) p.drawLine(x, 16, x, 21);
+    for (int x : {5, 9, 15}) p.fillRect(QRectF(x, 10, 2, 6), ink);
     p.setPen(QPen(accent, 1.5, Qt::SolidLine, Qt::RoundCap));
-    p.drawLine(14, 2, 14, 5);
-    p.drawLine(18, 2, 18, 5);
-    p.drawRoundedRect(QRectF(13, 5, 6, 3), 1, 1);
-    p.drawLine(16, 8, 16, 10);
+    p.drawLine(10, 2, 10, 5); p.drawLine(14, 2, 14, 5);
+    p.drawRoundedRect(QRectF(8, 5, 8, 3), 1, 1);
+    p.drawLine(12, 8, 12, 10);
   } else if (key == "harmony-assistant") {
     for (int y : {8, 12, 16}) {
       p.setBrush(ink);
@@ -431,21 +428,21 @@ QIcon personalToolIcon(const QString &key) {
     p.drawLine(15, 7, 20, 7);
     p.drawLine(15, 12, 20, 12);
   } else if (key == "reference-player") {
-    for (int i = 0; i < 8; ++i) {
-      const int h = (i * 7 % 11) + 2;
-      p.drawLine(3 + i * 2, 12 - h / 2, 3 + i * 2, 12 + h / 2);
-    }
+    const int heights[] = {4, 8, 14, 8, 18, 10, 6, 12, 4};
+    for (int i = 0; i < 9; ++i)
+      p.drawLine(QPointF(4+i*2,12-heights[i]/2.), QPointF(4+i*2,12+heights[i]/2.));
   } else if (key == "performance-expression") {
     for (int i = 0; i < 4; ++i) {
-      p.fillRect(QRectF(4 + i * 5, 18 - i * 3, 3, i * 3 + 3),
-                 i == 2 ? accent : ink);
+      const int heights[] = {8, 16, 12, 6};
+      p.fillRect(QRectF(4+i*5, 20-heights[i], 3, heights[i]), i == 1 ? accent : ink);
     }
   } else if (key == "kumo-spectrum") {
-    p.drawLine(3, 3, 3, 21);
-    for (int row = 0; row < 4; ++row) {
-      auto color = row == 2 ? accent : ink;
-      color.setAlpha(220 - row * 30);
-      p.fillRect(QRectF(6, 4 + row * 4, 15 - row * 2, 2), color);
+    p.setPen(QPen(ink, 1.2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.drawRoundedRect(QRectF(3,4,18,16),1,1);
+    for (int row=0;row<4;++row) {
+      auto color=row%2?accent:ink;
+      color.setAlpha(row==0?140:220);
+      p.fillRect(QRectF(6,7+row*3, row%2?12:8,1.5),color);
     }
   } else if (key == "kumo-rhythm") {
     p.setBrush(ink);
@@ -472,14 +469,25 @@ QIcon personalToolIcon(const QString &key) {
     for (int x : {7, 12, 17})
       p.drawPoint(x, 10);
   } else {
-    p.setBrush(Qt::NoBrush);
-    p.drawEllipse(QRectF(6, 3, 12, 12));
-    p.drawLine(9, 18, 15, 18);
-    p.drawLine(10, 21, 14, 21);
-    p.setPen(QPen(accent, 1.5));
-    p.drawLine(10, 11, 14, 7);
+    // A note under a magnifier: inspect the actual writing.
+    p.setBrush(ink); p.drawEllipse(QRectF(3,16,6,4));
+    p.drawLine(9,5,9,18); p.setBrush(Qt::NoBrush);
+    p.setPen(QPen(accent,1.5,Qt::SolidLine,Qt::RoundCap));
+    p.drawEllipse(QRectF(12,4,8,8)); p.drawLine(19,11,22,15);
   }
-  return QIcon(image);
+  p.end();
+  // The native toolbar, tabs and QML provider share this centred 24-unit canvas.
+  const auto pixels=image.toImage();
+  QRect bounds;
+  for(int y=0;y<pixels.height();++y)for(int x=0;x<pixels.width();++x)
+    if(qAlpha(pixels.pixel(x,y))) bounds|=QRect(x,y,1,1);
+  if(bounds.isEmpty()) return {};
+  auto glyph=pixels.copy(bounds).scaled(QSize(80,80),Qt::KeepAspectRatio,Qt::SmoothTransformation);
+  glyph.setDevicePixelRatio(1);
+  QPixmap centred(96,96);centred.fill(Qt::transparent);
+  {QPainter draw(&centred);draw.drawImage(QPoint((96-glyph.width())/2,(96-glyph.height())/2),glyph);}
+  centred.setDevicePixelRatio(4);
+  return QIcon(centred);
 }
 void addEditorDockActions(QDockWidget *dock) {
   if (!dock || dock->property("kumoDockActions").toBool())

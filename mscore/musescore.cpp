@@ -770,7 +770,11 @@ void MuseScore::populateAlternativeOperations()
             if (!action) continue;
             if (QString(name) != "performance-editor" && QString(name) != "performance-score-band") action->setIcon(personalToolIcon(name));
             auto button = new AccessibleToolButton(tools, action);
-            button->setObjectName(QString(name) + "-button");tools->addWidget(button);
+            button->setObjectName(QString(name) + "-button");
+            button->setIconSize(tools->iconSize());
+            button->setToolButtonStyle(Qt::ToolButtonIconOnly);button->setAutoRaise(true);
+            connect(tools,&QToolBar::iconSizeChanged,button,&QToolButton::setIconSize);
+            tools->addWidget(button);
             }
       addWorkspaceSelector(tools);
       int needed=16;for(auto action:tools->actions())if(auto widget=tools->widgetForAction(action))needed+=widget->sizeHint().width();

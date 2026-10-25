@@ -51,6 +51,19 @@ void PerformanceEditor::overlayViewChanged()
             }
       _overlayMatrix = matrix;
       }
+void PerformanceEditor::endBandResize(bool cancel)
+      {
+      if (!_bandResizing && !_bandResizeHover) return;
+      if (_bandResizing) {
+            _bandResizing = false;
+            if (cancel) _bandHeight = _bandResizeHeight;
+            else QSettings().setValue("performanceEditor/bandHeight", _bandHeight);
+            qApp->removeEventFilter(this);
+            if (_view && QWidget::mouseGrabber() == _view) _view->releaseMouse();
+            }
+      _bandResizeHover = false;
+      if (_view) { if (_view->cursor().shape() == Qt::SizeVerCursor) _view->unsetCursor(); _view->update(); }
+      }
 bool PerformanceEditor::overlayEvent(QEvent* event)
       {
       const bool growDown=_view&&_bandFollowsSystem&&_scoreFrame.top()>=_view->matrix().map(QPointF(0,_systemBottom)).y();
@@ -63,7 +76,7 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
                   const int height=_bandResizeHeight+(_bandResizeDown?1:-1)*(mouse->y()-qRound(_press.y()));
                   _bandHeight=qBound(48,height,qMax(48,qMin(240,available)));_view->update();return true;
                   }
-            if(event->type()==QEvent::MouseButtonRelease){_bandResizing=false;QSettings().setValue("performanceEditor/bandHeight",_bandHeight);qApp->removeEventFilter(this);_view->releaseMouse();_view->unsetCursor();return true;}
+            if(event->type()==QEvent::MouseButtonRelease && static_cast<QMouseEvent*>(event)->button()==Qt::LeftButton){endBandResize();return true;}
             }
       if (_scoreRangePanning) {
             if (event->type() == QEvent::MouseMove) {
@@ -107,6 +120,7 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
                   }
             }
       if (event->type() == QEvent::Wheel) { if (wheelVelocity(static_cast<QWheelEvent*>(event), false, true)) return true; finishWheel(); }
+      if (event->type() == QEvent::Leave && !_bandResizing) endBandResize();
       if (_dirty || _geometryDirty) {
             // Keep ownership while the queued snapshot/layout refresh erases the
             // old strip. An immediate undo/click must not reach a hidden staff.
@@ -147,7 +161,8 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
                   for (double x : {old.x(), _overlayPointer.x()}) _view->update(QRect(qRound(x) - 3, qRound(_scoreLane.top()) - 24, 7, qRound(_scoreLane.height()) + 30));
                   _view->setCursor(_overBand ? Qt::CrossCursor : Qt::ArrowCursor);
                   }
-            if(overResize){_view->setCursor(Qt::SizeVerCursor);return true;}
+            if(overResize){_bandResizeHover=true;_view->setCursor(Qt::SizeVerCursor);return true;}
+            if(_bandResizeHover) endBandResize();
             if (_scoreFrame.contains(mouse->pos())) { if (!_overBand) _view->setCursor(Qt::ArrowCursor); return true; }
             }
       if (event->type() == QEvent::ToolTip) {

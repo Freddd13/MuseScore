@@ -522,3 +522,7 @@ CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件�
 逐处定位	share/plugins/ArrangementAssistant/ArrangementAssistant_MS3.qml	function occurrenceStep	57	同一排列的下一处与单独忽略	arrangementRepeatedHints119
 窗口切换结束演奏手势	mscore/performanceeditor/performanceeditor.cpp	const bool leavingGestureWindow	1206	归还时间尺、框选、平移及参数鼠标	referencePanelsAfterPlayback120
 空白定位画布身份	mscore/performanceeditor/performanceinteraction.cpp	_seekingSurface = _canvas	524	参数区空白定位与鼠标转交	referencePanelsAfterPlayback120
+尺寸手势及时结束	mscore/performanceeditor/performanceeditor.cpp	const bool releasedBeforeMove	1209	无按键移动、新点击归还鼠标	resizePanelsAfterPlayback121
+谱行带尺寸与光标	mscore/performanceeditor/performanceoverlay.cpp	void PerformanceEditor::endBandResize	54	正常完成、取消与边缘光标	resizePanelsAfterPlayback121
+工具图标统一中心	mscore/workflow/workspaceviews.cpp	QIcon personalToolIcon	391	共用图形、中心与视觉尺寸	personalToolbarIcons121
+工具按钮跟随尺寸	mscore/musescore.cpp	button->setIconSize(tools->iconSize())	774	原生按钮图标尺寸与菜单动作	personalToolbarIcons121

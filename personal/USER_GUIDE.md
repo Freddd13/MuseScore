@@ -2,6 +2,8 @@
 
 当前修复进度、各功能剩余检查与后续顺序见[进度与完整计划](docs/REWORK_PROGRESS.md)。
 
+尺寸拖动后继续操作面板、编曲工具栏图标与用途见[操作说明](docs/INPUT_121_GUIDE.md)。
+
 和弦音名、低音与转位级数，以及连续换谱后的自动显示，见[和弦例子与操作](docs/HARMONY_109_GUIDE.md)。踏板内单个／多个和弦、导入解释和调号变化见[踏板内的和弦](docs/HARMONY_110_GUIDE.md)。分解伴奏、八度重复与中途换和弦见[连续伴奏](docs/HARMONY_111_GUIDE.md)。即时摘要、全谱调号与无踏板聚合见[操作例子](docs/HARMONY_112_GUIDE.md)。导入、保存、重新检测和临时显示的打印效果见[分析文件](docs/HARMONY_113_GUIDE.md)。问号、识别点增删和跨行范围见[修改和弦](docs/HARMONY_114_GUIDE.md)。
 
 希望换谱后继续使用同一套CFX、Pianoteq或SF2声音，见[所有谱子共用钢琴](docs/COMMON_PIANO_108_GUIDE.md)。每份谱可单独切回自己的音源；本批实际结果见[检查记录](docs/COMMON_PIANO_108_CHECKS.md)。
@@ -16,7 +18,7 @@
 
 AI怎样读取当前谱、标题和图片，见[当前实现与后续安排](docs/AI_WORKFLOW_REVIEW_20261024.md)。当前旧画谱入口会根据音符重新排版；MuseScore原生选段图片与数据一起提供的功能安排在E阶段。
 
-本文对应个人版本：**0.120.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+本文对应个人版本：**0.121.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
 
 从完整MIDI寻找选段、分别选择两音改对应、撤销重做及使用力度，见[演奏表达操作](docs/EXPRESSION_096_GUIDE.md)。采用演奏中的快慢、分范围使用速度与长休止录制，见[速度与录制](docs/EXPRESSION_097_GUIDE.md)。
 

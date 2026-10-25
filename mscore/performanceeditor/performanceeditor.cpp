@@ -1180,7 +1180,7 @@ void PerformanceEditor::finishGesture()
 
 void PerformanceEditor::cancelGesture()
       {
-      if(_bandResizing){_bandHeight=_bandResizeHeight;_bandResizing=false;qApp->removeEventFilter(this);if(_view){_view->releaseMouse();_view->unsetCursor();_view->update();}}
+      endBandResize(true);
       if (_scoreRangePanning) { _scoreRangePanning = false; qApp->removeEventFilter(this); if (_view) { _view->releaseMouse(); _view->unsetCursor(); } }
       _moveTimer.stop(); _moveQueued = false;
       if (!_dragging) return;
@@ -1203,6 +1203,19 @@ bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       else if (_marquee || (_dragging && _noteGesture)) gestureOwner = _noteCanvas;
       else if (_seeking) gestureOwner = _seekingSurface ? _seekingSurface.data() : _canvas;
       else if (_rangePanning || _dragging) gestureOwner = _canvas;
+      // The next pointer event can arrive through a native child window after
+      // Windows has already released the button. End the old gesture before
+      // dispatching this new input to another tool.
+      const bool releasedBeforeMove = gestureOwner && event->type() == QEvent::MouseMove
+            && !(static_cast<QMouseEvent*>(event)->buttons() & Qt::LeftButton);
+      const bool nextPress = gestureOwner && event->type() == QEvent::MouseButtonPress
+            && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton;
+      if (releasedBeforeMove || nextPress) {
+            if (_bandResizing) endBandResize();
+            cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); updateSurfaces();
+            }
+      if (_bandResizing && object != _view && event->type() == QEvent::MouseButtonRelease
+            && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) endBandResize();
       const bool leavingGestureWindow = gestureOwner && event->type() == QEvent::WindowDeactivate
             && (object == gestureOwner || object == gestureOwner->window()
                 || object == gestureOwner->window()->windowHandle());

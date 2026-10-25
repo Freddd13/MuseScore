@@ -179,7 +179,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       int keyboardPitch(QPointF) const;
       void paintOriginalVelocity(QPainter&,const QRectF&,bool);
       friend class PerformancePeekKeys;
-      bool _bandResizing=false;
+      bool _bandResizing=false, _bandResizeHover=false;
       int _bandResizeHeight=0;
       QVector<int> _pressedCandidates;
       QToolButton* _followButton = nullptr;
@@ -297,6 +297,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       void invalidateOverlay();
       void syncOverlayTracking();
       bool overlayEvent(QEvent*);
+      void endBandResize(bool cancel = false);
       bool surfaceEvent(QObject*, QEvent*);
       void selectIndices(const QVector<int>&, Qt::KeyboardModifiers, bool preserveGroup = false);
       void selectVoices(int scope);
