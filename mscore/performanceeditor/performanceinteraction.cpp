@@ -521,7 +521,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
                         if (mouse->modifiers() & Qt::ControlModifier) return true;
                         beginGesture(mouse->pos(), laneRect(), false, target); _cycleOnClick = cycle; _pressedCandidates = candidates; return _dragging;
                         }
-                  if (parameter && _tool->currentIndex() == 0 && laneRect().contains(mouse->pos())) { pauseFollow(); _seeking = true; _seekTick = tickForX(mouse->x(), false); _canvas->grabMouse(); qApp->installEventFilter(this); return true; }
+                  if (parameter && _tool->currentIndex() == 0 && laneRect().contains(mouse->pos())) { pauseFollow(); _seeking = true; _seekTick = tickForX(mouse->x(), false); _seekingSurface = _canvas; _canvas->grabMouse(); qApp->installEventFilter(this); return true; }
                   }
             }
       if (event->type() == QEvent::MouseButtonDblClick) {

@@ -41,6 +41,7 @@
 #include "libmscore/select.h"
 #include <QPainter>
 #include <QApplication>
+#include <QWindow>
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QKeyEvent>
@@ -1200,9 +1201,12 @@ bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       if (_comparisonDragging) gestureOwner = _canvas;
       else if (_bandResizing || _scoreRangePanning || (_dragging && _scoreGesture)) gestureOwner = _view;
       else if (_marquee || (_dragging && _noteGesture)) gestureOwner = _noteCanvas;
-      else if (_seeking) gestureOwner = _seekingSurface;
+      else if (_seeking) gestureOwner = _seekingSurface ? _seekingSurface.data() : _canvas;
       else if (_rangePanning || _dragging) gestureOwner = _canvas;
-      if (event->type() == QEvent::ApplicationDeactivate ||
+      const bool leavingGestureWindow = gestureOwner && event->type() == QEvent::WindowDeactivate
+            && (object == gestureOwner || object == gestureOwner->window()
+                || object == gestureOwner->window()->windowHandle());
+      if (event->type() == QEvent::ApplicationDeactivate || leavingGestureWindow ||
           (event->type() == QEvent::UngrabMouse && object == gestureOwner)) {
             cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); updateSurfaces();
             return false;

@@ -520,3 +520,5 @@ CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件�
 分析时间边界	mscore/plugin/api/arrangementsnapshot.cpp	auto appendTempo	193	范围起止与有效BPM	arrangementTiming119
 反复显示行	share/plugins/ArrangementAssistant/Presentation.js	function rows	30	保留每处资料并合并列表	test-low-119.cjs
 逐处定位	share/plugins/ArrangementAssistant/ArrangementAssistant_MS3.qml	function occurrenceStep	57	同一排列的下一处与单独忽略	arrangementRepeatedHints119
+窗口切换结束演奏手势	mscore/performanceeditor/performanceeditor.cpp	const bool leavingGestureWindow	1206	归还时间尺、框选、平移及参数鼠标	referencePanelsAfterPlayback120
+空白定位画布身份	mscore/performanceeditor/performanceinteraction.cpp	_seekingSurface = _canvas	524	参数区空白定位与鼠标转交	referencePanelsAfterPlayback120
