@@ -16,15 +16,19 @@
 
 调度使用 [Windows 多媒体任务接口](https://learn.microsoft.com/en-us/windows/win32/procthread/multimedia-class-scheduler-service)，仅调整独立进程的声音工作线程，离线处理恢复原线程优先级。尚不能用不同窗口条件的两组数字判断调度改动的效果。
 
-## 尚未通过的操作
+## 窗口超时的后续核对
 
 厂商窗口打开的组合检查两次停在独立进程的 `editor` 请求，随后超时。第一轮 113.960 秒，带请求记录的复查 110.406 秒。这两次均未进入正式播放测量。
 
-桌面取点另已确认被 Windows LockApp 覆盖，鼠标选择失败的记录不能用于判断控件可用性。桌面解锁后，先复查同一窗口打开、实际鼠标选择及厂商控件焦点，再在相同窗口条件下比较声音缓冲和界面间隔。
+线程现场两次落在Windows DWrite字体读取中，后一次累计CPU时间约74秒。相同程序在正常权限下通过四轮窗口及播放操作，69.522秒，随后原工作进程与调度尝试各完成四轮相同条件对照。这项超时已定位到受限测试环境的字体读取，相关系统字体保持原样。
+
+原工作进程18,864块输出中五块未及时返回；Pro Audio调度18,891块中六块未及时返回，输入占用与处理失败均为零。调度尝试没有稳定改善，现已退出编译和调用，沿用原声音调度；实验文件保留。原、新主窗口最长间隔分别为37.15／43.03／43.62／37.77毫秒和46.00／38.54／62.17／37.72毫秒。
+
+桌面取点另已确认被Windows LockApp覆盖，正常权限下的鼠标复查也命中同一锁屏窗口，检查因此退出。解锁后继续菜单选择与厂商控件焦点。期间接着C3-A的实际按键数据检查。
 
 ## 接下来的顺序
 
-1. R1-C3.3-B：查明独立厂商窗口超时；补齐真实鼠标操作及相同条件的声音连续性比较。
+1. R1-C3.3-B：窗口超时已完成权限对照；补齐真实鼠标操作和厂商控件焦点。
 2. 确认修改后再编译正式程序、更新说明、安装和发布。当前 0.128.0 与个人设置继续保留。
 3. 返回 C3-A 实际按键与分手，接着 C3-B 连续手位、C4 松手导出、D 记谱与字体、E AI 和分享、F 完整使用检查。
 
@@ -39,5 +43,9 @@
 - `mode129-priority-buffers-pluginhost.txt`
 - `mode129-priority-trace-console.txt`
 - `mode129-priority-no-editor.json`、`mode129-priority-no-editor-pluginhost.txt`
+- `worker-129-stack-final-119352.txt`、`worker-129-stack-late-119352.txt`
+- `mode129-window-normal-access.json`
+- `mode129-original-worker-normal.json`、`mode129-priority-worker-normal.json`
+- `mode129-native-normal-pianoteq-pluginhost.txt`
 
 官谱保持只读。各轮使用独立测试设置，未修改个人声音配置。

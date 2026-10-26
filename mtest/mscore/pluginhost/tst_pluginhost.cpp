@@ -213,6 +213,9 @@ class TestPluginHost : public QObject {
       void playbackGuiLatency125();
       void combinedPlaybackGui126();
       void commonPianoPlaybackSnapshot128();
+      void arrangementPhysicalKeys();
+      void arrangementPhysicalPlayback();
+      void arrangementPhysicalPanel();
       void referenceOutputCancel126();
       void harmonyTemporaryMemory126();
       void workflowCopyLifetime126();
@@ -1466,6 +1469,7 @@ class TestPluginHost : public QObject {
 #include "arrangement_118_tests.inc"
 #include "arrangement_119_tests.inc"
 #include "arrangement_122_tests.inc"
+#include "arrangement_physical_tests.inc"
 #include "performance_123_tests.inc"
 #include "reference_123_tests.inc"
 #include "vst_088_tests.inc"

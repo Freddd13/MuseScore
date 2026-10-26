@@ -5,6 +5,14 @@ namespace Ms { namespace PluginAPI {
 namespace {
 int side(const QString& name){return name=="left"?0:name=="right"?1:-1;}
 QVariantMap hand(const PianoHands::Hand& value){return {{"low",value.low},{"high",value.high},{"count",value.count},{"maximum",value.maximum},{"fingerConflicts",value.fingerConflicts},{"crowdedBlackKeys",value.crowdedBlackKeys},{"fits",value.fits}};}
+QString identityOf(const QVariantMap& note) {
+      auto id=note.value("analysisId",note.value("id")).toString();
+      if(id.isEmpty())id=QString("%1:%2:%3:%4").arg(note.value("track").toInt()).arg(note.value("attackTick",note.value("tick")).toInt()).arg(note.value("index").toInt()).arg(note.value("pitch").toInt());
+      return id;
+      }
+int keyStart(const QVariantMap& note){return note.value("physicalStart",note.value("attackTick",note.value("tick"))).toInt();}
+int keyEnd(const QVariantMap& note){return note.value("physicalEnd",note.value("logicalEnd",note.value("end"))).toInt();}
+bool activeKey(const QVariantMap& note,int tick){return keyStart(note)<=tick && keyEnd(note)>tick && !note.value("grace").toBool() && note.value("play",true).toBool() && !note.value("muted").toBool();}
 }
 QVariantMap PianoHandAnalysis::analyse(const QVariantList& notes,const QVariantList& pedals,const QVariantMap& options) {
       const int tick=options.value("tick").toInt();auto& state=_parts[options.value("part",0).toInt()];
@@ -21,28 +29,29 @@ QVariantMap PianoHandAnalysis::analyse(const QVariantList& notes,const QVariantL
       const double minimum=qBound(0.,options.value("minimumHoldMs",120.).toDouble(),5000.)/1000.;
       QHash<QString,int> identities;
       auto identity=[&](const QVariantMap& n) {
-            auto id=n.value("id").toString();
-            if(id.isEmpty())id=QString("%1:%2:%3:%4").arg(n.value("track").toInt()).arg(n.value("attackTick",n.value("tick")).toInt()).arg(n.value("index").toInt()).arg(n.value("pitch").toInt());
+            const auto id=identityOf(n);
             if(!identities.contains(id))identities[id]=identities.size();return identities.value(id);
             };
       auto keyFor=[&](const QVariantMap& n,int at,double atSeconds) {
             PianoHands::Key key;key.id=identity(n);key.pitch=n.value("pitch").toInt();key.hint=side(n.value("analysisHand").toString());
-            key.attack=n.value("attackTick",n.value("tick")).toInt()==at;
-            key.hand=n.value("handKnown").toBool()?key.hint:!key.attack?state.assigned.value(n.value("id").toString(),-1):-1;
+            key.attack=keyStart(n)==at;
+            key.hand=n.value("handKnown").toBool()?key.hint:!key.attack?state.assigned.value(identityOf(n),-1):-1;
             for(const auto& value:n.value("fingerings").toList()) {
                   const auto text=value.toString().trimmed();const int finger=text.toInt();
                   if(text.size()==1 && finger>=1 && finger<=5){if(!key.finger)key.finger=finger;else if(key.finger!=finger)key.finger=-1;}
                   }
-            if(!key.attack && atSeconds-n.value("onSeconds").toDouble()>=minimum)for(const auto& value:pedals) {
+            if(!key.attack && atSeconds-n.value("physicalOnSeconds",n.value("onSeconds")).toDouble()>=minimum)for(const auto& value:pedals) {
                   const auto p=value.toMap();const int track=n.value("track").toInt();
-                  if(p.value("tick").toInt()<at && at<p.value("end").toInt() && track>=p.value("firstTrack").toInt() && track<p.value("endTrack").toInt()
-                        && n.value("logicalEnd",n.value("end")).toInt()<=p.value("end").toInt() && p.value("supported",true).toBool())key.releasable=true;
+                  const bool matches=p.contains("channelKey") ? p.value("channelKey")==n.value("playbackChannel")
+                        : track>=p.value("firstTrack").toInt() && track<p.value("endTrack").toInt();
+                  if(matches && p.value("tick").toInt()<at && at<p.value("end").toInt()
+                        && keyEnd(n)<=p.value("end").toInt() && p.value("supported",true).toBool())key.releasable=true;
                   }
             return key;
             };
       for(int i=0;i<notes.size();++i) {
-            auto n=notes[i].toMap();const auto id=n.value("id").toString();
-            if(n.value("logicalEnd",n.value("end")).toInt()<=tick || n.value("grace").toBool() || state.released.contains(id))continue;
+            auto n=notes[i].toMap();const auto id=identityOf(n);
+            if(!activeKey(n,tick) || state.released.contains(id))continue;
             inferred|=!n.value("handKnown").toBool();keys.append(keyFor(n,tick,seconds));rows.append(n);original.append(i);
             }
       QHash<int,int> pitchHands,pitchFingers;
@@ -63,7 +72,7 @@ QVariantMap PianoHandAnalysis::analyse(const QVariantList& notes,const QVariantL
       for(int i=keys.size()-1;i>=0;--i) {
             if(fingerConflicts.contains(keys[i].pitch))uncertainFingerings.prepend(original[i]);
             if(handConflicts.contains(keys[i].pitch)) {
-                  uncertainHands.prepend(original[i]);uncertainIds.insert(rows[i].value("id").toString());
+                  uncertainHands.prepend(original[i]);uncertainIds.insert(identityOf(rows[i]));
                   keys.removeAt(i);rows.removeAt(i);original.removeAt(i);
                   }
             }
@@ -74,7 +83,7 @@ QVariantMap PianoHandAnalysis::analyse(const QVariantList& notes,const QVariantL
             if(at<=tick || atSeconds<seconds)continue;
             PianoHands::Future next;next.seconds=atSeconds;
             for(const auto& note:frame.value("notes").toList()) {
-                  auto n=note.toMap();if(n.value("logicalEnd",n.value("end")).toInt()<=at || n.value("grace").toBool() || state.released.contains(n.value("id").toString()) || uncertainIds.contains(n.value("id").toString()))continue;
+                  auto n=note.toMap();if(!activeKey(n,at) || state.released.contains(identityOf(n)) || uncertainIds.contains(identityOf(n)))continue;
                   next.keys.append(keyFor(n,at,atSeconds));
                   }
             future.append(next);
@@ -84,17 +93,20 @@ QVariantMap PianoHandAnalysis::analyse(const QVariantList& notes,const QVariantL
             QVariantList involved,released,attacks;bool rolled=false;
             for(int i=0;i<keys.size();++i)if(result.hands[i]==h) {
                   involved.append(original[i]);if(keys[i].attack)attacks.append(original[i]);rolled|=rows[i].value("rolled").toBool();
-                  const auto id=rows[i].value("id").toString();state.assigned[id]=h;
+                  const auto id=identityOf(rows[i]);state.assigned[id]=h;
                   if(result.released.contains(i)){released.append(original[i]);state.released.insert(id);}
                   assignments.append(QVariantMap{{"index",original[i]},{"hand",h==0?"left":"right"},{"inferred",!rows[i].value("handKnown").toBool()}});
                   }
             int travel=0;double available=0;
-            if(result.after[h].count && state.previous[h].valid) {
+            if(result.after[h].count && result.after[h].fits && state.previous[h].valid) {
                   travel=std::max({0,result.after[h].high-result.after[h].maximum-state.previous[h].low,state.previous[h].high-result.after[h].maximum-result.after[h].low});
                   available=std::max(0.,seconds-state.previous[h].seconds);
                   }
             sides.append(QVariantMap{{"hand",h==0?"left":"right"},{"before",hand(result.before[h])},{"after",hand(result.after[h])},{"notes",involved},{"released",released},{"attacks",attacks},{"travel",travel},{"available",available},{"rolled",rolled},{"partial",!uncertainHands.isEmpty()}});
-            if(!attacks.isEmpty() && result.after[h].count)state.previous[h]={true,result.after[h].low,result.after[h].high,seconds};
+            if(!attacks.isEmpty()) {
+                  if(result.after[h].count && result.after[h].fits)state.previous[h]={true,result.after[h].low,result.after[h].high,seconds};
+                  else state.previous[h]={};
+                  }
             }
       return {{"sides",sides},{"assignments",assignments},{"possible",result.possible && uncertainHands.isEmpty() && uncertainFingerings.isEmpty()},{"inferred",inferred},{"uncertain",result.uncertain || !uncertainHands.isEmpty()},{"uncertainHands",uncertainHands},{"uncertainFingerings",uncertainFingerings},{"limited",result.limited}};
       }

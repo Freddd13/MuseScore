@@ -4,8 +4,8 @@
 // Keep the written note reference alongside each actual key/sustain interval.
 function copy(value) {return JSON.parse(JSON.stringify(value));}
 function create(data) {
-    return {data:data,phase:0,index:0,byId:{},keys:{},pedals:{},released:{},windows:[],
-        onsets:{},times:{},ticks:[],active:[],ranges:(data.ranges||[]).slice().sort(function(a,b){return a.start-b.start;}),rangeIndex:0,frame:null};
+    return {data:data,phase:0,index:0,byId:{},keys:{},pedals:{},released:{},windows:[],pedalWindows:[],activePedals:{},
+        onsets:{},times:{},ticks:[],active:[],activeKeys:[],ranges:(data.ranges||[]).slice().sort(function(a,b){return a.start-b.start;}),rangeIndex:0,frame:null};
 }
 function closeSound(window,row) {
     window.end=row.utick;window.endSeconds=row.seconds;
@@ -27,6 +27,13 @@ function event(s,row) {
     var channel=row.partId+":"+row.channel,key=channel+":"+row.pitch;
     if(row.kind==="pedal") {
         var down=row.value>=64;
+        var current=s.activePedals[channel];
+        if(down && !current) {
+            current={tick:row.utick,seconds:row.seconds,channelKey:channel,supported:row.value===127};
+            s.activePedals[channel]=current;s.pedalWindows.push(current);
+        }
+        if(current && row.value!==0 && row.value!==127)current.supported=false;
+        if(!down && current){current.end=row.utick;current.endSeconds=row.seconds;delete s.activePedals[channel];}
         if(!down)(s.released[channel]||[]).forEach(function(window){closeSound(window,row);});
         if(!down)s.released[channel]=[];
         s.pedals[channel]=down;return;
@@ -72,13 +79,53 @@ function step(s) {
     } else if(s.phase===3) {
         if(s.index>=s.ticks.length){s.phase=4;return true;}
         var tick=s.ticks[s.index++];s.active=s.active.filter(function(window){return window.end>tick;}).concat(s.onsets[tick]);
+        s.activeKeys=s.activeKeys.filter(function(window){return window.keyEnd>tick;}).concat(s.onsets[tick]);
         var range=rangeAt(s,tick);
         if(range){
             var written=tick-range.offset,attacks=s.onsets[tick].filter(function(window){return window.notes.some(function(note){return note.tick>=range.scoreStart&&note.tick<range.scoreEnd;});});
             if(attacks.length)written=attacks[attacks.length-1].notes[0].tick;
-            s.frame={utick:tick,seconds:s.times[tick],tick:written,windows:s.active.slice(),range:range};
+            s.frame={utick:tick,seconds:s.times[tick],tick:written,windows:s.active.slice(),keys:s.activeKeys.slice(),range:range};
         }
     } else return true;
     return false;
 }
 function run(data) {var state=create(data),frames=[];while(!step(state))if(state.frame)frames.push(state.frame);return {windows:state.windows,frames:frames};}
+
+// Keep the score reference intact. The planner reads these separate physical
+// fields so edited note lengths, repeats and delayed attacks use actual MIDI.
+function physicalNotes(windows,tick) {
+    var result=[];
+    windows.forEach(function(window){
+        if(window.incomplete || window.start>tick || !(window.keyEnd>tick))return;
+        window.notes.forEach(function(source){
+            if(source.grace || source.play===false || source.piano===false)return;
+            var note=copy(source);
+            note.analysisId=note.id+"@"+window.channelKey+":"+window.start;
+            note.physicalStart=window.start;note.physicalEnd=window.keyEnd;
+            note.physicalOnSeconds=window.startSeconds;note.physicalEndSeconds=window.keyEndSeconds;
+            note.playbackChannel=window.channelKey;note.partId=window.part;
+            result.push(note);
+        });
+    });
+    return result;
+}
+function physicalFrame(s,frame) {
+    var keys=frame.keys||frame.windows,result={tick:frame.tick,playbackTick:frame.utick,seconds:frame.seconds,notes:physicalNotes(keys,frame.utick),lookahead:[]};
+    var pool=keys.slice(),rangeIndex=s.rangeIndex,last=frame.utick,counts={},pending=0;
+    result.notes.forEach(function(note){if(counts[note.partId]===undefined){counts[note.partId]=0;++pending;}});
+    for(var i=s.index;i<s.ticks.length && i<s.index+32 && pending>0;++i){
+        var at=s.ticks[i],onsets=s.onsets[at]||[];
+        pool=pool.filter(function(window){return window.keyEnd>at;}).concat(onsets);
+        while(rangeIndex<s.ranges.length && s.ranges[rangeIndex].end<=at)++rangeIndex;
+        var range=s.ranges[rangeIndex];if(!range || at<range.start || at>=range.end)continue;
+        var notes=physicalNotes(pool,at);
+        var needed={};notes.forEach(function(note){if(note.physicalStart===at && counts[note.partId]!==undefined && counts[note.partId]<2)needed[note.partId]=true;});
+        if(!Object.keys(needed).length)continue;
+        var written=at-range.offset;
+        for(var j=onsets.length-1;j>=0;--j)if(onsets[j].notes.length){written=onsets[j].notes[0].tick;break;}
+        result.lookahead.push({tick:written,playbackTick:at,seconds:s.times[at],notes:notes});last=at;
+        for(var part in needed)if(++counts[part]===2)--pending;
+    }
+    result.playbackPedals=s.pedalWindows.filter(function(pedal){return pedal.tick<=last && pedal.end>frame.utick;});
+    return result;
+}

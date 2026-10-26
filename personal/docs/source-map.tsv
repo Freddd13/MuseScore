@@ -554,3 +554,8 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方
 
 共用钢琴载入设置	audio/vst/rack.cpp	Slot::loadedConfig / Rack::load	110	当前控制值快照与载入设置分别比较，切谱复用音源	commonPianoPlaybackSnapshot128 / commonPianoReal108
 真实音源连续组合	mtest/mscore/pluginhost/combined_gui_126_tests.inc	TestPluginHost::combinedPlaybackGui126	22	四谱八轨、CFX与Pianoteq、厂商窗口、编辑缩放与实际声音	PIANO_PLAYBACK_128_CHECKS.md
+
+实际按键区间	share/plugins/ArrangementAssistant/Playback.js	physicalNotes / physicalFrame	96	保留谱面身份，读取实际按键与每架钢琴的后续音组	arrangementPhysicalPlayback / test-physical-playback.cjs
+实际按键规则	share/plugins/ArrangementAssistant/Rules.js	physicalPlayability / step	470	实际松键、静音与反复共用音乐位置；保留旧宿主判断	arrangementPhysicalPanel
+原生按键字段	mscore/plugin/api/pianohandanalysis.cpp	activeKey / keyFor	16	按实际松键和声道踏板计算，限定有效手位	arrangementPhysicalKeys
+按键读取能力	mscore/plugin/api/pianohandanalysis.h	playbackFieldsVersion	13	只读能力字段，兼容原有调用	test-physical-playback.cjs

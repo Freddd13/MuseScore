@@ -26,6 +26,8 @@
 
 ### 看懂可弹性提示
 
+本轮正在核对手调音长、踏板留声和反复下的实际按键。操作例子见[哪些音还需要按住](https://github.com/Freddd13/MuseScore/blob/3.x/personal/docs/ARRANGEMENT_PHYSICAL_GUIDE.md)，发布与安装状态见[当前进度](https://github.com/Freddd13/MuseScore/blob/3.x/personal/docs/REWORK_PROGRESS.md)。
+
 检查分别考虑正在按下的新音、需要按住的旧音，以及踏板维持的声音。例如，右手C4写了长音，下一组又出现C6：
 
 - 需要继续按住C4时，提示会写“右手需同时保持 C4–C6（24半音）”，并列出个人跨度上限。

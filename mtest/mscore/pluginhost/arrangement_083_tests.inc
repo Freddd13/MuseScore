@@ -3,7 +3,8 @@ static QVariantMap arrangementBundle083()
 {
     QVariantMap sources;
     for(const auto& item:QList<QPair<QString,QString>>{{"harmony","HarmonyAssistant/Harmony.js"},
-        {"timeline","HarmonyAssistant/Timeline.js"},{"rules","ArrangementAssistant/Rules.js"}}) {
+        {"timeline","HarmonyAssistant/Timeline.js"},{"rules","ArrangementAssistant/Rules.js"},
+        {"playback","ArrangementAssistant/Playback.js"}}) {
         QFile file(QString(TESTROOT)+"/share/plugins/"+item.second);
         if(!file.open(QIODevice::ReadOnly))return {{"error",file.fileName()}};
         sources[item.first]=QString::fromUtf8(file.readAll());

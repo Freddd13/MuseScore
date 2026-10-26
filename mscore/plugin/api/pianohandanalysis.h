@@ -10,6 +10,7 @@ namespace Ms { namespace PluginAPI {
 // Constructed inside one analysis worker. Never retains a score object.
 class PianoHandAnalysis : public QObject {
       Q_OBJECT
+      Q_PROPERTY(int playbackFieldsVersion READ playbackFieldsVersion CONSTANT)
       struct State {
             QHash<QString,int> assigned;
             QSet<QString> released;
@@ -19,6 +20,7 @@ class PianoHandAnalysis : public QObject {
       QMap<int,State> _parts;
    public:
       explicit PianoHandAnalysis(QObject* parent=nullptr):QObject(parent) {}
+      int playbackFieldsVersion() const {return 1;}
       Q_INVOKABLE QVariantMap analyse(const QVariantList&,const QVariantList&,const QVariantMap&);
       };
 } }
