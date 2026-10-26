@@ -16,6 +16,8 @@ R1-C2已查到原曲声音设备打开阻塞界面，以及反复和弦显示遗
 
 ### C3-B1源码已检查：实际松键后的移动时间
 
+C3-B1源码：[1e0791c47afb](https://github.com/Freddd13/MuseScore/commit/1e0791c47afbabf054369144735a6ccd17ce0b57)；插件：[c2866a702abb](https://github.com/Freddd13/Muse3Plugins/commit/c2866a702abb8b21ed4a56575fafe1561fe6f9f7)。尚未安装。
+
 已复现并修正把全部起音间隔算成移动时间的问题。现在按各旧音松键计算，并单独说明踏板下提前松手的时间；同处松手与移动合并。面板定位、改音长、撤销和重开已核对，12组JS与共用指法／导出检查通过。真实谱读取688毫秒、后台分析5871毫秒，界面最长间隔35.4毫秒。源码尚未安装，操作见[松手与移动手位](ARRANGEMENT_MOVEMENT_GUIDE.md)，结果见[本批记录](ARRANGEMENT_MOVEMENT_CHECKS.md)。接着C3-B2跨延音分手／指法和琶音、C3-B3具体建议，再到C4、D、E、F。
 
 ### C3-A2源码已检查：真实谱的分手和指法

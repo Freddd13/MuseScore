@@ -2,6 +2,8 @@
 
 ## 开发中 — 2026-10-27
 
+C3-B1源码：[1e0791c47afb](https://github.com/Freddd13/MuseScore/commit/1e0791c47afbabf054369144735a6ccd17ce0b57)；插件：[c2866a702abb](https://github.com/Freddd13/Muse3Plugins/commit/c2866a702abb8b21ed4a56575fafe1561fe6f9f7)。尚未安装。
+
 - C3-B1：移动时间按实际松键计算，分别说明借踏板提前松手后的时间；同处松手与移动合并展示，定位补齐旧音。原生时间、真实面板、保存撤销、真实谱和12组JS已核对；源码尚未安装，见ARRANGEMENT_MOVEMENT_CHECKS.md。
 
 C3-A2源码：[3ead294965a3](https://github.com/Freddd13/MuseScore/commit/3ead294965a35d326c7f4a92fdb01f03ab18f851)；插件：[3ec68d0017d3](https://github.com/Freddd13/Muse3Plugins/commit/3ec68d0017d3b96889b8a6b911fb83d9dd4612a4)。尚未安装。
