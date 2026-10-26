@@ -193,6 +193,23 @@ bool PerformanceEditor::peekKeyEvent(QObject* object,QEvent* event)
       }
 void PerformanceEditor::paintOriginalVelocity(QPainter& painter, const QRectF& rect, bool onScore)
       {
+      if (onScore) { renderOriginalVelocity(painter, rect, true); return; }
+      // Cursor/playing-note damage changes many times between two edits. The
+      // reference curves and their labels only change with the editor view.
+      const auto ratio = _canvas->devicePixelRatioF();
+      const QSize size = _canvas->size() * ratio;
+      if (_velocityReferenceImage.size() != size || _velocityReferenceImage.devicePixelRatioF() != ratio
+            || _velocityReferenceRevision != _visualRevision || _velocityReferenceFont != painter.font()) {
+            _velocityReferenceImage = QPixmap(size); _velocityReferenceImage.setDevicePixelRatio(ratio);
+            _velocityReferenceImage.fill(Qt::transparent);
+            QPainter cached(&_velocityReferenceImage); cached.setFont(painter.font()); cached.setRenderHints(painter.renderHints());
+            renderOriginalVelocity(cached, rect, false);
+            _velocityReferenceRevision = _visualRevision; _velocityReferenceFont = painter.font();
+            }
+      painter.drawPixmap(0, 0, _velocityReferenceImage);
+      }
+void PerformanceEditor::renderOriginalVelocity(QPainter& painter, const QRectF& rect, bool onScore)
+      {
       if (rangeKind() != 0 || _velocityReferences.isEmpty()) return;
       const int from = qBound(0, tickForX(rect.left(), onScore), _endTick);
       const int until = qBound(from, tickForX(rect.right(), onScore), _endTick);

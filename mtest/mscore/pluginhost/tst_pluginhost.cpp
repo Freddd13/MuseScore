@@ -210,6 +210,7 @@ class TestPluginHost : public QObject {
       void cfxLiveStateKeepsEditorInstance();
       void sourceScorePlayback_data();
       void sourceScorePlayback();
+      void playbackGuiLatency125();
       void sourcePerformance_data();
       void sourcePerformance();
       void sourceSessionReuse107();
@@ -1477,6 +1478,7 @@ class TestPluginHost : public QObject {
 #include "workspace_093_tests.inc"
 #include "reference_input_120_tests.inc"
 #include "source_performance_tests.inc"
+#include "playback_gui_125_tests.inc"
 #include "input_121_tests.inc"
 #include "values_094_tests.inc"
 QTEST_MAIN(TestPluginHost)

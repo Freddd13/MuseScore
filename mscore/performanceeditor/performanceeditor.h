@@ -167,6 +167,9 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QVector<QRectF> _visibleScoreInk;
       quint64 _visibleScoreRevision=1;
       PerformanceValueLayout _scoreValueLabels, _rollValueLabels;
+      QPixmap _velocityReferenceImage;
+      quint64 _velocityReferenceRevision = 0;
+      QFont _velocityReferenceFont;
       QTransform _visibleScoreMatrix;
       QRect _visibleScoreRect;
       ScoreContentState _visibleScoreState;
@@ -178,6 +181,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       bool peekKeyEvent(QObject*,QEvent*);
       int keyboardPitch(QPointF) const;
       void paintOriginalVelocity(QPainter&,const QRectF&,bool);
+      void renderOriginalVelocity(QPainter&,const QRectF&,bool);
       friend class PerformancePeekKeys;
       bool _bandResizing=false, _bandResizeHover=false;
       int _bandResizeHeight=0;

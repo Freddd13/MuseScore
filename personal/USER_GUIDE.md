@@ -2,6 +2,8 @@
 
 当前修复进度、各功能剩余检查与后续顺序见[进度与完整计划](docs/REWORK_PROGRESS.md)。
 
+播放时的力度参考线、滚轮和本轮界面性能检查，见[播放与力度显示](docs/PLAYBACK_GUI_125_GUIDE.md)。
+
 同时打开多份谱时的音源共用、保留与释放，见[多谱音源安排](docs/MULTISCORE_AUDIO_GUIDE.md)。0.124修复了停播换谱后，返回旧谱时力度预览一直等待的问题。
 
 关闭和弦助手、普通听原曲、选段循环、互相停止及谱面片段播放按钮，见[完整操作](docs/PERFORMANCE_REFERENCE_123_GUIDE.md)。

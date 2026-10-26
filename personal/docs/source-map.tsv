@@ -539,3 +539,6 @@ CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件�
 
 停播后的所属谱状态	mscore/seq.cpp	void Seq::stopWait / guiStop	529	停止立即清除所属谱播放标志	mtest/mscore/pluginhost/source_performance_tests.inc
 多谱音源与实际负载	mtest/mscore/pluginhost/source_performance_tests.inc	sourcePerformance / sourceScorePlayback	1	实际三种钢琴、四谱与连续编辑播放	MULTISCORE_AUDIO_CHECKS.md
+
+力度参考线图像复用	mscore/performanceeditor/performanceux.cpp	paintOriginalVelocity / renderOriginalVelocity	194	播放重绘复用，记号筛选与视窗更新	mtest/mscore/performanceeditor/dynamics_090_tests.inc
+播放界面耗时	mtest/mscore/pluginhost/playback_gui_125_tests.inc	playbackGuiLatency125	1	多谱持续播放与滚轮、缩放	PLAYBACK_GUI_125_CHECKS.md
