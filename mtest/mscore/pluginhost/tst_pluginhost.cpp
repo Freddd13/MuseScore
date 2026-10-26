@@ -208,6 +208,10 @@ class TestPluginHost : public QObject {
       void toolWindowScreenAndFullscreenRoundTrip();
       void spectrumButtonsAndFirstOpenContent();
       void cfxLiveStateKeepsEditorInstance();
+      void sourceScorePlayback_data();
+      void sourceScorePlayback();
+      void sourcePerformance_data();
+      void sourcePerformance();
       void sourceSessionReuse107();
       void commonPianoPool108();
       void commonPianoCfxOrder108();
@@ -1472,6 +1476,7 @@ class TestPluginHost : public QObject {
 #include "components_092_tests.inc"
 #include "workspace_093_tests.inc"
 #include "reference_input_120_tests.inc"
+#include "source_performance_tests.inc"
 #include "input_121_tests.inc"
 #include "values_094_tests.inc"
 QTEST_MAIN(TestPluginHost)

@@ -2,6 +2,8 @@
 
 当前修复进度、各功能剩余检查与后续顺序见[进度与完整计划](docs/REWORK_PROGRESS.md)。
 
+同时打开多份谱时的音源共用、保留与释放，见[多谱音源安排](docs/MULTISCORE_AUDIO_GUIDE.md)。0.124修复了停播换谱后，返回旧谱时力度预览一直等待的问题。
+
 关闭和弦助手、普通听原曲、选段循环、互相停止及谱面片段播放按钮，见[完整操作](docs/PERFORMANCE_REFERENCE_123_GUIDE.md)。
 
 低音排列按实际起音、松键与踏板检查；手调音长、起音和踏板后怎样更新，见[完整操作](docs/ARRANGEMENT_122_GUIDE.md)。

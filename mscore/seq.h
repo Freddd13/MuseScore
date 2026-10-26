@@ -142,7 +142,9 @@ class Seq : public QObject, public Sequencer {
       MasterScore* cs;
       ScoreView* cv;
       bool running;                       // true if sequencer is available
-      Transport state;                    // STOP, PLAY, STARTING=3
+      std::atomic<Transport> state;        // shared by the audio and GUI threads
+      std::atomic_bool _stopNoticePending { false };
+      bool _synchronousStop = false;      // GUI stop also completes its queued notice
       bool inCountIn;
                                           // When we begin playing count in, JACK should play the ticks, but shouldn't run
                                           // JACK Transport to prevent playing in other applications. Before playing

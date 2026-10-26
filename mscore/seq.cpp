@@ -27,6 +27,7 @@
 #include "preferences.h"
 #include "scoreview.h"
 #include "seq.h"
+#include <QScopedValueRollback>
 #include "workflow/playbackpreview.h"
 #include <QCoreApplication>
 #include "workflow/referencebus.h"
@@ -527,13 +528,15 @@ void Seq::stop()
 
 void Seq::stopWait()
       {
+      const bool dispatchStop = !_synchronousStop;
+      QScopedValueRollback<bool> stopping(_synchronousStop, true);
       stop();
       QWaitCondition sleep;
 #ifndef NDEBUG
       int idx = 0;
 #endif
-      while (state != Transport::STOP) {
-            qDebug("State %d", (int)state);
+      while (state != Transport::STOP || _stopNoticePending.load(std::memory_order_acquire)) {
+            qDebug("State %d", static_cast<int>(state.load()));
             mutex.lock();
             sleep.wait(&mutex, 100);
             mutex.unlock();
@@ -541,6 +544,12 @@ void Seq::stopWait()
             Q_ASSERT(++idx <= 10);
 #endif
             }
+      // The queued GUI stop notification can arrive after a tab switch. Clear
+      // the score owned by this sequencer before its view is replaced.
+      if (cs)
+            cs->setIsPlaying(false);
+      if (dispatchStop)
+            synchronizeStoppedGui();
       }
 
 //---------------------------------------------------------
@@ -643,6 +652,10 @@ const QList<ActiveNoteEventInfo>& Seq::activeNoteEvents() const
 
 void Seq::guiStop()
       {
+      // Natural completion also belongs to the sequencer's score; the main
+      // window may already display another tab when this message is delivered.
+      if (cs)
+            cs->setIsPlaying(false);
       QAction* a = getAction("play");
       a->setChecked(false);
 
@@ -675,10 +688,12 @@ void Seq::seqMessage(int msg, int arg)
                   break;
                   }
             case '4':   // Restart the playback at the end of the score
-                  loopStart();
+                  if (_synchronousStop) guiStop();
+                  else loopStart();
                   break;
             case '3':   // Loop restart while playing
-                  seek(cs->repeatList().tick2utick(cs->loopInTick().ticks()));
+                  if (!_synchronousStop)
+                        seek(cs->repeatList().tick2utick(cs->loopInTick().ticks()));
                   break;
             case '2':
                   guiStop();
@@ -709,7 +724,7 @@ void Seq::seqMessage(int msg, int arg)
                   break;
 
             case '1':         // PLAY
-                  emit started();
+                  if (!_synchronousStop && isPlaying()) emit started();
 //                  heartBeatTimer->start(1000/guiRefresh);
                   break;
 
@@ -1205,6 +1220,9 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                   }
             // Got a message from JACK Transport panel: Stop
             else if (state == Transport::PLAY && driverState == Transport::STOP) {
+                  // Publish completion only after the GUI notice has been queued.
+                  // stopWait must finish this score before another view takes over.
+                  _stopNoticePending.store(true, std::memory_order_release);
                   state = Transport::STOP;
                   // Muting all notes
                   stopNotes(-1, true);
@@ -1213,6 +1231,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                         if (mscore->loop()) {
                               qDebug("Seq.cpp - Process - Loop whole score. endUTick = %d, cs->pos() = %d", endUTick, cs->pos().ticks());
                               emit toGui('4');
+                              _stopNoticePending.store(false, std::memory_order_release);
                               return;
                               }
                         else {
@@ -1222,10 +1241,11 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                   else {
                      emit toGui('0');
                      }
+                  _stopNoticePending.store(false, std::memory_order_release);
                   }
             else if (state != driverState)
                   qDebug("Seq: state transition %d -> %d ?",
-                     (int)state, (int)driverState);
+                     static_cast<int>(state.load()), (int)driverState);
             }
 
       memset(buffer, 0, sizeof(float) * framesPerPeriod * 2); // assume two channels

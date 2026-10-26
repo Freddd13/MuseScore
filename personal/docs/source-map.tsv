@@ -536,3 +536,6 @@ CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件�
 和弦关闭	mscore/workflow/builtinpanels.cpp	void showHarmonyPanel	73	整体停止与恢复显示	mtest/mscore/pluginhost/performance_123_tests.inc
 力度与和弦索引	mscore/plugin/api/scoreobserver.cpp	bool ScoreObserver::reuseHarmonyAfterVelocityEdit	178	核对实际改动并复用音乐资料	mtest/mscore/pluginhost/performance_123_tests.inc
 原曲谱面入口	mscore/workflow/referencefactory.cpp	class ReferenceScoreControls	69	关联播放与位置	mtest/mscore/pluginhost/reference_123_tests.inc
+
+停播后的所属谱状态	mscore/seq.cpp	void Seq::stopWait / guiStop	528	停止立即清除所属谱播放标志	mtest/mscore/pluginhost/source_performance_tests.inc
+多谱音源与实际负载	mtest/mscore/pluginhost/source_performance_tests.inc	sourcePerformance / sourceScorePlayback	1	实际三种钢琴、四谱与连续编辑播放	MULTISCORE_AUDIO_CHECKS.md
