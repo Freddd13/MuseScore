@@ -2,6 +2,8 @@
 
 ## 开发中 — 2026-10-27
 
+C3-B2-B2源码：[ca100cf0a20e](https://github.com/Freddd13/MuseScore/commit/ca100cf0a20ed4d8ef450a21508dec19f9f78c38)；插件：[c3408839da28](https://github.com/Freddd13/Muse3Plugins/commit/c3408839da287939bcdb80d3f3cb5cb8405a367c)。尚未安装。
+
 - C3-B2-B2：备选与括号指法参加五指分配和松手判断，补齐具体音与文字说明。192组枚举、真实面板、连续琶音、撤销与重开及原有MIDI计算已核对。源码尚未安装，见ARRANGEMENT_ALTERNATIVE_CHECKS.md；接着同音换指时机与具体路线。
 
 C3-B2-B1源码：[0c622116b48c](https://github.com/Freddd13/MuseScore/commit/0c622116b48c02607ca9d89efac27419103b67a5)；插件：[ebd2e0ecbdae](https://github.com/Freddd13/Muse3Plugins/commit/ebd2e0ecbdae6fd1ababc93acbc182335e30b865)。尚未安装。

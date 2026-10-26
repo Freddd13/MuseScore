@@ -16,6 +16,8 @@ R1-C2已查到原曲声音设备打开阻塞界面，以及反复和弦显示遗
 
 ### C3-B2-B2源码已检查：备选指法与连续琶音
 
+C3-B2-B2源码：[ca100cf0a20e](https://github.com/Freddd13/MuseScore/commit/ca100cf0a20ed4d8ef450a21508dec19f9f78c38)；插件：[c3408839da28](https://github.com/Freddd13/Muse3Plugins/commit/c3408839da287939bcdb80d3f3cb5cb8405a367c)。尚未安装。
+
 备选指法`2(3)`、括号指法`[4]`参加五指匹配，松手建议使用同一判断。说明列出相关音和指法。192组独立枚举对照一致，实际面板完成定位、修改、撤销与重开；连续琶音分别核对普通按键、踏板留声和延长按键。
 
 最后记录19 passed，全部14组JS与共用模块6 passed通过。真实谱读取770毫秒、后台计算6823毫秒，界面最长间隔86.4毫秒。源码尚未安装，程序仍为0.128.0；操作见[备选指法与琶音](ARRANGEMENT_ALTERNATIVE_GUIDE.md)，结果见[本批记录](ARRANGEMENT_ALTERNATIVE_CHECKS.md)。接着C3-B2-B3同音换指时机，再按C3-B3、C4、D、E、F继续。
