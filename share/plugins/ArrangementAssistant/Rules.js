@@ -510,12 +510,14 @@ function physicalPlayability(s,frame) {
         var side=report.sides[h],label=side.hand==="left"?"左手":"右手",before=side.before,after=side.after;
         if(!before.count)continue;
         var involved=side.notes.map(function(index){return notes[index];}),released=side.released.map(function(index){return notes[index];});
+        involved.forEach(function(note){note.analysisHand=side.hand;});
         var basis=(side.partial?"按已明确分手的音检查，":frame.playbackTick===undefined?"按谱面一直保持时：":"按实际按键时长：")+before.count+"个不同按键，跨度"+(before.high-before.low)+"半音。";
         basis+=report.inferred?"其中部分分手来自自动建议，可校正。":"分手由用户或符号指定。";
+        var releaseIssue=null;
         if(released.length) {
             basis+="同一踏板内可提前松开 "+released.map(function(n){return Harmony.spelledName(n.tpc,n.pitch,false)+(Math.floor(n.pitch/12)-1);}).join("、")+"；之后需保持"+after.count+"键，跨度"+(after.high-after.low)+"半音。";
             var names=released.map(function(n){return Harmony.spelledName(n.tpc,n.pitch,false)+(Math.floor(n.pitch/12)-1);});
-            issue(s,"playability","release-"+side.hand,tick,involved,label+"先松开"+names.slice(0,3).join("、")+(names.length>3?"等音":"")+"，再弹下一组音",basis,"注意");
+            releaseIssue=issue(s,"playability","release-"+side.hand,tick,involved,label+"先松开"+names.slice(0,3).join("、")+(names.length>3?"等音":"")+"，再弹下一组音",basis,"注意");
         }
         if(!after.fits) {
             var remaining=involved.filter(function(n){return released.indexOf(n)<0;}),distance=after.high-after.low;
@@ -533,9 +535,24 @@ function physicalPlayability(s,frame) {
         }
         if(after.crowdedBlackKeys && after.high-after.low>=12)issue(s,"playability","shape-"+side.hand,tick,involved,label+"的黑白键排列需要核对",basis+"跨度较大，同时有相邻黑白键。可检查内部黑白键的指法，或尝试换手、调整排列。","提示");
         if(side.attacks.length && side.travel>0) {
-            var movement="手位至少需要移动"+side.travel+"半音；两组音之间有"+Math.round(side.available*1000)+" ms。";
-            if(side.travel>=7 && side.available<.3)issue(s,"playability","transition-"+side.hand,tick,involved,label+"弹下一组音的时间较短",movement+"即使提前松手也仍需快速移动；可考虑换手或改变排列。","注意");
-            else if(side.travel>=12)issue(s,"playability","travel-"+side.hand,tick,involved,label+"需要较大手位移动",movement+"请结合你的实际速度检查。","提示");
+            var from=side.movementFrom||[],movementNotes=involved.slice(),pedalNotes=side.pedalReleaseNotes||[];
+            from.concat(pedalNotes).forEach(function(note){if(!movementNotes.some(function(n){return n.id===note.id;}))movementNotes.push(note);});
+            var movement;
+            if(from.length) {
+                var names=from.map(pitchLabel).filter(function(name,index,list){return list.indexOf(name)===index;}).join("、");
+                movement=side.available>0?"从 "+names+" 实际松键到这组音只有 "+Math.round(side.available*1000)+" ms，手位至少还需移动 "+side.travel+" 半音。"
+                    :names+" 按到这组音开始时，需松键后再移动至少 "+side.travel+" 半音。";
+            } else movement="手位至少需要移动 "+side.travel+" 半音；两组音之间有 "+Math.round(side.available*1000)+" ms。";
+            var pedalHelps=pedalNotes.length && side.pedalAvailable>side.available && side.pedalTravel/Math.max(.000001,side.pedalAvailable)<side.travel/Math.max(.000001,side.available);
+            if(pedalHelps) {
+                var releaseNames=pedalNotes.map(pitchLabel).filter(function(name,index,list){return list.indexOf(name)===index;}).join("、");
+                movement+="借同一踏板提前松开 "+releaseNames+"，可留出约 "+Math.round(side.pedalAvailable*1000)+" ms 完成移动。可在演奏编辑器调整松手位置。";
+            }
+            if(releaseIssue && (side.travel>=7 && side.available<.3 || side.travel>=12)) {
+                releaseIssue.basis+="\n"+movement;
+                movementNotes.forEach(function(note){if(!releaseIssue.notes.some(function(n){return n.id===note.id;}))releaseIssue.notes.push(note);});
+            } else if(side.travel>=7 && side.available<.3)issue(s,"playability","transition-"+side.hand,tick,movementNotes,pedalHelps?label+"可借踏板提前松手，留出移动时间":label+"实际松键后的移动时间较短",movement+(pedalHelps?"":"可考虑提前松手、换手或改变排列。"),"注意");
+            else if(side.travel>=12)issue(s,"playability","travel-"+side.hand,tick,movementNotes,label+"需要较大手位移动",movement+(pedalHelps?"":"请结合你的实际速度检查。"),"提示");
         }
     }
     }

@@ -219,6 +219,8 @@ class TestPluginHost : public QObject {
       void arrangementPhysicalAnnotations();
       void arrangementNestedHandMarkers();
       void arrangementPhysicalRealScore();
+      void arrangementMovementTiming();
+      void arrangementMovementPanel();
       void referenceOutputCancel126();
       void harmonyTemporaryMemory126();
       void workflowCopyLifetime126();

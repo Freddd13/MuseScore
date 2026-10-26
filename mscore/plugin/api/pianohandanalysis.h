@@ -15,6 +15,7 @@ class PianoHandAnalysis : public QObject {
             QHash<QString,int> assigned;
             QSet<QString> released;
             PianoHands::Position previous[2];
+            QVariantList previousNotes[2];
             int lastTick=-1;
             };
       QMap<int,State> _parts;

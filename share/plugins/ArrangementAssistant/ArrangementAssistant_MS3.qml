@@ -496,7 +496,7 @@ Flickable {
                 ScrollBar.vertical:ScrollBar {}
             }
             RowLayout {
-                Desk.DeskButton {iconName:"locate";text:"定位相关音";enabled:!!root.current;onClicked:root.locate();ToolTip.visible:hovered;ToolTip.text:"选中涉及的音，并在谱面短暂标出所在小节"}
+                Desk.DeskButton {objectName:"arrangementLocate";iconName:"locate";text:"定位相关音";enabled:!!root.current;onClicked:root.locate();ToolTip.visible:hovered;ToolTip.text:"选中涉及的音，并在谱面短暂标出所在小节"}
                 Desk.DeskButton {text:"上一条";enabled:root.issueRows.indexOf(root.currentRow)>0;onClicked:root.issueStep(-1)}
                 Desk.DeskButton {text:"下一条";enabled:!!root.currentRow&&root.issueRows.indexOf(root.currentRow)+1<root.issueRows.length;onClicked:root.issueStep(1)}
                 Desk.DeskButton {objectName:"arrangementIgnoreIssue";iconName:"delete";text:"忽略此处";enabled:!!root.current;onClicked:root.ignore()}

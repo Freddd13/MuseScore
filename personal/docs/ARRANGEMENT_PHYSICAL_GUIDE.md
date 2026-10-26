@@ -38,3 +38,5 @@
 如果提示的分手与你的弹法不同，先在“声部与左右手”校正，再更新结果。点空白和选其它音会保留本次检查范围。
 
 实际检查和后续工作见[本批记录](ARRANGEMENT_PHYSICAL_CHECKS.md)。
+
+下一组音的时间判断见[松手与移动手位](ARRANGEMENT_MOVEMENT_GUIDE.md)。

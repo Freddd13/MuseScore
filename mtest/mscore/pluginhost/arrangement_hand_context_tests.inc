@@ -123,3 +123,82 @@ void TestPluginHost::arrangementPhysicalRealScore()
     const auto output=QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path()));QFile report(output.filePath("physical-real-score.json"));QVERIFY(report.open(QIODevice::WriteOnly));report.write(QJsonDocument::fromVariant(QVariantMap{{"summary",summary},{"input",data},{"result",result}}).toJson());
     QFile originalAgain(original);QVERIFY(originalAgain.open(QIODevice::ReadOnly));QCOMPARE(QCryptographicHash::hash(originalAgain.readAll(),QCryptographicHash::Sha256).toHex(),hash);qInfo()<<"Physical real score"<<summary;
 }
+
+void TestPluginHost::arrangementMovementTiming()
+{
+    auto key=[](int pitch,int start,int end,double on,double off,const QString& id){return QVariantMap{
+        {"id",id},{"analysisId",id},{"pitch",pitch},{"track",4},{"attackTick",start},{"logicalEnd",end},
+        {"physicalStart",start},{"physicalEnd",end},{"physicalOnSeconds",on},{"physicalEndSeconds",off},
+        {"playbackChannel","0:0"},{"analysisHand","left"},{"handKnown",true}};};
+    auto side=[](const QVariantMap& result){return result.value("sides").toList().front().toMap();};
+    auto old=key(36,0,470,0.,470/960.,"old"),next=key(72,480,960,.5,1.,"next");
+    PluginAPI::PianoHandAnalysis planner;planner.analyse({old},{},{{"tick",0},{"seconds",0.}});
+    auto result=side(planner.analyse({next},{},{{"tick",480},{"seconds",.5}}));
+    QVERIFY(result.value("travel").toInt()>0);
+    QVERIFY2(qAbs(result.value("available").toDouble()-10/960.)<1.e-9,"Movement time starts when the old key is released");
+    QCOMPARE(result.value("movementFrom").toList().size(),1);QCOMPARE(result.value("movementFrom").toList().front().toMap().value("id").toString(),QString("old"));
+    auto run=[&](const QVariantList& previous,const QVariantMap& following,const QVariantList& pedals=QVariantList{},QVariantMap options=QVariantMap{}){
+        PluginAPI::PianoHandAnalysis p;options["tick"]=0;options["seconds"]=0.;p.analyse(previous,pedals,options);
+        options["tick"]=following.value("physicalStart");options["seconds"]=following.value("physicalOnSeconds");return side(p.analyse({following},pedals,options));
+    };
+    old["physicalEnd"]=120;old["physicalEndSeconds"]=.125;result=run({old},next);
+    QVERIFY(qAbs(result.value("available").toDouble()-.375)<1.e-9);
+    old["physicalEnd"]=470;old["physicalEndSeconds"]=.99;next["physicalOnSeconds"]=1.;next["physicalEndSeconds"]=2.;result=run({old},next);
+    QVERIFY(qAbs(result.value("available").toDouble()-.01)<1.e-9);
+    // A late release on the higher key leaves a shorter final part of the move.
+    old=key(36,0,96,0.,.1,"low");auto later=key(48,0,470,0.,.49,"high");next=key(72,480,960,.5,1.,"next");
+    result=run({old,later},next);QCOMPARE(result.value("travelTotal").toInt(),20);QCOMPARE(result.value("travel").toInt(),8);QVERIFY(qAbs(result.value("available").toDouble()-.01)<1.e-9);
+    QCOMPARE(result.value("movementFrom").toList().front().toMap().value("id").toString(),QString("high"));
+    old=key(36,0,470,0.,.49,"old");QVariantMap pedal{{"tick",20},{"seconds",20/960.},{"end",960},{"endSeconds",1.},{"channelKey","0:0"},{"supported",true}};
+    result=run({old},next,{pedal});QVERIFY(qAbs(result.value("available").toDouble()-.01)<1.e-9);QVERIFY(qAbs(result.value("pedalAvailable").toDouble()-.38)<1.e-9);
+    QCOMPARE(result.value("pedalReleaseNotes").toList().size(),1);
+    pedal["supported"]=false;result=run({old},next,{pedal});QVERIFY(qAbs(result.value("pedalAvailable").toDouble()-.01)<1.e-9);QVERIFY(result.value("pedalReleaseNotes").toList().isEmpty());
+    pedal["supported"]=true;pedal["channelKey"]="0:1";result=run({old},next,{pedal});QVERIFY(result.value("pedalReleaseNotes").toList().isEmpty());
+    pedal["channelKey"]="0:0";pedal["end"]=460;result=run({old},next,{pedal});QVERIFY(result.value("pedalReleaseNotes").toList().isEmpty());
+    pedal["end"]=960;result=run({old},next,{pedal},{{"minimumHoldMs",490}});QVERIFY(result.value("pedalAvailable").toDouble()<.011);
+    old.remove("physicalEndSeconds");result=run({old},next);QVERIFY(qAbs(result.value("available").toDouble()-.5)<1.e-9);
+    // Parts retain their own preceding hand position; repeats start a fresh sequence.
+    old=key(36,0,470,0.,.49,"old");PluginAPI::PianoHandAnalysis parts;
+    parts.analyse({old},{},{{"tick",0},{"seconds",0.},{"part",0}});
+    parts.analyse({key(96,0,470,0.,.49,"other")},{},{{"tick",0},{"seconds",0.},{"part",8}});
+    result=side(parts.analyse({next},{},{{"tick",480},{"seconds",.5},{"part",0}}));QVERIFY(qAbs(result.value("available").toDouble()-.01)<1.e-9);
+    result=side(parts.analyse({old},{},{{"tick",0},{"seconds",0.},{"part",0}}));QCOMPARE(result.value("travel").toInt(),0);QVERIFY(result.value("movementFrom").toList().isEmpty());
+}
+
+void TestPluginHost::arrangementMovementPanel()
+{
+    const auto path=_settings.filePath("physical-movement.mscx");QFile file(path);QVERIFY(file.open(QIODevice::WriteOnly));file.write(physicalScoreXml(480,480));file.close();
+    auto main=Ms::mscore;auto score=main->readScore(path);QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));main->resize(1280,900);main->show();
+    auto chord=toChord(score->firstSegment(SegmentType::ChordRest)->element(4));auto bass=chord->upNote();chord->setPlayEventType(PlayEventType::User);
+    NoteEventList almost;almost.clear();almost.append(NoteEvent(0,0,990));bass->setPlayEvents(almost);score->setPlaylistDirty();
+    PluginAPI::Score wrapped(score);PluginAPI::ScoreObserver observer;observer.setScore(&wrapped);const auto bundle=arrangementBundle083();
+    auto config=bundle.value("config").toMap();config["harmony"]=false;config["counterpoint"]=false;config["autoRefresh"]=false;
+    config["roles"]=QVariantMap{{"4",QVariantMap{{"hand","left"}}},{"5",QVariantMap{{"hand","left"}}}};
+    auto input=physicalContextInput(observer,1920,8);auto result=physicalContextRun(observer,bundle,input,config);QVERIFY(!result.contains("error"));
+    auto transition=[](const QVariantList& rows){for(int i=0;i<rows.size();++i)if(rows[i].toMap().value("code")=="transition-left"&&rows[i].toMap().value("tick").toInt()==480)return i;return -1;};
+    auto rows=result.value("issues").toList();int index=transition(rows);QVERIFY(index>=0);QVERIFY(rows[index].toMap().value("basis").toString().contains("C2"));
+    double oldOff=-1,nextOn=-1;for(const auto& value:input.value("playback").toMap().value("events").toList()){
+        const auto event=value.toMap();if(event.value("pitch").toInt()==36&&event.value("kind")=="off")oldOff=event.value("seconds").toDouble();
+        if(event.value("pitch").toInt()==72&&event.value("kind")=="on")nextOn=event.value("seconds").toDouble();
+    }
+    QVERIFY(oldOff>0&&nextOn>oldOff);const auto gap=QString::number(qRound((nextOn-oldOff)*1000))+" ms";QVERIFY(rows[index].toMap().value("basis").toString().contains(gap));
+    auto pedal=new Pedal(score);pedal->setTrack(4);pedal->setTrack2(4);pedal->setTick(Fraction());pedal->setTick2(Fraction::fromTicks(1920));
+    score->startCmd();score->undoAddElement(pedal);score->endCmd();main->endCmd();
+    main->pluginTriggered(QString(TESTROOT)+"/share/plugins/ArrangementAssistant/ArrangementAssistant_MS3.qml");QPointer<QmlPlugin> panel=arrangementPanel116();QVERIFY(panel);
+    struct Close{QPointer<QmlPlugin> panel;QVariantMap config;~Close(){if(panel){panel->setProperty("config",config);panel->disposePanelForReload();}QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);}}close{panel,panel->property("config").value<QJSValue>().toVariant().toMap()};
+    panel->setPanelFloating(true);panel->resizePanel(460,760);panel->setProperty("config",config);panel->setProperty("rangeChoice",1);QTest::qWait(100);
+    auto update=[&]{auto button=panel->findChild<QQuickItem*>("arrangementUpdate");if(!button||!button->isVisible())return false;QTest::mouseClick(panel->window(),Qt::LeftButton,Qt::NoModifier,button->mapToScene(QPointF(button->width()/2,button->height()/2)).toPoint());return true;};
+    auto issues=[&]{return panel->property("issues").value<QJSValue>().toVariant().toList();};
+    QVERIFY(update());QTRY_VERIFY_WITH_TIMEOUT(panel->property("analyzed").toBool()&&!panel->property("running").toBool(),15000);
+    rows=issues();index=transition(rows);QVERIFY(index>=0);const auto selected=rows[index].toMap();QVERIFY(selected.value("title").toString().contains(QString::fromUtf8("借踏板")));QVERIFY(selected.value("basis").toString().contains("380 ms"));
+    panel->setProperty("currentIssueIndex",index);auto locate=panel->findChild<QQuickItem*>("arrangementLocate");QVERIFY(locate&&locate->isVisible());
+    QTest::mouseClick(panel->window(),Qt::LeftButton,Qt::NoModifier,locate->mapToScene(QPointF(locate->width()/2,locate->height()/2)).toPoint());
+    QVERIFY(!score->selection().elements().isEmpty());const auto target=score->selection().elements().front();QVERIFY(target->isNote());QCOMPARE(target->track(),5);QCOMPARE(toNote(target)->chord()->tick().ticks(),480);
+    const auto out=QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path()));QTest::qWait(100);QVERIFY(panel->window()->grabWindow().save(out.filePath("arrangement-movement-panel.png")));QVERIFY(main->currentScoreView()->grab().save(out.filePath("arrangement-movement-score.png")));
+    NoteEventList shortGate;shortGate.clear();shortGate.append(NoteEvent(0,0,250));score->startCmd();score->undo(new ChangeNoteEventList(bass,shortGate));score->endCmd();main->endCmd();
+    QVERIFY(update());QTRY_VERIFY_WITH_TIMEOUT(!panel->property("running").toBool(),15000);QVERIFY(transition(issues())<0);
+    main->cmd(getAction("undo"));QVERIFY(update());QTRY_VERIFY_WITH_TIMEOUT(!panel->property("running").toBool(),15000);QVERIFY(transition(issues())>=0);
+    QVERIFY(main->saveFile());TemporaryScore reopened(main->readScore(path));QVERIFY(reopened);PluginAPI::Score restored(reopened.get());observer.setScore(&restored);
+    auto restoredResult=physicalContextRun(observer,bundle,physicalContextInput(observer,1920,8),config);QVERIFY(!restoredResult.contains("error"));QVERIFY(transition(restoredResult.value("issues").toList())>=0);
+    QFile report(out.filePath("arrangement-movement.json"));QVERIFY(report.open(QIODevice::WriteOnly));report.write(QJsonDocument::fromVariant(QVariantMap{{"initialInput",input},{"initialResult",result},{"pedalIssue",selected},{"reopened",restoredResult}}).toJson());
+}

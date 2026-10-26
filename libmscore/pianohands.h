@@ -15,8 +15,11 @@ struct Key {
       int id=0,pitch=60,hand=-1,hint=-1;
       bool attack=true,releasable=false;
       int finger=0;
+      double endSeconds=std::numeric_limits<double>::quiet_NaN();
+      double releaseSeconds=std::numeric_limits<double>::quiet_NaN();
       };
-struct Position { bool valid=false;int low=0,high=0;double seconds=0; };
+struct Hold { int pitch=60;double until=0,release=std::numeric_limits<double>::quiet_NaN(); };
+struct Position { bool valid=false;int low=0,high=0;double seconds=0;QVector<Hold> holds; };
 struct Hand {
       int low=0,high=0,count=0,maximum=15;
       int fingerConflicts=0;
@@ -29,6 +32,39 @@ struct Plan {
       bool possible=true,uncertain=false,limited=false;
       double cost=std::numeric_limits<double>::infinity();
       };
+struct Movement {
+      int distance=0,total=0,holdPitch=-1;
+      double available=0,since=0;
+      };
+inline int distanceTo(const Hand& hand,int low,int high) {
+      return std::max({0,hand.high-hand.maximum-low,high-hand.maximum-hand.low});
+      }
+inline Movement movement(const Hand& hand,const Position& previous,double seconds,bool pedal=false) {
+      Movement out;
+      if(!hand.count || !hand.fits || !previous.valid)return out;
+      out.distance=out.total=distanceTo(hand,previous.low,previous.high);
+      out.available=std::max(0.,seconds-previous.seconds);out.since=previous.seconds;
+      // A held key constrains the hand until its release. Compare the remaining
+      // distance/time at each constraint, rather than treating the entire IOI as free.
+      for(const auto& hold:previous.holds) {
+            const double until=pedal && std::isfinite(hold.release)?std::min(hold.until,hold.release):hold.until;
+            if(!std::isfinite(until) || until<=previous.seconds)continue;
+            const int distance=distanceTo(hand,hold.pitch,hold.pitch);if(!distance)continue;
+            const double since=std::min(seconds,std::max(previous.seconds,until));
+            const double available=std::max(0.,seconds-since);
+            if(!out.distance || distance*std::max(1.e-9,out.available)>out.distance*std::max(1.e-9,available)) {
+                  out.distance=distance;out.available=available;out.since=since;out.holdPitch=hold.pitch;
+                  }
+            }
+      return out;
+      }
+inline Position positionFor(const QVector<Key>& keys,const Plan& plan,int side,double seconds) {
+      const auto& hand=plan.after[side];if(!hand.count || !hand.fits)return {};
+      Position out{true,hand.low,hand.high,seconds,{}};
+      for(int i=0;i<keys.size();++i)if(plan.hands[i]==side && !plan.released.contains(i) && std::isfinite(keys[i].endSeconds))
+            out.holds.append({keys[i].pitch,keys[i].endSeconds,keys[i].releaseSeconds});
+      return out;
+      }
 inline bool white(int pitch) {
       const int pc=(pitch%12+12)%12;return pc==0 || pc==2 || pc==4 || pc==5 || pc==7 || pc==9 || pc==11;
       }
@@ -124,9 +160,8 @@ inline QVector<Plan> candidates(const QVector<Key>& input,const Limits (&limits)
                   if(current.count)cost+=std::max(0,current.high-current.low-limits[side].comfort)*.1;
                   cost+=current.crowdedBlackKeys*.08;
                   if(current.count && previous[side].valid) {
-                        const int travel=std::max({0,current.high-current.maximum-previous[side].low,previous[side].high-current.maximum-current.low});
-                        const double available=std::max(.02,seconds-previous[side].seconds);
-                        cost+=std::min(5.,travel*.03/available);
+                        const auto motion=movement(current,previous[side],seconds,true);
+                        cost+=std::min(5.,motion.distance*.03/std::max(.02,motion.available));
                         }
                   }
             for(int i=0;i<groups.size();++i)for(int member:groups[i].members) {
@@ -162,7 +197,7 @@ inline Plan planWithContext(const QVector<Key>& input,const Limits (&limits)[2],
                         }
                   for(int side=0;side<2;++side) {
                         bool attacked=false;for(int i=0;i<keys.size();++i)attacked|=keys[i].attack && value.hands[i]==side;
-                        if(attacked&&value.after[side].count)positions[side]={true,value.after[side].low,value.after[side].high,at};
+                        if(attacked)positions[side]=positionFor(keys,value,side,at);
                         }
                   };
             remember(input,choice,seconds);double cost=choice.cost,weight=.5;
