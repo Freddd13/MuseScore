@@ -483,7 +483,11 @@ function fingerConflictText(notes) {
     var groups={};notes.forEach(function(note){(note.fingerings||[]).forEach(function(text){
         text=String(text).trim();if(!/^[1-5]$/.test(text))return;var names=groups[text]||(groups[text]=[]),name=pitchLabel(note);if(names.indexOf(name)<0)names.push(name);
     });});
-    return Object.keys(groups).filter(function(finger){return groups[finger].length>1;}).map(function(finger){return finger+"指同时标在 "+groups[finger].join("、")+" 上。";}).join("");
+    var conflicts=Object.keys(groups).filter(function(finger){return groups[finger].length>1;}).map(function(finger){return finger+"指同时标在 "+groups[finger].join("、")+" 上。";}).join("");
+    if(conflicts)return conflicts;
+    var alternatives=notes.some(function(note){return (note.fingerings||[]).some(function(text){return /[1-5]\s*\([1-5]\)/.test(String(text));});});
+    if(alternatives)return notes.filter(function(note){return (note.fingerings||[]).length;}).map(function(note){return pitchLabel(note)+"："+note.fingerings.join("／");}).join("；")+"。这些音的备选指法仍有手指重叠。";
+    return "";
 }
 function physicalPlayability(s,frame) {
     if(typeof PianoHands==="undefined" || typeof PianoHands.analyse!=="function")return false;

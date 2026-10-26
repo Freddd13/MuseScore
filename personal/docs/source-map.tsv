@@ -572,3 +572,7 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方
 后续保持位置	share/plugins/ArrangementAssistant/Playback.js	physicalNotes / notationAt	116	选区外前文继承与后续保持位置，按反复换算实际时间	test-required-holds.cjs
 保持与松手时间	mscore/plugin/api/pianohandanalysis.cpp	keyFor	52	明确换指或分手前保留按键，最早松手时间包含该约束	arrangementRequiredKey
 后续位置说明	share/plugins/ArrangementAssistant/Rules.js	completeHands / physicalPlayability	127	合并范围外分手，显示后续小节、拍位与指法	arrangementRequiredRange
+备选指法文字	libmscore/pianofingering.h	choices	8	读取2(3)与[4]，保留原来的指法文字和外观	arrangementAlternativeFingers
+五指可用匹配	libmscore/pianohands.h	assignFinger / matchingFingers	78	比较同时按键可用的手指，保留新起音后尽量少释放旧音	arrangementFingerMatchingCorpus
+原生指法交集	mscore/plugin/api/pianohandanalysis.cpp	keyFor / pitchFingers	44	同音多声部核对共同指法，局部冲突继续检查其它键	arrangementAlternativePanel
+连续琶音保持	mtest/mscore/pluginhost/arrangement_alternative_fingers_tests.inc	arrangementArpeggioHolds	44	真实MIDI核对普通按键、踏板留声与延长按键	ARRANGEMENT_ALTERNATIVE_CHECKS.md

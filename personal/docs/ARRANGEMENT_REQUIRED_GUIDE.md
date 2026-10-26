@@ -26,4 +26,4 @@
 
 指法和分手沿用乐谱原来的记号。按Ctrl+S保存，重新打开后点“更新结果”即可继续检查。实际播放音长仍在演奏编辑器中调整。
 
-连续琶音和特殊指法文字继续完善，具体记录见[本批检查](ARRANGEMENT_REQUIRED_CHECKS.md)。
+连续琶音与备选指法见[操作例子](ARRANGEMENT_ALTERNATIVE_GUIDE.md)，该批源码已检查，尚未安装。同音换指组合的时机继续完善；后续保持位置的检查见[本批记录](ARRANGEMENT_REQUIRED_CHECKS.md)。

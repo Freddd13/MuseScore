@@ -2,6 +2,8 @@
 
 ## 开发中 — 2026-10-27
 
+- C3-B2-B2：备选与括号指法参加五指分配和松手判断，补齐具体音与文字说明。192组枚举、真实面板、连续琶音、撤销与重开及原有MIDI计算已核对。源码尚未安装，见ARRANGEMENT_ALTERNATIVE_CHECKS.md；接着同音换指时机与具体路线。
+
 C3-B2-B1源码：[0c622116b48c](https://github.com/Freddd13/MuseScore/commit/0c622116b48c02607ca9d89efac27419103b67a5)；插件：[ebd2e0ecbdae](https://github.com/Freddd13/Muse3Plugins/commit/ebd2e0ecbdae6fd1ababc93acbc182335e30b865)。尚未安装。
 
 - C3-B2-B1：延音后续的指法／分手约束提前松手，选区外的说明也参与；移动时间从实际可松手处计算。面板写出后续位置，删除、撤销、反复、保存重开与真实谱已核对。源码尚未安装，见ARRANGEMENT_REQUIRED_CHECKS.md；接着连续琶音和特殊指法文字。

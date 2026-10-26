@@ -17,6 +17,7 @@ struct Key {
       int finger=0;
       double endSeconds=std::numeric_limits<double>::quiet_NaN();
       double releaseSeconds=std::numeric_limits<double>::quiet_NaN();
+      int fingerMask=0;
       };
 struct Hold { int pitch=60;double until=0,release=std::numeric_limits<double>::quiet_NaN(); };
 struct Position { bool valid=false;int low=0,high=0;double seconds=0;QVector<Hold> holds; };
@@ -73,18 +74,32 @@ struct Group {
       bool releasable=true,attack=false;
       QVector<int> members;
       int finger=0;
+      int fingerMask=31;
       };
+inline bool assignFinger(int key,const int* masks,int* owners,int& visited) {
+      for(int finger=0;finger<5;++finger)if((masks[key]&(1<<finger)) && !(visited&(1<<finger))) {
+            visited|=1<<finger;
+            if(owners[finger]<0 || assignFinger(owners[finger],masks,owners,visited)){owners[finger]=key;return true;}
+            }
+      return false;
+      }
+inline int matchingFingers(const int* masks,int count) {
+      int owners[5]={-1,-1,-1,-1,-1},matched=0;
+      for(int i=0;i<count;++i){int visited=0;if(assignFinger(i,masks,owners,visited))++matched;}
+      return matched;
+      }
 inline Hand describe(const QVector<Group>& keys,const QVector<int>& hands,int side,const Limits& limits,const QVector<bool>& removed) {
-      Hand out;out.maximum=limits.maximum;int used[6]={};int previous=-1;
+      Hand out;out.maximum=limits.maximum;QVector<int> fingers;int previous=-1;
       for(int i=0;i<keys.size();++i)if(hands[i]==side && !removed[i]) {
             if(!out.count)out.low=out.high=keys[i].pitch;
             else {out.low=std::min(out.low,keys[i].pitch);out.high=std::max(out.high,keys[i].pitch);}
             ++out.count;
-            if(keys[i].finger>=1 && keys[i].finger<=5 && used[keys[i].finger]++)++out.fingerConflicts;
+            if(keys[i].fingerMask!=31)fingers.append(keys[i].fingerMask);
             if(previous>=0 && keys[i].pitch-keys[previous].pitch<=1 && (!white(keys[i].pitch) || !white(keys[previous].pitch)))++out.crowdedBlackKeys;
             previous=i;
             }
       if(out.count && white(out.low) && white(out.high))out.maximum=limits.white;
+      out.fingerConflicts=fingers.size()-matchingFingers(fingers.constData(),fingers.size());
       out.fits=out.count<=5 && out.high-out.low<=out.maximum && !out.fingerConflicts;return out;
       }
 inline double strain(const Hand& hand) {
@@ -100,19 +115,21 @@ inline bool releaseForHand(const QVector<Group>& keys,const QVector<int>& hands,
       for(int low=0;low<positions.size();++low)for(int high=low;high<positions.size();++high) {
             const int a=positions[low],b=positions[high];const int maximum=white(keys[a].pitch)&&white(keys[b].pitch)?limits.white:limits.maximum;
             if(keys[b].pitch-keys[a].pitch>maximum)continue;
-            QVector<bool> kept(keys.size(),false);int used[6]={},count=0;bool valid=true;
+            QVector<bool> kept(keys.size(),false);int fingers[5]={},count=0;bool valid=true;
             auto retain=[&](int i) {
-                  if(kept[i])return;const int finger=keys[i].finger;
-                  if(++count>5 || finger>0 && used[finger]++){valid=false;return;}kept[i]=true;
+                  if(kept[i])return true;
+                  if(count>=5)return false;fingers[count]=keys[i].fingerMask;
+                  if(matchingFingers(fingers,count+1)!=count+1)return false;
+                  ++count;kept[i]=true;return true;
                   };
-            retain(a);retain(b);
+            valid=retain(a)&&retain(b);
             for(int p=0;p<positions.size() && valid;++p)if(!keys[positions[p]].releasable) {
-                  if(p<low || p>high)valid=false;else retain(positions[p]);
+                  if(p<low || p>high)valid=false;else valid=retain(positions[p]);
                   }
             if(!valid)continue;
             for(int p=low;p<=high && count<5;++p) {
-                  const int i=positions[p],finger=keys[i].finger;
-                  if(!kept[i] && keys[i].releasable && (!finger || !used[finger]))retain(i);
+                  const int i=positions[p];
+                  if(!kept[i] && keys[i].releasable)retain(i);
                   }
             auto candidate=*removed;int released=0;
             for(int i:positions){candidate[i]=!kept[i];released+=!kept[i];}
@@ -136,6 +153,8 @@ inline QVector<Plan> candidates(const QVector<Key>& input,const Limits (&limits)
                   else group.hand=key.hand;
                   }
             if(group.hint<0 && key.hint>=0 && key.hint<2)group.hint=key.hint;
+            const int mask=key.fingerMask?key.fingerMask:key.finger>=1&&key.finger<=5?1<<(key.finger-1):31;
+            if(group.fingerMask&mask)group.fingerMask&=mask;else uncertain=true;
             if(key.finger>=1 && key.finger<=5) {
                   if(group.finger && group.finger!=key.finger)uncertain=true;
                   else group.finger=key.finger;

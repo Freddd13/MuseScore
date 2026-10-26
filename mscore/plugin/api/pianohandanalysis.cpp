@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2.
 #include "pianohandanalysis.h"
+#include "libmscore/pianofingering.h"
 #include <algorithm>
 namespace Ms { namespace PluginAPI {
 namespace {
@@ -41,8 +42,11 @@ QVariantMap PianoHandAnalysis::analyse(const QVariantList& notes,const QVariantL
             const double start=n.value("physicalOnSeconds",n.value("onSeconds")).toDouble(&hasStart);
             if(hasEnd && std::isfinite(end))key.endSeconds=end;
             for(const auto& value:n.value("fingerings").toList()) {
-                  const auto text=value.toString().trimmed();const int finger=text.toInt();
-                  if(text.size()==1 && finger>=1 && finger<=5){if(!key.finger)key.finger=finger;else if(key.finger!=finger)key.finger=-1;}
+                  const auto mask=PianoFingering::choices(value.toString());if(!mask)continue;
+                  if(key.finger<0)continue;
+                  if(!key.fingerMask)key.fingerMask=mask;
+                  else if(key.fingerMask&mask)key.fingerMask&=mask;
+                  else key.finger=-1;
                   }
             for(const auto& value:pedals) {
                   const auto p=value.toMap();const int track=n.value("track").toInt();
@@ -74,15 +78,15 @@ QVariantMap PianoHandAnalysis::analyse(const QVariantList& notes,const QVariantL
                   else pitchHands[key.pitch]=key.hand;
                   }
             if(key.finger<0)fingerConflicts.insert(key.pitch);
-            else if(key.finger>0) {
-                  if(pitchFingers.contains(key.pitch) && pitchFingers[key.pitch]!=key.finger)fingerConflicts.insert(key.pitch);
-                  else pitchFingers[key.pitch]=key.finger;
+            else if(key.fingerMask) {
+                  if(pitchFingers.contains(key.pitch) && !(pitchFingers[key.pitch]&key.fingerMask))fingerConflicts.insert(key.pitch);
+                  else pitchFingers[key.pitch]=pitchFingers.value(key.pitch,31)&key.fingerMask;
                   }
             }
       QVariantList uncertainHands,uncertainFingerings;
       QSet<QString> uncertainIds;
       for(int i=keys.size()-1;i>=0;--i) {
-            if(fingerConflicts.contains(keys[i].pitch))uncertainFingerings.prepend(original[i]);
+            if(fingerConflicts.contains(keys[i].pitch)){uncertainFingerings.prepend(original[i]);keys[i].finger=0;keys[i].fingerMask=0;}
             if(handConflicts.contains(keys[i].pitch)) {
                   uncertainHands.prepend(original[i]);uncertainIds.insert(identityOf(rows[i]));
                   keys.removeAt(i);rows.removeAt(i);original.removeAt(i);
@@ -135,6 +139,6 @@ QVariantMap PianoHandAnalysis::analyse(const QVariantList& notes,const QVariantL
                         }
                   }
             }
-      return {{"sides",sides},{"assignments",assignments},{"possible",result.possible && uncertainHands.isEmpty() && uncertainFingerings.isEmpty()},{"inferred",inferred},{"uncertain",result.uncertain || !uncertainHands.isEmpty()},{"uncertainHands",uncertainHands},{"uncertainFingerings",uncertainFingerings},{"limited",result.limited}};
+      return {{"sides",sides},{"assignments",assignments},{"possible",result.possible && uncertainHands.isEmpty() && uncertainFingerings.isEmpty()},{"inferred",inferred},{"uncertain",result.uncertain || !uncertainHands.isEmpty() || !uncertainFingerings.isEmpty()},{"uncertainHands",uncertainHands},{"uncertainFingerings",uncertainFingerings},{"limited",result.limited}};
       }
 } }
