@@ -130,7 +130,10 @@ class EditorAreas : public QObject {
             common ? page != 3 && !(page == 2 && area.widget->objectName() !=
                                                      "performanceNotesArea")
                    : page == area.page;
-        if (common && visible)
+        const QString pageChoice = "performanceEditor/pageArea/" + QString::number(page) + "/" + area.widget->objectName();
+        if (common && page == 2 && QSettings().contains(pageChoice))
+          visible = QSettings().value(pageChoice).toBool();
+        else if (common && visible)
           visible =
               QSettings()
                   .value("performanceEditor/area/" + area.widget->objectName(),
@@ -339,10 +342,13 @@ public:
                   if (visible && value.page > 0 && tabs)
                     tabs->setCurrentIndex(value.page);
                   value.widget->setVisible(visible);
-                  if (value.page == 0)
-                    QSettings().setValue("performanceEditor/area/" +
-                                             value.widget->objectName(),
-                                         visible);
+                  if (value.page == 0) {
+                    const int page = tabs ? tabs->currentIndex() : 0;
+                    const QString key = page == 2
+                        ? "performanceEditor/pageArea/2/" + value.widget->objectName()
+                        : "performanceEditor/area/" + value.widget->objectName();
+                    QSettings().setValue(key, visible);
+                  }
                 }
                 ensureEditorAreas(split);
                 updateChecks(value);

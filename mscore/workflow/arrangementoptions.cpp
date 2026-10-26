@@ -3,6 +3,7 @@
 #include "featuregate.h"
 #include "playbackpreview.h"
 #include "regionalcomparison.h"
+#include "temporaryscore.h"
 #include "mscore/plugin/api/scoreobserver.h"
 #include "mscore/musescore.h"
 #include "mscore/scoreview.h"
@@ -989,7 +990,7 @@ QVariantMap arrangementOperation(PluginAPI::ScoreObserver *observer, Score *scor
                 QString problem;
                 QElapsedTimer preparationClock;
                 preparationClock.start();
-                option.copy.reset(score->masterScore()->clone());
+                option.copy=std::shared_ptr<MasterScore>(score->masterScore()->clone(),TemporaryScoreDeleter{});
                 option.preparation["cloneMs"] = double(preparationClock.nsecsElapsed()) / 1000000.;
                 preparationClock.restart();
                 if (!option.copy)

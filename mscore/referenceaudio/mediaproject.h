@@ -7,8 +7,6 @@
 #include <QThreadPool>
 #include <QTimer>
 #include <memory>
-class QAudioOutput;
-class QIODevice;
 class ReferenceMediaProject : public QObject {
       Q_OBJECT
       Q_PROPERTY(bool available READ available CONSTANT)
@@ -31,12 +29,12 @@ class ReferenceMediaProject : public QObject {
       Q_PROPERTY(bool audioStopsScore READ audioStopsScore WRITE setAudioStopsScore NOTIFY changed)
       Q_PROPERTY(bool scoreStopsAudio READ scoreStopsAudio WRITE setScoreStopsAudio NOTIFY changed)
       struct Session;
+      class OutputThread;
       KumoReferenceHost _host;
       QThreadPool _pool;
       QTimer _timer;
       std::shared_ptr<Session> _session;
-      QAudioOutput* _audio=nullptr;
-      QIODevice* _device=nullptr;
+      std::unique_ptr<OutputThread> _output;
       QVariantList _tracks;
       int _selectedTrack=0;
       QVariantMap _settings;

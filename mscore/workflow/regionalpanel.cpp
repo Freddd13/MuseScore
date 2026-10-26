@@ -21,6 +21,7 @@
 #include "referencefactory.h"
 #include "regionalcontrols.h"
 #include "regionalcomparison.h"
+#include "temporaryscore.h"
 #include "playbackpreview.h"
 #include "libmscore/undo.h"
 #include <QCheckBox>
@@ -97,7 +98,7 @@ class RegionalPanel : public QWidget {
       QComboBox *_compareWith,*_combinations;
       QTreeWidget *_differences;
       QLabel* _differenceStatus=nullptr;
-      std::unique_ptr<MasterScore> _other;
+      TemporaryScore _other;
       ScoreContentState _comparedState;
       QString _comparedGroup,_comparedVariant;
       QPointer<ScoreView> _compareView;
@@ -660,7 +661,7 @@ class RegionalPanel : public QWidget {
                               continue;
                         }
                   }
-                  std::unique_ptr<MasterScore> old(mscore->readScore(source));
+                  TemporaryScore old(mscore->readScore(source));
                   if (!old) {
                         failures << tr("%1：不能打开").arg(QFileInfo(source).fileName());
                         continue;

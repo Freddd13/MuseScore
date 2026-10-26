@@ -5,7 +5,8 @@ class PlaybackGuiProbe125 : public QObject {
     QMap<QString,QVector<double>> timings;
     bool eventFilter(QObject* object,QEvent* event) override {
         if(nested || (event->type()!=QEvent::Paint && event->type()!=QEvent::Timer && event->type()!=QEvent::MetaCall && event->type()!=QEvent::UpdateRequest && event->type()!=QEvent::Wheel && event->type()!=QEvent::MouseMove))return false;
-        const QString name=QString::fromLatin1(object->metaObject()->className())+":"+object->objectName()+":"+QString::number(event->type());
+        const auto timer=qobject_cast<QTimer*>(object);
+        const QString name=QString::fromLatin1(object->metaObject()->className())+":"+object->objectName()+":"+QString::number(event->type())+(timer?QString(":interval=%1").arg(timer->interval()):QString());
         QElapsedTimer watch;watch.start();nested=true;QCoreApplication::sendEvent(object,event);nested=false;
         const double ms=watch.nsecsElapsed()/1.e6;timings[name].append(ms);if(ms>100)qInfo()<<"Long GUI event"<<name<<ms;return true;
     }

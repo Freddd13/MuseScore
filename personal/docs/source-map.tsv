@@ -542,3 +542,8 @@ CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件�
 
 力度参考线图像复用	mscore/performanceeditor/performanceux.cpp	paintOriginalVelocity / renderOriginalVelocity	194	播放重绘复用，记号筛选与视窗更新	mtest/mscore/performanceeditor/dynamics_090_tests.inc
 播放界面耗时	mtest/mscore/pluginhost/playback_gui_125_tests.inc	playbackGuiLatency125	1	多谱持续播放与滚轮、缩放	PLAYBACK_GUI_125_CHECKS.md
+
+原曲声音准备	mscore/referenceaudio/mediaproject.cpp	ReferenceMediaProject::OutputThread	85	声音线程持有设备与输出，界面读取原子位置	referenceOutputCancel126 / combinedPlaybackGui126
+临时副本释放	mscore/workflow/temporaryscore.h	TemporaryScoreDeleter	13	临时谱、所属容器及撤销对象依次释放	workflowCopyLifetime126 / arrangementAiWorkflow
+和弦显示临时资料	mscore/workflow/harmonylabel.cpp	ScoreObserver::harmonyLabel	16	及时释放Movements	harmonyTemporaryMemory126
+扒谱区域显隐	mscore/workflow/editorareas.cpp	EditorAreas::applyPage	107	保存扒谱页公共区域的显式选择	combinedPlaybackGui126

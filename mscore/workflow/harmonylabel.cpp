@@ -10,6 +10,7 @@
 #include <QPainter>
 #include <QScopedValueRollback>
 #include <QtMath>
+#include <memory>
 
 namespace Ms { namespace PluginAPI {
 QVariantMap ScoreObserver::harmonyLabel(const QString& chordText,const QString& degreeText,const QVariantMap& options) const
@@ -25,7 +26,10 @@ QVariantMap ScoreObserver::harmonyLabel(const QString& chordText,const QString& 
       const qreal gap=qBound(0.,options.value("gap",6.).toDouble(),24.);
       const int order=qBound(0,options.value("order",0).toInt(),3);
       const QColor ink(options.value("color","#343a3f").toString());
-      MasterScore scratch(_score->style());scratch.style().checkChordList();
+      // MasterScore's Movements belongs to its caller. Keep it alive through
+      // the score destructor, then release its style, pages and undo storage.
+      std::unique_ptr<Movements> scratchMovements;
+      MasterScore scratch(_score->style());scratchMovements.reset(scratch.movements());scratch.style().checkChordList();
       // This display uses the same baseline for root, slash and bass. The score style stays unchanged.
       alignTemporaryHarmonyBass(scratch);
       Harmony harmony(&scratch);

@@ -474,6 +474,7 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
       QHash<const Page*,QVector<QRectF>> occupied,chordBoxes;
       QHash<const System*,QMap<int,QVector<int>>> groups;
       // Private style/chord list: parsing unknown symbols must not modify the user's score.
+      std::unique_ptr<Ms::Movements> scratchMovements;
       std::unique_ptr<Ms::MasterScore> scratch;
       QHash<QString,NotePreviewEntry> rendered;QHash<QString,qreal> renderedBaselines;
       int hidden=0;QVariantList unplaced;QString fontFallback;
@@ -574,6 +575,7 @@ void ScoreObserver::applyPreview(QObject* owner, const QVariantList& descriptors
                   if (!rendered.contains(renderKey)) {
                         if (!scratch) {
                               scratch=std::make_unique<Ms::MasterScore>(_score->style());
+                              scratchMovements.reset(scratch->movements());
                               // Scores without written Harmony may not yet have loaded their symbol list.
                               scratch->style().checkChordList();alignTemporaryHarmonyBass(*scratch);
                               }

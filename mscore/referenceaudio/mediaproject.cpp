@@ -15,6 +15,8 @@
 #include <QMutexLocker>
 #include <QSet>
 #include <QSettings>
+#include <QElapsedTimer>
+#include <QThread>
 #include <cmath>
 #include <array>
 using KumoAudio::PcmRing;
@@ -43,8 +45,9 @@ struct ReferenceMediaProject::Session {
       int rate=48000,startFrame=0;
       qint64 total=0,offset=0;
       std::atomic<float> master{.8f};
-      bool joint=false,attached=false,loop=false,notifiedStart=false;
+      bool joint=false,attached=false,loop=false,notifiedStart=false,outputRequested=false;
       std::atomic_bool started{false};
+      std::atomic<qint64> deviceMicroseconds{0},startMicroseconds{0};
       std::vector<std::shared_ptr<PcmRing>> lanes;
       QStringList trackIds;
       std::vector<std::shared_ptr<std::atomic<float>>> gains;
@@ -75,12 +78,86 @@ struct ReferenceMediaProject::Session {
       QString error;
       void fail(QString value){QMutexLocker lock(&errorsMutex);if(error.isEmpty())error=value;canceled=true;}
 };
+
+// Independent playback owns its Qt audio objects on one thread. Device lookup,
+// opening and closing can take hundreds of milliseconds on Windows; none of
+// these operations may hold up score input or the playback cursor.
+class ReferenceMediaProject::OutputThread {
+      struct State {
+            QAudioOutput* audio=nullptr;
+            RingDevice* device=nullptr;
+            QTimer* clock=nullptr;
+            std::shared_ptr<Session> session;
+            void stop() {
+                  if(clock){clock->stop();clock->deleteLater();clock=nullptr;}
+                  if(audio){audio->stop();delete audio;audio=nullptr;}
+                  delete device;device=nullptr;session.reset();
+                  }
+            void start(QObject* owner,const std::shared_ptr<Session>& next) {
+                  stop();if(next->canceled)return;session=next;
+                  QElapsedTimer timer;timer.start();
+                  auto outputDevice=QAudioDeviceInfo::defaultOutputDevice();
+                  next->deviceMicroseconds=timer.nsecsElapsed()/1000;
+                  if(next->canceled){stop();return;}
+                  QAudioFormat format;format.setSampleRate(next->rate);format.setChannelCount(2);
+                  format.setSampleSize(32);format.setSampleType(QAudioFormat::Float);
+                  format.setByteOrder(QAudioFormat::LittleEndian);format.setCodec("audio/pcm");
+                  bool integer=false;
+                  if(!outputDevice.isFormatSupported(format)) {
+                        format.setSampleSize(16);format.setSampleType(QAudioFormat::SignedInt);integer=true;
+                        }
+                  if(outputDevice.isNull()||!outputDevice.isFormatSupported(format)) {
+                        next->fail(QObject::tr("声音设备不能播放此采样格式。"));stop();return;
+                        }
+                  if(next->canceled){stop();return;}
+                  device=new RingDevice(next.get(),[](void* context){return static_cast<Session*>(context)->available();},
+                        [](void* context,float* samples,unsigned count,bool add){return static_cast<Session*>(context)->consume(samples,count,add);},owner,integer);
+                  audio=new QAudioOutput(outputDevice,format,owner);
+                  audio->setBufferSize(next->rate*(integer?4:8)/10);
+                  timer.restart();audio->start(device);next->startMicroseconds=timer.nsecsElapsed()/1000;
+                  if(qEnvironmentVariableIsSet("KUMO_MEDIA_PROFILE"))
+                        qInfo("Reference worker output: device %.3f ms, start %.3f ms",next->deviceMicroseconds.load()/1000.,next->startMicroseconds.load()/1000.);
+                  if(next->canceled){stop();return;}
+                  if(audio->error()!=QAudio::NoError){next->fail(QObject::tr("无法打开声音输出设备。请检查当前声音设备。"));stop();return;}
+                  next->started=true;
+                  clock=new QTimer(owner);clock->setInterval(10);clock->setTimerType(Qt::PreciseTimer);
+                  QObject::connect(clock,&QTimer::timeout,owner,[this] {
+                        if(!session||session->canceled){stop();return;}
+                        const qint64 frames=session->offset+audio->processedUSecs()*session->rate/1000000;
+                        session->outputFrames=session->loop?frames:qMin(session->total,frames);
+                        });
+                  clock->start();
+                  }
+            };
+      QThread _thread;
+      QObject* _owner=new QObject;
+      std::shared_ptr<State> _state=std::make_shared<State>();
+public:
+      OutputThread() {
+            _thread.setObjectName("referenceIndependentOutput");_owner->moveToThread(&_thread);
+            QObject::connect(&_thread,&QThread::finished,_owner,&QObject::deleteLater);
+            _thread.start();
+            }
+      ~OutputThread() {
+            const auto state=_state;
+            QMetaObject::invokeMethod(_owner,[state]{state->stop();},Qt::BlockingQueuedConnection);
+            _thread.quit();_thread.wait();
+            }
+      void start(const std::shared_ptr<Session>& session) {
+            const auto state=_state;auto owner=_owner;
+            QMetaObject::invokeMethod(owner,[state,owner,session]{state->start(owner,session);},Qt::QueuedConnection);
+            }
+      void stop() {
+            const auto state=_state;
+            QMetaObject::invokeMethod(_owner,[state]{state->stop();},Qt::QueuedConnection);
+            }
+      };
 ReferenceMediaProject::ReferenceMediaProject(QObject* parent,const KumoReferenceHost& host):QObject(parent),_host(host) {
       _pool.setMaxThreadCount(17);_pool.setExpiryTimeout(1000);
       _timer.setInterval(30);connect(&_timer,&QTimer::timeout,this,&ReferenceMediaProject::poll);
       _status=tr("添加音频后，选择要播放的片段。");
       }
-ReferenceMediaProject::~ReferenceMediaProject(){stop();_pool.waitForDone();}
+ReferenceMediaProject::~ReferenceMediaProject(){stop();_output.reset();_pool.waitForDone();}
 double ReferenceMediaProject::volume()const{return _session?_session->master.load(std::memory_order_relaxed):_volume;}
 void ReferenceMediaProject::setVolume(double value){if(!std::isfinite(value))return;value=qBound(0.,value,1.);_volume=value;if(_session)_session->master.store(float(value),std::memory_order_relaxed);emit volumeChanged();}
 double ReferenceMediaProject::position()const{if(!_session)return 0;auto s=_session;auto frame=s->outputFrames.load();if(s->loop&&s->total>0)frame%=s->total;return double(frame)*1000/s->rate;}
@@ -104,7 +181,8 @@ double ReferenceMediaProject::sourcePosition(const QString& path,const QString& 
 }
 QVariantMap ReferenceMediaProject::diagnostics()const {
       if(!_session)return {};auto s=_session;
-      return {{"sampleRate",s->rate},{"bufferFrames",131072},{"audioTracks",int(s->lanes.size())},{"underruns",qulonglong(s->underruns.load())},{"outputFrames",s->outputFrames.load()},{"boundedBytes",qint64(s->lanes.size())*131072*8}};
+      return {{"sampleRate",s->rate},{"bufferFrames",131072},{"audioTracks",int(s->lanes.size())},{"underruns",qulonglong(s->underruns.load())},{"outputFrames",s->outputFrames.load()},{"boundedBytes",qint64(s->lanes.size())*131072*8},
+            {"outputStarted",s->started.load()},{"deviceMilliseconds",s->deviceMicroseconds.load()/1000.},{"outputStartMilliseconds",s->startMicroseconds.load()/1000.}};
       }
 QVariantMap ReferenceMediaProject::setTracks(const QVariantList& values) {
       if(playing())return {{"error",tr("请先停止播放，再改变音轨。")}};
@@ -186,20 +264,17 @@ void ReferenceMediaProject::poll() {
       if(s->canceled){QString error;{QMutexLocker lock(&s->errorsMutex);error=s->error;}const bool underrun=s->underruns.load()>0;stop();_status=underrun?tr("音频准备跟不上播放，已停止以免位置错开。请减少同时播放的音轨。"):error.isEmpty()?tr("播放已停止。"):tr("音频无法播放：%1").arg(error);emit changed();return;}
       if(!s->ready){bool ready=true;for(const auto& lane:s->lanes)if(lane->available()<qMin<qint64>(8192,s->total-s->offset)&&!lane->done.load())ready=false;s->ready=ready;}
       if(s->discontinuous){stop();_status=tr("乐谱播放位置改变，联合播放已停止。请从新的位置重新开始。");emit changed();return;}
-      if(s->ready&&!s->started&& !_audio&&!s->attached){
+      if(s->ready&&!s->started&&!s->outputRequested&&!s->attached){
             if(s->joint){if(!_host.attach||!_host.attach(&ReferenceMediaProject::mix,s.get())){stop();_status=tr("联合播放输出正被使用，请停止另一次播放。");emit changed();return;}s->attached=true;setProperty("prepared",true);_status=tr("音频已准备，等待乐谱开始。");emit changed();return;}
-            QAudioFormat f;f.setSampleRate(s->rate);f.setChannelCount(2);f.setSampleSize(32);f.setSampleType(QAudioFormat::Float);f.setByteOrder(QAudioFormat::LittleEndian);f.setCodec("audio/pcm");auto device=QAudioDeviceInfo::defaultOutputDevice();
-            bool integer=false;if(!device.isFormatSupported(f)){f.setSampleSize(16);f.setSampleType(QAudioFormat::SignedInt);integer=true;}
-            if(device.isNull()||!device.isFormatSupported(f)){stop();_status=tr("声音设备不能播放此采样格式。");emit changed();return;}
-            _device=new RingDevice(s.get(),[](void* context){return static_cast<Session*>(context)->available();},[](void* context,float* data,unsigned count,bool add){return static_cast<Session*>(context)->consume(data,count,add);},this,integer);_audio=new QAudioOutput(device,f,this);_audio->setBufferSize(s->rate*(integer?4:8)/10);_audio->start(_device);s->started=true;_status=tr("音频播放中。");
+            s->outputRequested=true;if(!_output)_output.reset(new OutputThread);_output->start(s);
+            _status=tr("正在打开声音输出…");
             }
-      if(!s->joint){qint64 frames=s->offset+(_audio?_audio->processedUSecs()*s->rate/1000000:0);s->outputFrames=s->loop?frames:qMin(s->total,frames);}
-      if(s->joint&&s->started&&!s->notifiedStart){s->notifiedStart=true;_status=tr("乐谱与参考音频一起播放中。");}
+      if(s->started&&!s->notifiedStart){s->notifiedStart=true;_status=s->joint?tr("乐谱与参考音频一起播放中。"):tr("音频播放中。");}
       if(s->started&&!s->loop&&s->outputFrames>=s->total){bool wasJoint=s->joint;stop();_completed=true;_status=tr("片段播放结束。");emit changed();emit finished(wasJoint);return;}emit changed();
       }
 void ReferenceMediaProject::stop(){
       _timer.stop();setProperty("prepared",false);if(!_session)return;_stoppedOutput=position();auto s=_session;s->canceled=true;_pool.clear();if(s->joint&&_host.detach)_host.detach(s.get());
-      if(_audio){_audio->stop();delete _audio;_audio=nullptr;}delete _device;_device=nullptr;_session.reset();_joint=false;_status=tr("播放已停止。");emit changed();
+      if(_output)_output->stop();_session.reset();_joint=false;_status=tr("播放已停止。");emit changed();
       }
 void ReferenceMediaProject::requestJoint(){if(receivers(SIGNAL(jointRequested()))==0){_status=tr("请先打开“原曲参考”，选择要联合播放的关联。");emit changed();return;}emit jointRequested();}
 void ReferenceMediaProject::toggleIndependent(){

@@ -25,6 +25,7 @@
 #include "workflowcontext.h"
 #include "expressiontempo.h"
 #include "playbackpreview.h"
+#include "temporaryscore.h"
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
@@ -267,7 +268,7 @@ QVariantMap ScoreObserver::auditionExpression(const QString& workspace,const QVa
   QTemporaryDir materials(QStandardPaths::writableLocation(QStandardPaths::TempLocation)+"/musescore-expression-playback-XXXXXX");if(!materials.isValid())return {{"error",tr("暂时无法准备试听材料，请检查临时文件夹的空间。")}};
   const QString path=materials.filePath("expression.mscz");
   auto copied=copyWorkflowScore(path,analysisRevision(),true);if(copied.contains("error"))return copied;
-  std::unique_ptr<MasterScore> material(mscore->readScore(path));if(!material)return {{"error",tr("读取试听材料失败，请重新准备。")}};
+  TemporaryScore material(mscore->readScore(path));if(!material)return {{"error",tr("读取试听材料失败，请重新准备。")}};
   Ms::Score* target=material.get();
   if(_score!=_score->masterScore()){
    int index=-1;auto excerpts=_score->masterScore()->excerpts();for(int i=0;i<excerpts.size();++i)if(excerpts[i]->partScore()==_score)index=i;
