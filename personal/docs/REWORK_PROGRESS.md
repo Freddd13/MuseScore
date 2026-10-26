@@ -16,6 +16,8 @@ R1-C2已查到原曲声音设备打开阻塞界面，以及反复和弦显示遗
 
 ### C3-B2-B1源码已检查：后续换指与提前松手
 
+C3-B2-B1源码：[0c622116b48c](https://github.com/Freddd13/MuseScore/commit/0c622116b48c02607ca9d89efac27419103b67a5)；插件：[ebd2e0ecbdae](https://github.com/Freddd13/Muse3Plugins/commit/ebd2e0ecbdae6fd1ababc93acbc182335e30b865)。尚未安装。
+
 后续音头写有指法或分手时，检查会保留按键到指定位置，并说明后续小节和拍位；选区外的安排也一起考虑。移动手位的可用时间使用同一约束。独立两小节谱例完成定位、删除、撤销、反复与保存重开。
 
 9项新增JS、全部14组JS、最后13项原生／面板及共用模块6项通过。真实谱读取736毫秒、后台计算6823毫秒，界面最长间隔93.0毫秒。源码尚未安装，当前程序仍为0.128.0；操作见[后续换指与松手](ARRANGEMENT_REQUIRED_GUIDE.md)，结果见[本批记录](ARRANGEMENT_REQUIRED_CHECKS.md)。接着连续琶音和特殊指法文字，再按B3、C4、D、E、F继续。

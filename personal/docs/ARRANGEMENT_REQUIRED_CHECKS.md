@@ -4,6 +4,8 @@
 
 ## 原因与修改
 
+C3-B2-B1源码：[0c622116b48c](https://github.com/Freddd13/MuseScore/commit/0c622116b48c02607ca9d89efac27419103b67a5)；插件：[ebd2e0ecbdae](https://github.com/Freddd13/Muse3Plugins/commit/ebd2e0ecbdae6fd1ababc93acbc182335e30b865)。尚未安装。
+
 旧计算只按当前音与踏板判断能否松手，遗漏了延音后段明确写出的指法、分手。选择较短范围时，后续音头还可能位于本次快照之外。
 
 实际演奏分页现在为延音附带有指法或分手的音头资料，按乐谱内容版本复用。一次按键保留独立身份，后续说明按反复位置换算；普通MIDI的起音、松键和控制事件保持原样。

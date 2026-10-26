@@ -2,6 +2,8 @@
 
 ## 开发中 — 2026-10-27
 
+C3-B2-B1源码：[0c622116b48c](https://github.com/Freddd13/MuseScore/commit/0c622116b48c02607ca9d89efac27419103b67a5)；插件：[ebd2e0ecbdae](https://github.com/Freddd13/Muse3Plugins/commit/ebd2e0ecbdae6fd1ababc93acbc182335e30b865)。尚未安装。
+
 - C3-B2-B1：延音后续的指法／分手约束提前松手，选区外的说明也参与；移动时间从实际可松手处计算。面板写出后续位置，删除、撤销、反复、保存重开与真实谱已核对。源码尚未安装，见ARRANGEMENT_REQUIRED_CHECKS.md；接着连续琶音和特殊指法文字。
 
 C3-B2-A源码：[a531055312db](https://github.com/Freddd13/MuseScore/commit/a531055312dbea5f3fe9d9d1a3dbc7f358d90113)；插件：[0ab8b2835bb9](https://github.com/Freddd13/Muse3Plugins/commit/0ab8b2835bb98f8bd27f77fc18709d962bd7d2fe)。尚未安装。
