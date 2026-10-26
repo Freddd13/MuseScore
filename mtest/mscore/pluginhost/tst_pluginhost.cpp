@@ -216,6 +216,9 @@ class TestPluginHost : public QObject {
       void arrangementPhysicalKeys();
       void arrangementPhysicalPlayback();
       void arrangementPhysicalPanel();
+      void arrangementPhysicalAnnotations();
+      void arrangementNestedHandMarkers();
+      void arrangementPhysicalRealScore();
       void referenceOutputCancel126();
       void harmonyTemporaryMemory126();
       void workflowCopyLifetime126();
@@ -1491,5 +1494,6 @@ class TestPluginHost : public QObject {
 #include "combined_gui_126_tests.inc"
 #include "input_121_tests.inc"
 #include "values_094_tests.inc"
+#include "arrangement_hand_context_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

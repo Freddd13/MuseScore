@@ -559,3 +559,5 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方
 实际按键规则	share/plugins/ArrangementAssistant/Rules.js	physicalPlayability / step	470	实际松键、静音与反复共用音乐位置；保留旧宿主判断	arrangementPhysicalPanel
 原生按键字段	mscore/plugin/api/pianohandanalysis.cpp	activeKey / keyFor	16	按实际松键和声道踏板计算，限定有效手位	arrangementPhysicalKeys
 按键读取能力	mscore/plugin/api/pianohandanalysis.h	playbackFieldsVersion	13	只读能力字段，兼容原有调用	test-physical-playback.cjs
+嵌套分手资料	mscore/plugin/api/arrangementsnapshot.cpp	handData	118	读取符号中的结束记号，保留原音符及装饰音身份	arrangementNestedHandMarkers
+真实谱分手与指法	mtest/mscore/pluginhost/arrangement_hand_context_tests.inc	arrangementPhysicalRealScore	101	只读副本与独立XML统计、实际演奏及GUI耗时核对	ARRANGEMENT_PHYSICAL_CHECKS.md

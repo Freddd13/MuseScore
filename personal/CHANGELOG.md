@@ -2,6 +2,8 @@
 
 ## 开发中 — 2026-10-27
 
+- C3-A2：修复嵌套分手结束记号漏读。真实谱2429音、57个分手记号、108条指法与XML一致；读取761毫秒，后台分析6259毫秒。新检查5项与原有回查8项通过，源码尚未安装，接着C3-B连续手位。详见ARRANGEMENT_PHYSICAL_CHECKS.md。
+
 源码：[c9b98c134f7e](https://github.com/Freddd13/MuseScore/commit/c9b98c134f7e31f337e70bdb4dc2aebb0b0f24b1)；插件：[7ea7b899c9ee](https://github.com/Freddd13/Muse3Plugins/commit/7ea7b899c9eed960e478e7d3b553bb439eb0b528)。尚未安装。
 
 - C3-A1：可弹性读取实际起音、松键、踏板和反复；保留谱面身份，支持缩短、延长与静音。多架钢琴各自读取后续音组，无法形成手位时先说明跨度问题。
