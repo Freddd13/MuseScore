@@ -1,5 +1,6 @@
 # MuseScore Evolution 个人功能说明
 
+连续打开工具的绘图修复与首次音源入口，见[播放与音源入口](docs/DRAWING_127_GUIDE.md)。
 当前修复进度、各功能剩余检查与后续顺序见[进度与完整计划](docs/REWORK_PROGRESS.md)。
 
 多谱播放的卡顿修复、原曲准备与扒谱页区域开关，见[多谱播放与显示](docs/COMBINED_GUI_126_GUIDE.md)。

@@ -1,0 +1,13 @@
+From Qt 1c010b202506bb7eb0f0e24ab37ad50e319abada
+Task: QTBUG-80415
+Source: https://github.com/qt/qtdeclarative/commit/1c010b202506bb7eb0f0e24ab37ad50e319abada
+Apply with: git apply --unidiff-zero QTBUG-80415.patch
+
+--- a/src/quick/scenegraph/adaptations/software/qsgsoftwareinternalimagenode_p.h
++++ b/src/quick/scenegraph/adaptations/software/qsgsoftwareinternalimagenode_p.h
+@@ -55,0 +56,2 @@
++
++#include <QtCore/QPointer>
+@@ -135 +137 @@
+-    QSGTexture *m_texture;
++    QPointer<QSGTexture> m_texture;

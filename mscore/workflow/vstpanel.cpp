@@ -1393,17 +1393,27 @@ void showVstPanel(Channel *channel) {
   panel->select(channel);
 }
 void addVstPanelAction(QMenu *menu) {
-  if (!menu || !mscore)
+  if (!menu)
     return;
-  auto action = mscore->findChild<QAction *>("kumo-vst");
+  // Menus are built inside the main-window constructor, before the global
+  // mscore pointer has been assigned. Use the menu's own window at startup.
+  MuseScore *window = nullptr;
+  for (auto parent = menu->parentWidget(); parent && !window;
+       parent = parent->parentWidget())
+    window = qobject_cast<MuseScore *>(parent);
+  if (!window)
+    window = mscore;
+  if (!window)
+    return;
+  auto action = window->findChild<QAction *>("kumo-vst");
   if (!action) {
-    action = new QAction(QObject::tr("音源与效果（VST）"), mscore);
+    action = new QAction(QObject::tr("音源与效果（VST）"), window);
     action->setObjectName("kumo-vst");
     action->setCheckable(true);
     action->setIcon(personalToolIcon("kumo-vst"));
     markPersonalAction(action);
     Workspace::addActionAndString(action, "kumo-vst");
-    QObject::connect(action, &QAction::triggered, mscore, [action](bool shown) {
+    QObject::connect(action, &QAction::triggered, window, [action](bool shown) {
       if (shown)
         showVstPanel();
       else if (panel)

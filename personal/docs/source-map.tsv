@@ -547,3 +547,7 @@ CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件�
 临时副本释放	mscore/workflow/temporaryscore.h	TemporaryScoreDeleter	13	临时谱、所属容器及撤销对象依次释放	workflowCopyLifetime126 / arrangementAiWorkflow
 和弦显示临时资料	mscore/workflow/harmonylabel.cpp	ScoreObserver::harmonyLabel	16	及时释放Movements	harmonyTemporaryMemory126
 扒谱区域显隐	mscore/workflow/editorareas.cpp	EditorAreas::applyPage	107	保存扒谱页公共区域的显式选择	combinedPlaybackGui126
+
+软件绘图修复接线	personal/qtquick-runtime.cmake	kumo_select_qtquick_runtime	5	构建与安装共用经校验的Qt Quick	P2/tests/test_qtquick_runtime.py
+Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方补丁、导出与架构核对	DRAWING_127_CHECKS.md
+首次音源入口	mscore/workflow/vstpanel.cpp	addVstPanelAction	1395	从菜单所属主窗口注册动作	personalToolbarIcons121 / builtinToolEntryPoints

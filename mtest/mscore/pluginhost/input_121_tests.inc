@@ -126,7 +126,10 @@ void TestPluginHost::personalToolbarIcons121()
       painter.drawText(QRect(i*80,42,80,24),Qt::AlignCenter,keys[i].second);
       painter.drawPixmap(QPoint(i*80+32,80),icon.pixmap(16,16));
       if(i<6){
-        auto button=toolbar->findChild<QToolButton*>(keys[i].first+"-button");QVERIFY(button);
+        auto button=toolbar->findChild<QToolButton*>(keys[i].first+"-button");
+        if(!button){auto action=main->findChild<QAction*>(keys[i].first);qWarning()<<"Missing toolbar entry"<<keys[i].first<<"action"<<action;
+          for(auto item:toolbar->findChildren<QToolButton*>())qWarning()<<"Toolbar button"<<item->objectName()<<item->defaultAction();}
+        QVERIFY(button);
         QVERIFY(button->isVisible());
         QCOMPARE(button->iconSize(),toolbar->iconSize());QVERIFY(!button->toolTip().isEmpty());
         if(center<0)center=button->geometry().center().y();else QCOMPARE(button->geometry().center().y(),center);

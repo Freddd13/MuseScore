@@ -17,6 +17,8 @@
 #  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #=============================================================================
 
+include("${PROJECT_SOURCE_DIR}/personal/qtquick-runtime.cmake")
+
 if (MINGW)
       set (resource_file ${PROJECT_BINARY_DIR}/resfile.o)
 endif (MINGW)
@@ -356,6 +358,7 @@ else (MINGW)
       list(APPEND dlls_to_copy ${dll_lame} ${dll_ogg} ${dll_sndfile} ${dll_vorbis} ${dll_vorbisfile} ${dll_portaudio} ${dll_ssl1} ${dll_ssl2} "$<TARGET_FILE_DIR:mscore>/${MSCORE_OUTPUT_NAME}.exe")
       set( output_dir_for_dlls "${CMAKE_INSTALL_PREFIX}/bin")
 
+      kumo_select_qtquick_runtime(dlls_to_copy)
       COPY_FILES_INTO_DIRECTORY_IF_CHANGED( "${dlls_to_copy}" ${output_dir_for_dlls}  mscore)
 
       # Keep dependencies in alphabetical order. Changes made to this list
@@ -373,6 +376,7 @@ else (MINGW)
          endif (EXISTS ${QtSharedLibrary})
       endforeach (QtLibrary ${QT_LIBRARIES})
       list(REMOVE_DUPLICATES QtInstallLibraries)
+      kumo_select_qtquick_runtime(QtInstallLibraries)
 
       target_link_libraries(mscore ${QT_LIBRARIES})
       add_dependencies(mscore lrelease)
