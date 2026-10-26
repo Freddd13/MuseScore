@@ -128,6 +128,10 @@ class TestPluginHost : public QObject {
       void referencePanelsAfterPlayback120();
       void resizePanelsAfterPlayback121();
       void personalToolbarIcons121();
+      void harmonyCloseAll123();
+      void harmonyVelocityReuse123();
+      void referenceSelectionPlayback123();
+      void harmonyMultiScorePencil123();
       void combinedToolsKeepWorkspaceAndScreenBounds();
       void vstRestoreFollowsSelectedInstrument();
       void vstEffectsHaveOwnPresets();
@@ -1452,6 +1456,8 @@ class TestPluginHost : public QObject {
 #include "arrangement_118_tests.inc"
 #include "arrangement_119_tests.inc"
 #include "arrangement_122_tests.inc"
+#include "performance_123_tests.inc"
+#include "reference_123_tests.inc"
 #include "vst_088_tests.inc"
 #include "pedal_106_audio_tests.inc"
 #include "source_sessions_107_tests.inc"

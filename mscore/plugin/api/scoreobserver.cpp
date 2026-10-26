@@ -19,6 +19,7 @@
 #include "mscore/seq.h"
 #include "mscore/musescore.h"
 #include "libmscore/chord.h"
+#include "libmscore/undo.h"
 #include "libmscore/harmony.h"
 #include "libmscore/measure.h"
 #include "libmscore/note.h"
@@ -174,6 +175,22 @@ QVariantMap ScoreObserver::describe(const Ms::Note* note, int pitch, bool eventP
       return result;
       }
 
+bool ScoreObserver::reuseHarmonyAfterVelocityEdit()
+      {
+      if(!_score || _index.isEmpty())return false;
+      auto master=_score->masterScore();auto stack=master->undoStack();
+      if(master->state()==_indexState || stack->getCurIdx()!=_indexUndoIndex+1)return false;
+      auto macro=stack->last();if(!macro || macro->commands().isEmpty())return false;
+      for(auto command:macro->commands()) {
+            if(QString::fromLatin1(command->name())!="ChangeProperty" || command->childCount())return false;
+            const auto change=static_cast<const ChangeProperty*>(command);
+            auto element=change->getElement();
+            if(!element || !element->isNote() || (change->getId()!=Pid::VELO_TYPE && change->getId()!=Pid::VELO_OFFSET))return false;
+            }
+      // These properties leave pitch, spelling, timing, pedal and geometry intact.
+      _indexState=master->state();_indexUndoIndex=stack->getCurIdx();return true;
+      }
+
 void ScoreObserver::ensureIndex(int firstTrack, int endTrack)
       {
       const auto state = _score->masterScore()->state();
@@ -247,6 +264,7 @@ void ScoreObserver::ensureIndex(int firstTrack, int endTrack)
       _firstTrack = firstTrack;
       _endTrack = endTrack;
       _indexState = state;
+      _indexUndoIndex=_score->masterScore()->undoStack()->getCurIdx();
       _indexBuildMilliseconds = double(timer.nsecsElapsed()) / 1000000.0;
       ++_indexBuildCount;
       emit indexChanged();

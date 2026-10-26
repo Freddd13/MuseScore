@@ -64,6 +64,7 @@ void QmlPlugin::disposePanelForReload()
 void QmlPlugin::attachPanelDock(QDockWidget* dock)
       {
       _panelDock = dock;
+      dock->installEventFilter(this);
       if (!property("preferredPanelGroup").toString().isEmpty())
             installPanelWindowControls(dock);
       if(property("independentPanelSurfaces").toBool())dock->setAttribute(Qt::WA_DeleteOnClose,false);
@@ -140,6 +141,10 @@ bool QmlPlugin::detailPanelVisible() const
       { return _detailDock && _detailDock->isVisible(); }
 bool QmlPlugin::eventFilter(QObject* object, QEvent* event)
       {
+      if(object==_panelDock && event->type()==QEvent::Close) {
+            const auto handler=property("panelCloseHandler").toString().toUtf8();
+            if(!handler.isEmpty())QMetaObject::invokeMethod(this,handler.constData(),Qt::DirectConnection);
+            }
       if (object==_detailDock && event->type()==QEvent::Close) emit panelDetailClosed();
       if (object==_summaryDock && event->type()==QEvent::Close) emit panelSummaryClosed();
       if(event->type()==QEvent::WindowDeactivate && qobject_cast<QQuickWindow*>(object)) {

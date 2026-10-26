@@ -2,6 +2,8 @@
 
 当前修复进度、各功能剩余检查与后续顺序见[进度与完整计划](docs/REWORK_PROGRESS.md)。
 
+关闭和弦助手、普通听原曲、选段循环、互相停止及谱面片段播放按钮，见[完整操作](docs/PERFORMANCE_REFERENCE_123_GUIDE.md)。
+
 低音排列按实际起音、松键与踏板检查；手调音长、起音和踏板后怎样更新，见[完整操作](docs/ARRANGEMENT_122_GUIDE.md)。
 
 尺寸拖动后继续操作面板、编曲工具栏图标与用途见[操作说明](docs/INPUT_121_GUIDE.md)。
@@ -20,7 +22,7 @@
 
 AI怎样读取当前谱、标题和图片，见[当前实现与后续安排](docs/AI_WORKFLOW_REVIEW_20261024.md)。当前旧画谱入口会根据音符重新排版；MuseScore原生选段图片与数据一起提供的功能安排在E阶段。
 
-本文对应个人版本：**0.122.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+本文对应准备发布的个人版本：**0.123.0**（当前安装0.122.0） · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
 
 从完整MIDI寻找选段、分别选择两音改对应、撤销重做及使用力度，见[演奏表达操作](docs/EXPRESSION_096_GUIDE.md)。采用演奏中的快慢、分范围使用速度与长休止录制，见[速度与录制](docs/EXPRESSION_097_GUIDE.md)。
 

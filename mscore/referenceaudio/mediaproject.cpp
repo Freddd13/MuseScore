@@ -84,6 +84,8 @@ ReferenceMediaProject::~ReferenceMediaProject(){stop();_pool.waitForDone();}
 double ReferenceMediaProject::volume()const{return _session?_session->master.load(std::memory_order_relaxed):_volume;}
 void ReferenceMediaProject::setVolume(double value){if(!std::isfinite(value))return;value=qBound(0.,value,1.);_volume=value;if(_session)_session->master.store(float(value),std::memory_order_relaxed);emit volumeChanged();}
 double ReferenceMediaProject::position()const{if(!_session)return 0;auto s=_session;auto frame=s->outputFrames.load();if(s->loop&&s->total>0)frame%=s->total;return double(frame)*1000/s->rate;}
+bool ReferenceMediaProject::scoreControls()const{return QSettings().value("workflow/reference/scoreControls",false).toBool();}
+void ReferenceMediaProject::setScoreControls(bool value){if(scoreControls()==value)return;QSettings().setValue("workflow/reference/scoreControls",value);emit scoreControlsChanged();}
 bool ReferenceMediaProject::audioStopsScore()const{return QSettings().value("workflow/reference/stopScoreOnAudio",false).toBool();}
 bool ReferenceMediaProject::scoreStopsAudio()const{return QSettings().value("workflow/reference/stopAudioOnScore",false).toBool();}
 void ReferenceMediaProject::setAudioStopsScore(bool value){QSettings().setValue("workflow/reference/stopScoreOnAudio",value);emit changed();}
@@ -203,7 +205,7 @@ void ReferenceMediaProject::requestJoint(){if(receivers(SIGNAL(jointRequested())
 void ReferenceMediaProject::toggleIndependent(){
       if(receivers(SIGNAL(independentRequested()))>0){emit independentRequested();return;}
       if(playing()){stop();return;}int index=property("selectedTrack").toInt();if(index<0||index>=_tracks.size()){_status=tr("请先在原曲参考中选择音轨和片段。");emit changed();return;}
-      auto t=_tracks[index].toMap();if(t.value("mute").toBool()){_status=tr("当前音轨已静音，取消静音后即可播放。");emit changed();return;}double a=t.value("a").toDouble(),b=t.value("b").toDouble(),speed=t.value("speed",1.).toDouble();
+      auto t=_tracks[index].toMap();if(t.value("mute").toBool()){_status=tr("当前音轨已静音，取消静音后即可播放。");emit changed();return;}const bool limited=t.value("onlyRange",t.value("loop",false)).toBool();double a=limited?t.value("a").toDouble():0,b=limited?t.value("b").toDouble():t.value("duration",t.value("b")).toDouble(),speed=t.value("speed",1.).toDouble();
       QVariantMap piece{{"from",a},{"until",b},{"at",0},{"duration",(b-a)/speed},{"fade",t.value("fade",true)}};
       QVariantMap clip{{"path",t.value("path")},{"identity",t.value("identity")},{"volume",t.value("volume",.8)},{"pieces",QVariantList{piece}}};
       auto result=start({{"clips",QVariantList{clip}},{"joint",false},{"loop",t.value("loop",false)},{"volume",1.}});if(result.contains("error")){_status=result.value("error").toString();emit changed();}

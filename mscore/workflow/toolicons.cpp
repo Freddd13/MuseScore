@@ -84,7 +84,7 @@ QIcon componentToolIcon(const QString& key) {
       };
       const auto item = stock.constFind(key);
       if (item != stock.cend() && icons[int(item.value())]) return *icons[int(item.value())];
-      if (!QStringList{"add", "record", "stop", "pause", "mute", "solo", "fit", "link", "filter", "line", "panel", "settings", "select", "hand"}.contains(key)) return {};
+      if (!QStringList{"add", "record", "stop", "pause", "mute", "solo", "fit", "link", "filter", "line", "panel", "settings", "select", "range", "hand"}.contains(key)) return {};
       QPixmap image(64, 64); image.setDevicePixelRatio(4); image.fill(Qt::transparent);
       QPainter p(&image); p.setRenderHint(QPainter::Antialiasing);
       const auto ink = qApp->palette().color(QPalette::WindowText);
@@ -109,6 +109,9 @@ QIcon componentToolIcon(const QString& key) {
             QPolygonF arrow; arrow << QPointF(3,1) << QPointF(3,13) << QPointF(6,10)
                 << QPointF(9,15) << QPointF(11,14) << QPointF(8,9) << QPointF(13,9);
             p.drawPolygon(arrow);
+      } else if (key == "range") {
+            p.setPen(QPen(ink, 1.2, Qt::DashLine));p.drawRect(QRectF(3, 4, 10, 8));
+            p.setPen(QPen(ink, 1.8));p.drawLine(3,2,3,14);p.drawLine(13,2,13,14);
       } else if (key == "hand") {
             QPainterPath hand; hand.moveTo(6,14); hand.lineTo(2.5,9);
             hand.quadTo(2,7,3.5,7.5); hand.lineTo(5,9); hand.lineTo(5,4);

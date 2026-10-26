@@ -485,6 +485,11 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
       if (event->type() == QEvent::MouseButtonPress) {
             auto mouse = static_cast<QMouseEvent*>(event);
             if (!_score || _dirty) return false;
+            // Drawing preserves the user's selection, including an empty selection
+            // meaning all visible editable notes. Hit cycling belongs to the drag tool.
+            if (parameter && mouse->button()==Qt::LeftButton && _parameter->currentIndex()==0 && _tool->currentIndex()>0 && laneRect().contains(mouse->pos())) {
+                  beginGesture(mouse->pos(),laneRect(),false);if(_dragging)queueGesture(mouse->pos());return _dragging;
+                  }
             if (parameter && mouse->button() == Qt::LeftButton && mouse->x() < PerformanceViewport::gutter && rangeKind() != 3) {
                   pauseFollow(); _rangePanning = true; _last = mouse->pos(); _canvas->setCursor(Qt::ClosedHandCursor); _canvas->grabMouse(); qApp->installEventFilter(this); return true;
                   }

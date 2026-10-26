@@ -532,3 +532,7 @@ CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件�
 共享MIDI去重	audio/midi/event.cpp	void MidiEventFixup::process	411	正常播放与只读查询共用事件处理	midiEventPostprocessing122
 按键与留声区间	share/plugins/ArrangementAssistant/Playback.js	function event	26	实际松键、踏板与同音重触	test-playback-122.cjs
 实际低音共同持续	share/plugins/ArrangementAssistant/Rules.js	function playedLowVoicing	62	实际音对、时间、力度及来源	arrangementActualPanel122 / arrangementRepeatedHints119
+
+和弦关闭	mscore/workflow/builtinpanels.cpp	void showHarmonyPanel	73	整体停止与恢复显示	mtest/mscore/pluginhost/performance_123_tests.inc
+力度与和弦索引	mscore/plugin/api/scoreobserver.cpp	bool ScoreObserver::reuseHarmonyAfterVelocityEdit	178	核对实际改动并复用音乐资料	mtest/mscore/pluginhost/performance_123_tests.inc
+原曲谱面入口	mscore/workflow/referencefactory.cpp	class ReferenceScoreControls	69	关联播放与位置	mtest/mscore/pluginhost/reference_123_tests.inc

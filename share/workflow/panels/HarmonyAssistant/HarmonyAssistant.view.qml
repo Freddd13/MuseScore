@@ -105,6 +105,10 @@ MuseScore {
     property var importedRegions: []
     readonly property bool usingImportedAnalysis:importedRecords.length>0 || importedRegions.some(function(region){return root.regionInScope(region)}) || manualOverrides.some(function(region){return region.source==="imported"&&root.regionInScope(region)})
     property string analysisFingerprint: ""
+    property string completedAnalysisKey: ""
+    property int completedAnalysisCount: 0
+    property int reusedAnalysisCount: 0
+    property bool analysisReuseEnabled: true
     property int analysisNextTick: 0
     property bool analysisDirty: true
     property string pendingFileAction: ""
@@ -121,8 +125,12 @@ MuseScore {
     property string detailPanelTitle:"和弦助手 · 详细面板"
     property color detailPanelBackground:theme.background
     property bool started: false
+    property bool toolEnabled: true
+    signal toolActiveChanged(bool active)
+    onToolEnabledChanged:toolActiveChanged(toolEnabled)
+    property string panelCloseHandler: "closeHarmonyTool"
     property var observer: null
-    property bool surfaceActive: (visible || dualSummaryActive || dualDetailActive || (showChords.checked && !!ownerScore)) && (!observer || observer.surfaceVisible)
+    property bool surfaceActive: toolEnabled && (visible || dualSummaryActive || dualDetailActive || (showChords.checked && !!ownerScore)) && (!observer || observer.surfaceVisible)
     property string analysisStatus: !ownerScore ? "打开乐谱后开始识别" : analysisTimer.running ? "正在读取 · "+pendingRecords.length+" 个位置" : regionJobToken || regionBuilder ? "正在分析前后和弦" : analysisDirty ? observer && observer.playing ? "正在识别当前位置 · 停播后整理全段" : "正在准备和弦分析" : "已更新 · "+analysisRegions.length+" 处和弦"+(manualNeedsReview?" · 人工范围待核对":"")
     property bool nativeAvailable: observer !== null
     property var nativeSnapshot: ({})
@@ -384,17 +392,34 @@ MuseScore {
     }
     function syncDetailPanel() {
         if(!started || loadingConfiguration)return
-        if(typeof root.showDetailPanel==="function")root.showDetailPanel(ribbon && configuration.dualPanel)
-        if(typeof root.showSummaryPanel==="function")root.showSummaryPanel(!ribbon && configuration.dualPanel)
+        if(typeof root.showDetailPanel==="function")root.showDetailPanel(toolEnabled && ribbon && configuration.dualPanel)
+        if(typeof root.showSummaryPanel==="function")root.showSummaryPanel(toolEnabled && !ribbon && configuration.dualPanel)
         syncAnalysisSurface()
         if(!ribbon)detailPopup.visible=false
     }
     function syncAnalysisSurface() {
         if(observer && typeof observer.auxiliarySurfaceVisible==="boolean") {
-            observer.auxiliarySurfaceVisible=dualDetailActive || dualSummaryActive || (showChords.checked && !!curScore)
-            observer.enabled=visible || observer.auxiliarySurfaceVisible
+            observer.auxiliarySurfaceVisible=toolEnabled && (dualDetailActive || dualSummaryActive || (showChords.checked && !!curScore))
+            observer.enabled=toolEnabled && (visible || observer.auxiliarySurfaceVisible)
         }
     }
+    function setToolActive(active) {
+        if(toolEnabled===active)return
+        toolEnabled=active
+        if(!active) {
+            cancelRegionJob();refreshTimer.stop();playbackTimer.stop();buildTimer.stop();analysisTimer.stop()
+            savePreferences();configurationTimer.stop();saveCorrections()
+            markerWindow.hide();ribbonMenuWindow.hide();detailPopup.close();scoreRangeEditing=false
+            if(typeof root.showDetailPanel==="function")root.showDetailPanel(false)
+            if(typeof root.showSummaryPanel==="function")root.showSummaryPanel(false)
+            restoreColors(true)
+            if(observer)observer.clearAllPreviews()
+            syncAnalysisSurface()
+        } else {
+            syncDetailPanel();syncAnalysisSurface();requestRefresh(true)
+        }
+    }
+    function closeHarmonyTool() {setToolActive(false);if(typeof root.hidePanel==="function")root.hidePanel()}
     function toggleDetailPanel() {
         var c=JSON.parse(JSON.stringify(configuration));c.dualPanel=!(dualDetailActive || dualSummaryActive)
         configuration=Preferences.clean(c);configurationTimer.restart();syncDetailPanel()
@@ -478,7 +503,7 @@ MuseScore {
         if(!started || loadingConfiguration)return
         syncDetailPanel()
         configurationTimer.restart()
-        if(rebuild!==false) {cancelRegionJob();analysisDirty=true; regionBuilder=null;analysisTimer.stop()}
+        if(rebuild!==false) {completedAnalysisKey="";cancelRegionJob();analysisDirty=true; regionBuilder=null;analysisTimer.stop()}
         requestRefresh(false)
         if(advancedNative) {
             if(rebuild===false && !analysisDirty)applyScorePreview()
@@ -490,6 +515,7 @@ MuseScore {
         regionJobToken=0
     }
     function finishRegions(regions) {
+        completedAnalysisKey=analysisFingerprint+JSON.stringify(collectPreferences())+correctionStructure();completedAnalysisCount++;
         automaticRegions=regions;regionBuilder=null;analysisDirty=false
         rebuildRegions();analyze();applyScorePreview()
         if(pendingExport.length){var action=pendingExport;pendingExport="";chooseFile(action)}
@@ -541,6 +567,12 @@ MuseScore {
         if(regionBuilder){buildRegionChunk();return}
         var batch=observer.analysisFrames(analysisNextTick,observer.playing?8:32,firstTrack,endTrack,pedalContext.checked,windowTicks())
         analysisFingerprint=batch.fingerprint || ""
+        // Velocity and layout edits keep the same harmonic material. Reuse the
+        // completed analysis, while republishing its current score revision.
+        if(analysisReuseEnabled && analysisNextTick===0 && completedAnalysisKey.length && completedAnalysisKey===analysisFingerprint+JSON.stringify(collectPreferences())+correctionStructure()) {
+            pendingRecords=[];analysisDirty=false;reusedAnalysisCount++;
+            rebuildRegions();analyze();applyScorePreview();return;
+        }
         var frames=batch.frames || []
         var defer=regionWorkerSource.length && typeof observer.startReadOnlyJob==="function" && autoChord.checked && !importedRecords.length
         for(var i=0;i<frames.length;++i)pendingRecords.push(frameSnapshot(frames[i],defer))
@@ -758,6 +790,7 @@ MuseScore {
         buildTimer.stop()
         buildSegment = null
         ownerScore = curScore
+        completedAnalysisKey=""
         fileNotice="";fileNoticeKind="analysis"
         lastLiveHarmony=null;displayedLiveHarmony=null
         if (observer) observer.score = curScore
@@ -799,7 +832,7 @@ MuseScore {
         matchText = message
     }
     function requestRefresh(dirty) {
-        if (!started || internalChange) return
+        if (!started || !toolEnabled || internalChange) return
         if (dirty) {
             cancelRegionJob();analysisTimer.stop()
             cacheDirty = true
@@ -1227,7 +1260,7 @@ MuseScore {
         requestRefresh(true)
     }
     onScoreStateChanged: {
-        if (!started || internalChange || nativeCorrectionWrite) return
+        if (!started || !toolEnabled || internalChange || nativeCorrectionWrite) return
         syncNativeCorrections()
         if (state.undoRedo && !observer) {
             // Never change the score from an undo/redo callback. Keep the inspector read-only.
@@ -1237,6 +1270,9 @@ MuseScore {
         }
         var dirty = state.undoRedo || state.excerptsChanged || state.instrumentsChanged ||
                 (typeof state.startLayoutTick === "number" && state.startLayoutTick >= 0)
+        if(analysisReuseEnabled && dirty && !state.undoRedo && !analysisDirty && observer && typeof observer.reuseHarmonyAfterVelocityEdit==="function" && observer.reuseHarmonyAfterVelocityEdit()) {
+            reusedAnalysisCount++;publishRegions();if(state.selectionChanged)requestRefresh(false);return;
+        }
         if (dirty && observer) observer.clearNotePreviewColors()
         requestRefresh(dirty)
     }
@@ -1308,6 +1344,7 @@ MuseScore {
             Column {
                 width:parent.width;visible:!ribbonMenuWindow.positionOnly;spacing:4
                 DeskButton {objectName:"harmonyRibbonMarkerList";width:parent.width;text:root.unplacedMarkers.length?"记号列表（有待检查项）":"记号列表";enabled:root.advancedNative;onClicked:{ribbonMenuWindow.hide();markerWindow.show();markerWindow.raise();markerWindow.requestActivate()}}
+                DeskButton {objectName:"harmonyCloseTool";width:parent.width;text:"关闭和弦助手";onClicked:root.closeHarmonyTool()}
                 DeskButton {width:parent.width;text:"隐藏顶部摘要";onClicked:{ribbonMenuWindow.hide();if(root.dualSummaryActive)root.toggleDetailPanel();else if(typeof root.hidePanel==="function")root.hidePanel()}}
                 DeskButton {objectName:"harmonyRibbonAppearance";width:parent.width;text:"摘要外观与调性";onClicked:{ribbonMenuWindow.hide();root.openSummarySettings(ribbonMenuWindow.anchorItem)}}
                 DeskButton {width:parent.width;text:"详细窗口";onClicked:{ribbonMenuWindow.hide();root.openDetailWindow()}}

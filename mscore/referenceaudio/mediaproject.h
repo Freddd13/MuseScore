@@ -26,6 +26,8 @@ class ReferenceMediaProject : public QObject {
       Q_PROPERTY(int scoreTick MEMBER _scoreTick NOTIFY changed)
       Q_PROPERTY(QVariantMap diagnostics READ diagnostics NOTIFY changed)
       Q_PROPERTY(QVariantMap playbackPlan READ playbackPlan NOTIFY changed)
+      Q_PROPERTY(bool scoreControls READ scoreControls WRITE setScoreControls NOTIFY scoreControlsChanged)
+      Q_PROPERTY(QString activeAssociation READ activeAssociation WRITE setActiveAssociation NOTIFY activeAssociationChanged)
       Q_PROPERTY(bool audioStopsScore READ audioStopsScore WRITE setAudioStopsScore NOTIFY changed)
       Q_PROPERTY(bool scoreStopsAudio READ scoreStopsAudio WRITE setScoreStopsAudio NOTIFY changed)
       struct Session;
@@ -40,7 +42,7 @@ class ReferenceMediaProject : public QObject {
       QVariantMap _settings;
       bool _expressionPreview=false;
       int _scoreTick=0;
-      QString _status;
+      QString _status,_activeAssociation;
       bool _joint=false, _completed=false, _repeatSelection=false;
       double _volume=.8, _stoppedOutput=0;
       static void mix(void*,float*,unsigned,int,bool);
@@ -60,6 +62,11 @@ public:
       QVariantMap diagnostics()const;
       QVariantMap playbackPlan()const{return property("workflowPlaybackPlan").toMap();}
       Q_INVOKABLE double sourcePosition(const QString& path,const QString& trackId=QString())const;
+      bool scoreControls()const;
+      void setScoreControls(bool);
+      QString activeAssociation()const{return _activeAssociation;}
+      void setActiveAssociation(const QString& value){if(_activeAssociation==value)return;_activeAssociation=value;emit activeAssociationChanged();}
+      Q_INVOKABLE void requestAssociation(const QString& track,const QString& association){emit associationRequested(track,association);}
       bool audioStopsScore()const;
       bool scoreStopsAudio()const;
       void setAudioStopsScore(bool);
@@ -77,5 +84,8 @@ signals:
       void tracksChanged();
       void finished(bool wasJoint);
       void independentRequested();
+      void associationRequested(const QString& track,const QString& association);
+      void scoreControlsChanged();
+      void activeAssociationChanged();
       void jointRequested();
 };

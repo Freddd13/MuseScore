@@ -72,7 +72,7 @@ QQuickView* loadView(const QString& name,bool embedded,QWidget* owner){
 }
 void showHarmonyPanel(bool visible){
  if(!mscore || !personalFeaturesEnabled())return;
- if(harmonyDock&&harmonyRoot){harmonyDock->setVisible(visible);if(visible)harmonyRoot->focusPanel();return;}
+ if(harmonyDock&&harmonyRoot){QMetaObject::invokeMethod(harmonyRoot,"setToolActive",Q_ARG(QVariant,visible));harmonyDock->setVisible(visible);if(visible)harmonyRoot->focusPanel();return;}
  if(!visible)return;
  const QSize previousWindow=mscore->size();
  auto view=loadView("HarmonyAssistant",false,nullptr);if(!view)return;
@@ -83,7 +83,8 @@ void showHarmonyPanel(bool visible){
  const bool restored=arrangeWorkflowDock(mscore,dock,"HarmonyAssistant_MS3","rightTools",Qt::RightDockWidgetArea);
  root->attachPanelDock(dock);
  auto action=getAction("harmony-assistant");
- QObject::connect(dock,&QDockWidget::visibilityChanged,action,[action](bool on){QSignalBlocker block(action);action->setChecked(on);});
+ QObject::connect(root,SIGNAL(toolActiveChanged(bool)),action,SLOT(setChecked(bool)));
+ QObject::connect(dock,&QDockWidget::visibilityChanged,action,[action,root](bool){QSignalBlocker block(action);action->setChecked(root->property("toolEnabled").toBool());});
  QObject::connect(root,&QObject::destroyed,dock,&QObject::deleteLater);
  dock->show();dock->raise();root->runPlugin();
  if(!restored)mscore->resizeDocks({dock},{360},Qt::Horizontal);

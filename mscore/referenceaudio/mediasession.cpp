@@ -79,11 +79,12 @@ void ReferenceMediaSession::play() {
  format.setCodec("audio/pcm");format.setByteOrder(QAudioFormat::LittleEndian);format.setSampleType(QAudioFormat::SignedInt);
  auto device=QAudioDeviceInfo::defaultOutputDevice();
  if(device.isNull()||!device.isFormatSupported(format)){_status=tr("Audio output does not support stereo PCM at this rate");emit changed();return;}
- if(_position>=(_loop?_b:_duration))_position=_loop?_a:0;
+ const bool limited=_loop&&_b>_a;
+ if(_position>=(limited?_b:_duration)||(limited&&_position<_a))_position=limited?_a:0;
  _origin=_position;const int token=++_generation;
  _ring=new AudioRing(this);_audio=new QAudioOutput(device,format,this);_audio->setBufferSize(format.sampleRate()/10*4);_audio->setVolume(_volume);
  auto ring=_ring;auto cancel=std::make_shared<std::atomic_bool>(false);_cancel=cancel;
- auto path=_path;double start=_position,a=_a,b=_loop?_b:_duration,speed=_speed;bool loop=_loop,fade=_fade;int rate=format.sampleRate();
+ auto path=_path;double start=_position,a=_a,b=limited?_b:_duration,speed=_speed;bool loop=_loop,fade=_fade;int rate=format.sampleRate();
  _playJob=QtConcurrent::run([this,ring,cancel,path,start,a,b,speed,loop,fade,rate,token]{
   QString error;double from=start;
   do {
@@ -117,7 +118,10 @@ void ReferenceMediaSession::seek(double v){bool resume=playing();sampleClock();s
 void ReferenceMediaSession::setSpeed(double v){v=qBound(.5,v,1.5);if(qFuzzyCompare(v,_speed))return;bool resume=playing();sampleClock();stopWorker();_speed=v;emit changed();if(resume)play();}
 void ReferenceMediaSession::setVolume(double v){_volume=qBound(0.,v,1.);if(_audio)_audio->setVolume(_volume);emit changed();}
 void ReferenceMediaSession::setLoop(double a,double b,bool enabled,bool fade){
- bool resume=playing();sampleClock();stopWorker();_a=qBound(0.,a,_duration);_b=qBound(_a,b,_duration);_loop=enabled&&_b>_a;_fade=fade;emit changed();if(resume)play();
+ a=qBound(0.,a,_duration);b=qBound(a,b,_duration);enabled=enabled&&b>a;
+ if(_a==a&&_b==b&&_loop==enabled&&_fade==fade)return;
+ const bool restart=_loop||enabled;bool resume=restart&&playing();
+ if(restart){sampleClock();stopWorker();}_a=a;_b=b;_loop=enabled;_fade=fade;emit changed();if(resume)play();
 }
 QVariantMap ReferenceMediaSession::identity()const {
  QFileInfo file(_path);return {{"path",_path},{"size",file.size()},{"modified",file.lastModified().toMSecsSinceEpoch()},{"duration",_duration}};

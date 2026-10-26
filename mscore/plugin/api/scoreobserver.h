@@ -41,6 +41,7 @@ class ScoreObserver : public QObject {
       Q_PROPERTY(int indexBuildCount READ indexBuildCount NOTIFY indexChanged)
       Q_PROPERTY(double indexBuildMilliseconds READ indexBuildMilliseconds NOTIFY indexChanged)
 
+      int _indexUndoIndex=-1;
       struct Event { int tick; int end; QVariantList notes; };
       struct PedalWindow { int start; int end; int firstTrack; int endTrack; };
       QVector<PedalWindow> _pedals;
@@ -122,6 +123,7 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QVariantMap stopReferencePlayback();
       Q_INVOKABLE QVariantMap setEditorComparison(const QVariantMap&);
       Q_INVOKABLE QVariantMap updateEditorComparisonState(const QVariantMap&);
+      Q_INVOKABLE bool reuseHarmonyAfterVelocityEdit();
       Q_INVOKABLE QVariantMap setReferenceTracks(const QVariantList&);
       Q_INVOKABLE QVariantMap workflowFingerprint(int from,int limit,const QString& expected);
       Q_INVOKABLE QVariantMap returnWorkflowSource();
