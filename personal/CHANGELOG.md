@@ -2,6 +2,8 @@
 
 ## 开发中 — 2026-10-27
 
+源码：[c9b98c134f7e](https://github.com/Freddd13/MuseScore/commit/c9b98c134f7e31f337e70bdb4dc2aebb0b0f24b1)；插件：[7ea7b899c9ee](https://github.com/Freddd13/Muse3Plugins/commit/7ea7b899c9eed960e478e7d3b553bb439eb0b528)。尚未安装。
+
 - C3-A1：可弹性读取实际起音、松键、踏板和反复；保留谱面身份，支持缩短、延长与静音。多架钢琴各自读取后续音组，无法形成手位时先说明跨度问题。
 - 15项新JS、十组JS和最后九项原生／面板检查通过；详见ARRANGEMENT_PHYSICAL_CHECKS.md。源码尚未安装，当前发布版本仍为0.128.0。
 - R1-C3.3-B窗口超时已完成正常权限对照；没有稳定改善的调度试验退出编译。运行方式菜单及厂商窗口待桌面解锁后复查。

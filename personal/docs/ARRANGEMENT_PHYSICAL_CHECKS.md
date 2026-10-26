@@ -2,6 +2,8 @@
 
 2026-10-27。源码检查完成，尚未安装；当前安装版仍为0.128.0。接着C3-A的真实谱与指法资料，再进入C3-B连续手位、C4松手导出。
 
+源码：[c9b98c134f7e](https://github.com/Freddd13/MuseScore/commit/c9b98c134f7e31f337e70bdb4dc2aebb0b0f24b1)；插件：[7ea7b899c9ee](https://github.com/Freddd13/Muse3Plugins/commit/7ea7b899c9eed960e478e7d3b553bb439eb0b528)。尚未安装。
+
 ## 查到的原因和改动
 
 低音音响检查已经读取实际MIDI事件，可弹性检查仍使用谱上时值。手调音长、静音及起音偏移由此产生两套保持关系。

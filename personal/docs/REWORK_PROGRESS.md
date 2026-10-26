@@ -16,6 +16,8 @@ R1-C2已查到原曲声音设备打开阻塞界面，以及反复和弦显示遗
 
 ### C3-A1源码已检查：实际按键时长
 
+源码：[c9b98c134f7e](https://github.com/Freddd13/MuseScore/commit/c9b98c134f7e31f337e70bdb4dc2aebb0b0f24b1)；插件：[7ea7b899c9ee](https://github.com/Freddd13/Muse3Plugins/commit/7ea7b899c9eed960e478e7d3b553bb439eb0b528)。尚未安装。
+
 手调缩短、延长、踏板留声、静音、起音偏移与反复现在使用同一份实际演奏资料。多架钢琴各自读取后续音组，谱面定位继续使用原音符身份。15项新JS检查、十组JS和最后九项原生／面板操作通过；保存重开、定位及撤销已核对。当前尚未安装，继续C3-A的真实谱与指法资料，再进入C3-B。操作见[哪些音还需要按住](ARRANGEMENT_PHYSICAL_GUIDE.md)，数据见[本批检查](ARRANGEMENT_PHYSICAL_CHECKS.md)。
 
 ### 已安装0.128.0：R1-C3.3-A共用钢琴复用
