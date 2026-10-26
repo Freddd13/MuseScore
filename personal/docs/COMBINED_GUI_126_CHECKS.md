@@ -50,7 +50,7 @@ MasterScore的Movements由调用方拥有，内含样式、页面及撤销资料
 
 日志和数据在插件工作区P2/out：combined-126-before、combined-126-output-profile、combined-126-thread、combined-126-long、combined-126-fixed、combined-126-fixed-alone，以及harmony-memory-126-before／fixed。失败过程继续保留。真实谱截图留在本机检查目录，公开图片采用自制材料。
 
-接着R1-C3：实际VST及厂商窗口的长期组合、自动保存停顿；之后C3-A按键占用、C3-B连续手位、C4松手导出、D记谱、E AI与分享、F完整编曲操作。
+接着R1-C3：软件绘制故障、自动保存停顿，再查实际VST及厂商窗口的长期组合；之后C3-A按键占用、C3-B连续手位、C4松手导出、D记谱、E AI与分享、F完整编曲操作。
 
 ## 正式编译后的回查
 
@@ -60,4 +60,6 @@ MasterScore的Movements由调用方拥有，内含样式、页面及撤销资料
 
 ## 安装
 
-0.126编译与回查进行中，当前安装仍为0.125。完成后补充安装清单、提交和程序校验。
+0.126.0已安装，11份安装文件与编译及说明一致，kumo.ini保持。已安装程序实际导出7446字节PDF。源码50918ae5486903f6f93126d80f6aefc01537ea9f，发布定位personal-v0.126.0。程序SHA256：`b5a5f14ca16eeca40656f6c6379ef1948f495aae96d3ac46c943f617e114109d`。
+
+安装清单与旧文件分别保存在P2/out/release-126-install.json、P2/out/before-0.126.0；原文件未删除。
