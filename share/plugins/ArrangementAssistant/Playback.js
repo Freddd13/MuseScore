@@ -9,7 +9,7 @@ function create(data,handIndex,handOverrides) {
         var index=handIndex[track];Object.keys(index.singles).forEach(function(tick){boundaries[track+":"+tick]=true;});
         index.left.concat(index.right).forEach(function(range){boundaries[track+":"+range.start.tick]=true;boundaries[track+":"+range.end.tick]=true;});
     }
-    return {data:data,handIndex:handIndex,handOverrides:handOverrides||[],handBoundaries:boundaries,phase:0,index:0,byId:{},chains:{},notationCache:{},chordSizes:{},keys:{},pedals:{},released:{},windows:[],pedalWindows:[],activePedals:{},
+    return {data:data,handIndex:handIndex,handOverrides:handOverrides||[],handBoundaries:boundaries,phase:0,index:0,byId:{},chains:{},tieContexts:{},notationCache:{},chordSizes:{},keys:{},pedals:{},released:{},windows:[],pedalWindows:[],activePedals:{},
         onsets:{},times:{},ticks:[],active:[],activeKeys:[],ranges:(data.ranges||[]).slice().sort(function(a,b){return a.start-b.start;}),rangeIndex:0,frame:null};
 }
 function closeSound(window,row) {
@@ -22,10 +22,12 @@ function closeKey(s,key,row) {
     else closeSound(window,row);
 }
 function source(s,row) {
+    if(row.tieContext)s.tieContexts[row.logicalId||row.id]=row.tieContext;
     var value=copy(s.byId[row.id]||s.byId[row.logicalId]||row);
+    delete value.tieContext;
     ["tick","track","index","graceIndex","grace","pitch","writtenPitch","eventIndex"].forEach(function(key){if(row[key]!==undefined)value[key]=row[key];});
     if(row.tpc===undefined)delete value.tpc;else value.tpc=row.tpc;
-    value.id=row.id;value.velocity=row.velocity;value.occurrence=row.occurrence||1;
+    value.id=row.id;value.logicalId=row.logicalId||value.logicalId;value.velocity=row.velocity;value.occurrence=row.occurrence||1;
     return value;
 }
 function event(s,row) {
@@ -112,14 +114,19 @@ function run(data) {var state=create(data),frames=[];while(!step(state))if(state
 // Keep the score reference intact. The planner reads these separate physical
 // fields so edited note lengths, repeats and delayed attacks use actual MIDI.
 function notationAt(s,source,tick) {
-    var key=source.logicalId||source.id,chain=s?s.chains[key]:null;
-    if(!chain || chain.length<2 || chain[0].pitch!==source.pitch)return copy(source);
+    var key=source.logicalId||source.id,chain=s?s.chains[key]:null,context=s?s.tieContexts[key]||[]:[];
+    if(!chain || chain.length<2&&!context.length || chain[0].pitch!==source.pitch)return copy(source);
     var cached=s.notationCache[key];
     if(!cached) {
-        cached=[];var fingers=[],anchor={tick:chain[0].tick,track:chain[0].track,index:chain[0].index};
+        cached=[];var fingers=[],anchor={tick:chain[0].tick,track:chain[0].track,index:chain[0].index},position=0;
+        function singleMark(n){var index=s.handIndex[n.track],singles=index?index.singles[n.tick]||[]:[];return singles.some(function(mark){return mark.index===undefined||mark.index<0||mark.index===n.index;});}
         for(var i=0;i<chain.length;++i) {
-            var n=chain[i],index=s.handIndex[n.track],singles=index?index.singles[n.tick]||[]:[];
-            if(singles.some(function(mark){return mark.index===undefined||mark.index<0||mark.index===n.index;}))anchor={tick:n.tick,track:n.track,index:n.index};
+            var n=chain[i];
+            while(position<context.length && context[position].tick<=n.tick) {
+                var action=context[position++];if(action.fingerings&&action.fingerings.length)fingers=action.fingerings;
+                if(action.note&&singleMark(action.note))anchor={tick:action.note.tick,track:action.note.track,index:action.note.index};
+            }
+            if(singleMark(n))anchor={tick:n.tick,track:n.track,index:n.index};
             if(n.fingerings && n.fingerings.length)fingers=n.fingerings;
             cached.push({note:n,fingers:fingers,anchor:anchor});
         }
@@ -144,6 +151,26 @@ function physicalNotes(windows,tick,s,scoreTick) {
             note.physicalStart=window.start;note.physicalEnd=window.keyEnd;
             note.physicalOnSeconds=window.startSeconds;note.physicalEndSeconds=window.keyEndSeconds;
             note.playbackChannel=window.channelKey;note.partId=window.part;
+            var logical=source.logicalId||source.id;
+            if(s) {
+                if(!window.requiredById)window.requiredById={};
+                if(!Object.prototype.hasOwnProperty.call(window.requiredById,logical)) {
+                    var hold=null,context=s.tieContexts[logical]||[];
+                    context.forEach(function(action){var at=action.tick+(window.offset||0);
+                        if(action.continuation && at>window.start && at<window.keyEnd && (!hold||at>hold.at))hold={at:at,action:action};
+                    });
+                    window.requiredById[logical]=hold;
+                }
+                var hold=window.requiredById[logical];
+                if(hold) {
+                    note.requiredUntil=hold.at;note.requiredTick=hold.action.tick;note.requiredNote=copy(hold.action.note||{});
+                    note.requiredFingerings=copy(hold.action.fingerings||[]);
+                    note.requiredKind=(note.requiredFingerings.length?"指法":"")+(note.requiredFingerings.length&&(hold.action.hands||[]).length?"与":"")+((hold.action.hands||[]).length?"分手":"");
+                    for(var r=0;r<s.ranges.length;++r)if((s.ranges[r].offset||0)===(window.offset||0)&&typeof s.ranges[r].scoreStartSeconds==="number"){
+                        note.requiredSeconds=s.ranges[r].startSeconds+hold.action.positionSeconds-s.ranges[r].scoreStartSeconds;break;
+                    }
+                }
+            }
             result.push(note);
         });
     });

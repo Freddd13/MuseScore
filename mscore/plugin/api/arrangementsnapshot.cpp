@@ -2,6 +2,7 @@
 // Read-only, GUI-thread paging. All returned data are numbers/text, never native pointers.
 #include "scoreobserver.h"
 #include "readonlyanalysisjob.h"
+#include "handmarkers.h"
 #include "libmscore/chord.h"
 #include "libmscore/note.h"
 #include "libmscore/notevelocity.h"
@@ -116,21 +117,7 @@ QVariantMap ScoreObserver::analysisRange(int start,int end,int firstTrack,int en
       QVariantList notes,rests,meters,harmonies,hands,pedals,parts,keys,tempos;
       QElapsedTimer timer;timer.start();int count=0,previousMeasure=-1;
       auto handData=[&](const ElementList& list,int tick,int track,int index,int graceIndex=-1) {
-            QList<const Ms::Symbol*> symbols;
-            for(const auto e:list)if(e->isSymbol())symbols.append(toSymbol(e));
-            for(int i=0;i<symbols.size();++i) {
-                  const auto symbol=symbols[i];
-                  // MuseScore supports symbols attached to another symbol.
-                  // They inherit the note/chord anchor, even below a non-hand symbol.
-                  for(const auto child:symbol->leafs())if(child->isSymbol())symbols.append(toSymbol(child));
-                  if(!symbol->handEligible())continue;
-                  QVariantMap row{{"tick",tick},{"track",track},{"index",index},{"left",symbol->handLeft()},{"end",symbol->handEnd()},{"bracket",symbol->handBracket()},
-                        {"hand",symbol->handLeft()?"left":"right"},{"marker",symbol->handEnd()?"end":"start"},{"attached",index>=0?"note":"chord"}};
-                  auto anchor=symbol->parent();while(anchor && anchor->isSymbol())anchor=anchor->parent();
-                  if(index>=0 && anchor && anchor->isNote())row.insert("pitch",toNote(anchor)->pitch());
-                  if(graceIndex>=0){row.insert("grace",true);row.insert("graceIndex",graceIndex);}
-                  hands.append(row);
-                  }
+            hands.append(readHandMarkers(list,tick,track,index,graceIndex));
             };
       while(segment && segment->tick().ticks()<end) {
             const int at=segment->tick().ticks();const auto m=segment->measure();const double positionSeconds=_score->tempomap()->tick2time(at);

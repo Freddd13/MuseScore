@@ -49,9 +49,11 @@ QVariantMap PianoHandAnalysis::analyse(const QVariantList& notes,const QVariantL
                   const bool matches=p.contains("channelKey") ? p.value("channelKey")==n.value("playbackChannel")
                         : track>=p.value("firstTrack").toInt() && track<p.value("endTrack").toInt();
                   if(!matches || p.value("tick").toInt()>=keyEnd(n) || keyEnd(n)>p.value("end").toInt() || !p.value("supported",true).toBool())continue;
-                  if(!key.attack && atSeconds-start>=minimum && p.value("tick").toInt()<at && at<p.value("end").toInt())key.releasable=true;
-                  if(hasStart && hasEnd && p.contains("seconds")) {
-                        const double earliest=std::max(start+minimum,std::nextafter(p.value("seconds").toDouble(),std::numeric_limits<double>::infinity()));
+                  const bool required=n.contains("requiredUntil")&&at<=n.value("requiredUntil").toInt();
+                  if(!key.attack && !required && atSeconds-start>=minimum && p.value("tick").toInt()<at && at<p.value("end").toInt())key.releasable=true;
+                  if(hasStart && hasEnd && p.contains("seconds") && (!n.contains("requiredUntil")||n.contains("requiredSeconds"))) {
+                        double earliest=std::max(start+minimum,std::nextafter(p.value("seconds").toDouble(),std::numeric_limits<double>::infinity()));
+                        if(n.contains("requiredSeconds"))earliest=std::max(earliest,std::nextafter(n.value("requiredSeconds").toDouble(),std::numeric_limits<double>::infinity()));
                         if(earliest<end && (!std::isfinite(key.releaseSeconds) || earliest<key.releaseSeconds))key.releaseSeconds=earliest;
                         }
                   }

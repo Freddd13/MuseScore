@@ -1,7 +1,9 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 // GUI-side preparation in bounded musical chunks; callers receive values only.
 #include "scoreobserver.h"
+#include "handmarkers.h"
 #include "libmscore/chord.h"
+#include "libmscore/measure.h"
 #include "libmscore/note.h"
 #include "libmscore/part.h"
 #include "libmscore/instrument.h"
@@ -11,6 +13,7 @@
 #include "libmscore/playbacktiming.h"
 #include "libmscore/tempo.h"
 #include "libmscore/tie.h"
+#include "libmscore/textbase.h"
 #include "mscore/musescore.h"
 #include "mscore/seq.h"
 #include "audio/midi/event.h"
@@ -36,6 +39,7 @@ struct AnalysisPlaybackRead {
       struct Pass {int start,end,offset,occurrence;};
       QVector<Pass> passes;
       QHash<int,QVector<Pass>> notePasses;
+      QHash<const Ms::Note*,QVariantList> tieContexts;
 };
 namespace {
 bool unavailable(ScoreObserver* observer) {return observer->playing() || (seq&&!seq->backgroundRenderingIdle());}
@@ -120,7 +124,24 @@ QVariantMap ScoreObserver::analysisPlaybackPage(int fromTick,int firstTrack,int 
       if(read.score!=_score || read.revision!=expected || !read.ready)return {{"error","not-prepared"}};
       firstTrack=qBound(0,firstTrack,_score->ntracks());endTrack=qBound(firstTrack,endTrack,_score->ntracks());limit=qBound(1,limit,64);
       auto it=fromTick==INT_MIN?read.events.cbegin():read.events.lower_bound(fromTick);
-      QVariantList rows;QElapsedTimer timer;timer.start();int groups=0;
+      QVariantList rows;QElapsedTimer timer;timer.start();int groups=0;QSet<const Ms::Note*> describedContexts;
+      auto tieContext=[&](const Ms::Note* origin) {
+            if(read.tieContexts.contains(origin))return read.tieContexts.value(origin);
+            QVariantList result;QSet<const Ms::Note*> visited;auto current=origin;
+            while(current&&!visited.contains(current)) {
+                  visited.insert(current);const auto chord=current->chord();const int at=chord->tick().ticks();
+                  const int index=int(std::find(chord->notes().begin(),chord->notes().end(),current)-chord->notes().begin());
+                  QVariantList fingers;for(const auto element:current->el())if(element->isFingering())fingers.append(toTextBase(element)->plainText());
+                  auto hands=readHandMarkers(chord->el(),at,current->track(),-1);hands.append(readHandMarkers(current->el(),at,current->track(),index));
+                  if(!fingers.isEmpty()||!hands.isEmpty()) {
+                        auto note=describe(current,current->ppitch());note.insert("id",QString("%1:%2:%3").arg(at).arg(current->track()).arg(index));
+                        const auto measure=chord->measure();note.insert("measure",measure->no()+1);note.insert("beat",1.+double(at-measure->tick().ticks())/(DIVISION*4./measure->timesig().denominator()));
+                        result.append(QVariantMap{{"tick",at},{"positionSeconds",_score->tempomap()->tick2time(at)},{"continuation",current!=origin},{"fingerings",fingers},{"hands",hands},{"note",note}});
+                        }
+                  current=current->tieFor()?current->tieFor()->endNote():nullptr;
+                  }
+            read.tieContexts.insert(origin,result);return result;
+            };
       while(it!=read.events.cend()) {
             const int at=it->first;
             do {
@@ -153,6 +174,9 @@ QVariantMap ScoreObserver::analysisPlaybackPage(int fromTick,int firstTrack,int 
                         while(origin->tieBack()&&origin->tieBack()->startNote()&&!visited.contains(origin)){visited.insert(origin);origin=origin->tieBack()->startNote();}
                         const auto& originNotes=origin->chord()->notes();const int index=int(std::find(originNotes.begin(),originNotes.end(),origin)-originNotes.begin());
                         row.insert("logicalId",grace<0?QString("%1:%2:%3").arg(origin->chord()->tick().ticks()).arg(origin->track()).arg(index):id);
+                        if(event.velo()&&grace<0&&origin->tieFor()&&!describedContexts.contains(origin)) {
+                              const auto context=tieContext(origin);if(!context.isEmpty())row.insert("tieContext",context);describedContexts.insert(origin);
+                              }
                         const int written=row.value("tick").toInt();
                         if(!read.notePasses.contains(written)) {
                               QVector<AnalysisPlaybackRead::Pass> candidates;

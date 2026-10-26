@@ -122,7 +122,14 @@ function perfect(a,b) {
 }
 function create(data,config,imported) {
     return {data:data,config:clone(config),imported:imported||[],phase:0,index:0,byTick:{},ticks:[],byTrack:{},
-        frames:[],active:[],pedalNotes:[],roles:[],issues:[],previousHands:{},previousLines:{},pairState:{},regions:[],seen:{},logicalSeen:{},trackTicks:{},trackIndices:{},trackParts:{},trackTextures:{},trackProfiles:{},trackKeys:null,roleIndex:0,textureJob:null,clock:timingClock(data),keyIndex:indexKeys(data.keys||[]),handIndex:indexHands(data.hands||[])};
+        frames:[],active:[],pedalNotes:[],roles:[],issues:[],previousHands:{},previousLines:{},pairState:{},regions:[],seen:{},logicalSeen:{},trackTicks:{},trackIndices:{},trackParts:{},trackTextures:{},trackProfiles:{},trackKeys:null,roleIndex:0,textureJob:null,clock:timingClock(data),keyIndex:indexKeys(data.keys||[]),handIndex:indexHands(completeHands(data))};
+}
+function completeHands(data) {
+    var result=[],seen={};
+    function add(mark){var key=[mark.tick,mark.track,mark.index,mark.graceIndex,mark.hand,mark.left,mark.end,mark.marker].join(":");if(!seen[key]){seen[key]=true;result.push(mark);}}
+    (data.hands||[]).forEach(add);
+    ((data.playback||{}).events||[]).forEach(function(event){(event.tieContext||[]).forEach(function(action){(action.hands||[]).forEach(add);});});
+    return result;
 }
 function indexKeys(keys) {
     var result={};keys.forEach(function(event){(result[event.track]||(result[event.track]=[])).push(event);});
@@ -539,6 +546,11 @@ function physicalPlayability(s,frame) {
             else title=label+"的同一手指需要同时按不同音";
             if(distance>after.maximum)basis+=keyName(after.low)+"–"+keyName(after.high)+" 相距"+distance+"半音，个人上限为"+after.maximum+"半音。"+(remaining.some(function(n){return keyStart(n)<at;})?"可调整分手、排列或旧音的松手时机。":"这些新音同时按下，可调整分手、排列或琶音写法。");
             if(after.fingerConflicts)basis+=(fingerConflictText(remaining)||"现有指法要求同一个手指同时保持不同按键。")+"可核对指法或松手时机。";
+            remaining.filter(function(note){return note.requiredUntil!==undefined&&note.requiredUntil>=at;}).forEach(function(note){
+                var point=note.requiredNote||{},where=point.measure?"第"+point.measure+"小节第"+point.beat+"拍":"后面的指定位置",fingers=(note.requiredFingerings||[]).join("／");
+                var mark=(fingers?fingers+"指":"")+(fingers&&(note.requiredKind||"").indexOf("分手")>=0?"及":"")+((note.requiredKind||"").indexOf("分手")>=0?"分手记号":"");
+                basis+=pitchLabel(note)+" 在"+where+"标有"+(mark||"演奏说明")+"，需要按到这个位置。";
+            });
             if(side.rolled)basis+="已标记琶音，需要另外核查展开顺序。";
             issue(s,"playability",(after.count>5?"keys-":"span-")+side.hand,tick,involved,title,basis,report.inferred || side.rolled?"注意":"需核查");
         } else if(after.high-after.low>s.config[side.hand].comfort) {
