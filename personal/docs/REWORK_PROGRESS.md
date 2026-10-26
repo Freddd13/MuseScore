@@ -20,7 +20,7 @@ C3-B2-B2源码：[ca100cf0a20e](https://github.com/Freddd13/MuseScore/commit/ca1
 
 备选指法`2(3)`、括号指法`[4]`参加五指匹配，松手建议使用同一判断。说明列出相关音和指法。192组独立枚举对照一致，实际面板完成定位、修改、撤销与重开；连续琶音分别核对普通按键、踏板留声和延长按键。
 
-最后记录19 passed，全部14组JS与共用模块6 passed通过。真实谱读取770毫秒、后台计算6823毫秒，界面最长间隔86.4毫秒。源码尚未安装，程序仍为0.128.0；操作见[备选指法与琶音](ARRANGEMENT_ALTERNATIVE_GUIDE.md)，结果见[本批记录](ARRANGEMENT_ALTERNATIVE_CHECKS.md)。接着C3-B2-B3同音换指时机，再按C3-B3、C4、D、E、F继续。
+最后一组19项、全部14组JS与共用模块6项检查通过。真实谱读取770毫秒、后台计算6823毫秒，界面最长间隔86.4毫秒。源码尚未安装，程序仍为0.128.0；操作见[备选指法与琶音](ARRANGEMENT_ALTERNATIVE_GUIDE.md)，结果见[本批记录](ARRANGEMENT_ALTERNATIVE_CHECKS.md)。接着C3-B2-B3同音换指时机，再按C3-B3、C4、D、E、F继续。
 
 ### C3-B2-B1源码已检查：后续换指与提前松手
 
