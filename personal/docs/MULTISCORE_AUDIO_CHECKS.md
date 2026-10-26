@@ -70,3 +70,12 @@ SF2和CFX都出现过。修复前的检查分别在第11轮等待十秒仍未提
 本批完成后回到C3连续手位与可弹性，再按C4松手导出、D记谱与字体、E AI连接和分享、F完整编曲操作执行。长期使用中整机完全卡住仍纳入F连续检查；本批先交付已经定位的停止与换谱修复。
 
 音源选择和释放的步骤见[用户说明](MULTISCORE_AUDIO_GUIDE.md)，总顺序见[完整进度](REWORK_PROGRESS.md)。
+
+
+## 安装与提交
+
+0.124.0已安装到现用目录，程序与本次编译材料一致。已安装程序打开独立钢琴谱，实际导出7446字节PDF；11份安装文件和个人配置校验通过。
+
+源码提交0274a308370e3902867fa1fef7ae2e4a0f712177，发布定位personal-v0.124.0。程序SHA256为`b81d31de9d1d404f8f7933b9f6a4c549c3acdbb3eacbee6e4e911af95f65e516`。个人版本从personal/VERSION生成，保留Kumo branch／Freddd13标识。
+
+安装清单与备份在插件工作区P2/out/release-124-install.json、P2/out/releases/0.124.0及P2/out/before-0.124.0；独立安装检查位于release-124-installed-export.txt。未删除旧程序或临时资料。
