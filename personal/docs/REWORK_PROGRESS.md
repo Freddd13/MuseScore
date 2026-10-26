@@ -16,6 +16,8 @@ R1-C2已查到原曲声音设备打开阻塞界面，以及反复和弦显示遗
 
 ### C3-B2-A源码已检查：延音中的指法与分手
 
+C3-B2-A源码：[a531055312db](https://github.com/Freddd13/MuseScore/commit/a531055312dbea5f3fe9d9d1a3dbc7f358d90113)；插件：[0ab8b2835bb9](https://github.com/Freddd13/Muse3Plugins/commit/0ab8b2835bb98f8bd27f77fc18709d962bd7d2fe)。尚未安装。
+
 后段延音的指法与分手会按谱位更新，继续保留同一次按键；换手后两只手的占用一起更新，连续跨度提示合并。12项新JS和全部13组通过；变速、反复、中途选段、实际定位、撤销与重开，以及原有面板流程共10项通过，共用指法与MIDI6项通过。真实谱读取695毫秒、后台分析5804毫秒，界面最长间隔61.5毫秒。源码尚未安装，操作见[延音换指与换手](ARRANGEMENT_TIED_GUIDE.md)，结果见[本批记录](ARRANGEMENT_TIED_CHECKS.md)。接着C3-B2-B换指时机、提前松手、连续琶音，再按B3、C4、D、E、F继续。
 
 ### C3-B1源码已检查：实际松键后的移动时间
