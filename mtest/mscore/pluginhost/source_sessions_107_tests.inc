@@ -23,6 +23,7 @@ public:
             const auto& event=events[i];
             if ((event.status&0xf0)==0x90) counts->held[id]=event.second>0;
             if ((event.status&0xf0)==0x80 || ((event.status&0xf0)==0xb0 && event.first==120)) counts->held[id]=false;
+            if ((event.status&0xf0)==0xb0 && event.first==91) value=event.second/127.;
         }
         for(int i=0;i<n;++i) left[i]=right[i]=counts->held[id]?float(value):0;
         return true;
@@ -37,6 +38,30 @@ QVariantMap sessionConfiguration107(const QVariantMap& descriptor,const QString&
     return {{"schema",1},{"slots",QVariantList{slot}}};
 }
 QVariantMap sessionFake107(const QString& id) { return {{"format","SF2"},{"uid",id},{"name",id},{"instrument",true}}; }
+}
+void TestPluginHost::commonPianoPlaybackSnapshot128() {
+#ifdef KUMO_VST_HOST
+    auto counts=std::make_shared<SessionCounts107>();
+    VstHost::Rack rack(false,[counts](const VstHost::Descriptor& d,QString*) { return std::make_unique<SessionInstrument107>(counts,d.uid); });
+    auto config=sessionConfiguration107(sessionFake107("controller-snapshot"),"Common piano");
+    auto slotRows=config["slots"].toList();auto row=slotRows.front().toMap();
+    row["commonPiano"]="piano-1";auto source=row["source"].toMap();
+    source["state"]=QString::fromLatin1(QByteArray("0.5").toBase64());row["source"]=source;slotRows[0]=row;config["slots"]=slotRows;
+    rack.selectSession("a","Score A",false);QVERIFY(rack.load(config,44100));
+    auto first=rack.plugin(1);QVERIFY(first);rack.bindChannels({1});
+    rack.midi(0,0xb0,91,101);float audio[128]{};rack.mix(64,audio,{});
+    const auto played=rack.state();QVERIFY(!VstHost::sameConfiguration(config,played));
+    rack.selectSession("b","Score B",false);QVERIFY(rack.load(config,44100));
+    QCOMPARE(counts->created,1);QCOMPARE(rack.plugin(1),first);QCOMPARE(counts->destroyed,0);
+    rack.bindChannels({1});rack.midi(0,0xb0,91,51);rack.mix(64,audio,{});rack.state();
+    rack.selectSession("a","Score A",false);QVERIFY(rack.load(config,44100));
+    QCOMPARE(counts->created,1);QCOMPARE(rack.plugin(1),first);
+    // A deliberately changed preset still reaches the instrument.
+    source["state"]=QString::fromLatin1(QByteArray("0.9").toBase64());row["source"]=source;slotRows[0]=row;config["slots"]=slotRows;
+    QVERIFY(rack.load(config,44100));QCOMPARE(rack.plugin(1)->presetName(),QString("0.9"));
+    auto edited=rack.plugin(1);rack.state();rack.selectSession("c","Score C",false);QVERIFY(rack.load(config,44100));
+    QCOMPARE(rack.plugin(1),edited);QCOMPARE(rack.plugin(1)->presetName(),QString("0.9"));
+#endif
 }
 void TestPluginHost::sourceSessionReuse107() {
 #ifdef KUMO_VST_HOST

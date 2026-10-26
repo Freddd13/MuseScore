@@ -20,6 +20,13 @@ void TestPluginHost::combinedPlaybackGui126()
     QVERIFY(main && !Ms::seq);
     const bool pencil=!qEnvironmentVariableIsSet("P2_COMBINED_NO_PENCIL");
     const bool useHarmony=!qEnvironmentVariableIsSet("P2_COMBINED_NO_HARMONY");
+    const auto sourceKind=qEnvironmentVariable("P2_COMBINED_SOURCE","SF2");
+    QVERIFY(sourceKind=="SF2"||sourceKind=="Pianoteq"||sourceKind=="CFX");
+    const auto oldCommon=QSettings().value("kumo/vst/commonPiano");
+    const auto oldRetain=QSettings().value("kumo/vst/retainOpenScores");
+    struct RestoreSources {QVariant common,retain;~RestoreSources(){QSettings().setValue("kumo/vst/commonPiano",common);QSettings().setValue("kumo/vst/retainOpenScores",retain);}} restoreSources{oldCommon,oldRetain};
+    QSettings().remove("kumo/vst/commonPiano");
+    QSettings().setValue("kumo/vst/retainOpenScores",false);
     const auto entryBytes=sourcePrivateBytes();
     const auto audioPath = qEnvironmentVariable("P2_COMBINED_AUDIO");
     QVERIFY(QFileInfo::exists(audioPath));
@@ -40,6 +47,27 @@ void TestPluginHost::combinedPlaybackGui126()
     QVERIFY(synth->synthesizer("Fluid")->loadSoundFonts({qEnvironmentVariable("P0_TEST_SOUNDFONT")}));
     QScopedValueRollback<MasterSynthesizer*> currentSynth(Ms::synti,synth.get());
     QScopedValueRollback<bool> sequencing(noSeq,false);
+    VstSynth* vst=nullptr;
+    VstHost::Plugin* sharedPiano=nullptr;
+    if(sourceKind!="SF2") {
+        main->setCurrentScoreView(main->scores().indexOf(scores.front()));
+        restoreVstForScore(scores.front());
+        vst=static_cast<VstSynth*>(synth->synthesizer("KumoVST"));QVERIFY(vst);
+        QString error;
+        const auto descriptors=sourceKind=="CFX"
+            ?VstHost::scanVst2("E:/music_fonts/CFX Concert Grand/VST/CFX Concert Grand VST_x64.dll",&error)
+            :VstHost::scanVst3("C:/Program Files/Common Files/VST3/Pianoteq 9/Pianoteq 9.vst3",&error);
+        QVERIFY2(!descriptors.isEmpty(),qPrintable(error));
+        auto channel=const_cast<Channel*>(scores.front()->midiMapping().front().articulation());
+        QVERIFY(!assignVstInstrument(scores.front(),channel,descriptors.front().toMap()).contains("error"));
+        auto own=vst->rack().plugin(channel->bank());QVERIFY(own);
+        if(sourceKind=="CFX")QVERIFY2(own->importPreset("E:/music_fonts/CFX Concert Grand/Presets/com.Plogue.Aria/02- Compact/Player/00_Default.ariax",&error),qPrintable(error));
+        saveVstEdits(scores.front());
+        auto settings=commonPianoSettings();settings["enabled"]=true;
+        settings["instance"]=commonPianoFromCurrent(scores.front(),channel);settings["name"]="Combined playback piano";
+        QVERIFY(!applyCommonPianoSettings(scores.front(),settings).contains("error"));
+        sharedPiano=vst->rack().plugin(vst->pianoSlot(channel->channel()));QVERIFY(sharedPiano);
+    }
     auto sequence=new Seq; Ms::seq=sequence;
     std::unique_ptr<Seq,std::function<void(Seq*)>> guard(sequence,[](Seq* s) { workflowContext()->finishPlaybackSession(); s->stopWait(); s->synchronizeStoppedGui(); s->waitForStoppedRendering(); s->setScoreView(nullptr); delete s; Ms::seq=nullptr; });
     auto driver=new SourcePlaybackDriver(sequence);
@@ -76,6 +104,17 @@ void TestPluginHost::combinedPlaybackGui126()
     for(int round=0;round<rounds;++round) {
         QElapsedTimer preparation; preparation.start();
         auto score=scores[round%4]; main->setCurrentScoreView(main->scores().indexOf(score));
+        if(vst) {
+            const auto channel=score->midiMapping().front().articulation();
+            auto actual=vst->rack().plugin(vst->pianoSlot(channel->channel()));
+            if(actual!=sharedPiano) {
+                qInfo()<<"Combined source mismatch"<<round<<"channel"<<channel->channel()<<"slot"<<vst->pianoSlot(channel->channel())<<"actual"<<actual<<"expected"<<sharedPiano<<"own"<<scoreUsesOwnPiano(score);
+                QFile detail(output.filePath("combined-source-mismatch.json"));
+                QVERIFY(detail.open(QIODevice::WriteOnly));
+                detail.write(QJsonDocument::fromVariant(QVariantMap{{"runtime",vst->runtimeConfiguration()},{"common",commonPianoSettings()},{"revision",vst->revision()}}).toJson());
+            }
+            QCOMPARE(actual,sharedPiano);
+        }
         main->showPerformanceEditor(true);editorDock->show();editorDock->raise();
         tabs->setCurrentIndex(0);
         editor->findChild<QComboBox*>("performanceScope")->setCurrentIndex(2);
@@ -140,6 +179,13 @@ void TestPluginHost::combinedPlaybackGui126()
         QTRY_VERIFY_WITH_TIMEOUT(!useHarmony||!harmony->property("analysisDirty").toBool(),20000);
         const auto preparedMs=preparation.elapsed();
         QSignalSpy spectrumChanges(session,SIGNAL(changed())); QSignalSpy mediaChanges(media,SIGNAL(changed()));
+        QPointer<QWidget> vendor;
+        if(sharedPiano&&qEnvironmentVariableIsSet("P2_COMBINED_VENDOR")) {
+            QString error;QVERIFY2(sharedPiano->openEditor(main,&error),qPrintable(error));
+            vendor=main->findChild<QWidget*>("kumoVstPluginEditor");
+            QVERIFY(vendor&&vendor->isVisible());
+            vendor->move(available.left()+15,available.top()+30);
+        }
         const int mode=round%3;
         score->setPlayPos(Fraction()); driver->resetMetrics();
         if(mode==0) { getAction("play")->trigger(); QTRY_VERIFY_WITH_TIMEOUT(sequence->isPlaying(),10000); }
@@ -152,6 +198,10 @@ void TestPluginHost::combinedPlaybackGui126()
         { CombinedPaintCounter126 painted({notes,canvas,spectrumCanvas});PlaybackGuiProbe125 probe; ticker.start();
             for(int second=0;second<seconds;++second) {
                 QTest::qWait(1000);
+                if(vst) {
+                    QCOMPARE(vst->rack().plugin(vst->pianoSlot(score->midiMapping().front().articulation()->channel())),sharedPiano);
+                    if(vendor)QVERIFY(vendor->isVisible());
+                }
                 if(second%3==2) {
                     QElapsedTimer timer; timer.start();
                     for(int step=0;step<4;++step) { auto view=main->currentScoreView(); QPointF point(view->width()/2.,view->height()/2.); QWheelEvent event(point,view->mapToGlobal(point.toPoint()),QPoint(),QPoint(0,step%2?-120:120),Qt::NoButton,Qt::ControlModifier,Qt::NoScrollPhase,false); QCoreApplication::sendEvent(view,&event); QApplication::processEvents(); }
@@ -167,8 +217,12 @@ void TestPluginHost::combinedPlaybackGui126()
         QVERIFY(QMetaObject::invokeMethod(reference,"stopJoint")); sequence->stopWait(); sequence->waitForStoppedRendering();
         QTRY_VERIFY(!sequence->isPlaying()&&!media->property("playing").toBool());
         QTRY_VERIFY_WITH_TIMEOUT(!editor->hasPending()&&!session->property("busy").toBool(),15000);
+        if(vendor){QVERIFY(vendor->isVisible());sharedPiano->closeEditor();}
         QVariantList zoomValues; for(double value:zooms)zoomValues.append(value);
         auto row=driver->metrics(); row["round"]=round; row["mode"]=mode; row["overlay"]=display->currentIndex()==1; row["preparationMilliseconds"]=preparedMs; row["guiP95Milliseconds"]=sourcePercentile(gaps,.95); row["guiMaximumMilliseconds"]=sourcePercentile(gaps,1.); row["fourZoomMilliseconds"]=zoomValues; row["events"]=events; row["spectrumChanges"]=spectrumChanges.count(); row["mediaChanges"]=mediaChanges.count(); row["spectrumInfo"]=session->property("info"); row["cache"]=session->property("cacheOptions"); row["mediaDiagnostics"]=mediaDiagnostics; row["privateBytes"]=sourcePrivateBytes(); row["windows"]=QGuiApplication::allWindows().size();row["notePaints"]=notePaints;row["parameterPaints"]=parameterPaints;row["spectrumPaints"]=spectrumPaints; rows.append(row);
+        row["source"]=sourceKind;
+        row["vendorWindow"]=qEnvironmentVariableIsSet("P2_COMBINED_VENDOR");
+        if(mode!=1){QVERIFY(row["finite"].toBool());QVERIFY2(row["peak"].toDouble()>.00001,"Score transport must produce actual piano audio");}
         int playEvents=0;for(auto note:selected)playEvents+=note->playEvents().size();row["playEvents"]=playEvents;row["notes"]=selected.size();row["undoMacros"]=score->undoStack()->getCurIdx();row["pencilUndoChildren"]=pencilChildren;row["pencil"]=pencil;row["harmony"]=useHarmony;rows.last()=row;
         qInfo()<<"Combined GUI"<<round<<"mode"<<mode<<"p95"<<row["guiP95Milliseconds"]<<"maximum"<<row["guiMaximumMilliseconds"]<<"zooms"<<zooms;
         QFile report(output.filePath("combined-gui-126.json")); QVERIFY(report.open(QIODevice::WriteOnly)); report.write(QJsonDocument::fromVariant(rows).toJson());

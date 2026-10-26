@@ -551,3 +551,6 @@ CFX状态比较	audio/vst/plugin.cpp	AriaNode / comparableUnit	20	具名附件�
 软件绘图修复接线	personal/qtquick-runtime.cmake	kumo_select_qtquick_runtime	5	构建与安装共用经校验的Qt Quick	P2/tests/test_qtquick_runtime.py
 Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方补丁、导出与架构核对	DRAWING_127_CHECKS.md
 首次音源入口	mscore/workflow/vstpanel.cpp	addVstPanelAction	1395	从菜单所属主窗口注册动作	personalToolbarIcons121 / builtinToolEntryPoints
+
+共用钢琴载入设置	audio/vst/rack.cpp	Slot::loadedConfig / Rack::load	110	当前控制值快照与载入设置分别比较，切谱复用音源	commonPianoPlaybackSnapshot128 / commonPianoReal108
+真实音源连续组合	mtest/mscore/pluginhost/combined_gui_126_tests.inc	TestPluginHost::combinedPlaybackGui126	22	四谱八轨、CFX与Pianoteq、厂商窗口、编辑缩放与实际声音	PIANO_PLAYBACK_128_CHECKS.md

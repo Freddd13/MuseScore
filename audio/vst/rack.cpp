@@ -107,6 +107,8 @@ struct Slot {
   bool enabled = true, nativeControls = false;
   std::array<bool, 128> held{};
   QVariantMap config;
+  // The requested preset stays stable when a live snapshot includes MIDI controls.
+  QVariantMap loadedConfig;
   Unit source;
   std::vector<std::unique_ptr<Unit>> effects;
   Delay compensation;
@@ -444,6 +446,7 @@ bool Rack::load(const QVariantMap &value, double rate, QStringList *problems) {
     const auto c = v.toMap();
     auto slot = std::make_shared<Slot>();
     slot->config = c;
+    slot->loadedConfig = c;
     slot->id = c["id"].toInt();
     if (slot->id < 1 || slot->id > 16383 || d->find(slot->id))
       continue;
@@ -451,9 +454,11 @@ bool Rack::load(const QVariantMap &value, double rate, QStringList *problems) {
     const auto common = d->commonPianos.find(commonKey);
     if (!commonKey.isEmpty() && common != d->commonPianos.end() && common->second->source.processor &&
         common->second->source.processor->status().isEmpty() &&
-        sameCommonPiano(common->second->config, c)) {
+        (sameCommonPiano(common->second->config, c) ||
+         sameCommonPiano(common->second->loadedConfig, c))) {
       common->second->id = slot->id;
       common->second->config = c;
+      common->second->loadedConfig = c;
       d->slots.push_back(common->second);
       continue;
     }

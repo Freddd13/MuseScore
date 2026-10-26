@@ -212,6 +212,7 @@ class TestPluginHost : public QObject {
       void sourceScorePlayback();
       void playbackGuiLatency125();
       void combinedPlaybackGui126();
+      void commonPianoPlaybackSnapshot128();
       void referenceOutputCancel126();
       void harmonyTemporaryMemory126();
       void workflowCopyLifetime126();
