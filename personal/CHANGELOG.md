@@ -2,6 +2,8 @@
 
 ## 开发中 — 2026-10-27
 
+C3-A2源码：[3ead294965a3](https://github.com/Freddd13/MuseScore/commit/3ead294965a35d326c7f4a92fdb01f03ab18f851)；插件：[3ec68d0017d3](https://github.com/Freddd13/Muse3Plugins/commit/3ec68d0017d3b96889b8a6b911fb83d9dd4612a4)。尚未安装。
+
 - C3-A2：修复嵌套分手结束记号漏读。真实谱2429音、57个分手记号、108条指法与XML一致；读取761毫秒，后台分析6259毫秒。新检查5项与原有回查8项通过，源码尚未安装，接着C3-B连续手位。详见ARRANGEMENT_PHYSICAL_CHECKS.md。
 
 源码：[c9b98c134f7e](https://github.com/Freddd13/MuseScore/commit/c9b98c134f7e31f337e70bdb4dc2aebb0b0f24b1)；插件：[7ea7b899c9ee](https://github.com/Freddd13/Muse3Plugins/commit/7ea7b899c9eed960e478e7d3b553bb439eb0b528)。尚未安装。
