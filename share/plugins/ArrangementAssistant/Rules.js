@@ -157,9 +157,9 @@ function issue(s,type,code,tick,notes,title,basis,severity,instance) {
     if(tick<s.data.scope.start || tick>=s.data.scope.end)return;
     var physical=type==="playability"?s.physicalContext:null;
     if(physical && !instance)instance="play:"+physical.occurrence+":"+physical.offset;
-    var ids=notes.map(function(n){return n.id || n.track+":"+n.tick+":"+n.index;}).sort();
+    var ids=notes.map(function(n){return type==="playability"&&n.physicalSourceId?n.physicalSourceId:n.id || n.track+":"+n.tick+":"+n.index;}).sort();
     var continuous=type==="harmony" || type==="playability" && /^(span|keys|comfort|hand|fingering)-/.test(code);
-    var anchor=continuous?notes.map(function(n){return n.track+":"+n.attackTick+":"+n.pitch;}).sort().join(","):tick;
+    var anchor=continuous?notes.map(function(n){return (type==="playability"&&n.physicalSourceTrack!==undefined?n.physicalSourceTrack:n.track)+":"+n.attackTick+":"+n.pitch;}).sort().join(","):tick;
     var id=type+":"+code+":"+anchor+":"+ids.join(",");
     var previousId=id;if(instance)id+="@"+instance;
     if(s.seen[id] || s.config.ignored.indexOf(id)>=0 || instance && s.config.ignored.indexOf(previousId)>=0)return;
@@ -243,16 +243,21 @@ function handFor(s,n,tick) {
     if(assigned && (assigned.hand==="left" || assigned.hand==="right"))return {hand:assigned.hand,source:"用户指定"};
     var candidates=[],uncertain=false,index=s.handIndex[n.track];
     function side(m) {return m.hand==="left" || m.left===true ? "left":"right";}
-    function attached(m,n) {return m.index<0 || m.index===undefined || m.index===(n.attackIndex===undefined?n.index:n.attackIndex);}
-    var singles=index?index.singles[n.attackTick]||[]:[];
-    for(var i=0;i<singles.length;++i)if(attached(singles[i],n))candidates.push(side(singles[i]));
+    var anchorTick=n.assignmentTick===undefined?n.attackTick:n.assignmentTick,anchorIndex=n.assignmentIndex===undefined?(n.attackIndex===undefined?n.index:n.attackIndex):n.assignmentIndex;
+    function attached(m,at) {return m.index<0 || m.index===undefined || m.index===at;}
+    var anchors=n.handAnchors||[{tick:anchorTick,track:n.track,index:anchorIndex}];
+    for(var a=anchors.length-1;a>=0;--a) {
+        var anchor=anchors[a],handIndex=s.handIndex[anchor.track],singles=handIndex?handIndex.singles[anchor.tick]||[]:[],found=false;
+        for(var i=0;i<singles.length;++i)if(attached(singles[i],anchor.index)){candidates.push(side(singles[i]));found=true;}
+        if(found)break;
+    }
     for(var h=0;index && h<2;++h) {
         var ranges=index[h===0?"left":"right"],lo=0,hi=ranges.length;
         while(lo<hi){var mid=(lo+hi)>>1;if(ranges[mid].start.tick<=tick)lo=mid+1;else hi=mid;}
         if(!lo)continue;var range=ranges[lo-1],m=range.start,endpoint=range.end;if(tick>endpoint.tick)continue;
-        if(n.attackTick===m.tick && !attached(m,n) || tick===endpoint.tick && !attached(endpoint,n))continue;
-        var group=(s.byTrack[n.track]||{})[n.attackTick]||[];
-        if(m.index>=0 && endpoint.index>=0 && group.length>1 && n.attackTick!==m.tick && tick<endpoint.tick)uncertain=true;
+        if(anchorTick===m.tick && !attached(m,anchorIndex) || tick===endpoint.tick && !attached(endpoint,anchorIndex))continue;
+        var group=(s.byTrack[n.track]||{})[anchorTick]||[],chordSize=n.assignmentChordSize===undefined?group.length:n.assignmentChordSize;
+        if(m.index>=0 && endpoint.index>=0 && chordSize>1 && anchorTick!==m.tick && tick<endpoint.tick)uncertain=true;
         else candidates.push(side(m));
     }
     var left=candidates.indexOf("left")>=0,right=candidates.indexOf("right")>=0;
@@ -467,13 +472,19 @@ function counterpoint(s,frame) {
 }
 function keyStart(n) {return n.physicalStart===undefined?n.attackTick:n.physicalStart;}
 function keyEnd(n) {return n.physicalEnd===undefined?n.logicalEnd:n.physicalEnd;}
+function fingerConflictText(notes) {
+    var groups={};notes.forEach(function(note){(note.fingerings||[]).forEach(function(text){
+        text=String(text).trim();if(!/^[1-5]$/.test(text))return;var names=groups[text]||(groups[text]=[]),name=pitchLabel(note);if(names.indexOf(name)<0)names.push(name);
+    });});
+    return Object.keys(groups).filter(function(finger){return groups[finger].length>1;}).map(function(finger){return finger+"指同时标在 "+groups[finger].join("、")+" 上。";}).join("");
+}
 function physicalPlayability(s,frame) {
     if(typeof PianoHands==="undefined" || typeof PianoHands.analyse!=="function")return false;
     if(frame.playbackTick!==undefined && !(PianoHands.playbackFieldsVersion>=1))return false;
     var tick=frame.tick,at=frame.playbackTick===undefined?tick:frame.playbackTick,notes=[],seconds=frame.seconds===undefined?tick/960:frame.seconds,parts={};
     for(var i=0;i<frame.notes.length;++i) {
         var original=frame.notes[i];if(keyEnd(original)<=at || keyStart(original)>at || original.grace || original.piano===false || original.play===false)continue;
-        var assignment=handFor(s,original,frame.playbackTick===undefined?tick:original.attackTick);
+        var assignment=handFor(s,original,frame.playbackTick===undefined?tick:original.assignmentTick===undefined?original.attackTick:original.assignmentTick);
         if(assignment.hand!=="left" && assignment.hand!=="right") {
             issue(s,"playability","hand-uncertain",tick,[original],"分手关系待确认",assignment.source+"；确认后再检查这几个音的按键占用。","提示");continue;
         }
@@ -491,7 +502,7 @@ function physicalPlayability(s,frame) {
         for(var j=0;j<upcoming.notes.length;++j) {
             var source=upcoming.notes[j],sourcePart=source.partId===undefined?s.data.scope.firstTrack:source.partId;
             if(Number(sourcePart)!==Number(part) || keyEnd(source)<=futureAt || keyStart(source)>futureAt || source.grace || source.piano===false || source.play===false)continue;
-            var hand=handFor(s,source,upcoming.playbackTick===undefined?upcoming.tick:source.attackTick);if(hand.hand!=="left" && hand.hand!=="right")continue;
+            var hand=handFor(s,source,upcoming.playbackTick===undefined?upcoming.tick:source.assignmentTick===undefined?source.attackTick:source.assignmentTick);if(hand.hand!=="left" && hand.hand!=="right")continue;
             var next=clone(source);next.analysisHand=hand.hand;next.handKnown=hand.source.indexOf("自动推断")<0;next.id=next.id||next.track+":"+next.attackTick+":"+next.index;
             futureNotes.push(next);if(keyStart(next)===futureAt){attacked=true;if(upcoming.seconds===undefined)futureSeconds=next.onSeconds;}
         }
@@ -527,7 +538,7 @@ function physicalPlayability(s,frame) {
             else if(distance>after.maximum)title=label+"需同时保持 "+keyName(after.low)+"–"+keyName(after.high)+"（"+distance+"半音）";
             else title=label+"的同一手指需要同时按不同音";
             if(distance>after.maximum)basis+=keyName(after.low)+"–"+keyName(after.high)+" 相距"+distance+"半音，个人上限为"+after.maximum+"半音。"+(remaining.some(function(n){return keyStart(n)<at;})?"可调整分手、排列或旧音的松手时机。":"这些新音同时按下，可调整分手、排列或琶音写法。");
-            if(after.fingerConflicts)basis+="现有指法要求同一个手指同时保持不同按键，可核对指法或松手时机。";
+            if(after.fingerConflicts)basis+=(fingerConflictText(remaining)||"现有指法要求同一个手指同时保持不同按键。")+"可核对指法或松手时机。";
             if(side.rolled)basis+="已标记琶音，需要另外核查展开顺序。";
             issue(s,"playability",(after.count>5?"keys-":"span-")+side.hand,tick,involved,title,basis,report.inferred || side.rolled?"注意":"需核查");
         } else if(after.high-after.low>s.config[side.hand].comfort) {
@@ -564,7 +575,7 @@ function playability(s,frame) {
     var groups={left:[],right:[]},sources={left:[],right:[]},tick=frame.tick,at=frame.playbackTick===undefined?tick:frame.playbackTick;
     for(var i=0;i<frame.notes.length;++i) {
         var n=frame.notes[i];if(keyEnd(n)<=at || keyStart(n)>at || n.grace || n.play===false || n.piano===false)continue;
-        var hand=handFor(s,n,frame.playbackTick===undefined?tick:n.attackTick);if(!groups[hand.hand]) {issue(s,"playability","hand-uncertain",tick,[n],"分手关系待确认",hand.source+"；可按所选音或 voice 校正，暂不据此判定跨度错误。","提示");continue;}groups[hand.hand].push(n);
+        var hand=handFor(s,n,frame.playbackTick===undefined?tick:n.assignmentTick===undefined?n.attackTick:n.assignmentTick);if(!groups[hand.hand]) {issue(s,"playability","hand-uncertain",tick,[n],"分手关系待确认",hand.source+"；可按所选音或 voice 校正，暂不据此判定跨度错误。","提示");continue;}groups[hand.hand].push(n);
         if(sources[hand.hand].indexOf(hand.source)<0)sources[hand.hand].push(hand.source);
     }
     for(var side in groups) {
@@ -668,7 +679,7 @@ function step(s,budget) {
         } else if(s.phase===3) {
             if(s.index<s.frames.length) {var frame=s.frames[s.index++];harmonic(s,frame);counterpoint(s,frame);if(!s.data.playback)playability(s,frame);}
             else if(s.data.playback) {
-                s.playback=Playback.create(s.data.playback);
+                s.playback=Playback.create(s.data.playback,s.handIndex,s.config.handOverrides);
                 s.playbackState={data:{scope:s.data.playback.scope,meters:s.data.playback.meters},config:s.config,seen:s.seen,issues:s.issues};
                 s.phase=4;
             } else {s.issues.sort(function(a,b){return a.tick-b.tick || a.type.localeCompare(b.type);});s.phase=5;return true;}

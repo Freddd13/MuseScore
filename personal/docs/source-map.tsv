@@ -556,7 +556,7 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方
 真实音源连续组合	mtest/mscore/pluginhost/combined_gui_126_tests.inc	TestPluginHost::combinedPlaybackGui126	22	四谱八轨、CFX与Pianoteq、厂商窗口、编辑缩放与实际声音	PIANO_PLAYBACK_128_CHECKS.md
 
 实际按键区间	share/plugins/ArrangementAssistant/Playback.js	physicalNotes / physicalFrame	96	保留谱面身份，读取实际按键与每架钢琴的后续音组	arrangementPhysicalPlayback / test-physical-playback.cjs
-实际按键规则	share/plugins/ArrangementAssistant/Rules.js	physicalPlayability / step	470	实际松键、静音与反复共用音乐位置；保留旧宿主判断	arrangementPhysicalPanel
+实际按键规则	share/plugins/ArrangementAssistant/Rules.js	physicalPlayability / step	481	实际松键、静音与反复共用音乐位置；保留旧宿主判断	arrangementPhysicalPanel
 原生按键字段	mscore/plugin/api/pianohandanalysis.cpp	activeKey / keyFor	16	按实际松键和声道踏板计算，限定有效手位	arrangementPhysicalKeys
 按键读取能力	mscore/plugin/api/pianohandanalysis.h	playbackFieldsVersion	13	只读能力字段，兼容原有调用	test-physical-playback.cjs
 嵌套分手资料	mscore/plugin/api/arrangementsnapshot.cpp	handData	118	读取符号中的结束记号，保留原音符及装饰音身份	arrangementNestedHandMarkers
@@ -564,3 +564,7 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方
 按键保持与移动	libmscore/pianohands.h	movement / positionFor	42	分别计算实际松键与踏板提前松手后的最紧移动区间	arrangementMovementTiming
 手位说明与原音	mscore/plugin/api/pianohandanalysis.cpp	keyFor / movementFrom	35	保存实际松键、合法提前释放及所指旧音	arrangementMovementPanel
 同处移动说明	share/plugins/ArrangementAssistant/Rules.js	physicalPlayability	537	旧音与新音共同定位，松手和移动合并说明	test-movement-timing.cjs
+延音当前位置	share/plugins/ArrangementAssistant/Playback.js	notationAt	114	复用延音链资料，当前音头与实际按键分别保留	test-tied-context.cjs
+延音时间换算	mscore/plugin/api/analysisplayback.cpp	analysisPlaybackPrepare	104	提供谱面时间起点，与实际反复时间精确对应	arrangementTiedContext
+音头谱面时间	mscore/plugin/api/arrangementsnapshot.cpp	analysisRange	163	读取每个音头在谱内的实际秒数，保留起音秒数	arrangementTiedContext
+换手占用交接	mscore/plugin/api/pianohandanalysis.cpp	analyse	101	同时更新两只手的保持记录，指法变化继续沿用一次按键	arrangementTiedHandTransfer

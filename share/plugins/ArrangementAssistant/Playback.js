@@ -3,8 +3,13 @@
 // MIDI note-off suppression and restrikes have already been resolved by the host.
 // Keep the written note reference alongside each actual key/sustain interval.
 function copy(value) {return JSON.parse(JSON.stringify(value));}
-function create(data) {
-    return {data:data,phase:0,index:0,byId:{},keys:{},pedals:{},released:{},windows:[],pedalWindows:[],activePedals:{},
+function create(data,handIndex,handOverrides) {
+    var boundaries={};handIndex=handIndex||{};
+    for(var track in handIndex) {
+        var index=handIndex[track];Object.keys(index.singles).forEach(function(tick){boundaries[track+":"+tick]=true;});
+        index.left.concat(index.right).forEach(function(range){boundaries[track+":"+range.start.tick]=true;boundaries[track+":"+range.end.tick]=true;});
+    }
+    return {data:data,handIndex:handIndex,handOverrides:handOverrides||[],handBoundaries:boundaries,phase:0,index:0,byId:{},chains:{},notationCache:{},chordSizes:{},keys:{},pedals:{},released:{},windows:[],pedalWindows:[],activePedals:{},
         onsets:{},times:{},ticks:[],active:[],activeKeys:[],ranges:(data.ranges||[]).slice().sort(function(a,b){return a.start-b.start;}),rangeIndex:0,frame:null};
 }
 function closeSound(window,row) {
@@ -61,7 +66,20 @@ function step(s) {
     s.frame=null;
     if(s.phase===0) {
         var notes=s.data.notes||[];
-        if(s.index<notes.length){var note=notes[s.index++];s.byId[note.id]=note;if(note.logicalId&&!s.byId[note.logicalId])s.byId[note.logicalId]=note;}
+        if(s.index<notes.length){var note=notes[s.index++];s.byId[note.id]=note;if(note.logicalId&&!s.byId[note.logicalId])s.byId[note.logicalId]=note;
+            if(!note.grace) {
+                var chain=s.chains[note.logicalId||note.id]||(s.chains[note.logicalId||note.id]=[]),at=chain.length;
+                while(at && chain[at-1].tick>note.tick)--at;chain.splice(at,0,note);
+                var chord=note.tick+":"+note.track;s.chordSizes[chord]=(s.chordSizes[chord]||0)+1;
+                var correction=s.handOverrides.some(function(range){return range.start<=note.tick && note.tick<range.end && range.firstTrack<=note.track && note.track<range.endTrack;});
+                var changed=note.fingerings&&note.fingerings.length || s.handBoundaries[note.track+":"+note.tick] || correction || note.attackTrack!==undefined && note.track!==note.attackTrack;
+                if(note.tieBack && changed && typeof note.positionSeconds==="number")s.ranges.forEach(function(range){
+                    if(note.tick<range.scoreStart || note.tick>=range.scoreEnd || typeof range.scoreStartSeconds!=="number")return;
+                    var tick=note.tick+range.offset;if(!s.onsets[tick])s.onsets[tick]=[];
+                    s.times[tick]=range.startSeconds+note.positionSeconds-range.scoreStartSeconds;
+                });
+            }
+        }
         else{s.phase=1;s.index=0;}
     } else if(s.phase===1) {
         if(s.index<s.data.events.length)event(s,s.data.events[s.index++]);
@@ -93,14 +111,36 @@ function run(data) {var state=create(data),frames=[];while(!step(state))if(state
 
 // Keep the score reference intact. The planner reads these separate physical
 // fields so edited note lengths, repeats and delayed attacks use actual MIDI.
-function physicalNotes(windows,tick) {
+function notationAt(s,source,tick) {
+    var key=source.logicalId||source.id,chain=s?s.chains[key]:null;
+    if(!chain || chain.length<2 || chain[0].pitch!==source.pitch)return copy(source);
+    var cached=s.notationCache[key];
+    if(!cached) {
+        cached=[];var fingers=[],anchor={tick:chain[0].tick,track:chain[0].track,index:chain[0].index};
+        for(var i=0;i<chain.length;++i) {
+            var n=chain[i],index=s.handIndex[n.track],singles=index?index.singles[n.tick]||[]:[];
+            if(singles.some(function(mark){return mark.index===undefined||mark.index<0||mark.index===n.index;}))anchor={tick:n.tick,track:n.track,index:n.index};
+            if(n.fingerings && n.fingerings.length)fingers=n.fingerings;
+            cached.push({note:n,fingers:fingers,anchor:anchor});
+        }
+        s.notationCache[key]=cached;
+    }
+    var lo=0,hi=cached.length;while(lo<hi){var mid=(lo+hi)>>1;if(cached[mid].note.tick<=tick)lo=mid+1;else hi=mid;}
+    var current=cached[Math.max(0,lo-1)],note=copy(current.note);
+    note.fingerings=copy(current.fingers);note.handAnchors=[current.anchor];
+    note.physicalSourceId=source.id;note.physicalSourceTrack=source.track;
+    note.assignmentTick=note.tick;note.assignmentIndex=note.index;note.assignmentChordSize=s.chordSizes[note.tick+":"+note.track]||1;
+    ["pitch","velocity","occurrence","eventIndex","play","piano"].forEach(function(key){if(source[key]!==undefined)note[key]=source[key];});
+    return note;
+}
+function physicalNotes(windows,tick,s,scoreTick) {
     var result=[];
     windows.forEach(function(window){
         if(window.incomplete || window.start>tick || !(window.keyEnd>tick))return;
         window.notes.forEach(function(source){
             if(source.grace || source.play===false || source.piano===false)return;
-            var note=copy(source);
-            note.analysisId=note.id+"@"+window.channelKey+":"+window.start;
+            var note=notationAt(s,source,scoreTick);
+            note.analysisId=source.id+"@"+window.channelKey+":"+window.start;
             note.physicalStart=window.start;note.physicalEnd=window.keyEnd;
             note.physicalOnSeconds=window.startSeconds;note.physicalEndSeconds=window.keyEndSeconds;
             note.playbackChannel=window.channelKey;note.partId=window.part;
@@ -110,7 +150,7 @@ function physicalNotes(windows,tick) {
     return result;
 }
 function physicalFrame(s,frame) {
-    var keys=frame.keys||frame.windows,result={tick:frame.tick,playbackTick:frame.utick,seconds:frame.seconds,notes:physicalNotes(keys,frame.utick),lookahead:[]};
+    var keys=frame.keys||frame.windows,result={tick:frame.tick,playbackTick:frame.utick,seconds:frame.seconds,notes:physicalNotes(keys,frame.utick,s,frame.utick-frame.range.offset),lookahead:[]};
     var pool=keys.slice(),rangeIndex=s.rangeIndex,last=frame.utick,counts={},pending=0;
     result.notes.forEach(function(note){if(counts[note.partId]===undefined){counts[note.partId]=0;++pending;}});
     for(var i=s.index;i<s.ticks.length && i<s.index+32 && pending>0;++i){
@@ -118,7 +158,7 @@ function physicalFrame(s,frame) {
         pool=pool.filter(function(window){return window.keyEnd>at;}).concat(onsets);
         while(rangeIndex<s.ranges.length && s.ranges[rangeIndex].end<=at)++rangeIndex;
         var range=s.ranges[rangeIndex];if(!range || at<range.start || at>=range.end)continue;
-        var notes=physicalNotes(pool,at);
+        var notes=physicalNotes(pool,at,s,at-range.offset);
         var needed={};notes.forEach(function(note){if(note.physicalStart===at && counts[note.partId]!==undefined && counts[note.partId]<2)needed[note.partId]=true;});
         if(!Object.keys(needed).length)continue;
         var written=at-range.offset;

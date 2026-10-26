@@ -40,3 +40,5 @@
 实际检查和后续工作见[本批记录](ARRANGEMENT_PHYSICAL_CHECKS.md)。
 
 下一组音的时间判断见[松手与移动手位](ARRANGEMENT_MOVEMENT_GUIDE.md)。
+
+延音中的指法和分手见[延音中的换指与换手](ARRANGEMENT_TIED_GUIDE.md)。

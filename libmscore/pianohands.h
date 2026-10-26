@@ -190,14 +190,17 @@ inline Plan planWithContext(const QVector<Key>& input,const Limits (&limits)[2],
             if(possible && !choice.possible)continue;
             QHash<int,int> assigned;QSet<int> released;Position positions[2]={previous[0],previous[1]};
             auto remember=[&](const QVector<Key>& keys,const Plan& value,double at) {
+                  bool changed[2]={false,false};
                   for(int i=0;i<keys.size();++i) {
+                        const int before=assigned.value(keys[i].id,-1),after=value.hands[i];
+                        if(!keys[i].attack && before!=after){if(before>=0)changed[before]=true;if(after>=0)changed[after]=true;}
                         assigned[keys[i].id]=value.hands[i];
                         if(value.released.contains(i))released.insert(keys[i].id);
                         else if(keys[i].attack)released.remove(keys[i].id);
                         }
                   for(int side=0;side<2;++side) {
                         bool attacked=false;for(int i=0;i<keys.size();++i)attacked|=keys[i].attack && value.hands[i]==side;
-                        if(attacked)positions[side]=positionFor(keys,value,side,at);
+                        if(attacked || changed[side])positions[side]=positionFor(keys,value,side,at);
                         }
                   };
             remember(input,choice,seconds);double cost=choice.cost,weight=.5;

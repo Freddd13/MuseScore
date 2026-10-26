@@ -221,6 +221,8 @@ class TestPluginHost : public QObject {
       void arrangementPhysicalRealScore();
       void arrangementMovementTiming();
       void arrangementMovementPanel();
+      void arrangementTiedContext();
+      void arrangementTiedHandTransfer();
       void referenceOutputCancel126();
       void harmonyTemporaryMemory126();
       void workflowCopyLifetime126();
@@ -1497,5 +1499,6 @@ class TestPluginHost : public QObject {
 #include "input_121_tests.inc"
 #include "values_094_tests.inc"
 #include "arrangement_hand_context_tests.inc"
+#include "arrangement_tied_context_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

@@ -98,7 +98,16 @@ QVariantMap PianoHandAnalysis::analyse(const QVariantList& notes,const QVariantL
                   }
             future.append(next);
             }
-      const auto result=PianoHands::planWithContext(keys,limits,state.previous,seconds,future);QVariantList sides,assignments;
+      const auto result=PianoHands::planWithContext(keys,limits,state.previous,seconds,future);QVariantList sides,assignments;bool changed[2]={false,false};
+      for(int h=0;h<2;++h)for(auto& value:state.previousNotes[h])for(int i=0;i<rows.size();++i)if(result.hands[i]==h && identityOf(value.toMap())==identityOf(rows[i])) {
+            value=rows[i];
+            for(auto& hold:state.previous[h].holds)if(hold.pitch==keys[i].pitch && hold.until==keys[i].endSeconds && std::isfinite(keys[i].releaseSeconds))hold.release=keys[i].releaseSeconds;
+            break;
+            }
+      for(int i=0;i<keys.size();++i)if(!keys[i].attack) {
+            const int before=state.assigned.value(identityOf(rows[i]),-1),after=result.hands[i];
+            if(before!=after){if(before>=0)changed[before]=true;if(after>=0)changed[after]=true;}
+            }
       for(int h=0;h<2;++h) {
             QVariantList involved,released,attacks;bool rolled=false;
             for(int i=0;i<keys.size();++i)if(result.hands[i]==h) {
@@ -117,7 +126,7 @@ QVariantMap PianoHandAnalysis::analyse(const QVariantList& notes,const QVariantL
             sides.append(QVariantMap{{"hand",h==0?"left":"right"},{"before",hand(result.before[h])},{"after",hand(result.after[h])},{"notes",involved},{"released",released},{"attacks",attacks},
                   {"travel",motion.distance},{"available",motion.available},{"travelTotal",motion.total},{"movementSince",motion.since},{"movementFrom",from},
                   {"pedalTravel",pedalMotion.distance},{"pedalAvailable",pedalMotion.available},{"pedalReleaseNotes",pedalRelease},{"rolled",rolled},{"partial",!uncertainHands.isEmpty()}});
-            if(!attacks.isEmpty()) {
+            if(!attacks.isEmpty() || changed[h]) {
                   state.previous[h]=PianoHands::positionFor(keys,result,h,seconds);state.previousNotes[h].clear();
                   if(state.previous[h].valid)for(int i=0;i<keys.size();++i)if(result.hands[i]==h && !result.released.contains(i)) {
                         auto row=rows[i];row.insert("analysisHand",h==0?"left":"right");state.previousNotes[h].append(row);

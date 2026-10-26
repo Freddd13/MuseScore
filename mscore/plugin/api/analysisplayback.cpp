@@ -101,7 +101,7 @@ QVariantMap ScoreObserver::analysisPlaybackPrepare(int start,int end,const QStri
             const int first=qMax(start,segment->tick),last=qMin(end,segment->tick+segment->len());if(last<=first)continue;
             const int offset=segment->utick-segment->tick;
             ranges.append(QVariantMap{{"scoreStart",first},{"scoreEnd",last},{"start",first+offset},{"end",last+offset},
-                  {"startSeconds",PlaybackTiming::time(_score,first+offset)},{"endSeconds",PlaybackTiming::time(_score,last+offset)},
+                  {"startSeconds",PlaybackTiming::time(_score,first+offset)},{"scoreStartSeconds",_score->tempomap()->tick2time(first)},{"endSeconds",PlaybackTiming::time(_score,last+offset)},
                   {"offset",offset},{"occurrence",segment->playbackCount}});
             }
       return {{"revision",revision},{"ready",read.ready},{"nextTick",read.next},{"endTick",read.end},{"ranges",ranges},

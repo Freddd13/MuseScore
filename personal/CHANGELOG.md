@@ -2,6 +2,8 @@
 
 ## 开发中 — 2026-10-27
 
+- C3-B2-A：延音后段使用当前位置的指法与分手，保留同一次按键；换手后清除原手占用，连续提示按按键合并。变速、反复、中途选段、面板定位、撤销与重开已核对。源码尚未安装，接着明确换指时机与连续琶音，见ARRANGEMENT_TIED_CHECKS.md。
+
 C3-B1源码：[1e0791c47afb](https://github.com/Freddd13/MuseScore/commit/1e0791c47afbabf054369144735a6ccd17ce0b57)；插件：[c2866a702abb](https://github.com/Freddd13/Muse3Plugins/commit/c2866a702abb8b21ed4a56575fafe1561fe6f9f7)。尚未安装。
 
 - C3-B1：移动时间按实际松键计算，分别说明借踏板提前松手后的时间；同处松手与移动合并展示，定位补齐旧音。原生时间、真实面板、保存撤销、真实谱和12组JS已核对；源码尚未安装，见ARRANGEMENT_MOVEMENT_CHECKS.md。

@@ -133,7 +133,7 @@ QVariantMap ScoreObserver::analysisRange(int start,int end,int firstTrack,int en
                   }
             };
       while(segment && segment->tick().ticks()<end) {
-            const int at=segment->tick().ticks();const auto m=segment->measure();
+            const int at=segment->tick().ticks();const auto m=segment->measure();const double positionSeconds=_score->tempomap()->tick2time(at);
             if(previousMeasure!=m->no()) {
                   meters.append(QVariantMap{{"tick",m->tick().ticks()},{"end",m->endTick().ticks()},{"measure",m->no()+1},{"numerator",m->timesig().numerator()},{"denominator",m->timesig().denominator()}});previousMeasure=m->no();
                   }
@@ -160,6 +160,7 @@ QVariantMap ScoreObserver::analysisRange(int start,int end,int firstTrack,int en
                               }
                         row.insert("tieBack",note->tieBack()!=nullptr);row.insert("tieForward",note->tieFor()!=nullptr);
                         row.insert("duration",source->actualTicks().ticks());row.insert("performedTicks",note->playTicks());row.insert("onSeconds",_score->tempomap()->tick2time(attack));row.insert("endSeconds",_score->tempomap()->tick2time(logicalEnd));
+                        row.insert("positionSeconds",positionSeconds);
                         row.insert("measure",m->no()+1);row.insert("beat",1.+double(at-m->tick().ticks())/(DIVISION*4./m->timesig().denominator()));
                         row.insert("grace",source->isGrace());row.insert("rolled",source->arpeggio()!=nullptr);
                         const auto part=_score->staff(track/VOICES)->part();
