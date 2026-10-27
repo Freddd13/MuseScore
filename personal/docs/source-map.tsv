@@ -593,3 +593,4 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方
 差异绘图保持资料	mscore/workflow/regionalcomparison.cpp	DrawState	30	绘制颜色与选中随后恢复，采用核对保持原记号	regionalDifferencePreservesMaterial
 建议设置变化	mscore/workflow/suggestionpanel.cpp	matchesInputs / inputsChanged	77	设置变化同步更新当前候选，首次完成立即显示差异	traditionalVoicingCandidateFlow
 低音音对身份	share/plugins/ArrangementAssistant/Rules.js	lowNoteGroups / playedLowVoicing	31	保留每个相关音及音程参考，比较真实共同持续	test-suggestions-playback.cjs
+导出实际松键	audio/exports/midigate.h	process	160	当前与后续音组携带实际松键，保存每个键的保持信息	midiHandChoiceUsesPhysicalRelease

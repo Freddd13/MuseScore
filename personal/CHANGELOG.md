@@ -2,6 +2,8 @@
 
 ## 开发中 — 2026-10-27
 
+- C4-A1：导出手位补齐实际松键与保持信息，两手空出时机、明确分手和变速已核对；10项及6项原生／面板通过，两份SF3原新波形差值0。源码尚未安装，见MIDI_RELEASE_PHYSICAL_CHECKS.md；接着C4-A2／B／C。
+
 C3-B3-B源码：[d2eba830abec](https://github.com/Freddd13/MuseScore/commit/d2eba830abec1c24af7d81313851de40d7eccd31)；插件：[d78195905093](https://github.com/Freddd13/Muse3Plugins/commit/d781959050932a6a99d00c0736d5dce4c013f653)。尚未安装。
 
 - C3-B3-B：换手、配音与对位逐处比较，保护用户旋律角色并使用持续和声音；修复预览颜色造成采用回退、首次差异显示及列表列宽。采用、撤销、重开与17组JS、15项原生／面板通过，源码尚未安装，见SUGGESTIONS_CANDIDATES_CHECKS.md。接着C4。

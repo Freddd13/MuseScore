@@ -160,6 +160,8 @@ class MidiGateProcessor {
                               const double minimum=qBound(1.,option.minimumMs,5000.)/1000.;
                               const bool legal=!attack && preserved(n,option).isEmpty() && candidate>n.on && seconds(candidate)-seconds(n.on)>=minimum && releaseWindow(n,candidate);
                               keys.append({i,n.pitch,n.hand,n.handHint,attack,legal,n.finger});releaseAt.append(candidate);
+                              keys.last().endSeconds=seconds(n.newOff);
+                              if(legal)keys.last().releaseSeconds=seconds(candidate);
                               }
                         QVector<PianoHands::Future> future;
                         auto nextFrame=frame;
@@ -173,6 +175,8 @@ class MidiGateProcessor {
                                     const bool attack=n.on==nextTick;const int at=tickAt(nextTime-qBound(0.,option.releaseLeadMs,500.)/1000.);
                                     const bool legal=!attack && preserved(n,option).isEmpty() && at>n.on && durationMs(n.on,at)>=qBound(1.,option.minimumMs,5000.) && releaseWindow(n,at);
                                     next.keys.append({i,n.pitch,n.hand,n.handHint,attack,legal,n.finger});
+                                    next.keys.last().endSeconds=seconds(n.newOff);
+                                    if(legal)next.keys.last().releaseSeconds=seconds(at);
                                     }
                               future.append(next);
                               }
@@ -193,7 +197,7 @@ class MidiGateProcessor {
                               }
                         for(int side=0;side<2;++side) {
                               bool attacked=false;for(int j=0;j<keys.size();++j)attacked|=keys[j].attack && plan.hands[j]==side;
-                              if(attacked && plan.after[side].count)previous[side]={true,plan.after[side].low,plan.after[side].high,now};
+                              if(attacked)previous[side]=PianoHands::positionFor(keys,plan,side,now);
                               }
                         }
                   }

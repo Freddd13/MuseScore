@@ -225,6 +225,15 @@ class TestP0Native : public QObject {
             for(int i=0;i<3;++i){QVERIFY(followed[i].newOff<480);QCOMPARE(followed[i].newOff,followed[0].newOff);}
             options.jitter=.02;auto varied=processor.process(data,options);int low=10000,high=0;for(int i=0;i<3;++i){low=qMin(low,varied[i].newOff);high=qMax(high,varied[i].newOff);}QVERIFY(high-low<=3);
             }
+      void midiHandChoiceUsesPhysicalRelease() {
+            auto note=[](QString id,int pitch,int on,int off,int hand,int hint){MidiGateNote n;n.id=id;n.pitch=pitch;n.on=on;n.off=off;n.hand=hand;n.handHint=hint;n.partId=0;n.staff=hand==0?1:0;n.voice=hand==0?4:0;n.known=n.piano=true;n.offOrdinal=pitch;n.sourceTick=on;return n;};
+            MidiGateData data;data.notes={note("left-held",36,0,470,0,0),note("right-free",84,0,24,1,1),note("next",60,480,960,-1,0)};
+            MidiGateProcessor processor;MidiGateOptions options;options.jitter=0;
+            auto rows=processor.process(data,options);QCOMPARE(rows[2].hand,1);for(int i=0;i<rows.size();++i)QCOMPARE(rows[i].newOff,data.notes[i].off);
+            data.notes[0].off=24;data.notes[1].off=470;rows=processor.process(data,options);QCOMPARE(rows[2].hand,0);
+            data.notes[0].off=470;data.notes[1].off=24;data.notes[2].hand=0;rows=processor.process(data,options);QCOMPARE(rows[2].hand,0);
+            data.notes[2].hand=-1;data.tempos={{0,1000000.},{240,250000.}};rows=processor.process(data,options);QCOMPARE(rows[2].hand,1);
+            }
       void pianoHandsWorkerAndRules() {
             PluginAPI::ReadOnlyAnalysisJob job;QSignalSpy done(&job,&PluginAPI::ReadOnlyAnalysisJob::finished);
             QVariantList notes={QVariantMap{{"id","old"},{"pitch",36},{"track",4},{"attackTick",0},{"logicalEnd",1200},{"onSeconds",0.},{"analysisHand","left"},{"handKnown",true}},QVariantMap{{"id","new"},{"pitch",72},{"track",4},{"attackTick",480},{"logicalEnd",960},{"onSeconds",.5},{"analysisHand","left"},{"handKnown",true}}};
