@@ -818,6 +818,7 @@ void Seq::processMessages()
                         break;
                   case SeqMsgId::SEEK:
                         setPos(msg.intVal);
+                        loopSeekPending = false;
                         break;
                   case SeqMsgId::ALL_NOTE_OFF:
                         {
@@ -1213,6 +1214,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                   initInstruments(true);
                   // Need to change state after calling collectEvents()
                   state = Transport::PLAY;
+                  loopSeekPending = false;
                   if (mscore->countIn() && cs->playMode() == PlayMode::SYNTHESIZER) {
                         countInEvents.clear();
                         inCountIn = true;
@@ -1225,6 +1227,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                   // stopWait must finish this score before another view takes over.
                   _stopNoticePending.store(true, std::memory_order_release);
                   state = Transport::STOP;
+                  loopSeekPending = false;
                   // Muting all notes
                   stopNotes(-1, true);
                   initInstruments(true);
@@ -1338,7 +1341,9 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                                                       seekRT((seekto > 0) ? seekto : 0 );
                                                       }
                                                 }
-                                          else {
+                                          else if (!loopSeekPending) {
+                                                // One request per wrap; SEEK clears the pending flag.
+                                                loopSeekPending = true;
                                                 emit toGui('3'); // calls loopStart()
                                                 }
                                           // Exit this function to avoid segmentation fault in Scoreview
@@ -1658,7 +1663,9 @@ void Seq::collectEvents(int utick)
       rebuildPreparedPedalPoints();
       _preparedStartTarget = utick;
       _preparedStartTick = PlaybackTiming::startTick(events, utick, cs);
-      playPos = mscore->loop() ? events.find(cs->loopInTick().ticks()) : events.cbegin();
+      // Playback owns this iterator until its audio-thread SEEK is received.
+      if (state != Transport::PLAY)
+            playPos = mscore->loop() ? events.find(cs->loopInTick().ticks()) : events.cbegin();
       playlistChanged = false;
       mutex.unlock();
       }

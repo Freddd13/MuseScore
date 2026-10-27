@@ -181,6 +181,7 @@ class Seq : public QObject, public Sequencer {
       bool allowBackgroundRendering = false; // should be set to true only when playing, so no
                                              // score changes are possible.
       EventMap countInEvents;             // playlist of any metronome countin clicks
+      bool loopSeekPending { false };     // audio thread only: loop restart awaits its SEEK
       QQueue<NPlayEvent> _liveEventQueue; // playlist for score editing and note entry (rendered live)
 
       int _preparedStartTarget = 0;
