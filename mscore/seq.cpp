@@ -802,13 +802,16 @@ void Seq::processMessages()
                         if (playFrame != 0) {
                               int utick = cs->utime2utick(referenceScoreTime(qreal(playFrame) / qreal(MScore::sampleRate)));
                               cs->tempomap()->setRelTempo(msg.realVal);
-                              playFrame = cs->utick2utime(utick) * MScore::sampleRate;
+                              // Repeat offsets must use the new tempo before remapping this position.
+                              cs->masterScore()->updateRepeatListTempo();
+                              playFrame = referenceOutputTime(PlaybackTiming::time(cs, utick)) * MScore::sampleRate;
                               if (cachedPrefs.jackTimeBaseMaster && cachedPrefs.useJackTransport)
                                     _driver->seekTransport(utick + 2 * cs->utime2utick(qreal((_driver->bufferSize()) + 1) / qreal(MScore::sampleRate)));
                               }
-                        else
+                        else {
                               cs->tempomap()->setRelTempo(msg.realVal);
-                        cs->masterScore()->updateRepeatListTempo();
+                              cs->masterScore()->updateRepeatListTempo();
+                              }
                         prevTempo = curTempo();
                         emit tempoChanged();
                         }
