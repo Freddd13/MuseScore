@@ -97,14 +97,19 @@ class SuggestionPanel : public QWidget {
                 pitch |= x.value("pitch") != y.value("pitch") || x.value("tpc1") != y.value("tpc1");
                 velocity |= x.value("velocityType") != y.value("velocityType") ||
                             x.value("velocityRaw") != y.value("velocityRaw");
-                marks |= x.value("marks") != y.value("marks");
+                if (x.value("fingerings") != y.value("fingerings")) {
+                    auto from=x.value("fingerings").toStringList(),to=y.value("fingerings").toStringList();
+                    types << tr("指法 %1 → %2").arg(from.isEmpty()?tr("未标"):from.join(" / "))
+                                                .arg(to.isEmpty()?tr("清除"):to.join(" / "));
+                }
+                marks |= x.value("otherMarks") != y.value("otherMarks");
             }
             if (pitch)
                 types << tr("音高");
             if (velocity)
                 types << tr("力度");
             if (marks)
-                types << tr("附着标记");
+                types << tr("标记");
             auto item = new QTreeWidgetItem(_changes, {tr("第%1小节").arg(row.value("measure").toInt()),
                                                        tr("谱表%1 · 声部%2")
                                                            .arg(row.value("track").toInt() / 4 + 1)

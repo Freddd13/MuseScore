@@ -228,6 +228,7 @@ class TestPluginHost : public QObject {
       void arrangementAlternativeFingers();
       void arrangementAlternativePanel();
       void arrangementFingerMatchingCorpus();
+      void traditionalSuggestionsReadActualKeys();
       void arrangementSubstitutionTiming();
       void arrangementSubstitutionPanel();
       void arrangementArpeggioHolds();
@@ -1511,5 +1512,6 @@ class TestPluginHost : public QObject {
 #include "arrangement_required_holds_tests.inc"
 #include "arrangement_alternative_fingers_tests.inc"
 #include "arrangement_substitution_tests.inc"
+#include "arrangement_suggestion_playback_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

@@ -12,8 +12,10 @@ class LocalSuggestionTask : public QObject {
     QVariantMap _state, _data, _settings, _config;
     QString _kind;
     int _cursor = 0, _limit = 32, _token = 0;
-    bool _running = false;
+    bool _running = false, _readingPlayback = false;
     void page();
+    void playbackPage();
+    void beginCalculation();
     void finish(const QString &message);
 
   public:

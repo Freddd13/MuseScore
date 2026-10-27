@@ -5,6 +5,7 @@
 #include "mscore/plugin/api/score.h"
 #include <QRegularExpression>
 #include <QUrl>
+#include <limits>
 
 namespace Ms {
 namespace {
@@ -61,6 +62,7 @@ void LocalSuggestionTask::cancel() {
     _observer.cancelReadOnlyJob();
     _running = false;
     _token = 0;
+    _readingPlayback = false;
 }
 void LocalSuggestionTask::finish(const QString &message) {
     cancel();
@@ -115,6 +117,10 @@ void LocalSuggestionTask::start(Score *score, const QString &kind, const QVarian
     emit progress(tr("正在读取选段…"));
 }
 void LocalSuggestionTask::page() {
+    if (_readingPlayback) {
+        playbackPage();
+        return;
+    }
     const auto scope = _state["scope"].toMap();
     auto result = _observer.arrangementRange(
         {{"snapshotId", _state["snapshotId"]}, {"scope", scope}, {"fromTick", _cursor}, {"limit", _limit}});
@@ -140,11 +146,72 @@ void LocalSuggestionTask::page() {
         _cursor = result["nextTick"].toInt();
         return;
     }
+    _readingPlayback = true;
+    _data["playback"] = QVariantMap{{"scope", scope}, {"notes", _data["notes"]},
+                                     {"meters", _data["meters"]},
+                                     {"revision", _observer.analysisPlaybackRevision()},
+                                     {"events", QVariantList{}}, {"prepared", false}};
+    _cursor = std::numeric_limits<int>::min();
+    _limit = 32;
+    emit progress(tr("正在准备这段的实际起音、松键和踏板…"));
+}
+void LocalSuggestionTask::playbackPage() {
+    if (_observer.analysisContentRevision() != _state["snapshotId"].toString()) {
+        finish(tr("乐谱已更新，请再点一次分析选段。"));
+        return;
+    }
+    auto playback = _data["playback"].toMap();
+    const auto scope = _state["scope"].toMap();
+    const auto revision = playback["revision"].toString();
+    if (!playback["prepared"].toBool()) {
+        auto result = _observer.analysisPlaybackPrepare(scope["start"].toInt(), scope["end"].toInt(), revision);
+        if (result.contains("error")) {
+            finish(tr("实际演奏资料读取失败：%1。请重新分析这段。").arg(result["error"].toString()));
+            return;
+        }
+        emit progress(tr("准备实际演奏 · %1%").arg(result["progress"].toInt()));
+        if (!_running)
+            return;
+        if (!result["ready"].toBool())
+            return;
+        for (const auto& field : {"ranges", "endTick", "endSeconds"})
+            playback[field] = result[field];
+        playback["prepared"] = true;
+        _data["playback"] = playback;
+        return;
+    }
+    auto result = _observer.analysisPlaybackPage(_cursor, scope["firstTrack"].toInt(),
+                                                 scope["endTrack"].toInt(), _limit, revision);
+    if (result.contains("error")) {
+        finish(tr("实际演奏资料读取失败：%1。请重新分析这段。").arg(result["error"].toString()));
+        return;
+    }
+    auto events = playback["events"].toList();
+    events.append(result["events"].toList());
+    playback["events"] = events;
+    _data["playback"] = playback;
+    if (result["milliseconds"].toDouble() > 2)
+        _limit = qMax(1, int(_limit * 2. / result["milliseconds"].toDouble()));
+    emit progress(tr("已读取实际演奏 · %1条音符与踏板事件").arg(events.size()));
+    if (!_running)
+        return;
+    if (!result["done"].toBool()) {
+        _cursor = result["nextTick"].toInt();
+        return;
+    }
+    playback.remove("prepared");
+    _data["playback"] = playback;
+    beginCalculation();
+}
+void LocalSuggestionTask::beginCalculation() {
+    if (!_running)
+        return;
     _pages.stop();
     QString source = "(function(){\n";
     for (const auto &pair :
          QList<QPair<QString, QString>>{{"Harmony", "HarmonyAssistant/Harmony.js"},
                                         {"Timeline", "HarmonyAssistant/Timeline.js"},
+                                        {"Playback", "ArrangementAssistant/Playback.js"},
                                         {"Rules", "ArrangementAssistant/Rules.js"},
                                         {"Suggestions", "ArrangementAssistant/Suggestions.js"}}) {
         auto text = _observer.readTextFile(

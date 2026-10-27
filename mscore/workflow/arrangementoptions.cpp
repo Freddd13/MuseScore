@@ -155,15 +155,20 @@ QVariantList differences(Score *score, Score *other, const QVariantMap &scope) {
         QVariantList notes;
         if (e->isChord())
             for (auto n : toChord(e)->notes()) {
-                QStringList marks;
-                for (auto a : n->el())
+                QStringList marks, fingerings, otherMarks;
+                for (auto a : n->el()) {
                     marks << a->accessibleInfo();
+                    if (a->isFingering())
+                        fingerings << toFingering(a)->plainText();
+                    else
+                        otherMarks << a->accessibleInfo();
+                }
                 notes << QVariantMap{{"pitch", n->pitch()},
                                      {"tpc1", n->tpc1()},
                                      {"tpc2", n->tpc2()},
                                      {"velocityType", int(n->veloType())},
                                      {"velocityRaw", n->veloOffset()},
-                                     {"marks", marks}};
+                                     {"marks", marks}, {"fingerings", fingerings}, {"otherMarks", otherMarks}};
             }
         result["notes"] = notes;
         return result;

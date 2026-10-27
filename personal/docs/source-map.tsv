@@ -581,3 +581,9 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方
 持续换指状态	mscore/plugin/api/pianohandanalysis.cpp	fingeringChanges / blockedSubstitutions	39	同音多声部共享换指，按时更新松手与后续手指	arrangementSubstitutionTiming;arrangementSubstitutionPanel
 指法时刻与反复	share/plugins/ArrangementAssistant/Playback.js	fingeringAt / nextChangeSeconds	153	保留指法来源时间，下一次记号变化限定换指范围	test-substitution-context.cjs
 换指顺序与定位	share/plugins/ArrangementAssistant/Rules.js	fingeringChanges / blockedSubstitutions	527	说明相关音、等待松键和换指顺序，使用实际目标手指	arrangementSubstitutionPanel;test-substitution-context.cjs
+建议读取实际演奏	mscore/workflow/localsuggestions.cpp	playbackPage / beginCalculation	160	分批读取实际事件，可取消，工作线程共用Playback模块	traditionalSuggestionsReadActualKeys
+实际音组与原谱引用	share/plugins/ArrangementAssistant/Suggestions.js	handFrames	89	按松键与踏板安排手指，反复返回同一个谱面引用	test-suggestions-playback.cjs
+指法路线与说明	share/plugins/ArrangementAssistant/Suggestions.js	combinations / fingering	35	保持已用手指、备选和换指，说明音名拍位，合并反复记号	traditionalSuggestionsReadActualKeys;test-suggestions-playback.cjs
+改音高后的试算	share/plugins/ArrangementAssistant/Suggestions.js	trial	200	同步谱面和实际音高，依照MidiEventFixup重新核对同音松键	test-suggestions-playback.cjs
+具体指法变化	mscore/workflow/arrangementoptions.cpp	differences	145	比较资料分别保存指法和其它标记	traditionalSuggestionsReadActualKeys
+建议差异列表	mscore/workflow/suggestionpanel.cpp	details	76	显示原指法和新指法，保持原有面板布局	traditionalSuggestionsReadActualKeys
