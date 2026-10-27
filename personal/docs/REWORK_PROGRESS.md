@@ -16,6 +16,8 @@ R1-C2已查到原曲声音设备打开阻塞界面，以及反复和弦显示遗
 
 ### C4-A1源码已检查：导出的实际松键时间
 
+C4-A1源码：[9140ab18b81d](https://github.com/Freddd13/MuseScore/commit/9140ab18b81d9ccf823b9b2fb34a3fd0bd542fe9)；插件：[60ff099ee489](https://github.com/Freddd13/Muse3Plugins/commit/60ff099ee4894909f07a62c58cab0810d5a6ce25)。尚未安装。
+
 已复现导出把起音间隔全部用于移动的问题，修复后按两手各自实际松键计算。交换松键、明确分手、变速、长低音、原有成组变化和只移动note-off已核对。两份SF3输出的原新波形最大差值均为0；第一组10项、第二组6项原生／面板通过。源码尚未安装，当前仍为0.128.0。
 
 操作见[按实际按键考虑前后衔接](MIDI_RELEASE_PHYSICAL_GUIDE.md)，结果见[检查记录](MIDI_RELEASE_PHYSICAL_CHECKS.md)。接着C4-A2分手／指法资料、C4-B逐处释放与成组变化、C4-C预览试听和文件，再按D、E、F继续。真实声卡与厂商鼠标按用户安排接入。

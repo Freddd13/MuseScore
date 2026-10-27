@@ -4,6 +4,8 @@
 
 ## 复现与修改
 
+C4-A1源码：[9140ab18b81d](https://github.com/Freddd13/MuseScore/commit/9140ab18b81d9ccf823b9b2fb34a3fd0bd542fe9)；插件：[60ff099ee489](https://github.com/Freddd13/Muse3Plugins/commit/60ff099ee4894909f07a62c58cab0810d5a6ce25)。尚未安装。
+
 独立值谱例中，左手C2和右手C6在0时刻起音，右手24tick松键，左手470tick松键，下一音C4在480tick起音。原导出判断让两手都使用整个起音间隔，默认提示的左手继续接C4。实际左手只剩约10毫秒，右手已空出约475毫秒。
 
 已把每个键的真实松键时间交给共同手位模块，前后两组的比较保留各音的占用。允许的提前松手时间也一起传入；当前位置由共同的`positionFor`保存，后续计算继续使用这些保持信息。

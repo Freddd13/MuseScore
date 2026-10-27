@@ -2,6 +2,8 @@
 
 ## 开发中 — 2026-10-27
 
+C4-A1源码：[9140ab18b81d](https://github.com/Freddd13/MuseScore/commit/9140ab18b81d9ccf823b9b2fb34a3fd0bd542fe9)；插件：[60ff099ee489](https://github.com/Freddd13/Muse3Plugins/commit/60ff099ee4894909f07a62c58cab0810d5a6ce25)。尚未安装。
+
 - C4-A1：导出手位补齐实际松键与保持信息，两手空出时机、明确分手和变速已核对；10项及6项原生／面板通过，两份SF3原新波形差值0。源码尚未安装，见MIDI_RELEASE_PHYSICAL_CHECKS.md；接着C4-A2／B／C。
 
 C3-B3-B源码：[d2eba830abec](https://github.com/Freddd13/MuseScore/commit/d2eba830abec1c24af7d81313851de40d7eccd31)；插件：[d78195905093](https://github.com/Freddd13/Muse3Plugins/commit/d781959050932a6a99d00c0736d5dce4c013f653)。尚未安装。
