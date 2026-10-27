@@ -5,6 +5,7 @@
 #include "regionalcomparison.h"
 #include "temporaryscore.h"
 #include "mscore/plugin/api/scoreobserver.h"
+#include "mscore/plugin/api/handmarkers.h"
 #include "mscore/musescore.h"
 #include "mscore/scoreview.h"
 #include "mscore/seq.h"
@@ -155,20 +156,24 @@ QVariantList differences(Score *score, Score *other, const QVariantMap &scope) {
         QVariantList notes;
         if (e->isChord())
             for (auto n : toChord(e)->notes()) {
-                QStringList marks, fingerings, otherMarks;
+                QStringList marks, fingerings, otherMarks, hands;
                 for (auto a : n->el()) {
                     marks << a->accessibleInfo();
                     if (a->isFingering())
                         fingerings << toFingering(a)->plainText();
-                    else
-                        otherMarks << a->accessibleInfo();
+                    else {
+                        ElementList one;one.push_back(a);
+                        auto handMarks=PluginAPI::readHandMarkers(one,cr->tick().ticks(),n->track(),-1);
+                        if(handMarks.isEmpty())otherMarks << a->accessibleInfo();
+                        for(const auto& value:handMarks){auto hand=value.toMap();hands << hand.value("hand").toString()+(hand.value("end").toBool()?":end":"");}
+                    }
                 }
                 notes << QVariantMap{{"pitch", n->pitch()},
                                      {"tpc1", n->tpc1()},
                                      {"tpc2", n->tpc2()},
                                      {"velocityType", int(n->veloType())},
                                      {"velocityRaw", n->veloOffset()},
-                                     {"marks", marks}, {"fingerings", fingerings}, {"otherMarks", otherMarks}};
+                                     {"marks", marks}, {"fingerings", fingerings}, {"hands",hands}, {"otherMarks", otherMarks}};
             }
         result["notes"] = notes;
         return result;
@@ -300,13 +305,20 @@ bool mutate(Score *score, const Option &option, QString *problem) {
                 bool supported = false;
                 const auto part = n->staff()->part();
                 for (int track = part->startTrack(); track < part->endTrack(); ++track) {
-                    auto e = n->chord()->segment()->element(track);
+                    auto segment=n->chord()->segment();
+                    while(segment && !segment->element(track))segment=segment->prev1(SegmentType::ChordRest);
+                    auto e = segment?segment->element(track):nullptr;
                     if (e && e->isChord())
-                        for (auto tone : toChord(e)->notes())
-                            supported |= tone->pitch() % 12 == pitch % 12;
+                        for (auto tone : toChord(e)->notes()) {
+                            auto last=tone;QSet<Note*> heldChain;
+                            while(last->tieFor() && last->tieFor()->endNote() && !heldChain.contains(last)) {
+                                heldChain.insert(last);last=last->tieFor()->endNote();
+                            }
+                            supported |= tone->play() && last->chord()->endTick()>n->chord()->tick() && tone->pitch() % 12 == pitch % 12;
+                        }
                 }
                 if (!supported) {
-                    *problem = QObject::tr("这版加入了当前起音组以外的和声音，请确认本次和声后提交。");
+                    *problem = QObject::tr("这个新音高需要补充和声说明，请确认本段和弦后再提交。");
                     return false;
                 }
             }
@@ -863,6 +875,9 @@ QVariantMap summary(const Option &option) {
             {"summary", option.summary},
             {"scope", option.scope},
             {"differences", option.differences},
+            {"localSettings",option.brief.value("localSettings")},
+            {"localKind",option.brief.value("localKind")},
+            {"pianoSettings",option.brief.value("pianoSettings")},
             {"preparationMilliseconds", option.preparation},
             {"used", option.used}};
 }
@@ -1035,6 +1050,8 @@ QVariantMap arrangementOperation(PluginAPI::ScoreObserver *observer, Score *scor
                         return error(QObject::tr("这版已经采用，可以在乐谱中继续编辑，或按Ctrl+Z撤销。"));
                     if (option.snapshot != observer->analysisContentRevision())
                         return error(QObject::tr("乐谱已有修改，请让建议按现在的内容更新。"));
+                    if (option.brief.contains("pianoSettings") && option.brief.value("pianoSettings").toMap()!=score->property("kumoPianoSettings").toMap())
+                        return error(QObject::tr("分手或演奏检查设置已改变，请点“分析选段”更新建议。"));
                     if (mscore && mscore->currentScore() != score)
                         return error(QObject::tr("请先切回这份乐谱。"));
                     if (step == "preview") {

@@ -587,3 +587,9 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方
 改音高后的试算	share/plugins/ArrangementAssistant/Suggestions.js	trial	200	同步谱面和实际音高，依照MidiEventFixup重新核对同音松键	test-suggestions-playback.cjs
 具体指法变化	mscore/workflow/arrangementoptions.cpp	differences	145	比较资料分别保存指法和其它标记	traditionalSuggestionsReadActualKeys
 建议差异列表	mscore/workflow/suggestionpanel.cpp	details	76	显示原指法和新指法，保持原有面板布局	traditionalSuggestionsReadActualKeys
+候选逐处比较	share/plugins/ArrangementAssistant/Suggestions.js	compareCandidate / worsensLowRegister	259	旋律保护、逐处困难与低音音对共同持续比较	test-suggestion-quality.cjs;traditionalVoicingCandidateFlow
+持续和声音参照	mscore/workflow/arrangementoptions.cpp	mutate	209	参照同声部已持续的音，核对跨界与已有旋律	traditionalCounterpointHeldToneFlow
+换手试算与写入	share/plugins/ArrangementAssistant/Suggestions.js	handoff / trial	267	同刻跨声部分手一起复查，说明与差异显示具体手部	traditionalHandoffCandidateFlow
+差异绘图保持资料	mscore/workflow/regionalcomparison.cpp	DrawState	30	绘制颜色与选中随后恢复，采用核对保持原记号	regionalDifferencePreservesMaterial
+建议设置变化	mscore/workflow/suggestionpanel.cpp	matchesInputs / inputsChanged	77	设置变化同步更新当前候选，首次完成立即显示差异	traditionalVoicingCandidateFlow
+低音音对身份	share/plugins/ArrangementAssistant/Rules.js	lowNoteGroups / playedLowVoicing	31	保留每个相关音及音程参考，比较真实共同持续	test-suggestions-playback.cjs

@@ -189,20 +189,28 @@ function fingering(state, config, settings) {
     }
     return {options:options,messages:messages};
 }
-function canChange(n, settings) {
-    return !n.contextOnly && !n.grace && !n.tieBack && !n.tieForward && (settings.preserveTracks||[0]).indexOf(n.track)<0;
+function preservedTracks(state,settings) {
+    var tracks=(settings.preserveTracks||[0]).slice(),keep=settings.preserveMelody;
+    if(keep===undefined)keep=settings.preserveTracks===undefined || tracks.length>0;
+    if(keep)for(var track in state.config.roles)if(state.config.roles[track].role==="melody" && tracks.indexOf(Number(track))<0)tracks.push(Number(track));
+    return tracks;
+}
+function canChange(n, settings, state) {
+    var role=state.config.roles[String(n.track)];
+    return !!n.ref && !n.contextOnly && !n.grace && n.piano!==false && n.play!==false && !n.tieBack && !n.tieForward && (!role||role.role!=="ignore") && preservedTracks(state,settings).indexOf(n.track)<0;
 }
 function trial(state, changes, config) {
     var data=copy(state.data), byId={},original={};changes.forEach(function(c){byId[c.ref.id]=c;});
     state.data.notes.forEach(function(n){original[n.id]=n;});
-    function update(n){var c=byId[n.id];if(c){n.pitch=c.pitch;n.writtenPitch=c.pitch;n.tpc=n.tpc1=c.tpc1;n.tpc2=c.tpc2;}}
+    function update(n){var c=byId[n.id];if(c && c.pitch!==undefined){n.pitch=c.pitch;n.writtenPitch=c.pitch;n.tpc=n.tpc1=c.tpc1;n.tpc2=c.tpc2;}}
     data.notes.forEach(update);
+    changes.forEach(function(c){var n=original[c.ref.id];if(n && c.hand!==undefined)(data.hands||(data.hands=[])).push({tick:n.tick,track:n.track,index:n.index,hand:c.hand,end:c.handEnd===true});});
     if(data.playback) {
         (data.playback.notes||[]).forEach(update);
         var playing={};
         (data.playback.events||[]).forEach(function(event){
             var change=byId[event.id],source=original[event.id];
-            if(change && source) {
+            if(change && change.pitch!==undefined && source) {
                 event.pitch+=change.pitch-source.pitch;event.writtenPitch=change.pitch;
                 if(pc(event.pitch)===pc(change.pitch))event.tpc=change.tpc1;else delete event.tpc;
             }
@@ -219,18 +227,60 @@ function trial(state, changes, config) {
 }
 function problemWeight(state) {
     var total=0;
-    state.issues.forEach(function(i){if(i.type==="playability")total+=/^(span|keys|hand)-/.test(i.code)?20:/comfort/.test(i.code)?2:1;});
+    state.issues.forEach(function(i){if(i.type==="playability")total+=problemValue(i);});
     return total;
 }
+function problemValue(issue) {
+    if(/^(?:hand|fingering)-uncertain$/.test(issue.code) || /^fingering-change-/.test(issue.code))return 0;
+    return /^(?:span|keys|fingers)-/.test(issue.code) || issue.code==="fingering-substitution"?20:/comfort/.test(issue.code)?2:1;
+}
+function issueIdentity(issue) {
+    var notes=(issue.notes||[]).map(function(n){return n.physicalSourceId||n.id||n.track+":"+n.tick+":"+n.index;}).sort();
+    return [issue.type,issue.code,issue.tick,issue.utick===undefined?issue.tick:issue.utick,issue.occurrence||1,notes.join(",")].join("|");
+}
+function worsensLowRegister(previous,current) {
+    function pairs(issue) {
+        var out={};
+        (issue.lowDetails||[]).forEach(function(detail){
+            var groups=detail.noteGroups;if(!groups || groups.length!==2)return;
+            groups[0].forEach(function(a){groups[1].forEach(function(b){
+                var key=JSON.stringify([a,b].sort()),depth=detail.limit-Math.min.apply(null,detail.pitches),old=out[key];
+                if(!old)out[key]={depth:depth,seconds:detail.seconds};
+                else {old.depth=Math.max(old.depth,depth);old.seconds=Math.max(old.seconds,detail.seconds);}
+            });});
+        });
+        return out;
+    }
+    var before=pairs(previous),after=pairs(current);
+    for(var key in after)if(!before[key] || after[key].depth>before[key].depth
+        || typeof after[key].seconds==="number" && typeof before[key].seconds==="number" && after[key].seconds>before[key].seconds+0.001)return true;
+    return false;
+}
+function compareCandidate(before,after,kind) {
+    var old={},current={},resolved=[],introduced=[];
+    function severity(i){return i.severity==="需核查"?3:i.severity==="注意"?2:1;}
+    before.issues.forEach(function(i){old[issueIdentity(i)]=i;});after.issues.forEach(function(i){current[issueIdentity(i)]=i;});
+    before.issues.forEach(function(i){if(!current[issueIdentity(i)])resolved.push(i);});
+    after.issues.forEach(function(i){var previous=old[issueIdentity(i)];if(!previous || severity(i)>severity(previous) || i.code==="low-cluster"&&worsensLowRegister(previous,i))introduced.push(i);});
+    var worse=introduced.some(function(i){return i.type==="harmony" || i.type==="counterpoint" || i.type==="playability" && (problemValue(i)>=20 || /uncertain$/.test(i.code));});
+    var benefit=kind==="counterpoint"?before.issues.filter(function(i){return i.type==="counterpoint";}).length-after.issues.filter(function(i){return i.type==="counterpoint";}).length:problemWeight(before)-problemWeight(after);
+    return {acceptable:!worse && (kind==="handoff" || benefit>0),benefit:benefit,resolved:resolved,introduced:introduced};
+}
+function changeExplanation(report) {
+    var text="",names=report.resolved.filter(function(i){return i.type!=="playability" || problemValue(i)>0;}).slice(0,2).map(function(i){return "第"+i.bar+"小节“"+i.title+"”";});
+    if(names.length)text+="这版改善了"+names.join("、")+"。";
+    if(report.introduced.length)text+="仍需留意"+report.introduced.slice(0,2).map(function(i){return "第"+i.bar+"小节“"+i.title+"”";}).join("、")+"。";
+    return text;
+}
 function voicing(state,config,settings) {
-    var options=[], tested=0, baseline=problemWeight(state);
-    var candidates=state.data.notes.filter(function(n){return canChange(n,settings);});
+    var options=[], tested=0;
+    var candidates=state.data.notes.filter(function(n){return canChange(n,settings,state);});
     for(var i=0;i<candidates.length && tested<128;++i)for(var d=-12;d<=12;d+=24) {
         var n=candidates[i], pitch=n.pitch+d;if(pitch<21 || pitch>108 || state.data.notes.some(function(t){return t.tick===n.tick && t.track===n.track && t.pitch===pitch;}))continue;
         var changes=[noteChange(n,{pitch:pitch,tpc1:n.tpc1,tpc2:n.tpc2})], proposed=trial(state,changes,config);++tested;
-        var benefit=baseline-problemWeight(proposed);
-        if(benefit<=0)continue;
-        options.push({title:"调整音区 · "+Rules.pitchLabel(n),summary:"第"+n.measure+"小节的"+Rules.pitchLabel(n)+(d<0?"降低":"升高")+"一个八度，减轻同时按键或前后移动的负担；保留旋律与和弦构成音。",changes:changes,benefit:benefit});
+        var quality=compareCandidate(state,proposed,"voicing");
+        if(!quality.acceptable)continue;
+        options.push({title:"调整音区 · "+Rules.pitchLabel(n),summary:"第"+n.measure+"小节第"+n.beat+"拍，"+Rules.pitchLabel(n)+(d<0?"降低":"升高")+"一个八度。"+changeExplanation(quality),changes:changes,benefit:quality.benefit});
     }
     options.sort(function(a,b){return b.benefit-a.benefit;});
     return {options:options.slice(0,3),messages:options.length?[]:["这段暂未找到通过八度调整就能改善的写法。可检查分手或选择有困难的短段。"]};
@@ -238,39 +288,42 @@ function voicing(state,config,settings) {
 function handoff(state,config,settings) {
     var plans=handFrames(state,config), grouped={}, options=[];
     state.data.notes.forEach(function(n){
-        if(n.contextOnly || n.tieBack || n.grace)return;
+        if(!n.ref || n.contextOnly || n.tieBack || n.grace || n.piano===false || n.play===false)return;
         var given=Rules.handFor(state,n,n.attackTick), side=plans.writtenAssignments[n.id]||plans.assignments[n.logicalId];
         if(!side || side==="mixed" || side===given.hand || given.source.indexOf("自动推断")<0)return;
-        var key=n.tick+":"+n.track+":"+side;(grouped[key]||(grouped[key]=[])).push(n);
+        var key=n.tick+":"+(n.partId===undefined?0:n.partId);(grouped[key]||(grouped[key]=[])).push(n);
     });
     for(var key in grouped) {
-        var notes=grouped[key], side=plans.writtenAssignments[notes[0].id]||plans.assignments[notes[0].logicalId];
-        var changes=notes.map(function(n){return noteChange(n,{hand:side,handEnd:false});});
-        options.push({title:"第"+notes[0].measure+"小节借用"+(side==="left"?"左手":"右手"),summary:"将"+notes.map(Rules.pitchLabel).join("、")+"交给"+(side==="left"?"左手":"右手")+"，配合另一只手的保持音和下一组音。采用后在这些音旁写入分手记号。",changes:changes});
+        var notes=grouped[key];
+        var changes=notes.map(function(n){return noteChange(n,{hand:plans.writtenAssignments[n.id]||plans.assignments[n.logicalId],handEnd:false});});
+        var proposed=trial(state,changes,config),quality=compareCandidate(state,proposed,"handoff");if(!quality.acceptable)continue;
+        var description=notes.map(function(n,i){return Rules.pitchLabel(n)+"交给"+(changes[i].hand==="left"?"左手":"右手");}).join("；");
+        options.push({title:"第"+notes[0].measure+"小节第"+notes[0].beat+"拍调整分手",summary:description+"。已结合前后按键复查；采用后在相关音旁写入分手记号。"+changeExplanation(quality),changes:changes});
         if(options.length>=3)break;
     }
     return {options:options,messages:options.length?[]:["当前分手下暂未找到更合适的换手位置；已有分手记号继续保持。"]};
 }
 function counterpoint(state, config, settings) {
-    var targets=state.issues.filter(function(i){return i.type==="counterpoint";}), options=[], tested=0, original=targets.length;
+    var targets=state.issues.filter(function(i){return i.type==="counterpoint";}), options=[], tested=0;
     if(!targets.length)return {options:[],messages:["当前风格与声部设置下，没有需要调整的对位位置。可在编配检查中指定独立声部。"]};
     var targetTicks={};targets.forEach(function(i){targetTicks[i.tick]=true;});
     var ns=state.data.notes;
     for(var i=0;i<ns.length && tested<96;++i) {
-        var n=ns[i];if(!targetTicks[n.tick] || !canChange(n,settings))continue;
+        var n=ns[i];if(!targetTicks[n.tick] || !canChange(n,settings,state))continue;
         var chord=Rules.chordAt(state,n.tick,Rules.partFor(state,n.track)), allowed=[];
         if(chord && chord.root>=0 && Harmony.defs[chord.definition])allowed=Harmony.defs[chord.definition].intervals.map(function(p){return pc(chord.root+p);});
-        var sounding=ns.filter(function(a){return a.partId===n.partId && a.tick===n.tick && a.logicalEnd>n.tick;});
+        var sounding=ns.filter(function(a){return a.partId===n.partId && a.tick<=n.tick && a.logicalEnd>n.tick && !a.grace && a.play!==false && a.piano!==false;});
         for(var j=0;j<sounding.length;++j) {
             var source=sounding[j];if(allowed.length && allowed.indexOf(pc(source.pitch))<0)continue;
             var pitch=n.pitch+((source.pitch-n.pitch+1206)%12-6);
             if(pitch===n.pitch || Math.abs(pitch-n.pitch)>4)continue;
+            if(ns.some(function(a){return a.id!==n.id && a.tick===n.tick && a.track===n.track && a.pitch===pitch;}))continue;
             var changes=[noteChange(n,{pitch:pitch,tpc1:source.tpc1,tpc2:source.tpc2})];
             var proposed=trial(state,changes,config);++tested;
-            var count=proposed.issues.filter(function(v){return v.type==="counterpoint";}).length;
-            var harmony=proposed.issues.filter(function(v){return v.type==="harmony";}).length-state.issues.filter(function(v){return v.type==="harmony";}).length;
-            if(count>=original || harmony>0 || problemWeight(proposed)>problemWeight(state))continue;
-            options.push({title:"第"+n.measure+"小节调整内声",summary:"将"+Rules.pitchLabel(n)+"改成同一和弦中的"+Harmony.spelledName(source.tpc1,pitch,false)+"，使前后声部进行更顺；保留指定旋律。请连同前后音试听。",changes:changes,benefit:original-count});
+            var quality=compareCandidate(state,proposed,"counterpoint");
+            if(!quality.acceptable)continue;
+            var target=copy(source);target.pitch=pitch;
+            options.push({title:"第"+n.measure+"小节第"+n.beat+"拍调整声部",summary:"将"+Rules.pitchLabel(n)+"改为"+Rules.pitchLabel(target)+"，参考同处已有的音。"+changeExplanation(quality)+"可连同前后音试听。",changes:changes,benefit:quality.benefit});
         }
     }
     options.sort(function(a,b){return b.benefit-a.benefit;});
@@ -286,5 +339,6 @@ function generate(input) {
     else if(input.kind==="handoff")result=handoff(state,config,settings);
     else result=fingering(state,config,settings);
     result.options.forEach(function(v){v.scope=copy(input.data.scope);});
+    result.preserveTracks=preservedTracks(state,settings);
     result.snapshotId=input.data.snapshotId;return result;
 }

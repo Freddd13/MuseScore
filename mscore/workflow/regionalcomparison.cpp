@@ -27,6 +27,14 @@
 #include <QHash>
 namespace Ms {
 namespace {
+class DrawState final {
+      Element* _element;QColor _color;bool _selected;
+public:
+      DrawState(Element* element,const QColor& color):_element(element),_color(element->color()),_selected(element->selected()) {
+            element->Element::setSelected(false);element->Element::setColor(color);
+            }
+      ~DrawState(){_element->Element::setColor(_color);_element->Element::setSelected(_selected);}
+      };
 double tickX(Score* score,int tick){
       auto measure=score->tick2measure(Fraction::fromTicks(tick));if(!measure)return 0;
       double x=measure->canvasPos().x(),until=x+measure->width();int left=measure->tick().ticks(),right=measure->endTick().ticks();
@@ -78,12 +86,12 @@ class DifferenceLayer final:public QWidget {
             const auto accent=QApplication::palette().color(QPalette::Active,QPalette::Highlight);p.setPen(QPen(accent,0));p.setBrush(Qt::NoBrush);
             for(int index:current){const auto& item=_current[index];auto segment=_source->tick2segment(Fraction::fromTicks(item.first),false,SegmentType::ChordRest);auto e=segment&&segment->tick().ticks()==item.first?segment->element(item.second):nullptr;if(!e)continue;const auto box=e->canvasBoundingRect();if(!_view->matrix().mapRect(box).intersects(rect()))continue;p.drawRoundedRect(box.adjusted(-1,-1,1,1),1,1);}
             p.setOpacity(.4);
-            for(int index:items){const auto& item=_items[index];auto e=item.element;if(e->isBeam()){drawBeam(p,toBeam(e),item.track);continue;}const auto point=e->canvasPos()+shift(item.tick,item.track);if(!_view->matrix().mapRect(e->bbox().translated(point)).intersects(rect()))continue;p.save();p.translate(point);if(e->isNote())toNote(e)->draw(&p,accent);else e->draw(&p);p.restore();}
+            for(int index:items){const auto& item=_items[index];auto e=item.element;DrawState draw(e,accent);if(e->isBeam()){drawBeam(p,toBeam(e),item.track);continue;}const auto point=e->canvasPos()+shift(item.tick,item.track);if(!_view->matrix().mapRect(e->bbox().translated(point)).intersects(rect()))continue;p.save();p.translate(point);if(e->isNote())toNote(e)->draw(&p,accent);else e->draw(&p);p.restore();}
             }
 public:
       explicit DifferenceLayer(ScoreView* view):QWidget(view),_view(view){setObjectName("regionalDifferenceLayer");setAttribute(Qt::WA_TransparentForMouseEvents);setAttribute(Qt::WA_NoSystemBackground);view->installEventFilter(this);hide();}
       void display(Score* other,const QVariantList& changes){
-            _source=_view->score();_other=other;_items.clear();_current.clear();_itemTicks.clear();_currentTicks.clear();if(!other||!_source){hide();return;}_state=_source->masterScore()->state();QSet<Element*> seen;const auto accent=QApplication::palette().color(QPalette::Active,QPalette::Highlight);
+            _source=_view->score();_other=other;_items.clear();_current.clear();_itemTicks.clear();_currentTicks.clear();if(!other||!_source){hide();return;}_state=_source->masterScore()->state();QSet<Element*> seen;
             for(auto value:changes){const auto row=value.toMap();const int tick=row.value("tick").toInt(),track=row.value("track").toInt();
                   auto target=_source->tick2measure(Fraction::fromTicks(tick));auto origin=other->tick2measure(Fraction::fromTicks(tick));if(!target||!origin||!target->system()||!origin->system())continue;
                   auto a=_source->tick2segment(Fraction::fromTicks(tick),false,SegmentType::ChordRest),b=other->tick2segment(Fraction::fromTicks(tick),false,SegmentType::ChordRest);
@@ -92,7 +100,7 @@ public:
                   if(!alternative)continue;
                   QList<Element*> elements;alternative->scanElements(&elements,[](void* list,Element* element){static_cast<QList<Element*>*>(list)->append(element);},false);
                   if(alternative->isChord()&&toChord(alternative)->beam())elements.append(toChord(alternative)->beam());
-                  for(auto e:elements)if(e->visible()&&!seen.contains(e)){seen.insert(e);e->setSelected(false);e->setColor(accent);_items.append({e,tick,track});}
+                  for(auto e:elements)if(e->visible()&&!seen.contains(e)){seen.insert(e);_items.append({e,tick,track});}
                   }
             for(int i=0;i<_items.size();++i)_itemTicks[_items[i].tick].append(i);for(int i=0;i<_current.size();++i)_currentTicks[_current[i].first].append(i);
             setGeometry(_view->rect());setProperty("differenceCount",changes.size());show();raise();update();

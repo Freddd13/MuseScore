@@ -623,6 +623,7 @@ Ctrl+Z撤销，编辑菜单中的“重做”可恢复这一步。节点位置�
 - [备选指法与连续琶音](docs/ARRANGEMENT_ALTERNATIVE_GUIDE.md)；源码已检查，尚未安装。
 - [同一个音上写1-3，怎样安排换指](docs/ARRANGEMENT_SUBSTITUTION_GUIDE.md)；源码已检查，尚未安装。
 - [按实际按键安排指法建议](docs/SUGGESTIONS_PHYSICAL_GUIDE.md)；源码已检查，尚未安装。
+- [比较换手、音区和声部写法](docs/SUGGESTIONS_CANDIDATES_GUIDE.md)；源码已检查，尚未安装。
 - [截至0.75的说明、设计记录与字体研究](docs/USER_GUIDE_HISTORY_075.md)
 - [版本更新日志](CHANGELOG.md)
 - [本轮使用检查与返工记录](docs/USABILITY_REWORK_20261019.md)

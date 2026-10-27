@@ -6,6 +6,7 @@
 #include "paneldock.h"
 #include "workflowcontext.h"
 #include "regionalcomparison.h"
+#include "playbackpreview.h"
 #include "mscore/scoreview.h"
 #include "mscore/musescore.h"
 #include "mscore/plugin/api/score.h"
@@ -20,6 +21,7 @@
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QTreeWidget>
+#include <QHeaderView>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QUuid>
@@ -64,10 +66,33 @@ class SuggestionPanel : public QWidget {
                 return v.toMap();
         return {};
     }
+    QVariantMap inputSettings() const {
+        auto settings=_localSettings;
+        settings["hand"]=_hand->currentData();
+        settings["lockFingers"]=_lockFingers->isChecked();
+        settings["preserveMelody"]=_preserveMelody->isChecked();
+        settings["preserveTracks"]=_preserveMelody->isChecked()?QVariantList{0}:QVariantList{};
+        return settings;
+    }
+    bool matchesInputs(const QVariantMap& option) const {
+        if(option.value("localKind").toString().isEmpty())return true;
+        return option.value("localKind")==_kind->currentData()
+            && option.value("localSettings").toMap()==inputSettings()
+            && score() && option.value("pianoSettings").toMap()==score()->property("kumoPianoSettings").toMap();
+    }
+    void updateButtons() {
+        const auto option=selected();const bool ready=!_local.running()&&!option.isEmpty()&&!option.value("used").toBool()&&matchesInputs(option);
+        for(auto button:findChildren<QPushButton*>())if(button->objectName().startsWith("arrangement-"))
+            button->setEnabled(button->objectName()=="arrangement-stop"?!option.isEmpty():ready);
+    }
+    void inputsChanged() {
+        _local.cancel();stopPlaybackPreview(true);updateButtons();updateDifference();
+        if(!selected().isEmpty()&&!matchesInputs(selected()))_status->setText(tr("设置已改变，点“分析选段”更新建议。"));
+    }
     void updateDifference() {
         if (!mscore || !mscore->currentScoreView()) return;
         const auto option = selected();
-        if (isVisible() && _showDifferences && _showDifferences->isChecked() && !option.isEmpty() && !option.value("used").toBool())
+        if (isVisible() && !_local.running() && _showDifferences && _showDifferences->isChecked() && !option.isEmpty() && !option.value("used").toBool() && matchesInputs(option))
             operate("preview");
         else
             showRegionalDifference(mscore->currentScoreView(), nullptr, {});
@@ -102,6 +127,10 @@ class SuggestionPanel : public QWidget {
                     types << tr("指法 %1 → %2").arg(from.isEmpty()?tr("未标"):from.join(" / "))
                                                 .arg(to.isEmpty()?tr("清除"):to.join(" / "));
                 }
+                if (x.value("hands") != y.value("hands")) {
+                    auto names=[&](const QVariant& value){QStringList out;for(auto hand:value.toStringList())out << (hand.startsWith("left")?tr("左手"):tr("右手"))+(hand.endsWith(":end")?tr("结束"):QString());return out.isEmpty()?tr("未标"):out.join(" / ");};
+                    types << tr("分手 %1 → %2").arg(names(x.value("hands")),names(y.value("hands")));
+                }
                 marks |= x.value("otherMarks") != y.value("otherMarks");
             }
             if (pitch)
@@ -116,17 +145,20 @@ class SuggestionPanel : public QWidget {
                                                            .arg(row.value("track").toInt() % 4 + 1),
                                                        types.join("、")});
             item->setData(0, Qt::UserRole, row);
+            for(int column=0;column<3;++column)item->setToolTip(column,item->text(column));
         }
-        for (auto button : findChildren<QPushButton *>())
-            if (button->objectName().startsWith("arrangement-"))
-                button->setEnabled(!option.isEmpty() && !option.value("used").toBool());
+        updateButtons();
         _status->setText(option.isEmpty() ? tr("分析完成后，选择写法查看变化、试听或采用。") : option.value("used").toBool()
                              ? tr("已采用这版 · Ctrl+Z撤销 · Ctrl+S保存")
                              : tr("已选写法的变化显示在谱上；点列表中的位置查看相关音。"));
+        if(!option.isEmpty()&&!option.value("used").toBool()&&!matchesInputs(option))_status->setText(tr("设置已改变，点“分析选段”更新建议。"));
     }
     void operate(const QString &action) {
         if (!attach() || _selected.isEmpty())
             return;
+        if(action!="stop"&&!matchesInputs(selected())) {
+            _status->setText(tr("设置已改变，点“分析选段”更新建议。"));return;
+        }
         const auto result = _observer.arrangementRequest(
             "arrangementOption", {{"optionId", _selected},
                                   {"action", action},
@@ -173,6 +205,7 @@ class SuggestionPanel : public QWidget {
         layout->addLayout(analysis);
         auto choices = new QHBoxLayout;
         _hand = new QComboBox;
+        _hand->setObjectName("localSuggestionHand");
         _hand->addItem(tr("按谱面分手"), "auto");
         _hand->addItem(tr("选段用右手"), "right");
         _hand->addItem(tr("选段用左手"), "left");
@@ -181,23 +214,23 @@ class SuggestionPanel : public QWidget {
         _lockFingers->setChecked(true);
         choices->addWidget(_lockFingers);
         _preserveMelody = new QCheckBox(tr("保留旋律"));
+        _preserveMelody->setObjectName("localSuggestionPreserveMelody");
         _preserveMelody->setChecked(true);
         choices->addWidget(_preserveMelody);
         layout->addLayout(choices);
         _localSettings = QSettings().value("arrangementSuggestions/parameters").toMap();
         connect(generate, &QPushButton::clicked, this, [this] {
-            auto settings = _localSettings;
-            settings["hand"] = _hand->currentData();
-            settings["lockFingers"] = _lockFingers->isChecked();
-            settings["preserveTracks"] = _preserveMelody->isChecked() ? QVariantList{0} : QVariantList{};
-            _local.start(score(), _kind->currentData().toString(), settings);
+            stopPlaybackPreview(true);
+            if(mscore&&mscore->currentScoreView())showRegionalDifference(mscore->currentScoreView(),nullptr,{});
+            _local.start(score(), _kind->currentData().toString(), inputSettings());
         });
         connect(cancel, &QPushButton::clicked, this, [this] {
             _local.cancel();
             _status->setText(tr("已取消，可以重新选段。"));
         });
         connect(&_local, &LocalSuggestionTask::progress, this,
-                [this](const QString &text) { _status->setText(text); });
+                [this](const QString &text) { _status->setText(text);updateButtons(); });
+        connect(&_local, &LocalSuggestionTask::completed, this, [this] { refresh(); });
         connect(settings, &QPushButton::clicked, this, [this] {
             QDialog dialog(this);
             dialog.setWindowTitle(tr("编配建议参数"));
@@ -255,6 +288,7 @@ class SuggestionPanel : public QWidget {
             _localSettings["weights"] = values;
             _localSettings["style"] = style->currentIndex();
             QSettings().setValue("arrangementSuggestions/parameters", _localSettings);
+            inputsChanged();
         });
         _scope = new QLabel;
         _scope->setWordWrap(true);
@@ -265,14 +299,21 @@ class SuggestionPanel : public QWidget {
         _choices->setMaximumHeight(126);
         _choices->setHeaderLabels({tr("写法"), tr("状态")});
         _choices->setRootIsDecorated(false);
+        _choices->header()->setStretchLastSection(false);
+        _choices->header()->setSectionResizeMode(0,QHeaderView::Stretch);
+        _choices->header()->setSectionResizeMode(1,QHeaderView::ResizeToContents);
         layout->addWidget(_choices, 2);
         _explanation = new QTextBrowser;
         _explanation->setMinimumHeight(64);
         _explanation->setMaximumHeight(110);
         layout->addWidget(_explanation);
         _changes = new QTreeWidget;
+        _changes->setObjectName("arrangementChanges");
         _changes->setHeaderLabels({tr("位置"), tr("声部"), tr("变化")});
         _changes->setRootIsDecorated(false);
+        _changes->header()->setSectionResizeMode(0,QHeaderView::ResizeToContents);
+        _changes->header()->setSectionResizeMode(1,QHeaderView::ResizeToContents);
+        _changes->header()->setSectionResizeMode(2,QHeaderView::Stretch);
         layout->addWidget(_changes, 2);
         auto controls = new QHBoxLayout;
         layout->addLayout(controls);
@@ -304,6 +345,10 @@ class SuggestionPanel : public QWidget {
         _status->setWordWrap(true);
         _status->setMinimumHeight(46);
         layout->addWidget(_status);
+        connect(_kind,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this]{inputsChanged();});
+        connect(_hand,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this]{inputsChanged();});
+        connect(_lockFingers,&QCheckBox::toggled,this,[this]{inputsChanged();});
+        connect(_preserveMelody,&QCheckBox::toggled,this,[this]{inputsChanged();});
         connect(_choices, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem *item) {
             _selected = item ? item->data(0, Qt::UserRole).toString() : QString();
             details();
@@ -335,6 +380,7 @@ class SuggestionPanel : public QWidget {
                 new QTreeWidgetItem(_choices, {row.value("title").toString(),
                                                row.value("used").toBool() ? tr("已采用") : tr("可比较")});
             item->setData(0, Qt::UserRole, row["id"]);
+            item->setToolTip(0,row.value("title").toString());
             if (row["id"] == _selected)
                 _choices->setCurrentItem(item);
         }

@@ -229,6 +229,10 @@ class TestPluginHost : public QObject {
       void arrangementAlternativePanel();
       void arrangementFingerMatchingCorpus();
       void traditionalSuggestionsReadActualKeys();
+      void traditionalVoicingCandidateFlow();
+      void traditionalHandoffCandidateFlow();
+      void traditionalCounterpointHeldToneFlow();
+      void regionalDifferencePreservesMaterial();
       void arrangementSubstitutionTiming();
       void arrangementSubstitutionPanel();
       void arrangementArpeggioHolds();
@@ -937,7 +941,7 @@ class TestPluginHost : public QObject {
             auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);main->setCurrentScoreView(main->appendScore(score));main->resize(1280,960);main->show();score->deselectAll();
             showSuggestionPanel(true);auto panel=main->findChild<QWidget*>("arrangementSuggestionPanel");QVERIFY(panel);auto task=panel->findChild<LocalSuggestionTask*>();QVERIFY(task);
             const int before=score->undoStack()->getCurIdx();QSignalSpy completed(task,&LocalSuggestionTask::completed);QSignalSpy progress(task,&LocalSuggestionTask::progress);
-            panel->findChild<QComboBox*>("localSuggestionKind")->setCurrentIndex(0);QTest::mouseClick(panel->findChild<QPushButton*>("localSuggestionStart"),Qt::LeftButton);QTRY_VERIFY_WITH_TIMEOUT(!task->running(),15000);
+            panel->findChild<QComboBox*>("localSuggestionHand")->setCurrentIndex(0);panel->findChild<QComboBox*>("localSuggestionKind")->setCurrentIndex(0);QTest::mouseClick(panel->findChild<QPushButton*>("localSuggestionStart"),Qt::LeftButton);QTRY_VERIFY_WITH_TIMEOUT(!task->running(),15000);
             QVERIFY2(completed.size()==1,qUtf8Printable(progress.isEmpty()?QString("No progress"):progress.last()[0].toString()));
             auto result=completed.front()[0].toMap();QVERIFY(!result["options"].toList().isEmpty());QCOMPARE(score->undoStack()->getCurIdx(),before);
             auto apply=panel->findChild<QPushButton*>("arrangement-apply");QVERIFY(apply&&apply->isEnabled());
@@ -1513,5 +1517,6 @@ class TestPluginHost : public QObject {
 #include "arrangement_alternative_fingers_tests.inc"
 #include "arrangement_substitution_tests.inc"
 #include "arrangement_suggestion_playback_tests.inc"
+#include "arrangement_candidate_quality_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

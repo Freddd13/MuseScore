@@ -28,6 +28,9 @@ function timeAt(clock,tick) {
     var other=index+1<clock.length?clock[index+1]:clock[Math.max(0,index-1)];
     return other.tick!==point.tick?point.seconds+(tick-point.tick)*(other.seconds-point.seconds)/(other.tick-point.tick):null;
 }
+function lowNoteGroups(pair) {
+    return pair.map(function(group){return group.notes.map(function(n){return n.physicalSourceId||n.id;}).filter(function(id,i,a){return a.indexOf(id)===i;}).sort();});
+}
 function lowVoicing(s,frame){
     var held=frame.notes.filter(function(n){return !n.grace&&n.play!==false&&n.piano!==false&&(n.soundingEnd===undefined?n.logicalEnd:n.soundingEnd)>frame.tick;}),keys=[],byKey={},parts={};
     held.forEach(function(n){
@@ -50,7 +53,7 @@ function lowVoicing(s,frame){
         description+=(residual?"含踏板保持。":arpeggio?"先后起音。":"同时起音。")+"共同持续 "+(seconds===null?Number(((until-from)/480).toFixed(2))+" 四分拍":Math.round(seconds*1000)+" ms");
         if(velocities[0]!==null&&velocities[1]!==null)description+="，起音力度 "+velocities[0]+" / "+velocities[1];
         var result=parts[a.part]||(parts[a.part]={notes:[],details:[]});
-        result.details.push({start:from,end:until,seconds:seconds,velocities:velocities,source:residual?"pedal":arpeggio?"arpeggio":"together",pitches:[pair[0].pitch,pair[1].pitch],description:description+"。"});
+        result.details.push({start:from,end:until,seconds:seconds,velocities:velocities,source:residual?"pedal":arpeggio?"arpeggio":"together",pitches:[pair[0].pitch,pair[1].pitch],noteGroups:lowNoteGroups(pair),limit:limit,description:description+"。"});
         pair.forEach(function(group){group.notes.forEach(function(n){if(result.notes.indexOf(n)<0)result.notes.push(n);});});
     }
     for(var part in parts) {
@@ -84,7 +87,7 @@ function playedLowVoicing(s,frame) {
         description+=(residual?"含踏板保持。":arpeggio?"先后起音。":"同时起音。")+"实际共同持续 "+Math.round(seconds*1000)+" ms，起音力度 "+pair[0].velocity+" / "+pair[1].velocity;
         var found=parts[a.part]||(parts[a.part]={notes:[],details:[]});
         found.details.push({start:from-range.offset,end:until-range.offset,playbackStart:from,playbackEnd:until,seconds:seconds,
-            occurrence:range.occurrence||1,velocities:[pair[0].velocity,pair[1].velocity],source:residual?"pedal":arpeggio?"arpeggio":"together",pitches:[pair[0].pitch,pair[1].pitch],description:description+"。"});
+            occurrence:range.occurrence||1,velocities:[pair[0].velocity,pair[1].velocity],source:residual?"pedal":arpeggio?"arpeggio":"together",pitches:[pair[0].pitch,pair[1].pitch],noteGroups:lowNoteGroups(pair),limit:limit,description:description+"。"});
         pair.forEach(function(group){group.notes.forEach(function(note){if(!found.notes.some(function(n){return n.id===note.id;}))found.notes.push(note);});});
     }
     for(var part in parts){

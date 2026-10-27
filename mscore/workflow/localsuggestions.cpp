@@ -43,7 +43,9 @@ LocalSuggestionTask::LocalSuggestionTask(QObject *parent) : QObject(parent), _ob
                     return;
                 }
                 QVariantMap brief{{"scope", _state["scope"]},
-                                  {"preserveTracks", _settings.value("preserveTracks", QVariantList{0})},
+                                  {"preserveTracks", result.value("preserveTracks", _settings.value("preserveTracks", QVariantList{0}))},
+                                  {"localSettings", _settings}, {"localKind", _kind},
+                                  {"pianoSettings", _state.value("pianoSettings").toMap()},
                                   {"preserveHarmony", true}};
                 auto submitted = _observer.arrangementRequest(
                     "submitArrangementOptions",

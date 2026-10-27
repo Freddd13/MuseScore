@@ -336,7 +336,10 @@ void ScoreObserver::publishPianoSettings(const QVariantMap &settings) {
     for (const auto &name : QStringList{"roles", "handOverrides", "left", "right", "minimumHoldMs", "style"})
         if (settings.contains(name))
             values[name] = settings[name];
-    _score->QObject::setProperty("kumoPianoSettings", values);
+    if(_score->property("kumoPianoSettings").toMap()!=values) {
+        _score->QObject::setProperty("kumoPianoSettings", values);
+        notifyArrangementSuggestions(_score);
+    }
 }
 void ScoreObserver::publishHarmonyAnalysis(const QVariantMap &result) {
     if (!_score || result.value("snapshotId").toString() != analysisContentRevision())
