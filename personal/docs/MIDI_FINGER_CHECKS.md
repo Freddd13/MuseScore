@@ -4,6 +4,8 @@
 
 ## 原因与修改
 
+C4-A2-A源码：[f01de0b1455a](https://github.com/Freddd13/MuseScore/commit/f01de0b1455a1579c0ba7d95d4948f03f1a61c85)；插件：[2ca81aaf2d95](https://github.com/Freddd13/Muse3Plugins/commit/2ca81aaf2d95c27758ce2ec061f08feececec422)。尚未安装。
+
 导出只读取单个数字指法。`2(3)`和`[2]`被跳过，按键数量和跨度都合适时，指法占用可能漏掉。分手读取只看直接附属符号，也会遗漏嵌套记号。
 
 现在用与编配检查相同的`PianoFingering::choices`读取备选，允许的手指随实际MIDI来源传入共同手位模块。数字指法保留原有字段，多个指法说明取共同可用的手指；相互冲突的位置单独保留原音长。

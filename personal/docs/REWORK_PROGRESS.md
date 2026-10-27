@@ -16,6 +16,8 @@ R1-C2已查到原曲声音设备打开阻塞界面，以及反复和弦显示遗
 
 ### C4-A2-A源码已检查：导出分手和备选指法
 
+C4-A2-A源码：[f01de0b1455a](https://github.com/Freddd13/MuseScore/commit/f01de0b1455a1579c0ba7d95d4948f03f1a61c85)；插件：[2ca81aaf2d95](https://github.com/Freddd13/Muse3Plugins/commit/2ca81aaf2d95c27758ce2ec061f08feececec422)。尚未安装。
+
 补齐嵌套分手、数字／备选／括号指法，指法疑问单独处理；其余明确按键继续检查。实际窗口补充指法占用原因，保存重开保留原文字。整组19项及最终说明11项通过，两份SF3原新波形差值0。源码尚未安装，当前仍为0.128.0。
 
 操作见[已有分手和备选指法](MIDI_FINGER_GUIDE.md)，结果见[检查记录](MIDI_FINGER_CHECKS.md)。接着C4-A2-B延音中途分手／换指与反复、C4-B逐处释放和成组变化、C4-C预览与文件，然后D、E、F。

@@ -2,6 +2,8 @@
 
 ## 开发中 — 2026-10-27
 
+C4-A2-A源码：[f01de0b1455a](https://github.com/Freddd13/MuseScore/commit/f01de0b1455a1579c0ba7d95d4948f03f1a61c85)；插件：[2ca81aaf2d95](https://github.com/Freddd13/Muse3Plugins/commit/2ca81aaf2d95c27758ce2ec061f08feececec422)。尚未安装。
+
 - C4-A2-A：导出补齐嵌套分手、备选与括号指法，单独处理局部疑问；图下说明指法占用原因，原文字保存重开保持。19项及最终11项通过，源码尚未安装，见MIDI_FINGER_CHECKS.md；接着延音内分手和换指。
 
 C4-A1源码：[9140ab18b81d](https://github.com/Freddd13/MuseScore/commit/9140ab18b81d9ccf823b9b2fb34a3fd0bd542fe9)；插件：[60ff099ee489](https://github.com/Freddd13/Muse3Plugins/commit/60ff099ee4894909f07a62c58cab0810d5a6ce25)。尚未安装。
