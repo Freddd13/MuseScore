@@ -4,6 +4,8 @@
 
 ## 查到的问题与修改
 
+C3-B3-A源码：[abdc19b1976b](https://github.com/Freddd13/MuseScore/commit/abdc19b1976b988750630e71dd8aae00c6f9ea03)；插件：[eb08f3b30ad3](https://github.com/Freddd13/Muse3Plugins/commit/eb08f3b30ad3d2dc2f7f826faedeedff36ba1ab4)。尚未安装。
+
 建议生成仍用谱面音长判断手指占用。已在演奏编辑器提前松开的长音继续占用手指，延长播放的短音却被提前排除。原生建议任务也没有读取实际演奏事件。
 
 现在分批读取与编配检查相同的实际事件，再使用共同的按键资料建立连续音组；实际起音、松键、踏板、反复和后续指法参与建议。每批读取超过约2毫秒时缩小下一批。准备、读取和计算仍可取消，值资料交给工作线程。

@@ -2,6 +2,8 @@
 
 ## 开发中 — 2026-10-27
 
+C3-B3-A源码：[abdc19b1976b](https://github.com/Freddd13/MuseScore/commit/abdc19b1976b988750630e71dd8aae00c6f9ea03)；插件：[eb08f3b30ad3](https://github.com/Freddd13/Muse3Plugins/commit/eb08f3b30ad3d2dc2f7f826faedeedff36ba1ab4)。尚未安装。
+
 - C3-B3-A：建议读取实际起音、松键、踏板与反复，统一持续按键、备选和换指；说明与列表写出具体指法。12项新增JS、16组及9项原生／面板通过，采用后保存文件中的旧记号和演奏音长保留。源码尚未安装，见SUGGESTIONS_PHYSICAL_CHECKS.md；接着C3-B3-B换手、配音与对位候选。
 
 C3-B2-B3源码：[16b2d4978e6d](https://github.com/Freddd13/MuseScore/commit/16b2d4978e6d03d13bb51e17cdec7b231f5b4666)；插件：[5f8a5e4d023e](https://github.com/Freddd13/Muse3Plugins/commit/5f8a5e4d023eac68589ab5e919e5a563d7628007)。尚未安装。

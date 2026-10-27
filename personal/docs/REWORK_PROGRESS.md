@@ -16,6 +16,8 @@ R1-C2已查到原曲声音设备打开阻塞界面，以及反复和弦显示遗
 
 ### C3-B3-A源码已检查：按实际按键安排指法
 
+C3-B3-A源码：[abdc19b1976b](https://github.com/Freddd13/MuseScore/commit/abdc19b1976b988750630e71dd8aae00c6f9ea03)；插件：[eb08f3b30ad3](https://github.com/Freddd13/Muse3Plugins/commit/eb08f3b30ad3d2dc2f7f826faedeedff36ba1ab4)。尚未安装。
+
 建议已接入实际起音、松键、踏板和反复；持续按键、备选与换指一起参与路线。说明写出音名、拍位与手指，列表显示具体指法变化。实际面板完成选中差异、采用、撤销、保存重开和三个读取阶段的取消，原有指法与手调音长继续保留。
 
 新增12项JS、全部16组JS及最后9项原生／面板通过，截图已核对。源码尚未安装，当前仍为0.128.0；操作见[指法建议](SUGGESTIONS_PHYSICAL_GUIDE.md)，结果见[本批记录](SUGGESTIONS_PHYSICAL_CHECKS.md)。下一项C3-B3-B：真实换手、配音和对位候选，再按C4、D、E、F继续。
