@@ -16,6 +16,8 @@ R1-C2已查到原曲声音设备打开阻塞界面，以及反复和弦显示遗
 
 ### C3-B3-B源码已检查：换手、配音与对位候选
 
+C3-B3-B源码：[d2eba830abec](https://github.com/Freddd13/MuseScore/commit/d2eba830abec1c24af7d81313851de40d7eccd31)；插件：[d78195905093](https://github.com/Freddd13/Muse3Plugins/commit/d781959050932a6a99d00c0736d5dce4c013f653)。尚未安装。
+
 已核对旋律角色保护、持续和声音、同刻换手与候选逐处比较；低音音区及共同持续时间一起检查。修复差异绘图改变符号颜色导致采用回退、首次结果未自动显示及变化文字截断。分手与参数变化后，当前建议及时更新。
 
 全部17组JS、最后15项原生／面板通过，包含采用、撤销、保存重开及原有跨界连接。源码尚未安装，程序仍为0.128.0；操作见[比较换手、音区和声部写法](SUGGESTIONS_CANDIDATES_GUIDE.md)，结果见[本批记录](SUGGESTIONS_CANDIDATES_CHECKS.md)。接着C4松手导出，再按D、E、F继续；CFX厂商窗口鼠标检查按用户安排稍后补齐。
