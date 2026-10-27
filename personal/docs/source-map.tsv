@@ -597,3 +597,6 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方
 导出备选指法	audio/exports/exportmidi.cpp	PianoFingering::choices	393	保留数字与允许手指，来源传入实际导出结果	nativeAlternativeFingerExport
 嵌套分手分配	libmscore/handbracketanalysis.cpp	addMarks	17	读取符号内的分手，沿用音头与和弦范围	nativeNestedHandsForMidi
 局部指法疑问	audio/exports/midigate.h	process	161	保持有疑问的按键，其余明确音继续处理	midiUncertainFingerKeepsOtherHand
+
+已载入音源运行方式	mscore/workflow/vstpanel.cpp	Panel::changeSourceMode	486	直接与独立运行切换、保留音色效果和撤销	sourceModeSwitch129 / sourceModeDuringPlayback129
+独立音源声音块记录	audio/vst/proxy.cpp	Proxy::processingDiagnostics	269	记录声音块返回、遗漏、占用及处理失败	combinedPlaybackGui126

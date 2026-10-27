@@ -1,5 +1,13 @@
 # 个人版本更新日志
 
+## 0.129.0 — 2026-10-27
+
+- 编配检查采用实际起音、松键和踏板，补齐延音中的分手、后续指法、备选指法与换指时机。
+- 指法、换手、配音与对位建议共用实际按键；修复差异绘图影响采用、首次差异显示及列表截断。
+- MIDI 松手读取实际移动时间、嵌套分手和备选指法；局部指法疑问保留相关音，并说明具体原因。
+- 已载入 VST 可选择直接／独立运行；切换保留音色和效果，播放中切换停在当前拍位。
+- 操作见 personal/docs/RELEASE_129_GUIDE.md；构建和安装检查见 RELEASE_129_CHECKS.md。原有保存流程和个人配置保留。
+
 ## 开发中 — 2026-10-27
 
 C4-A2-A源码：[f01de0b1455a](https://github.com/Freddd13/MuseScore/commit/f01de0b1455a1579c0ba7d95d4948f03f1a61c85)；插件：[2ca81aaf2d95](https://github.com/Freddd13/Muse3Plugins/commit/2ca81aaf2d95c27758ce2ec061f08feececec422)。尚未安装。

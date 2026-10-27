@@ -1,5 +1,6 @@
 // GPL-2.0-or-later. Keep the actual media, spectrum, editor and score paths active together.
 #include <QScreen>
+#include "native_gui_129_probe.h"
 namespace {
 class CombinedPaintCounter126 : public QObject {
       QMap<QObject*,int> counts;
@@ -21,6 +22,7 @@ void TestPluginHost::combinedPlaybackGui126()
     const bool pencil=!qEnvironmentVariableIsSet("P2_COMBINED_NO_PENCIL");
     const bool useHarmony=!qEnvironmentVariableIsSet("P2_COMBINED_NO_HARMONY");
     const auto sourceKind=qEnvironmentVariable("P2_COMBINED_SOURCE","SF2");
+    const bool isolated=qEnvironmentVariableIsSet("P2_COMBINED_ISOLATED");
     QVERIFY(sourceKind=="SF2"||sourceKind=="Pianoteq"||sourceKind=="CFX");
     const auto oldCommon=QSettings().value("kumo/vst/commonPiano");
     const auto oldRetain=QSettings().value("kumo/vst/retainOpenScores");
@@ -59,7 +61,7 @@ void TestPluginHost::combinedPlaybackGui126()
             :VstHost::scanVst3("C:/Program Files/Common Files/VST3/Pianoteq 9/Pianoteq 9.vst3",&error);
         QVERIFY2(!descriptors.isEmpty(),qPrintable(error));
         auto channel=const_cast<Channel*>(scores.front()->midiMapping().front().articulation());
-        QVERIFY(!assignVstInstrument(scores.front(),channel,descriptors.front().toMap()).contains("error"));
+        QVERIFY(!assignVstInstrument(scores.front(),channel,descriptors.front().toMap(),isolated).contains("error"));
         auto own=vst->rack().plugin(channel->bank());QVERIFY(own);
         if(sourceKind=="CFX")QVERIFY2(own->importPreset("E:/music_fonts/CFX Concert Grand/Presets/com.Plogue.Aria/02- Compact/Player/00_Default.ariax",&error),qPrintable(error));
         saveVstEdits(scores.front());
@@ -98,6 +100,14 @@ void TestPluginHost::combinedPlaybackGui126()
     auto canvas=editor->findChild<QWidget*>("performanceParameterCanvas"); QVERIFY(canvas);
     auto wheel=editor->findChild<QToolButton*>("performanceWheelVelocity"); QVERIFY(wheel); wheel->setChecked(true);
     auto output=QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path()));
+    auto sourceDiagnostics=[&] {
+        QVariantList result;if(!vst)return result;
+        for(const auto& value:vst->runtimeConfiguration(false)["slots"].toList()) {
+            const int id=value.toMap()["id"].toInt();auto plugin=vst->rack().plugin(id);
+            if(plugin)result.append(QVariantMap{{"slot",id},{"values",plugin->processingDiagnostics()}});
+        }
+        return result;
+    };
     QVariantList rows;
     const int rounds=qMax(4,qEnvironmentVariableIntValue("P2_COMBINED_ROUNDS"));
     const int seconds=qMax(6,qEnvironmentVariableIntValue("P2_COMBINED_SECONDS"));
@@ -179,28 +189,35 @@ void TestPluginHost::combinedPlaybackGui126()
         QTRY_VERIFY_WITH_TIMEOUT(!useHarmony||!harmony->property("analysisDirty").toBool(),20000);
         const auto preparedMs=preparation.elapsed();
         QSignalSpy spectrumChanges(session,SIGNAL(changed())); QSignalSpy mediaChanges(media,SIGNAL(changed()));
+        if(vst&&qEnvironmentVariableIsSet("P2_COMBINED_SOURCE_PANEL"))showVstPanel(const_cast<Channel*>(score->midiMapping().front().articulation()));
+        const bool vendorRequested=sharedPiano&&qEnvironmentVariableIsSet("P2_COMBINED_VENDOR");
         QPointer<QWidget> vendor;
-        if(sharedPiano&&qEnvironmentVariableIsSet("P2_COMBINED_VENDOR")) {
+        if(vendorRequested) {
             QString error;QVERIFY2(sharedPiano->openEditor(main,&error),qPrintable(error));
-            vendor=main->findChild<QWidget*>("kumoVstPluginEditor");
-            QVERIFY(vendor&&vendor->isVisible());
-            vendor->move(available.left()+15,available.top()+30);
+            QVERIFY(sharedPiano->editorVisible());
+            if(!isolated) {
+                vendor=main->findChild<QWidget*>("kumoVstPluginEditor");
+                QVERIFY(vendor&&vendor->isVisible());
+                vendor->move(available.left()+15,available.top()+30);
+            }
         }
         const int mode=round%3;
+        const auto sourceBuffersBefore=sourceDiagnostics();
         score->setPlayPos(Fraction()); driver->resetMetrics();
         if(mode==0) { getAction("play")->trigger(); QTRY_VERIFY_WITH_TIMEOUT(sequence->isPlaying(),10000); }
         else if(mode==1) { reference->setProperty("transportTarget",0); QVERIFY(QMetaObject::invokeMethod(reference,"toggleReferencePlayback")); QTRY_VERIFY_WITH_TIMEOUT(media->property("playing").toBool(),10000); }
         else { QVERIFY(QMetaObject::invokeMethod(reference,"startJoint")); QTRY_VERIFY_WITH_TIMEOUT(sequence->isPlaying()&&media->property("playing").toBool(),10000); }
         QVector<double> gaps,zooms; QElapsedTimer clock; clock.start(); qint64 previous=clock.nsecsElapsed(); QTimer ticker; ticker.setTimerType(Qt::PreciseTimer); ticker.setInterval(16);
         QObject::connect(&ticker,&QTimer::timeout,main,[&] { const auto now=clock.nsecsElapsed(); gaps.append((now-previous)/1.e6); previous=now; });
-        QVariantList events;
+        QVariantList events,nativeEvents;
         int notePaints=0,parameterPaints=0,spectrumPaints=0;
-        { CombinedPaintCounter126 painted({notes,canvas,spectrumCanvas});PlaybackGuiProbe125 probe; ticker.start();
+        { CombinedPaintCounter126 painted({notes,canvas,spectrumCanvas});PlaybackGuiProbe125 probe;
+            PianoNativeProbe129 native(qEnvironmentVariableIsSet("P2_COMBINED_PROFILE_NATIVE"));ticker.start();
             for(int second=0;second<seconds;++second) {
                 QTest::qWait(1000);
                 if(vst) {
                     QCOMPARE(vst->rack().plugin(vst->pianoSlot(score->midiMapping().front().articulation()->channel())),sharedPiano);
-                    if(vendor)QVERIFY(vendor->isVisible());
+                    if(vendorRequested)QVERIFY(sharedPiano->editorVisible());
                 }
                 if(second%3==2) {
                     QElapsedTimer timer; timer.start();
@@ -209,19 +226,22 @@ void TestPluginHost::combinedPlaybackGui126()
                     auto scroll=pane->findChild<QScrollBar*>("spectrumTimeScroll"); QVERIFY(scroll); scroll->setValue(qMin(scroll->maximum(),scroll->value()+7000));
                 }
             }
-            ticker.stop(); events=probe.report();notePaints=painted.count(notes);parameterPaints=painted.count(canvas);spectrumPaints=painted.count(spectrumCanvas);
+            ticker.stop(); events=probe.report();nativeEvents=native.report();notePaints=painted.count(notes);parameterPaints=painted.count(canvas);spectrumPaints=painted.count(spectrumCanvas);
         }
         QVERIFY(notePaints>0&&parameterPaints>0);if(display->currentIndex()==0)QVERIFY(spectrumPaints>0);
+        const auto sourceBuffersAfter=sourceDiagnostics();
         const auto mediaDiagnostics=media->property("diagnostics").toMap();
         if(mode!=0) { QVERIFY2(mediaDiagnostics.value("outputFrames").toLongLong()>4096,qPrintable(media->property("status").toString())); if(mode==2)QCOMPARE(mediaDiagnostics.value("audioTracks").toInt(),8); }
         QVERIFY(QMetaObject::invokeMethod(reference,"stopJoint")); sequence->stopWait(); sequence->waitForStoppedRendering();
         QTRY_VERIFY(!sequence->isPlaying()&&!media->property("playing").toBool());
         QTRY_VERIFY_WITH_TIMEOUT(!editor->hasPending()&&!session->property("busy").toBool(),15000);
-        if(vendor){QVERIFY(vendor->isVisible());sharedPiano->closeEditor();}
+        if(vendorRequested){QVERIFY(sharedPiano->editorVisible());sharedPiano->closeEditor();}
         QVariantList zoomValues; for(double value:zooms)zoomValues.append(value);
         auto row=driver->metrics(); row["round"]=round; row["mode"]=mode; row["overlay"]=display->currentIndex()==1; row["preparationMilliseconds"]=preparedMs; row["guiP95Milliseconds"]=sourcePercentile(gaps,.95); row["guiMaximumMilliseconds"]=sourcePercentile(gaps,1.); row["fourZoomMilliseconds"]=zoomValues; row["events"]=events; row["spectrumChanges"]=spectrumChanges.count(); row["mediaChanges"]=mediaChanges.count(); row["spectrumInfo"]=session->property("info"); row["cache"]=session->property("cacheOptions"); row["mediaDiagnostics"]=mediaDiagnostics; row["privateBytes"]=sourcePrivateBytes(); row["windows"]=QGuiApplication::allWindows().size();row["notePaints"]=notePaints;row["parameterPaints"]=parameterPaints;row["spectrumPaints"]=spectrumPaints; rows.append(row);
         row["source"]=sourceKind;
         row["vendorWindow"]=qEnvironmentVariableIsSet("P2_COMBINED_VENDOR");
+        row["isolated"]=isolated;row["nativeEvents"]=nativeEvents;
+        row["sourceBuffersBefore"]=sourceBuffersBefore;row["sourceBuffersAfter"]=sourceBuffersAfter;
         if(mode!=1){QVERIFY(row["finite"].toBool());QVERIFY2(row["peak"].toDouble()>.00001,"Score transport must produce actual piano audio");}
         int playEvents=0;for(auto note:selected)playEvents+=note->playEvents().size();row["playEvents"]=playEvents;row["notes"]=selected.size();row["undoMacros"]=score->undoStack()->getCurIdx();row["pencilUndoChildren"]=pencilChildren;row["pencil"]=pencil;row["harmony"]=useHarmony;rows.last()=row;
         qInfo()<<"Combined GUI"<<round<<"mode"<<mode<<"p95"<<row["guiP95Milliseconds"]<<"maximum"<<row["guiMaximumMilliseconds"]<<"zooms"<<zooms;

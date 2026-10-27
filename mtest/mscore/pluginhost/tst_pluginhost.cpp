@@ -213,6 +213,9 @@ class TestPluginHost : public QObject {
       void playbackGuiLatency125();
       void combinedPlaybackGui126();
       void commonPianoPlaybackSnapshot128();
+      void sourceModeSwitch129_data();
+      void sourceModeSwitch129();
+      void sourceModeDuringPlayback129();
       void arrangementPhysicalKeys();
       void arrangementPhysicalPlayback();
       void arrangementPhysicalPanel();
@@ -1509,6 +1512,7 @@ class TestPluginHost : public QObject {
 #include "source_performance_tests.inc"
 #include "playback_gui_125_tests.inc"
 #include "combined_gui_126_tests.inc"
+#include "source_mode_129_tests.inc"
 #include "input_121_tests.inc"
 #include "values_094_tests.inc"
 #include "arrangement_hand_context_tests.inc"

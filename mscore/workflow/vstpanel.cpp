@@ -118,7 +118,8 @@ QString identity(const QVariantMap &d) {
   return d["path"].toString() + "|" + d["uid"].toString();
 }
 class Panel final : public QDockWidget {
-  QComboBox *parts, *catalog, *effectTarget;
+  QComboBox *parts, *catalog, *effectTarget, *sourceMode;
+  QWidget *sourceModeBox;
   QListWidget *chain;
   QStackedWidget *chainArea;
   QLabel *state, *current, *chainHint;
@@ -482,6 +483,50 @@ class Panel final : public QDockWidget {
       state->setText(tr("已打开插件参数。"));
     }
   }
+  void changeSourceMode(bool isolated) {
+    const int id=selectedSlot();
+    if (updating || !score || !backend() || !id)
+      return;
+    auto plugin=backend()->rack().plugin(id);
+    const auto currentUnit=unit(id,-1);
+    if (!plugin || currentUnit["plugin"].toMap()["format"]=="SF2" ||
+        currentUnit["isolated"].toBool()==isolated)
+      return;
+    const bool reopen=plugin->editorVisible();
+    const QPointer<Score> owner=score;
+    if (seq) {
+      seq->stopWait();
+      seq->synchronizeStoppedGui();
+      seq->waitForStoppedRendering();
+    }
+    commitEdits();
+    if (score!=owner || selectedSlot()!=id) {
+      refresh();
+      return;
+    }
+    state->setText(tr("正在切换音源运行方式…"));
+    state->repaint();
+    sourceMode->setEnabled(false);
+    current->setText(tr("正在切换到%1…\n音色：%2")
+        .arg(isolated?tr("独立运行"):tr("直接运行"),currentUnit["plugin"].toMap()["name"].toString()));
+    current->repaint();
+    editUnit(id,-1,[isolated](QVariantMap& value) { value["isolated"]=isolated; });
+    auto next=backend()->rack().plugin(selectedSlot());
+    if (!next || unit(selectedSlot(),-1)["isolated"].toBool()!=isolated)
+      return;
+    if (reopen) {
+      QString error;
+      if (!next->openEditor(this,&error)) {
+        state->setText(error);
+        return;
+      }
+    }
+    state->setText(commonSlot(selectedSlot())
+        ?tr("共用钢琴已改为%1，音色和参数保留；Ctrl+Z撤销。")
+             .arg(isolated?tr("独立运行"):tr("直接运行"))
+        :tr("当前音源已改为%1，音色和参数保留；Ctrl+Z撤销。")
+             .arg(isolated?tr("独立运行"):tr("直接运行")));
+  }
   void changeChain(const std::function<void(QVariantList &)> &edit) {
     const int id = targetSlot();
     if (!id && effectTarget->currentIndex() != 1)
@@ -546,13 +591,21 @@ class Panel final : public QDockWidget {
     const bool externalSource = c && (shared || c->synti() == "KumoVST") &&
         unit(id, -1)["plugin"].toMap()["format"].toString() != "SF2";
     current->setText(c ? tr("当前音源：%1\n音色：%2")
-                          .arg((shared?tr("共用钢琴 · "):QString())+(externalSource ? tr("VST") : tr("内置 SF2／SF3")),
+                          .arg((shared?tr("共用钢琴 · "):QString())+(externalSource
+                                   ? tr("VST · %1").arg(unit(id,-1)["isolated"].toBool()?tr("独立运行"):tr("直接运行"))
+                                   : tr("内置 SF2／SF3")),
                                shared?unit(id,-1)["plugin"].toMap()["name"].toString()
                                      :patch ? patch->name : externalSource ? tr("音源文件待重新定位") : tr("乐谱中的内置音色"))
                         : tr("打开乐谱后选择乐器。"));
     choose->setEnabled(c && !picked().isEmpty() &&
                        picked()["instrument"].toBool());
     const bool loaded = id && engine && engine->rack().plugin(id);
+    sourceModeBox->setVisible(externalSource);
+    sourceMode->setEnabled(loaded && externalSource);
+    {
+      QSignalBlocker blocked(sourceMode);
+      sourceMode->setCurrentIndex(unit(id,-1)["isolated"].toBool()?1:0);
+    }
 
     const bool external =
         unit(id, -1)["plugin"].toMap()["format"].toString() != "SF2";
@@ -773,6 +826,25 @@ public:
     save->setObjectName("kumoVstSourceSavePreset");
     presets->addWidget(import);
     presets->addWidget(save);
+    sourceModeBox=new QWidget(body);
+    sourceModeBox->setObjectName("kumoVstSourceModeBox");
+    auto modeRow=new QHBoxLayout(sourceModeBox);
+    modeRow->setContentsMargins(0,0,0,0);modeRow->setSpacing(6);
+    auto modeLabel=new QLabel(tr("运行方式"),sourceModeBox);
+    sourceMode=new QComboBox(sourceModeBox);
+    sourceMode->setObjectName("kumoVstSourceMode");
+    sourceMode->setAccessibleName(tr("当前音源运行方式"));
+    sourceMode->addItem(tr("直接运行"),false);
+    sourceMode->addItem(tr("独立运行"),true);
+    sourceMode->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    sourceMode->setToolTip(tr("直接运行适合低延迟弹奏。独立运行将音源窗口放在单独进程，"
+                              "可减少它对谱面操作的影响；44.1 kHz下额外延迟约11.6毫秒。"
+                              "切换保留音色和参数，Ctrl+Z撤销。"));
+    modeLabel->setBuddy(sourceMode);
+    modeRow->addWidget(modeLabel);modeRow->addWidget(sourceMode);
+    presets->addWidget(sourceModeBox);
+    connect(sourceMode,QOverload<int>::of(&QComboBox::activated),this,
+            [this](int index) { changeSourceMode(sourceMode->itemData(index).toBool()); });
     sourceLayout->addLayout(presets);
     layout->addWidget(libraryGroup);
     auto effectsGroup = new QGroupBox(tr("效果链"), body);

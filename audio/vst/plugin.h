@@ -108,6 +108,7 @@ public:
   virtual QVariantList parameters() const = 0;
   virtual bool takeChanges() = 0;
   virtual QString status() const { return {}; }
+  virtual QVariantMap processingDiagnostics() const { return {}; }
   std::function<void()> stateChanged;
 };
 std::unique_ptr<Plugin> createIsolated(const Descriptor &);

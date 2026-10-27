@@ -29,6 +29,7 @@ class Proxy final : public Plugin {
   QString preset;
   QVariantList parameterList;
   QByteArray replyBuffer;
+  std::atomic<quint64> outputBuffers{0},missingBuffers{0},busyBuffers{0},failedBuffers{0};
   QVariantMap rpc(const QVariantMap &value, QString *error,
                   int timeout = 15000) {
     if (child.state() != QProcess::Running ||
@@ -79,8 +80,10 @@ class Proxy final : public Plugin {
   }
   bool submit(BridgePacket &source, bool wait) {
     auto &packet = bridge.memory->packets[size_t(serial % BridgeSlots)];
-    if (InterlockedCompareExchange(&packet.status, 0, 0) == 1)
+    if (InterlockedCompareExchange(&packet.status, 0, 0) == 1) {
+      if (!wait)busyBuffers.fetch_add(1,std::memory_order_relaxed);
       return false;
+    }
     packet.serial = serial;
     packet.count = source.count;
     packet.eventCount = source.eventCount;
@@ -263,6 +266,13 @@ public:
   bool takeChanges() override {
     return bridge.memory && InterlockedExchange(&bridge.memory->dirty, 0) != 0;
   }
+  QVariantMap processingDiagnostics() const override {
+    return {{"outputBuffers",QVariant::fromValue(outputBuffers.load(std::memory_order_relaxed))},
+            {"missingOutputBuffers",QVariant::fromValue(missingBuffers.load(std::memory_order_relaxed))},
+            {"busyInputBuffers",QVariant::fromValue(busyBuffers.load(std::memory_order_relaxed))},
+            {"failedOutputBuffers",QVariant::fromValue(failedBuffers.load(std::memory_order_relaxed))},
+            {"bridgeLatencySamples",BridgeFrames*2}};
+  }
   bool process(int count, const float *l, const float *r, float *outL,
                float *outR, const Midi *events, int eventCount,
                const Clock &clock) override {
@@ -308,14 +318,16 @@ public:
         outputL.fill(0);
         outputR.fill(0);
         if (serial >= 2) {
+          outputBuffers.fetch_add(1,std::memory_order_relaxed);
           auto &packet =
               bridge.memory->packets[size_t((serial - 2) % BridgeSlots)];
           if (InterlockedCompareExchange(&packet.status, 0, 0) == 2 &&
               packet.serial == serial - 2) {
             std::copy_n(packet.outL.data(), BridgeFrames, outputL.data());
             std::copy_n(packet.outR.data(), BridgeFrames, outputR.data());
+            if(!packet.success)failedBuffers.fetch_add(1,std::memory_order_relaxed);
             InterlockedExchange(&packet.status, 0);
-          }
+          } else missingBuffers.fetch_add(1,std::memory_order_relaxed);
         }
       }
       const int n = std::min(count - at, BridgeFrames - fill);
