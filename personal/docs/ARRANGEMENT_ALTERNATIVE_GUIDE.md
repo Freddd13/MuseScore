@@ -28,6 +28,6 @@
 
 ## 接下来的完善
 
-同一音头上的`1-3`表示按住期间换指，具体换指时机继续在下一项完善。已明确写在后续延音音头上的指法，按[后续换指与松手](ARRANGEMENT_REQUIRED_GUIDE.md)中的方式检查。
+同一音头上的`1-3`表示按住期间换指，起音与后续时机见[同音换指说明](ARRANGEMENT_SUBSTITUTION_GUIDE.md)。已明确写在后续延音音头上的指法，按[后续换指与松手](ARRANGEMENT_REQUIRED_GUIDE.md)中的方式检查。
 
 备选与换指的含义参照[Steinberg指法输入说明](https://download.steinberg.net/downloads_software/Dorico/1.2.10/Dorico_1.2.10_Version_History.pdf)，两者的分别保存也见[MusicXML指法定义](https://www.w3.org/2021/06/musicxml40/musicxml-reference/elements/fingering/)。实际操作结果见[本批记录](ARRANGEMENT_ALTERNATIVE_CHECKS.md)。

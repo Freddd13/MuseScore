@@ -576,3 +576,8 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方
 五指可用匹配	libmscore/pianohands.h	assignFinger / matchingFingers	78	比较同时按键可用的手指，保留新起音后尽量少释放旧音	arrangementFingerMatchingCorpus
 原生指法交集	mscore/plugin/api/pianohandanalysis.cpp	keyFor / pitchFingers	44	同音多声部核对共同指法，局部冲突继续检查其它键	arrangementAlternativePanel
 连续琶音保持	mtest/mscore/pluginhost/arrangement_alternative_fingers_tests.inc	arrangementArpeggioHolds	44	真实MIDI核对普通按键、踏板留声与延长按键	ARRANGEMENT_ALTERNATIVE_CHECKS.md
+同音换指文字	libmscore/pianofingering.h	substitution	7	读取1-3及多次换指，保留指法原文	arrangementSubstitutionTiming
+换指时间比较	libmscore/pianosubstitution.h	choose	28	比较实际松键与踏板释放，优先少松琴键再选时间	arrangementSubstitutionTiming
+持续换指状态	mscore/plugin/api/pianohandanalysis.cpp	fingeringChanges / blockedSubstitutions	39	同音多声部共享换指，按时更新松手与后续手指	arrangementSubstitutionTiming;arrangementSubstitutionPanel
+指法时刻与反复	share/plugins/ArrangementAssistant/Playback.js	fingeringAt / nextChangeSeconds	153	保留指法来源时间，下一次记号变化限定换指范围	test-substitution-context.cjs
+换指顺序与定位	share/plugins/ArrangementAssistant/Rules.js	fingeringChanges / blockedSubstitutions	527	说明相关音、等待松键和换指顺序，使用实际目标手指	arrangementSubstitutionPanel;test-substitution-context.cjs

@@ -118,23 +118,23 @@ function notationAt(s,source,tick) {
     if(!chain || chain.length<2&&!context.length || chain[0].pitch!==source.pitch)return copy(source);
     var cached=s.notationCache[key];
     if(!cached) {
-        cached=[];var fingers=[],anchor={tick:chain[0].tick,track:chain[0].track,index:chain[0].index},position=0;
+        cached=[];var fingers=[],fingeringTick=chain[0].tick,anchor={tick:chain[0].tick,track:chain[0].track,index:chain[0].index},position=0;
         function singleMark(n){var index=s.handIndex[n.track],singles=index?index.singles[n.tick]||[]:[];return singles.some(function(mark){return mark.index===undefined||mark.index<0||mark.index===n.index;});}
         for(var i=0;i<chain.length;++i) {
             var n=chain[i];
             while(position<context.length && context[position].tick<=n.tick) {
-                var action=context[position++];if(action.fingerings&&action.fingerings.length)fingers=action.fingerings;
+                var action=context[position++];if(action.fingerings&&action.fingerings.length){fingers=action.fingerings;fingeringTick=action.tick;}
                 if(action.note&&singleMark(action.note))anchor={tick:action.note.tick,track:action.note.track,index:action.note.index};
             }
             if(singleMark(n))anchor={tick:n.tick,track:n.track,index:n.index};
-            if(n.fingerings && n.fingerings.length)fingers=n.fingerings;
-            cached.push({note:n,fingers:fingers,anchor:anchor});
+            if(n.fingerings && n.fingerings.length){fingers=n.fingerings;fingeringTick=n.tick;}
+            cached.push({note:n,fingers:fingers,fingeringTick:fingeringTick,anchor:anchor});
         }
         s.notationCache[key]=cached;
     }
     var lo=0,hi=cached.length;while(lo<hi){var mid=(lo+hi)>>1;if(cached[mid].note.tick<=tick)lo=mid+1;else hi=mid;}
     var current=cached[Math.max(0,lo-1)],note=copy(current.note);
-    note.fingerings=copy(current.fingers);note.handAnchors=[current.anchor];
+    note.fingerings=copy(current.fingers);note.fingeringTick=current.fingeringTick;note.handAnchors=[current.anchor];
     note.physicalSourceId=source.id;note.physicalSourceTrack=source.track;
     note.assignmentTick=note.tick;note.assignmentIndex=note.index;note.assignmentChordSize=s.chordSizes[note.tick+":"+note.track]||1;
     ["pitch","velocity","occurrence","eventIndex","play","piano"].forEach(function(key){if(source[key]!==undefined)note[key]=source[key];});
@@ -150,6 +150,7 @@ function physicalNotes(windows,tick,s,scoreTick) {
             note.analysisId=source.id+"@"+window.channelKey+":"+window.start;
             note.physicalStart=window.start;note.physicalEnd=window.keyEnd;
             note.physicalOnSeconds=window.startSeconds;note.physicalEndSeconds=window.keyEndSeconds;
+            note.fingeringAt=(note.fingeringTick===undefined?note.tick:note.fingeringTick)+(window.offset||0);
             note.playbackChannel=window.channelKey;note.partId=window.part;
             var logical=source.logicalId||source.id;
             if(s) {
@@ -178,6 +179,7 @@ function physicalNotes(windows,tick,s,scoreTick) {
 }
 function physicalFrame(s,frame) {
     var keys=frame.keys||frame.windows,result={tick:frame.tick,playbackTick:frame.utick,seconds:frame.seconds,notes:physicalNotes(keys,frame.utick,s,frame.utick-frame.range.offset),lookahead:[]};
+    result.nextChangeSeconds=s.index<s.ticks.length?s.times[s.ticks[s.index]]:undefined;result.endSeconds=frame.range.endSeconds;
     var pool=keys.slice(),rangeIndex=s.rangeIndex,last=frame.utick,counts={},pending=0;
     result.notes.forEach(function(note){if(counts[note.partId]===undefined){counts[note.partId]=0;++pending;}});
     for(var i=s.index;i<s.ticks.length && i<s.index+32 && pending>0;++i){

@@ -2,6 +2,8 @@
 
 ## 开发中 — 2026-10-27
 
+- C3-B2-B3：分别检查起音指法与同音换指时机，结合松键、踏板及后续音组安排；同音多声部共享换指，面板说明列出相关音。21项原生／面板、15组JS及共用模块6项通过，尚未安装。见ARRANGEMENT_SUBSTITUTION_CHECKS.md；接着C3-B3具体建议。
+
 C3-B2-B2源码：[ca100cf0a20e](https://github.com/Freddd13/MuseScore/commit/ca100cf0a20ed4d8ef450a21508dec19f9f78c38)；插件：[c3408839da28](https://github.com/Freddd13/Muse3Plugins/commit/c3408839da287939bcdb80d3f3cb5cb8405a367c)。尚未安装。
 
 - C3-B2-B2：备选与括号指法参加五指分配和松手判断，补齐具体音与文字说明。192组枚举、真实面板、连续琶音、撤销与重开及原有MIDI计算已核对。源码尚未安装，见ARRANGEMENT_ALTERNATIVE_CHECKS.md；接着同音换指时机与具体路线。

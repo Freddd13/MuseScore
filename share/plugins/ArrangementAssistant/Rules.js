@@ -480,7 +480,7 @@ function counterpoint(s,frame) {
 function keyStart(n) {return n.physicalStart===undefined?n.attackTick:n.physicalStart;}
 function keyEnd(n) {return n.physicalEnd===undefined?n.logicalEnd:n.physicalEnd;}
 function fingerConflictText(notes) {
-    var groups={};notes.forEach(function(note){(note.fingerings||[]).forEach(function(text){
+    var groups={};notes.forEach(function(note){(note.analysisFinger?[String(note.analysisFinger)]:note.fingerings||[]).forEach(function(text){
         text=String(text).trim();if(!/^[1-5]$/.test(text))return;var names=groups[text]||(groups[text]=[]),name=pitchLabel(note);if(names.indexOf(name)<0)names.push(name);
     });});
     var conflicts=Object.keys(groups).filter(function(finger){return groups[finger].length>1;}).map(function(finger){return finger+"指同时标在 "+groups[finger].join("、")+" 上。";}).join("");
@@ -519,7 +519,25 @@ function physicalPlayability(s,frame) {
         }
         if(attacked)lookahead.push({tick:futureAt,seconds:futureSeconds,notes:futureNotes});
     }
-    var report=PianoHands.analyse(notes,frame.playbackPedals||s.data.pedals||[],{tick:at,seconds:seconds,left:s.config.left,right:s.config.right,minimumHoldMs:s.config.minimumHoldMs===undefined?120:s.config.minimumHoldMs,part:Number(part),lookahead:lookahead});
+    var handOptions={tick:at,seconds:seconds,left:s.config.left,right:s.config.right,minimumHoldMs:s.config.minimumHoldMs===undefined?120:s.config.minimumHoldMs,part:Number(part),lookahead:lookahead};
+    if(typeof frame.nextChangeSeconds==="number")handOptions.nextChangeSeconds=frame.nextChangeSeconds;
+    if(typeof frame.endSeconds==="number")handOptions.endSeconds=frame.endSeconds;
+    var report=PianoHands.analyse(notes,frame.playbackPedals||s.data.pedals||[],handOptions);
+    var effective=report.effectiveFingers||{};for(var index in effective)if(notes[index])notes[index].analysisFinger=effective[index];
+    var substitutions={};(report.fingeringChanges||[]).forEach(function(change){var key=change.note.analysisId||change.note.id;(substitutions[key]||(substitutions[key]=[])).push(change);});
+    for(var substitution in substitutions){var steps=substitutions[substitution],source=steps[0].note,related=[source],explanation="",numbers=[steps[0].from];
+        steps.forEach(function(change){var release=change.released||[],after=change.after||[];numbers.push(change.to);
+            release.concat(after).forEach(function(n){if(!related.some(function(v){return v.id===n.id;}))related.push(n);});
+            explanation+=pitchLabel(source)+" 从"+change.from+"指换为"+change.to+"指，继续保持琴键。";
+            if(release.length)explanation+="可借同一踏板先松开 "+release.map(pitchLabel).filter(function(v,i,a){return a.indexOf(v)===i;}).join("、")+"，再完成这一步换指。";
+            else if(after.length)explanation+="可等 "+after.map(pitchLabel).filter(function(v,i,a){return a.indexOf(v)===i;}).join("、")+" 松键后换指。";
+            if(change.phase==="before")explanation+="换指后再弹当前这组音。";
+        });
+        issue(s,"playability","fingering-change-"+steps[0].hand,tick,related,pitchLabel(source)+"："+numbers.join("→")+"指",explanation,"提示");
+    }
+    (report.blockedSubstitutions||[]).forEach(function(change){var source=change.note;
+        var blockers=change.blockers||[],reason=change.replaced?"下一条指法已经开始，前面的换指还没有可用位置。":blockers.length?change.to+"指还需要按住 "+blockers.map(pitchLabel).join("、")+"，本次按键结束前没有可用的换指间隔。":"在这次按键结束前，尚未找到能腾出目标手指的时机。";
+        issue(s,"playability","fingering-substitution",tick,[source].concat(blockers),pitchLabel(source)+" 的换指需要调整",pitchLabel(source)+" 标有"+change.from+"指换"+change.to+"指。"+reason+"可调整相关指法、分手，或在延音的后一个音头标出换指位置。","注意");});
     if(report.limited || report.uncertain && !Array.isArray(report.uncertainHands)) {
         onsetSpans(s,frame);
         issue(s,"playability","hand-uncertain",tick,notes,"这处按键关系需要确认",report.limited?"同时延续的按键太多，本次不自动安排松手。可先确认分手和踏板范围。":"同一个按键有相互冲突的分手或指法说明，请先确认。","提示");continue;
@@ -533,7 +551,7 @@ function physicalPlayability(s,frame) {
         if(!before.count)continue;
         var involved=side.notes.map(function(index){return notes[index];}),released=side.released.map(function(index){return notes[index];});
         involved.forEach(function(note){note.analysisHand=side.hand;});
-        var basis=(side.partial?"按已明确分手的音检查，":frame.playbackTick===undefined?"按谱面一直保持时：":"按实际按键时长：")+before.count+"个不同按键，跨度"+(before.high-before.low)+"半音。";
+        var basis=(side.partial?"按已明确分手的音检查，":report.usesPlannedRelease||report.usesPlannedFingering?"按前面的松手和换指安排继续检查：":frame.playbackTick===undefined?"按谱面一直保持时：":"按实际按键时长：")+before.count+"个不同按键，跨度"+(before.high-before.low)+"半音。";
         basis+=report.inferred?"其中部分分手来自自动建议，可校正。":"分手由用户或符号指定。";
         var releaseIssue=null;
         if(released.length) {
@@ -547,16 +565,17 @@ function physicalPlayability(s,frame) {
             var title;
             if(after.count>5){title=label+"需要同时保持"+after.count+"个按键";basis+="这一时刻需保持"+after.count+"个不同按键。";}
             else if(distance>after.maximum)title=label+"需同时保持 "+keyName(after.low)+"–"+keyName(after.high)+"（"+distance+"半音）";
-            else title=label+"的同一手指需要同时按不同音";
+            else title=report.substitutionUncertain?label+"的换指需要核对分手":report.usesPlannedFingering?label+"的换指时机需要调整":label+"的同一手指需要同时按不同音";
             if(distance>after.maximum)basis+=keyName(after.low)+"–"+keyName(after.high)+" 相距"+distance+"半音，个人上限为"+after.maximum+"半音。"+(remaining.some(function(n){return keyStart(n)<at;})?"可调整分手、排列或旧音的松手时机。":"这些新音同时按下，可调整分手、排列或琶音写法。");
             if(after.fingerConflicts)basis+=(fingerConflictText(remaining)||"现有指法要求同一个手指同时保持不同按键。")+"可核对指法或松手时机。";
+            if(after.fingerConflicts&&report.substitutionUncertain)basis+="这组保持音标有换指；请先核对未确定的分手，再安排换指时机。";
             remaining.filter(function(note){return note.requiredUntil!==undefined&&note.requiredUntil>=at;}).forEach(function(note){
                 var point=note.requiredNote||{},where=point.measure?"第"+point.measure+"小节第"+point.beat+"拍":"后面的指定位置",fingers=(note.requiredFingerings||[]).join("／");
                 var mark=(fingers?fingers+"指":"")+(fingers&&(note.requiredKind||"").indexOf("分手")>=0?"及":"")+((note.requiredKind||"").indexOf("分手")>=0?"分手记号":"");
                 basis+=pitchLabel(note)+" 在"+where+"标有"+(mark||"演奏说明")+"，需要按到这个位置。";
             });
             if(side.rolled)basis+="已标记琶音，需要另外核查展开顺序。";
-            issue(s,"playability",(after.count>5?"keys-":"span-")+side.hand,tick,involved,title,basis,report.inferred || side.rolled?"注意":"需核查");
+            issue(s,"playability",(after.count>5?"keys-":"span-")+side.hand,tick,involved,title,basis,report.inferred || side.rolled || (report.usesPlannedFingering||report.substitutionUncertain)&&after.fingerConflicts?"注意":"需核查");
         } else if(after.high-after.low>s.config[side.hand].comfort) {
             issue(s,"playability","comfort-"+side.hand,tick,involved,label+"超出舒适跨度",basis+"当前跨度超过个人舒适值；两端白键才采用白键十度上限。","提示");
         }
