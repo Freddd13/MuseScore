@@ -2,6 +2,8 @@
 
 ## 开发中 — 2026-10-27
 
+C3-B2-B3源码：[16b2d4978e6d](https://github.com/Freddd13/MuseScore/commit/16b2d4978e6d03d13bb51e17cdec7b231f5b4666)；插件：[5f8a5e4d023e](https://github.com/Freddd13/Muse3Plugins/commit/5f8a5e4d023eac68589ab5e919e5a563d7628007)。尚未安装。
+
 - C3-B2-B3：分别检查起音指法与同音换指时机，结合松键、踏板及后续音组安排；同音多声部共享换指，面板说明列出相关音。21项原生／面板、15组JS及共用模块6项通过，尚未安装。见ARRANGEMENT_SUBSTITUTION_CHECKS.md；接着C3-B3具体建议。
 
 C3-B2-B2源码：[ca100cf0a20e](https://github.com/Freddd13/MuseScore/commit/ca100cf0a20ed4d8ef450a21508dec19f9f78c38)；插件：[c3408839da28](https://github.com/Freddd13/Muse3Plugins/commit/c3408839da287939bcdb80d3f3cb5cb8405a367c)。尚未安装。

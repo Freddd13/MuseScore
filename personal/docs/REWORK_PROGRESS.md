@@ -16,6 +16,8 @@ R1-C2已查到原曲声音设备打开阻塞界面，以及反复和弦显示遗
 
 ### C3-B2-B3源码已检查：同音换指的时机
 
+C3-B2-B3源码：[16b2d4978e6d](https://github.com/Freddd13/MuseScore/commit/16b2d4978e6d03d13bb51e17cdec7b231f5b4666)；插件：[5f8a5e4d023e](https://github.com/Freddd13/Muse3Plugins/commit/5f8a5e4d023eac68589ab5e919e5a563d7628007)。尚未安装。
+
 起音手指与后续换指分别核对，等其它音松键、借踏板松手和下一组音使用同一份时间。说明指出相关音和先后顺序；同音多声部共享换指，自动分手保留可行的原手安排。面板定位、修改、撤销、反复和保存重开已经核对。
 
 最后21项原生／面板、全部15组JS及共用模块6项通过。真实谱读取719毫秒、后台计算6883毫秒，界面最长间隔82.7毫秒。源码尚未安装，程序仍为0.128.0；操作见[同音换指](ARRANGEMENT_SUBSTITUTION_GUIDE.md)，结果见[本批记录](ARRANGEMENT_SUBSTITUTION_CHECKS.md)。接着C3-B3具体指法、换手和配音建议，之后C4、D、E、F。
