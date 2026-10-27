@@ -34,6 +34,7 @@ struct MidiGateNote {
       int port = 0, channel = 0, pitch = 60, on = 0, off = 0, newOff = 0;
       int sourceTick=-1,sourceMeasure=-1,sourceUtick=-1;
       int partId=-1,hand=-1,handHint=-1,finger=0;
+      int fingerMask=0;
       bool melody=false,handInferred=false;
       bool piano = false, known = false, manual = false, ambiguous = false;
       QString reason,handWarning;
@@ -159,7 +160,8 @@ class MidiGateProcessor {
                               const int candidate=tickAt(now-qBound(0.,option.releaseLeadMs,500.)/1000.);
                               const double minimum=qBound(1.,option.minimumMs,5000.)/1000.;
                               const bool legal=!attack && preserved(n,option).isEmpty() && candidate>n.on && seconds(candidate)-seconds(n.on)>=minimum && releaseWindow(n,candidate);
-                              keys.append({i,n.pitch,n.hand,n.handHint,attack,legal,n.finger});releaseAt.append(candidate);
+                              keys.append({i,n.pitch,n.hand,n.handHint,attack,legal,qMax(0,n.finger)});releaseAt.append(candidate);
+                              keys.last().fingerMask=n.finger<0?0:n.fingerMask;
                               keys.last().endSeconds=seconds(n.newOff);
                               if(legal)keys.last().releaseSeconds=seconds(candidate);
                               }
@@ -174,7 +176,8 @@ class MidiGateProcessor {
                                     const auto& n=result[i];if(n.newOff<=nextTick)continue;
                                     const bool attack=n.on==nextTick;const int at=tickAt(nextTime-qBound(0.,option.releaseLeadMs,500.)/1000.);
                                     const bool legal=!attack && preserved(n,option).isEmpty() && at>n.on && durationMs(n.on,at)>=qBound(1.,option.minimumMs,5000.) && releaseWindow(n,at);
-                                    next.keys.append({i,n.pitch,n.hand,n.handHint,attack,legal,n.finger});
+                                    next.keys.append({i,n.pitch,n.hand,n.handHint,attack,legal,qMax(0,n.finger)});
+                                    next.keys.last().fingerMask=n.finger<0?0:n.fingerMask;
                                     next.keys.last().endSeconds=seconds(n.newOff);
                                     if(legal)next.keys.last().releaseSeconds=seconds(at);
                                     }
@@ -191,6 +194,7 @@ class MidiGateProcessor {
                                     }
                               if(plan.after[side].fits && plan.released.contains(k)) {
                                     n.newOff=releaseAt[k];n.reason="hand-release";n.releaseFor=tick;
+                                    if(plan.before[side].fingerConflicts>plan.after[side].fingerConflicts)n.handWarning=QString::fromUtf8("这组音标注的指法有重叠，松手后可分别使用手指");
                                     for(int j=0;j<keys.size();++j)if(keys[j].attack && plan.hands[j]==side && !n.nextPitches.contains(keys[j].pitch))n.nextPitches.append(keys[j].pitch);
                                     std::sort(n.nextPitches.begin(),n.nextPitches.end());n.beforeKeys=plan.before[side].count;n.afterKeys=plan.after[side].count;n.beforeSpan=plan.before[side].high-plan.before[side].low;n.afterSpan=plan.after[side].high-plan.after[side].low;
                                     }

@@ -40,7 +40,7 @@ QString reasonText(const QString& code) {
             {"pedal-release",MidiCropPanel::tr("同组音自然松手，踏板继续保持声音")},
             {"hand-release",MidiCropPanel::tr("为弹下一组音提前松手")},
             {"hand-conflict",MidiCropPanel::tr("分手说明有冲突或未确认，保留原长度")},
-            {"fingering-uncertain",MidiCropPanel::tr("指法有多个解释，保留原长度")},
+            {"fingering-uncertain",MidiCropPanel::tr("这个音的指法互相冲突，保留原长度")},
             {"unselected",MidiCropPanel::tr("未选择这个乐器")},
             {"outside-range",MidiCropPanel::tr("不在选定小节内，或无法对应原音")},
             {"unselected-voice",MidiCropPanel::tr("未选择这个声部")},

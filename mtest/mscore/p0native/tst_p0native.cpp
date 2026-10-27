@@ -33,6 +33,7 @@
 #include "libmscore/pianohands.h"
 #include "libmscore/handbracket.h"
 #include "libmscore/symbol.h"
+#include "libmscore/fingering.h"
 #include <QJSEngine>
 #include <QRegularExpression>
 #include "libmscore/chord.h"
@@ -168,6 +169,41 @@ class TestP0Native : public QObject {
             timer.start();QTest::mouseClick(compare,Qt::LeftButton);timer.stop();QVERIFY(clicked);
 
             }
+      void nativeNestedHandsForMidi() {
+            QFile source(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx");QVERIFY(source.open(QIODevice::ReadOnly));auto xml=source.readAll();
+            xml.replace("<Symbol><name>keyboardPlayWithLH</name></Symbol>","<Symbol><name>coda</name><Symbol><name>keyboardPlayWithLH</name></Symbol></Symbol>");
+            const auto path=settings.filePath("gate-nested-hands.mscx");QFile file(path);QVERIFY(file.open(QIODevice::WriteOnly));file.write(xml);file.close();std::unique_ptr<MasterScore> score(mscore->readScore(path));QVERIFY(score);
+            auto old=toChord(score->firstSegment(SegmentType::ChordRest)->element(4))->downNote();QCOMPARE(HandBracket::assignments(score.get()).value(old,-1),0);
+            ExportMidi exporter(score.get());exporter.collectGateData=true;QBuffer output;output.open(QIODevice::WriteOnly);QVERIFY(exporter.write(&output,true,true,mscore->synthesizerState()));
+            bool found=false;for(const auto& n:exporter.gateData.notes)if(n.pitch==36){found=true;QCOMPARE(n.hand,0);}QVERIFY(found);
+            }
+      void nativeAlternativeFingerExport_data() {
+            QTest::addColumn<QString>("text");QTest::addColumn<QString>("third");QTest::addColumn<int>("mask");QTest::addColumn<bool>("release");
+            QTest::newRow("alternative-both-in-use")<<QString("2(3)")<<QString("3")<<6<<true;
+            QTest::newRow("alternative-one-free")<<QString("2(3)")<<QString()<<6<<false;
+            QTest::newRow("editorial")<<QString("[2]")<<QString()<<2<<true;
+            QTest::newRow("ordinary")<<QString("2")<<QString()<<2<<true;
+            QTest::newRow("conflicting-annotations")<<QString("2")<<QString()<<0<<false;
+            }
+      void nativeAlternativeFingerExport() {
+            QFETCH(QString,text);QFETCH(QString,third);QFETCH(int,mask);QFETCH(bool,release);
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx"));QVERIFY(score);auto old=toChord(score->firstSegment(SegmentType::ChordRest)->element(4))->downNote();old->setPitch(59,19,19);
+            auto next=toChord(score->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest)->element(5));QVERIFY(next);
+            auto add=[&](Note* note,const QString& value){if(value.isEmpty())return;auto f=new Fingering(score.get());f->setParent(note);f->setTrack(note->track());f->setPlainText(value);score->addElement(f);};add(old,text);add(next->notes()[0],"2");add(next->notes()[1],third);
+            if(mask==0)add(old,"3");
+            auto pedal=new Pedal(score.get());pedal->setTick(Fraction::fromTicks(0));pedal->setTicks(Fraction::fromTicks(1920));pedal->setTrack(4);pedal->setTrack2(4);score->addSpanner(pedal);score->doLayout();
+            const auto state=score->state();const bool dirty=score->dirty();const auto undo=score->undoStack()->getCurIdx();
+            ExportMidi exporter(score.get());QBuffer output;output.open(QIODevice::WriteOnly);MidiExportOptions options;options.crop=true;options.gate.jitter=0;QVERIFY(exporter.write(&output,true,true,mscore->synthesizerState(),options));
+            bool found=false;for(const auto& n:exporter.gateReport)if(n.pitch==59){found=true;QCOMPARE(n.fingerMask,mask);QCOMPARE(n.reason=="hand-release",release);if(release){QVERIFY(n.newOff<480);QVERIFY(n.handWarning.contains(QString::fromUtf8("指法")));}if(mask==0){QCOMPARE(n.reason,QString("fingering-uncertain"));QCOMPARE(n.newOff,n.off);}}QVERIFY(found);
+            QVERIFY(score->state()==state);QCOMPARE(score->dirty(),dirty);QCOMPARE(score->undoStack()->getCurIdx(),undo);
+            if(QString::fromLatin1(QTest::currentDataTag())=="alternative-both-in-use") {
+                  MidiCropPanel panel(nullptr,[&]{return QList<Score*>{score.get()};});panel.show();QTimer timer;timer.setInterval(40);bool shown=false;int tries=0;
+                  connect(&timer,&QTimer::timeout,&panel,[&]{auto dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());if(!dialog)return;if(++tries>100){dialog->reject();return;}auto table=dialog->findChild<QTableView*>();if(!table||table->model()->rowCount()==0)return;
+                        for(int i=0;i<table->model()->rowCount();++i)if(table->model()->index(i,0).data().toString()=="B3"){QVERIFY(table->model()->index(i,5).data().toString().contains(QString::fromUtf8("为弹下一组音提前松手")));QVERIFY(table->model()->index(i,5).data().toString().contains(QString::fromUtf8("指法")));table->selectRow(i);const auto out=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");QVERIFY(!out.isEmpty());QVERIFY(dialog->grab().save(out+"/midi-finger-alternatives.png"));shown=true;timer.stop();dialog->accept();return;}});
+                  timer.start();QTest::mouseClick(panel.findChild<QPushButton*>("midiCropCompare"),Qt::LeftButton);timer.stop();QVERIFY(shown);
+                  }
+            const auto saved=settings.filePath("gate-finger-"+QString::fromLatin1(QTest::currentDataTag())+".mscz");QFileInfo info(saved);QVERIFY(score->saveCompressedFile(info,false,false));std::unique_ptr<MasterScore> reopened(mscore->readScore(saved));QVERIFY(reopened);auto savedNote=toChord(reopened->firstSegment(SegmentType::ChordRest)->element(4))->downNote();QStringList fingers;for(auto e:savedNote->el())if(e->isFingering())fingers<<toFingering(e)->plainText();QVERIFY(fingers.contains(text));
+            }
       void midiHandSettingsAndPersistence() {
             std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx"));QVERIFY(score);
             MidiCropPanel panel(nullptr,[&]{return QList<Score*>{score.get()};});auto settings=panel.findChild<QPushButton*>("midiCropSettingsButton");QVERIFY(settings);bool edited=false;
@@ -233,6 +269,11 @@ class TestP0Native : public QObject {
             data.notes[0].off=24;data.notes[1].off=470;rows=processor.process(data,options);QCOMPARE(rows[2].hand,0);
             data.notes[0].off=470;data.notes[1].off=24;data.notes[2].hand=0;rows=processor.process(data,options);QCOMPARE(rows[2].hand,0);
             data.notes[2].hand=-1;data.tempos={{0,1000000.},{240,250000.}};rows=processor.process(data,options);QCOMPARE(rows[2].hand,1);
+            }
+      void midiUncertainFingerKeepsOtherHand() {
+            auto note=[](QString id,int pitch,int on,int off,int hand){MidiGateNote n;n.id=id;n.pitch=pitch;n.on=on;n.off=off;n.hand=n.handHint=hand;n.partId=0;n.staff=hand==0?1:0;n.voice=hand==0?4:0;n.known=n.piano=true;n.offOrdinal=pitch;n.sourceTick=on;return n;};
+            MidiGateData data;data.pedals={{0,0,0,1900,true}};data.notes={note("root",36,0,1800,0),note("uncertain-right",100,0,1800,1),note("c",60,480,960,0),note("e",64,480,960,0),note("g",67,480,960,0)};data.notes[1].finger=-1;
+            MidiGateProcessor processor;MidiGateOptions options;options.jitter=0;const auto rows=processor.process(data,options);QCOMPARE(rows[0].reason,QString("hand-release"));QCOMPARE(rows[1].reason,QString("fingering-uncertain"));QCOMPARE(rows[1].newOff,1800);
             }
       void pianoHandsWorkerAndRules() {
             PluginAPI::ReadOnlyAnalysisJob job;QSignalSpy done(&job,&PluginAPI::ReadOnlyAnalysisJob::finished);

@@ -15,8 +15,10 @@ struct Mark {int tick=0,index=-1,side=0;bool end=false;};
 struct Range {Mark start,end;};
 struct Track {QVector<Mark> marks;QVector<const Note*> notes;QVector<Range> ranges[2];QMap<int,QVector<Mark>> singles;};
 void addMarks(Track& track,const ElementList& elements,int tick,int index) {
-      for(auto element:elements)if(element->isSymbol() && toSymbol(element)->handEligible()) {
-            auto symbol=toSymbol(element);track.marks.append({tick,index,symbol->handLeft()?0:1,symbol->handEnd()});
+      QList<const Symbol*> symbols;for(auto element:elements)if(element->isSymbol())symbols.append(toSymbol(element));
+      for(int i=0;i<symbols.size();++i) {
+            auto symbol=symbols[i];for(auto child:symbol->leafs())if(child->isSymbol())symbols.append(toSymbol(child));
+            if(symbol->handEligible())track.marks.append({tick,index,symbol->handLeft()?0:1,symbol->handEnd()});
             }
       }
 void build(Track& track) {

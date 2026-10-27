@@ -594,3 +594,6 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方
 建议设置变化	mscore/workflow/suggestionpanel.cpp	matchesInputs / inputsChanged	77	设置变化同步更新当前候选，首次完成立即显示差异	traditionalVoicingCandidateFlow
 低音音对身份	share/plugins/ArrangementAssistant/Rules.js	lowNoteGroups / playedLowVoicing	31	保留每个相关音及音程参考，比较真实共同持续	test-suggestions-playback.cjs
 导出实际松键	audio/exports/midigate.h	process	160	当前与后续音组携带实际松键，保存每个键的保持信息	midiHandChoiceUsesPhysicalRelease
+导出备选指法	audio/exports/exportmidi.cpp	PianoFingering::choices	393	保留数字与允许手指，来源传入实际导出结果	nativeAlternativeFingerExport
+嵌套分手分配	libmscore/handbracketanalysis.cpp	addMarks	17	读取符号内的分手，沿用音头与和弦范围	nativeNestedHandsForMidi
+局部指法疑问	audio/exports/midigate.h	process	161	保持有疑问的按键，其余明确音继续处理	midiUncertainFingerKeepsOtherHand
