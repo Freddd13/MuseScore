@@ -1,4 +1,6 @@
 #include <QJsonDocument>
+#include <QRegularExpression>
+#include "libmscore/textbase.h"
 #include "libmscore/playbacktiming.h"
 //=============================================================================
 //  MuseScore
@@ -42,6 +44,14 @@
 #include "mscore/preferences.h"
 
 namespace Ms {
+#include "midihandannotations.inc"
+QVector<MidiGateNote> prepareMidiPostprocess(const MidiGateData& input,const MidiExportOptions& options,const std::function<bool()>& canceled) {
+      auto data=input;for(auto& n:data.notes)if(options.handOverrides.contains(n.id))n.hand=options.handOverrides[n.id];
+      MidiGateProcessor processor;QVector<MidiGateNote> rows;
+      if(options.crop)rows=processor.process(data,options.gate,canceled);else rows=data.notes;
+      if(options.splitHands)return assignMidiHands(data,rows,options,canceled);
+      return rows;
+      }
 
 //---------------------------------------------------------
 //   writeHeader
@@ -250,13 +260,17 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
 bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPNs, const SynthesizerState& synthState, const MidiExportOptions& options)
       {
       QVector<MidiGateSource> sources;
-      const auto handAssignments=(collectGateData || options.crop)?HandBracket::assignments(cs,false):QHash<const Note*,int>{};
+      QHash<const Note*,QString> handSources;
+      const auto handAssignments=(collectGateData || options.crop || options.splitHands)?exportWrittenHands(cs,handSources):QHash<const Note*,int>{};
       QHash<const Note*,QVector<MidiGateInstruction>> tiedInstructions;
       auto readFingers=[](const Note* note,MidiGateInstruction& point) {
+            QVector<int> sequence;
             for(auto e:note->el())if(e->isFingering()) {
                   const auto text=toFingering(e)->plainText();point.fingerings.append(text);
-                  const int mask=PianoFingering::choices(text);if(!mask)continue;
                   point.fingeringSet=true;
+                  const auto steps=PianoFingering::substitution(text);
+                  if(!steps.isEmpty()){if(!sequence.isEmpty()&&sequence!=steps){point.finger=-1;point.fingerMask=0;}sequence=steps;}
+                  const int mask=steps.isEmpty()?PianoFingering::choices(text):1<<(steps.first()-1);if(!mask)continue;
                   if(point.finger<0)continue;
                   if(point.fingerMask && !(point.fingerMask&mask)){point.finger=-1;point.fingerMask=0;}
                   else point.fingerMask=point.fingerMask?point.fingerMask&mask:mask;
@@ -316,7 +330,7 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
       pauseMap.calculate(cs);
       writeHeader(tempoTrack);
       struct GatePass {int start,end,writtenEnd;};QVector<GatePass> gatePasses;
-      if(collectGateData || options.crop)for(auto pass:cs->repeatList())
+      if(collectGateData || options.crop || options.splitHands)for(auto pass:cs->repeatList())
             gatePasses.append({pass->utick,pass->utick+pass->len(),pass->tick+pass->len()});
 
       int staffIdx = 0;
@@ -416,7 +430,7 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                     continue;
 
                               if (event.type() == ME_NOTEON) {
-                                    if ((collectGateData || options.crop) && event.velo() > 0) {
+                                    if ((collectGateData || options.crop || options.splitHands) && event.velo() > 0) {
                                           const Note* note = event.noteEventOwner() ? event.noteEventOwner() : event.note();
                                           if (note) {
                                                 MidiGateSource tag;
@@ -434,8 +448,9 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                                       for(auto candidate:toChord(element)->notes())if(!candidate->tieBack())highest=qMax(highest,candidate->ppitch());
                                                       }
                                                 tag.partId=part->startTrack();tag.handHint=staffIdx==part->startTrack()/VOICES?1:0;
-                                                tag.hand=handAssignments.value(note,-1);
-                                                MidiGateInstruction initial;readFingers(note,initial);tag.finger=initial.finger;tag.fingerMask=initial.fingerMask;
+                                                tag.hand=handAssignments.value(note,-1);tag.handSource=handSources.value(note);tag.displayStaff=note->chord()->vStaffIdx();
+                                                tag.handHint=tag.displayStaff==part->startTrack()/VOICES?1:0;
+                                                MidiGateInstruction initial;readFingers(note,initial);tag.finger=initial.finger;tag.fingerMask=initial.fingerMask;tag.fingerings=initial.fingerings;
                                                 const int offset=event.nominalTick()-tag.sourceTick;
                                                 // A repeat jump ends this written continuation. Later passes
                                                 // receive their own mapping and pause compensation.
@@ -553,15 +568,13 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
             tracks.front().insert(preRoll, marker);
             fprintf(stderr, "Kumo MIDI: score first beat offset %d ticks\n", preRoll);
             }
-      if (collectGateData || options.crop) {
+      if (collectGateData || options.crop || options.splitHands) {
             for (auto& source : sources) source.on += preRoll;
             gateData = midiGateSnapshot(mf, sources);
             gateData.writtenPedal = options.writtenPedal;
-            if (options.crop) {
-                  gateBaseline = mf;
-                  MidiGateProcessor processor;
-                  gateReport = processor.process(gateData, options.gate);
-                  applyMidiGate(mf, gateReport);
+            if (options.crop || options.splitHands) {
+                  gateBaseline = mf;gateReport=prepareMidiPostprocess(gateData,options);
+                  if(options.splitHands)applyMidiHands(mf,gateReport);else applyMidiGate(mf,gateReport);
                   }
             }
       return !mf.write(device);

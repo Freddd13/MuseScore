@@ -34,6 +34,7 @@
 #include "libmscore/handbracket.h"
 #include "libmscore/symbol.h"
 #include "libmscore/fingering.h"
+#include "libmscore/stafftext.h"
 #include <QJSEngine>
 #include <QRegularExpression>
 #include "libmscore/chord.h"
@@ -205,6 +206,129 @@ class TestP0Native : public QObject {
                   timer.start();QTest::mouseClick(panel.findChild<QPushButton*>("midiCropCompare"),Qt::LeftButton);timer.stop();QVERIFY(shown);
                   }
             const auto saved=settings.filePath("gate-finger-"+QString::fromLatin1(QTest::currentDataTag())+".mscz");QFileInfo info(saved);QVERIFY(score->saveCompressedFile(info,false,false));std::unique_ptr<MasterScore> reopened(mscore->readScore(saved));QVERIFY(reopened);auto savedNote=toChord(reopened->firstSegment(SegmentType::ChordRest)->element(4))->downNote();QStringList fingers;for(auto e:savedNote->el())if(e->isFingering())fingers<<toFingering(e)->plainText();QVERIFY(fingers.contains(text));
+            }
+      void midiSubstitutionTiming() {
+            MidiGateData data;data.tempos={{0,500000.}};
+            MidiGateNote old;old.id="held";old.known=old.piano=true;old.pitch=60;old.hand=0;old.partId=0;old.offOrdinal=0;old.off=old.newOff=1920;old.fingerings=QStringList{"1-3"};old.finger=1;old.fingerMask=1;
+            auto blocker=old;blocker.id="blocker";blocker.pitch=64;blocker.off=blocker.newOff=720;blocker.fingerings=QStringList{"3"};blocker.finger=3;blocker.fingerMask=4;blocker.offOrdinal=1;
+            auto next=old;next.id="next";next.pitch=62;next.on=960;next.off=next.newOff=1440;next.fingerings=QStringList{"1"};next.finger=1;next.fingerMask=1;next.offOrdinal=2;
+            data.notes={old,blocker,next};MidiGateOptions options;options.jitter=0;options.lengthRatio=options.nextAttackRatio=1.;MidiGateProcessor processor;
+            const auto result=processor.process(data,options);QCOMPARE(result[0].fingerChanges.size(),1);const auto change=result[0].fingerChanges[0];QCOMPARE(change.from,1);QCOMPARE(change.to,3);QVERIFY(change.tick>720&&change.tick<960);QVERIFY(change.afterPitches.contains(64));QVERIFY(!result[0].fingeringUnresolved);QVERIFY(result[0].requiredUntil>=change.tick);
+            }
+      void midiSubstitutionReleasesAndManualRestore() {
+            MidiGateData data;data.tempos={{0,500000.}};data.pedals={{0,0,-1,2400,true}};
+            MidiGateNote old;old.id="held";old.known=old.piano=true;old.pitch=60;old.hand=0;old.partId=0;old.offOrdinal=0;old.off=old.newOff=1920;old.fingerings=QStringList{"1-3"};old.finger=1;old.fingerMask=1;
+            auto blocker=old;blocker.id="blocker";blocker.voice=1;blocker.pitch=64;blocker.finger=3;blocker.fingerMask=4;blocker.fingerings=QStringList{"3"};blocker.offOrdinal=1;
+            auto next=old;next.id="next";next.pitch=62;next.on=960;next.off=next.newOff=1440;next.fingerings=QStringList{"1"};next.finger=1;next.fingerMask=1;next.offOrdinal=2;
+            data.notes={old,blocker,next};MidiGateOptions options;options.jitter=0;options.lengthRatio=options.nextAttackRatio=1.;MidiGateProcessor processor;
+            const auto result=processor.process(data,options);QCOMPARE(result[0].fingerChanges.size(),1);QCOMPARE(result[1].reason,QString("finger-release"));QVERIFY(result[1].newOff<=result[0].fingerChanges[0].tick);QVERIFY(result[0].fingerChanges[0].releasedPitches.contains(64));
+            options.releaseOverrides["blocker"]=1920;const auto restored=processor.process(data,options);QCOMPARE(restored[1].newOff,1920);QVERIFY(restored[0].fingerChanges.isEmpty());QVERIFY(restored[0].fingeringUnresolved);QCOMPARE(restored[0].newOff,1920);
+            options.releaseOverrides["blocker"]=480;const auto earlier=processor.process(data,options);QCOMPARE(earlier[1].newOff,480);QCOMPARE(earlier[0].fingerChanges.size(),1);QVERIFY(earlier[0].fingerChanges[0].tick>480&&earlier[0].fingerChanges[0].tick<960);
+            }
+      void nativeSubstitutionExportReading() {
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx"));QVERIFY(score);
+            auto old=toChord(score->firstSegment(SegmentType::ChordRest)->element(4))->downNote();old->setPitch(60,14,14);
+            auto finger=new Fingering(score.get());finger->setParent(old);finger->setTrack(old->track());finger->setPlainText("1-3");score->addElement(finger);score->doLayout();
+            ExportMidi exporter(score.get());exporter.collectGateData=true;QBuffer output;output.open(QIODevice::WriteOnly);QVERIFY(exporter.write(&output,true,true,mscore->synthesizerState()));
+            bool found=false;for(const auto& n:exporter.gateData.notes)if(n.voice==4){found=true;QCOMPARE(n.fingerings,QStringList{"1-3"});QCOMPARE(n.fingerMask,1);QCOMPARE(n.finger,1);}QVERIFY(found);
+            }
+      void midiSubstitutionMissedAttackAndPartialRoute() {
+            MidiGateData data;data.tempos={{0,500000.}};
+            MidiGateNote old;old.id="held";old.known=old.piano=true;old.pitch=60;old.hand=0;old.partId=0;old.offOrdinal=0;old.off=old.newOff=1920;old.fingerings=QStringList{"1-3"};old.finger=1;old.fingerMask=1;
+            auto blocker=old;blocker.id="blocker";blocker.pitch=64;blocker.off=blocker.newOff=720;blocker.fingerings=QStringList{"3"};blocker.finger=3;blocker.fingerMask=4;blocker.offOrdinal=1;
+            auto next=old;next.id="next";next.pitch=62;next.on=480;next.off=next.newOff=959;next.fingerings=QStringList{"1"};next.finger=1;next.fingerMask=1;next.offOrdinal=2;
+            data.notes={old,blocker,next};MidiGateOptions options;options.jitter=0;options.lengthRatio=options.nextAttackRatio=1.;MidiGateProcessor processor;
+            const auto missed=processor.process(data,options);QVERIFY(missed[0].fingeringUnresolved);QVERIFY(missed[0].fingerChanges.isEmpty());QCOMPARE(missed[0].newOff,1920);
+            data.pedals={{0,0,-1,2400,true}};old.fingerings=QStringList{"1-3-5"};blocker.off=blocker.newOff=1920;
+            auto protectedKey=blocker;protectedKey.id="protected";protectedKey.pitch=67;protectedKey.voice=2;protectedKey.fingerings=QStringList{"5"};protectedKey.finger=5;protectedKey.fingerMask=16;protectedKey.offOrdinal=3;
+            data.notes={old,blocker,next,protectedKey};options.protectedTracks.insert(2);const auto partial=processor.process(data,options);
+            QVERIFY(partial[0].fingeringUnresolved);QVERIFY(partial[0].fingerChanges.isEmpty());QCOMPARE(partial[0].newOff,1920);QVERIFY(partial[1].reason!="finger-release");QCOMPARE(partial[3].newOff,1920);
+            }
+      void nativeSubstitutionFlowAndSave() {
+            QFile source(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx");QVERIFY(source.open(QIODevice::ReadOnly));auto xml=source.readAll();
+            const QByteArray ending="</voice>\n    </Measure></Staff>";QVERIFY(xml.contains(ending));
+            xml.replace(ending,"</voice><voice><Chord><dots>1</dots><durationType>quarter</durationType><Note><pitch>64</pitch><tpc>18</tpc><Fingering><text>3</text></Fingering><Symbol><name>keyboardPlayWithLH</name></Symbol></Note></Chord><Rest><durationType>half</durationType></Rest><Rest><durationType>eighth</durationType></Rest></voice>\n    </Measure></Staff>");
+            const auto path=settings.filePath("gate-substitution-flow.mscx");QFile fixture(path);QVERIFY(fixture.open(QIODevice::WriteOnly));fixture.write(xml);fixture.close();std::unique_ptr<MasterScore> score(mscore->readScore(path));QVERIFY(score);
+            auto old=toChord(score->firstSegment(SegmentType::ChordRest)->element(4))->downNote();old->setPitch(60,14,14);auto f=new Fingering(score.get());f->setParent(old);f->setTrack(4);f->setPlainText("1-3");score->addElement(f);
+            auto next=toChord(score->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest)->element(5));const int pitches[]={62,65,69},tpcs[]={16,13,17};for(int i=0;i<3;++i)next->notes()[i]->setPitch(pitches[i],tpcs[i],tpcs[i]);
+            f=new Fingering(score.get());f->setParent(next->downNote());f->setTrack(5);f->setPlainText("1");score->addElement(f);
+            auto pedal=new Pedal(score.get());pedal->setTick(Fraction());pedal->setTicks(Fraction::fromTicks(1920));pedal->setTrack(4);pedal->setTrack2(4);score->addSpanner(pedal);score->doLayout();
+            const auto state=score->state();const auto undo=score->undoStack()->getCurIdx();const bool dirty=score->dirty();
+            auto verify=[&](MasterScore* target) {ExportMidi exporter(target);QBuffer bytes;bytes.open(QIODevice::WriteOnly);MidiExportOptions options;options.crop=true;options.gate.jitter=0;if(!exporter.write(&bytes,true,true,mscore->synthesizerState(),options))return false;
+                  bool held=false,released=false;for(const auto& n:exporter.gateReport){qInfo()<<"Native substitution"<<n.voice<<n.pitch<<n.on<<n.off<<n.hand<<n.fingerings<<n.manual<<n.ambiguous<<n.reason<<n.fingerChanges.size()<<n.handWarning;if(n.voice==4){held=n.fingerChanges.size()==1&&!n.fingeringUnresolved&&n.fingerChanges[0].releasedPitches.contains(64)&&n.newOff>n.fingerChanges[0].tick;}if(n.voice==6)released=n.reason=="finger-release"&&n.newOff<n.off;}
+                  return held&&released;};QVERIFY(verify(score.get()));
+            MidiCropPanel panel(nullptr,[&]{return QList<Score*>{score.get()};});panel.show();QTimer timer;timer.setInterval(40);bool shown=false;int tries=0;
+            connect(&timer,&QTimer::timeout,&panel,[&]{auto dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());if(!dialog)return;if(++tries>100){dialog->reject();return;}auto table=dialog->findChild<QTableView*>();if(!table||table->model()->rowCount()==0)return;
+                  bool release=false;int held=-1;for(int row=0;row<table->model()->rowCount();++row){const auto pitch=table->model()->index(row,0).data().toString();if(pitch=="E4")release=table->model()->index(row,5).data().toString().contains(QString::fromUtf8("为按谱换指提前松手"));if(pitch=="C4")held=row;}
+                  if(!release||held<0)return;timer.stop();table->selectRow(held);QTest::qWait(30);QVERIFY(table->model()->index(held,5).data().toString().contains(QString::fromUtf8("1→3")));const auto out=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");QVERIFY(!out.isEmpty());QVERIFY(dialog->grab().save(out+"/midi-substitution-release.png"));shown=true;dialog->accept();});
+            timer.start();QTest::mouseClick(panel.findChild<QPushButton*>("midiCropCompare"),Qt::LeftButton);timer.stop();QVERIFY(shown);QVERIFY(score->state()==state);QCOMPARE(score->dirty(),dirty);QCOMPARE(score->undoStack()->getCurIdx(),undo);
+            const auto saved=settings.filePath("gate-substitution-flow.mscz");QFileInfo info(saved);QVERIFY(score->saveCompressedFile(info,false,false));std::unique_ptr<MasterScore> reopened(mscore->readScore(saved));QVERIFY(reopened);QVERIFY(verify(reopened.get()));
+            }
+
+
+
+      void nativeStaffHandTextAndRangeEditing() {
+            QFile source(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx");QVERIFY(source.open(QIODevice::ReadOnly));auto xml=source.readAll();xml.replace("<Symbol><name>keyboardPlayWithLH</name></Symbol>","");const auto path=settings.filePath("staff-hand-text.mscx");QFile file(path);QVERIFY(file.open(QIODevice::WriteOnly));file.write(xml);file.close();std::unique_ptr<MasterScore> score(mscore->readScore(path));QVERIFY(score);
+            auto at=[&](int tick){return score->tick2segment(Fraction::fromTicks(tick),false,SegmentType::ChordRest);};
+            for(const auto& item:QList<QPair<int,QString>>{{0,"r.h."},{480,"l.h."}}){auto text=new StaffText(score.get());text->setParent(at(item.first));text->setTrack(4);text->setPlainText(item.second);score->addElement(text);}score->doLayout();
+            ExportMidi exporter(score.get());QBuffer bytes;bytes.open(QIODevice::WriteOnly);MidiExportOptions opts;opts.splitHands=true;QVERIFY(exporter.write(&bytes,true,true,mscore->synthesizerState(),opts));for(const auto& n:exporter.gateReport){if(n.voice==4)QCOMPARE(n.exportHand,1);if(n.voice==5)QCOMPARE(n.exportHand,0);}
+            score->selection().setRange(at(480),at(960),1,2);MidiCropPanel panel(nullptr,[&]{return QList<Score*>{score.get()};});panel.show();QTimer timer;timer.setInterval(50);int stage=0,tries=0;
+            connect(&timer,&QTimer::timeout,&panel,[&]{auto dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());if(!dialog)return;if(++tries>150){dialog->reject();return;}auto table=dialog->findChild<QTableView*>("midiHandNotes");auto roll=dialog->findChild<QAbstractScrollArea*>("midiHandRoll");if(!table||!roll||!roll->isEnabled()||!table->model()->rowCount())return;
+                  if(stage==0){auto range=dialog->findChild<QPushButton*>("midiHandSelectRange");QVERIFY(range->isEnabled());QTest::mouseClick(range,Qt::LeftButton);QCOMPARE(table->selectionModel()->selectedRows().size(),3);QTest::mouseClick(dialog->findChild<QPushButton*>("midiHandRight"),Qt::LeftButton);++stage;}
+                  else if(stage==1){int manual=0;for(int i=0;i<table->model()->rowCount();++i)manual+=table->model()->index(i,4).data().toString().startsWith(QString::fromUtf8("手动指定"));QCOMPARE(manual,3);timer.stop();dialog->accept();++stage;}
+                  });timer.start();QTest::mouseClick(panel.findChild<QPushButton*>("midiHandPreview"),Qt::LeftButton);timer.stop();QCOMPARE(stage,2);
+            }
+      void midiHandsContextTransferAndBudget() {
+            MidiGateData data;data.tempos={{0,500000.}};MidiGateNote left;left.id="left";left.piano=left.known=true;left.partId=0;left.offOrdinal=0;left.hand=left.handHint=0;left.pitch=36;left.off=left.newOff=200;
+            auto right=left;right.id="right";right.pitch=84;right.hand=right.handHint=1;right.offOrdinal=1;auto middle=left;middle.id="middle";middle.pitch=64;middle.hand=-1;middle.on=240;middle.off=middle.newOff=450;middle.offOrdinal=2;data.notes={left,right,middle};MidiExportOptions options;options.splitHands=true;
+            auto rows=prepareMidiPostprocess(data,options);QCOMPARE(rows[2].exportHand,1);QCOMPARE(rows[2].off,middle.off);
+            MidiGateInstruction handoff;handoff.tick=100;handoff.handSet=true;handoff.hand=0;right.instructions={handoff};data.notes={right};rows=prepareMidiPostprocess(data,options);QCOMPARE(rows[0].exportHand,1);QCOMPARE(rows[0].instructions[0].hand,0);
+            data.notes.clear();for(int group=0;group<1200;++group)for(int pitch:{43,48,52,55,64,67,71,74}){auto n=middle;n.id=QString("%1-%2").arg(group).arg(pitch);n.on=group*240;n.off=n.newOff=n.on+180;n.pitch=pitch;n.handHint=pitch<60?0:1;n.offOrdinal=group*8+pitch;data.notes.append(n);}
+            QElapsedTimer timer;timer.start();rows=prepareMidiPostprocess(data,options);QCOMPARE(rows.size(),9600);qInfo()<<"Hand export 1200 groups / 9600 notes ms"<<timer.elapsed();for(const auto& n:rows){QVERIFY(n.exportHand==0||n.exportHand==1);QCOMPARE(n.off,n.newOff);}int calls=0;QVERIFY(prepareMidiPostprocess(data,options,[&]{return ++calls>3;}).isEmpty());QCOMPARE(calls,4);
+            }
+      void midiHandRoutingPreservesEvents() {
+            MidiFile original;original.setDivision(480);original.setFormat(1);MidiTrack track;track.setOutPort(2);track.setOutChannel(0);
+            track.insert(0,MidiEvent(ME_CONTROLLER,0,CTRL_PROGRAM,0));track.insert(0,MidiEvent(ME_CONTROLLER,0,64,127));
+            track.insert(0,MidiEvent(ME_NOTEON,0,48,85));track.insert(0,MidiEvent(ME_NOTEON,0,72,98));track.insert(700,MidiEvent(ME_NOTEON,0,48,0));track.insert(900,MidiEvent(ME_NOTEON,0,72,0));track.insert(1200,MidiEvent(ME_CONTROLLER,0,64,0));original.tracks().append(track);
+            QVector<MidiGateSource> tags;for(int pitch:{48,72}){MidiGateSource tag;tag.track=0;tag.partId=0;tag.partName="Piano";tag.piano=true;tag.staff=pitch==48?0:1;tag.handHint=tag.staff==0?1:0;tag.hand=pitch==48?0:1;tag.pitch=pitch;tag.displayStaff=tag.staff;tag.sourceTick=0;tags.append(tag);}
+            auto data=midiGateSnapshot(original,tags);QCOMPARE(data.notes.size(),2);MidiExportOptions options;options.splitHands=true;auto notes=prepareMidiPostprocess(data,options);QCOMPARE(notes[0].exportHand,0);QCOMPARE(notes[1].exportHand,1);
+            auto flattened=[](const MidiFile& file){QVector<QString> rows;for(const auto& track:file.tracks())for(const auto& e:track.events())if(e.second.type()!=ME_META)rows.append(QString("%1:%2:%3:%4:%5:%6").arg(track.outPort()).arg(e.first).arg(e.second.type()).arg(e.second.channel()).arg(e.second.dataA()).arg(e.second.dataB()));std::sort(rows.begin(),rows.end());return rows;};
+            auto split=original;applyMidiHands(split,notes);QCOMPARE(flattened(split),flattened(original));QCOMPARE(split.tracks().size(),3);QCOMPARE(split.tracks()[1].events().count(700),size_t(1));
+            options.handOverrides[notes[0].id]=1;notes=prepareMidiPostprocess(data,options);auto edited=original;applyMidiHands(edited,notes);QCOMPARE(edited.tracks().size(),2);QCOMPARE(flattened(edited),flattened(original));QVERIFY(notes[0].exportHandSource.startsWith(QString::fromUtf8("手动指定")));
+            // Cropping and moving tracks are applied together, before ordinal order changes.
+            notes[0].newOff=300;auto shortened=original;applyMidiHands(shortened,notes);bool moved=false;for(const auto& t:shortened.tracks())for(const auto& e:t.events())if(e.first==300&&e.second.type()==ME_NOTEON&&e.second.pitch()==48&&e.second.velo()==0)moved=true;QVERIFY(moved);
+            QBuffer bytes;bytes.open(QIODevice::ReadWrite);QVERIFY(!edited.write(&bytes));bytes.seek(0);MidiFile reread;QVERIFY(reread.read(&bytes));int notesAfter=0;bool left=false,right=false;for(const auto& t:reread.tracks())for(const auto& e:t.events()){notesAfter+=e.second.type()==ME_NOTEON&&e.second.velo()>0;if(e.second.type()==ME_META&&e.second.metaType()==META_TRACK_NAME){const auto name=QByteArray(reinterpret_cast<const char*>(e.second.edata()),e.second.len());left|=name.contains("Left Hand");right|=name.contains("Right Hand");}}QCOMPARE(notesAfter,2);QVERIFY(right);QVERIFY(!left);
+            }
+      void nativeHandTextAndCrossStaffExport() {
+            QFile source(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx");QVERIFY(source.open(QIODevice::ReadOnly));auto xml=source.readAll();xml.replace("<Symbol><name>keyboardPlayWithLH</name></Symbol>","");
+            const auto path=settings.filePath("three-hand-export.mscx");QFile file(path);QVERIFY(file.open(QIODevice::WriteOnly));file.write(xml);file.close();std::unique_ptr<MasterScore> score(mscore->readScore(path));QVERIFY(score);
+            auto old=toChord(score->firstSegment(SegmentType::ChordRest)->element(4))->downNote();auto f=new Fingering(score.get());f->setParent(old);f->setTrack(4);f->setPlainText("r.h.");score->addElement(f);
+            auto next=toChord(score->tick2segment(Fraction::fromTicks(480),false,SegmentType::ChordRest)->element(5));next->setStaffMove(-1);score->doLayout();
+            const auto state=score->state();const bool dirty=score->dirty();const int undo=score->undoStack()->getCurIdx();
+            auto verify=[&](MasterScore* target){ExportMidi plain(target),split(target);QBuffer a,b;a.open(QIODevice::WriteOnly);b.open(QIODevice::WriteOnly);MidiExportOptions options;options.splitHands=true;
+                  if(!plain.write(&a,true,true,mscore->synthesizerState())||!split.write(&b,true,true,mscore->synthesizerState(),options))return false;
+                  bool text=false,visual=false;for(const auto& n:split.gateReport){if(n.pitch==36)text=n.exportHand==1&&n.hand==1&&n.handSource.contains("r.h.");if(n.voice==5)visual=n.displayStaff==0&&n.handHint==1;}
+                  auto frames=[](const MidiFile& midi){QVector<QString> all;for(const auto& t:midi.tracks())for(const auto& e:t.events())if(e.second.type()!=ME_META)all.append(QString("%1:%2:%3:%4:%5:%6").arg(t.outPort()).arg(e.first).arg(e.second.type()).arg(e.second.channel()).arg(e.second.dataA()).arg(e.second.dataB()));std::sort(all.begin(),all.end());return all;};
+                  if(frames(plain.mf)!=frames(split.mf)||!text||!visual)return false;
+                  const auto out=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");for(const auto& item:QList<QPair<QString,QByteArray>>{{"midi-hand-original.mid",a.data()},{"midi-hand-split.mid",b.data()}}){QFile file(out+"/"+item.first);if(!file.open(QIODevice::WriteOnly)||file.write(item.second)!=item.second.size())return false;}
+                  const auto font=qEnvironmentVariable("P0_TEST_SOUNDFONT");if(!font.isEmpty()){auto before=render(plain.mf,split.gateData,font),after=render(split.mf,split.gateData,font);if(before.isEmpty()||before!=after)return false;}
+                  return true;};QVERIFY(verify(score.get()));QVERIFY(score->state()==state);QCOMPARE(score->dirty(),dirty);QCOMPARE(score->undoStack()->getCurIdx(),undo);
+            const auto saved=settings.filePath("three-hand-export.mscz");QFileInfo info(saved);QVERIFY(score->saveCompressedFile(info,false,false));std::unique_ptr<MasterScore> reopened(mscore->readScore(saved));QVERIFY(reopened);QVERIFY(verify(reopened.get()));
+            }
+      void midiHandPreviewEditsAndExport() {
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx"));QVERIFY(score);MidiCropPanel panel(nullptr,[&]{return QList<Score*>{score.get()};});panel.show();QTimer timer;timer.setInterval(50);int stage=0,tries=0;QString id;const auto state=score->state();const int undo=score->undoStack()->getCurIdx();
+            connect(&timer,&QTimer::timeout,&panel,[&]{auto dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());if(!dialog)return;if(++tries>180){dialog->reject();return;}auto table=dialog->findChild<QTableView*>("midiHandNotes");auto roll=dialog->findChild<QAbstractScrollArea*>("midiHandRoll");auto left=dialog->findChild<QPushButton*>("midiHandLeft"),right=dialog->findChild<QPushButton*>("midiHandRight");if(!table||!roll||!left||!roll->isEnabled()||!table->model()->rowCount())return;
+                  int row=-1;for(int i=0;i<table->model()->rowCount();++i)if(table->model()->index(i,0).data().toString()=="C2")row=i;if(row<0)return;
+                  if(stage==0){QCOMPARE(table->model()->index(row,2).data().toString(),QString::fromUtf8("左手"));table->selectRow(row);QTest::mouseClick(right,Qt::LeftButton);++stage;}
+                  else if(stage==1){QCOMPARE(table->model()->index(row,2).data().toString(),QString::fromUtf8("右手"));QVERIFY(panel.splitsHands());dialog->findChild<QAction*>("midiHandUndo")->trigger();++stage;}
+                  else if(stage==2){QCOMPARE(table->model()->index(row,2).data().toString(),QString::fromUtf8("左手"));dialog->findChild<QAction*>("midiHandRedo")->trigger();++stage;}
+                  else if(stage==3){table->selectAll();QTest::mouseClick(left,Qt::LeftButton);++stage;}
+                  else if(stage==4){for(int i=0;i<table->model()->rowCount();++i)QCOMPARE(table->model()->index(i,2).data().toString(),QString::fromUtf8("左手"));dialog->findChild<QAction*>("midiHandUndo")->trigger();++stage;}
+                  else if(stage==5){table->selectRow(row);QTest::mouseClick(dialog->findChild<QPushButton*>("midiHandAutomatic"),Qt::LeftButton);++stage;}
+                  else if(stage==6){QCOMPARE(table->model()->index(row,2).data().toString(),QString::fromUtf8("左手"));dialog->findChild<QAction*>("midiHandUndo")->trigger();++stage;}
+                  else if(stage==7){QCOMPARE(table->model()->index(row,2).data().toString(),QString::fromUtf8("右手"));const auto out=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");QVERIFY(!out.isEmpty());QVERIFY(dialog->grab().save(out+"/midi-hand-export.png"));timer.stop();++stage;dialog->accept();}
+                  });timer.start();QTest::mouseClick(panel.findChild<QPushButton*>("midiHandPreview"),Qt::LeftButton);timer.stop();QCOMPARE(stage,8);QVERIFY(score->state()==state);QCOMPARE(score->undoStack()->getCurIdx(),undo);
+            const auto output=settings.filePath("hands.mid");QVERIFY(panel.write(score.get(),output,{}));QFile::copy(output,qEnvironmentVariable("HARMONY_TEST_ARTIFACTS")+"/midi-hand-preview.mid");QFile file(output);QVERIFY(file.open(QIODevice::ReadOnly));MidiFile midi;QVERIFY(midi.read(&file));bool rootRight=false;for(const auto& track:midi.tracks()){bool right=false;for(const auto& e:track.events())if(e.second.type()==ME_META&&e.second.metaType()==META_TRACK_NAME)right|=QByteArray(reinterpret_cast<const char*>(e.second.edata()),e.second.len()).contains("Right Hand");if(right)for(const auto& e:track.events())if(e.second.type()==ME_NOTEON&&e.second.velo()>0&&e.second.pitch()==36)rootRight=true;}QVERIFY(rootRight);
             }
       void midiTiedInstructionProtection() {
             MidiGateData data;data.tempos={{0,500000.}};data.pedals={{0,0,-1,2200,true}};

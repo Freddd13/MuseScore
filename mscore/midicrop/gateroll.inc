@@ -22,7 +22,7 @@ class GateRoll final:public QAbstractScrollArea {
             for(int i:buckets.value(bucket))if(box(notes[i],false).adjusted(-2,-1,5,1).contains(point)||box(notes[i],true).adjusted(-2,-1,5,1).contains(point))return i;
             return -1;
             }
-      QPair<int,int> bounds()const{return selected>=0&&selected<notes.size()?clock.releaseBounds(notes[selected],pedals,editingOptions):QPair<int,int>(-1,-1);}
+      QPair<int,int> bounds()const{return !handsMode&&selected>=0&&selected<notes.size()?clock.releaseBounds(notes[selected],pedals,editingOptions):QPair<int,int>(-1,-1);}
       void moveRelease(QPoint point){const auto range=bounds();if(range.first>=0)notes[selected].newOff=qBound(range.first,clock.tickForMilliseconds((point.x()-gutter+horizontalScrollBar()->value())/scale),range.second);}
       void publishHandle(){
             if(selected<0||selected>=notes.size()){setProperty("selectedNewOffHandle",QPoint());setProperty("selectedReleaseRange",QPoint(-1,-1));return;}
@@ -45,6 +45,11 @@ class GateRoll final:public QAbstractScrollArea {
             for(double sec=firstSecond;sec*1000<=clock.durationMs(0,lastVisible)+1;sec+=secondsStep){const double at=gutter+sec*1000*scale-horizontalScrollBar()->value();p.setPen(QPen(mid,1,Qt::DotLine));p.drawLine(QPointF(at,header),QPointF(at,bottom));}
             QSet<int> visible;for(int b=firstTick/4800;b<=lastVisible/4800;++b)for(int i:buckets.value(b))visible.insert(i);
             for(int i:visible){const auto& note=notes[i];auto old=box(note,false),now=box(note,true);if(old.right()<gutter||old.left()>viewport()->width()||(old.bottom()<header&&now.bottom()<header)||(old.top()>bottom&&now.top()>bottom))continue;
+                  if(handsMode){
+                        auto color=note.exportHand==0?QColor(49,132,185):QColor(213,136,48);if(note.exportHand<0)color=palette().text().color();
+                        color.setAlpha(i==selected||selectedIds.contains(note.id)?230:155);p.fillRect(now,color);
+                        p.setPen(QPen(note.handReview?QColor(190,70,70):palette().text().color(),i==selected||selectedIds.contains(note.id)?2.:.7,note.handReview?Qt::DashLine:Qt::SolidLine));p.setBrush(Qt::NoBrush);p.drawRect(now);continue;
+                        }
                   const bool changed=note.newOff<note.off;const auto chosen=selected>=0&&selected<notes.size()?&notes[selected]:nullptr;
                   const bool next=chosen&&chosen->releaseFor==note.on&&chosen->hand==note.hand&&(chosen->partId>=0?chosen->partId==note.partId:chosen->port==note.port&&chosen->channel==note.channel);
                   if(stacked){auto fill=palette().text().color();fill.setAlpha(i==selected?75:45);p.fillRect(old,fill);}
@@ -103,7 +108,7 @@ class GateRoll final:public QAbstractScrollArea {
       void mouseMoveEvent(QMouseEvent* event)override{
             if(panning){horizontalScrollBar()->setValue(scrollOrigin.x()+origin.x()-event->pos().x());verticalScrollBar()->setValue(scrollOrigin.y()+origin.y()-event->pos().y());return;}
             if(dragging){moveRelease(event->pos());viewport()->update();return;}
-            const int i=hit(event->pos());if(i<0){unsetCursor();return;}const auto tail=box(notes[i],true);setCursor(std::abs(event->pos().x()-tail.right())<=9?Qt::SizeHorCursor:Qt::ArrowCursor);QToolTip::showText(event->globalPos(),pitchText(notes[i].pitch)+" · "+reasonText(notes[i].reason),this);
+            const int i=hit(event->pos());if(i<0){unsetCursor();return;}const auto tail=box(notes[i],true);setCursor(!handsMode&&std::abs(event->pos().x()-tail.right())<=9?Qt::SizeHorCursor:Qt::ArrowCursor);QToolTip::showText(event->globalPos(),pitchText(notes[i].pitch)+" · "+(handsMode?notes[i].exportHandSource:reasonText(notes[i].reason)),this);
             }
       void mouseReleaseEvent(QMouseEvent* event)override{
             if(panning){panning=false;unsetCursor();event->accept();return;}
@@ -124,7 +129,7 @@ class GateRoll final:public QAbstractScrollArea {
             if(event->key()==Qt::Key_Space&&event->modifiers()==Qt::NoModifier&&togglePlayback){togglePlayback();event->accept();return;}
             QAbstractScrollArea::keyPressEvent(event);
             }
-      void contextMenuEvent(QContextMenuEvent* event)override{const int i=hit(event->pos());if(i<0)return;selected=i;if(selectRow)selectRow(i);QMenu menu(this);auto automatic=menu.addAction(tr("恢复自动松手")),original=menu.addAction(tr("保持原长度"));const auto result=menu.exec(event->globalPos());if(editRelease&&result)editRelease(notes[i].id,result==automatic?-1:notes[i].off);Q_UNUSED(original);}
+      void contextMenuEvent(QContextMenuEvent* event)override{if(handsMode){event->ignore();return;}const int i=hit(event->pos());if(i<0)return;selected=i;if(selectRow)selectRow(i);QMenu menu(this);auto automatic=menu.addAction(tr("恢复自动松手")),original=menu.addAction(tr("保持原长度"));const auto result=menu.exec(event->globalPos());if(editRelease&&result)editRelease(notes[i].id,result==automatic?-1:notes[i].off);Q_UNUSED(original);}
       void wheelEvent(QWheelEvent* event)override{
             if(event->modifiers()&Qt::ControlModifier){setScale(scale*std::exp(event->angleDelta().y()/600.),event->pos().x());event->accept();return;}
             if(event->modifiers()&Qt::ShiftModifier){fitRows=false;const double pitchOffset=(event->pos().y()-header+verticalScrollBar()->value())/rowHeight;rowHeight=qBound(4.,rowHeight*std::exp(event->angleDelta().y()/900.),36.);refresh();verticalScrollBar()->setValue(qRound(pitchOffset*rowHeight-event->pos().y()+header));event->accept();return;}
@@ -140,6 +145,7 @@ public:
       std::function<void(double)> seekPosition;
       std::function<void()> togglePlayback;
       QVector<MidiGateNote> notes;QVector<MidiGatePedal> pedals;
+      QSet<QString> selectedIds;bool handsMode=false;
       double scale=.15;bool stacked=false,foldUnused=false;int selected=-1,low=127,high=0,lastTick=0;
       QMap<int,QVector<int>> buckets;
       explicit GateRoll(QWidget* parent):QAbstractScrollArea(parent){setMinimumHeight(100);setMouseTracking(true);viewport()->setMouseTracking(true);setFocusPolicy(Qt::StrongFocus);setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding);}

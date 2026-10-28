@@ -13,6 +13,11 @@ class MidiCropPanel : public QWidget {
       Q_OBJECT
       QCheckBox* _enabled;
       QCheckBox* _original;
+      QCheckBox* _splitHands;
+      QMap<Score*,QMap<QString,int>> _handOverrides;
+      QMap<Score*,QUndoStack*> _handHistories;
+      QMap<Score*,ScoreContentState> _handStates;
+      void compareHands();
       QCheckBox* _writtenPedal;
       MidiGateOptions _gate;
       int _fromMeasure=0,_untilMeasure=0;
@@ -32,6 +37,7 @@ class MidiCropPanel : public QWidget {
    public:
       MidiCropPanel(QWidget*,std::function<QList<Score*>()>);
       bool enabled() const;
+      bool splitsHands() const;
       bool includeOriginal() const;
       bool usesWrittenPedal() const;
       void clearSessions();

@@ -32,6 +32,7 @@ QUndoStack* MidiCropPanel::editHistory(Score* score)
       }
 void MidiCropPanel::clearSessions()
       {
+      qDeleteAll(_handHistories);_handHistories.clear();_handOverrides.clear();_handStates.clear();
       qDeleteAll(_histories);_histories.clear();
       _exclusions.clear();_releaseOverrides.clear();_releaseStates.clear();
       _staves.clear();_tracks.clear();_protectedTracks.clear();

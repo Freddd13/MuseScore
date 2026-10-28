@@ -39,8 +39,10 @@ QString reasonText(const QString& code) {
             {"manual-original",MidiCropPanel::tr("已手动保留原按键长度")},
             {"pedal-release",MidiCropPanel::tr("同组音自然松手，踏板继续保持声音")},
             {"hand-release",MidiCropPanel::tr("为弹下一组音提前松手")},
+            {"finger-release",MidiCropPanel::tr("为按谱换指提前松手")},
             {"hand-conflict",MidiCropPanel::tr("分手说明有冲突或未确认，保留原长度")},
             {"fingering-uncertain",MidiCropPanel::tr("这个音的指法互相冲突，保留原长度")},
+            {"fingering-unresolved",MidiCropPanel::tr("换指需要调整，保留原长度")},
             {"unselected",MidiCropPanel::tr("未选择这个乐器")},
             {"outside-range",MidiCropPanel::tr("不在选定小节内，或无法对应原音")},
             {"unselected-voice",MidiCropPanel::tr("未选择这个声部")},
@@ -115,6 +117,7 @@ class GateModel : public QAbstractTableModel {
             }
       };
 }
+#include "midihandpanel.inc"
 MidiCropPanel::MidiCropPanel(QWidget* parent,std::function<QList<Score*>()> scores):QWidget(parent),_scores(std::move(scores)) {
       auto layout=new QVBoxLayout(this);layout->setContentsMargins(0,6,0,0);
       setVisible(personalFeaturesEnabled());
@@ -125,10 +128,14 @@ MidiCropPanel::MidiCropPanel(QWidget* parent,std::function<QList<Score*>()> scor
       connect(_writtenPedal,&QCheckBox::toggled,this,[this]{savePreferences();});
       _enabled=new QCheckBox(tr("人性化裁剪：保守踏板模式"),this);
       _enabled->setChecked(preferences.getBool("export/midi/cropEnabled"));layout->addWidget(_enabled);
-      auto buttons=new QHBoxLayout;
+      _splitHands=new QCheckBox(tr("按实际左右手分轨"),this);_splitHands->setObjectName("midiSplitHands");
+      _splitHands->setChecked(QSettings().value("export/midi/splitHands",false).toBool());layout->addWidget(_splitHands);
+      connect(_splitHands,&QCheckBox::toggled,this,[this]{savePreferences();});
+      auto buttons=new QHBoxLayout;auto hands=new QPushButton(tr("检查左右手…"),this);hands->setObjectName("midiHandPreview");buttons->addWidget(hands);
+      connect(hands,&QPushButton::clicked,this,&MidiCropPanel::compareHands);
       auto config=new QPushButton(tr("裁剪设置…"),this);config->setObjectName("midiCropSettingsButton");auto preview=new QPushButton(tr("查看对比…"),this);preview->setObjectName("midiCropCompare");
       buttons->addWidget(config);buttons->addWidget(preview);buttons->addStretch();layout->addLayout(buttons);
-      _original=new QCheckBox(tr("同时导出未裁剪版本"),this);_original->setChecked(preferences.getBool("export/midi/cropOriginal"));layout->addWidget(_original);
+      _original=new QCheckBox(tr("同时导出处理前版本"),this);_original->setChecked(preferences.getBool("export/midi/cropOriginal"));layout->addWidget(_original);
       _gate.lengthRatio=preferences.getDouble("export/midi/cropLength");_gate.nextAttackRatio=preferences.getDouble("export/midi/cropNext");
       _gate.minimumMs=preferences.getDouble("export/midi/cropMinimumMs");_gate.jitter=preferences.getDouble("export/midi/cropJitter");_gate.seed=preferences.getInt("export/midi/cropSeed");
       QSettings handSettings;_gate.releaseLeadMs=handSettings.value("export/midi/releaseLeadMs",60.).toDouble();
@@ -143,17 +150,18 @@ MidiCropPanel::MidiCropPanel(QWidget* parent,std::function<QList<Score*>()> scor
       connect(preview,&QPushButton::clicked,this,&MidiCropPanel::compare);
       }
 bool MidiCropPanel::enabled() const {return personalFeaturesEnabled() && _enabled->isChecked();}
-bool MidiCropPanel::includeOriginal() const {return enabled() && _original->isChecked();}
+bool MidiCropPanel::splitsHands() const {return personalFeaturesEnabled() && _splitHands->isChecked();}
+bool MidiCropPanel::includeOriginal() const {return (enabled()||splitsHands()) && _original->isChecked();}
 bool MidiCropPanel::usesWrittenPedal() const {return personalFeaturesEnabled() && _writtenPedal->isChecked();}
 MidiExportOptions MidiCropPanel::options(Score* score) const {
-      MidiExportOptions result;result.crop=enabled();result.gate=_gate;result.writtenPedal=usesWrittenPedal();
+      MidiExportOptions result;result.crop=enabled();result.splitHands=splitsHands();if(_handStates.value(score)==score->masterScore()->state())result.handOverrides=_handOverrides.value(score);result.gate=_gate;result.writtenPedal=usesWrittenPedal();
       if(_fromMeasure>0){result.gate.scoreStart=INT_MAX;result.gate.scoreEnd=INT_MAX;int bar=1;for(auto m=score->firstMeasure();m;m=m->nextMeasure(),++bar){if(bar==_fromMeasure)result.gate.scoreStart=m->tick().ticks();if(bar==_untilMeasure)result.gate.scoreEnd=m->endTick().ticks();}if(_untilMeasure<_fromMeasure||_untilMeasure>score->nmeasures())result.gate.scoreStart=result.gate.scoreEnd=INT_MAX;}
       result.gate.tracks=_tracks.value(score);result.gate.protectedTracks=_protectedTracks.value(score);
       result.gate.excluded=_exclusions.value(score);if(_releaseStates.value(score)==score->masterScore()->state())result.gate.releaseOverrides=_releaseOverrides.value(score);result.gate.staves=_staves.value(score);return result;
       }
 void MidiCropPanel::savePreferences() const {
       if (!personalFeaturesEnabled()) return;
-      QSettings handSettings;handSettings.setValue("export/midi/writtenPedal",usesWrittenPedal());handSettings.setValue("export/midi/releaseLeadMs",_gate.releaseLeadMs);
+      QSettings handSettings;handSettings.setValue("export/midi/splitHands",splitsHands());handSettings.setValue("export/midi/writtenPedal",usesWrittenPedal());handSettings.setValue("export/midi/releaseLeadMs",_gate.releaseLeadMs);
       for(int side=0;side<2;++side) {const auto key=QString("export/midi/hand%1/").arg(side);handSettings.setValue(key+"comfort",_gate.hands[side].comfort);handSettings.setValue(key+"maximum",_gate.hands[side].maximum);handSettings.setValue(key+"white",_gate.hands[side].white);}handSettings.sync();
       preferences.setPreference("export/midi/cropFromMeasure",_fromMeasure);preferences.setPreference("export/midi/cropUntilMeasure",_untilMeasure);preferences.setPreference("export/midi/cropProtectMelody",_gate.protectMelody);
       auto text=[](const QSet<int>& values){QList<int> list=values.values();std::sort(list.begin(),list.end());QStringList result;for(int v:list)result<<QString::number(v);return result.join(',');};
@@ -195,6 +203,7 @@ bool MidiCropPanel::write(Score* score,const QString& path,const QString& origin
       if(seq && (seq->isPlaying()||!seq->backgroundRenderingIdle())) {QMessageBox::information(this,tr("MIDI松手处理"),tr("请先停播，等待乐谱准备完成后再生成MIDI。"));return false;}
       if(enabled()&&_fromMeasure>0&&(_untilMeasure>score->nmeasures()||_untilMeasure<_fromMeasure)){QMessageBox::warning(this,tr("MIDI松手处理"),tr("%1中不存在所填的小节范围，请调整后再导出。").arg(score->title()));return false;}
       if(enabled()&&!_releaseOverrides.value(score).isEmpty()&&_releaseStates.value(score)!=score->masterScore()->state()){QMessageBox::information(this,tr("MIDI松手处理"),tr("乐谱已改变，请打开“查看对比”更新手动松手位置，再导出。"));return false;}
+      if(splitsHands()&&!_handOverrides.value(score).isEmpty()&&_handStates.value(score)!=score->masterScore()->state()){QMessageBox::information(this,tr("左右手分轨"),tr("乐谱已修改，请打开“检查左右手”重新核对。"));return false;}
       ExportMidi exporter(score);QBuffer buffer;buffer.open(QIODevice::WriteOnly);
       if(!exporter.write(&buffer,preferences.getBool(PREF_IO_MIDI_EXPANDREPEATS),preferences.getBool(PREF_IO_MIDI_EXPORTRPNS),mscore->synthesizerState(),options(score)))return false;
       auto store=[&](const QString& name,const QByteArray& bytes) {QSaveFile f(name);if(!f.open(QIODevice::WriteOnly) || f.write(bytes)!=bytes.size() || !f.commit()) {QMessageBox::warning(this,tr("MIDI导出"),tr("无法写入%1：%2").arg(name,f.errorString()));return false;}return true;};
@@ -356,11 +365,11 @@ void MidiCropPanel::compare() {
             roll->refresh();
             };
       auto calculate=[&] {
-            if(loading) {queued=true;return;}if(!targetScore)return;stopPlaybackPreview();auditionKey.clear();if(updateTransport)updateTransport();const auto snapshot=data;auto gate=options(scores[scoreBox->currentIndex()]).gate;loading=true;roll->setEnabled(false);originalPlay->setEnabled(false);proposedPlay->setEnabled(false);editorMode->setEnabled(false);
+            if(loading) {queued=true;return;}if(!targetScore)return;stopPlaybackPreview();auditionKey.clear();if(updateTransport)updateTransport();const auto snapshot=data;auto post=options(scores[scoreBox->currentIndex()]);post.crop=true;post.splitHands=false;loading=true;roll->setEnabled(false);originalPlay->setEnabled(false);proposedPlay->setEnabled(false);editorMode->setEnabled(false);
             caption->setText(tr("正在计算，关闭窗口可取消。"));exclude->setEnabled(false);recompute->setEnabled(false);scoreBox->setEnabled(false);targets->setEnabled(false);
-            watcher.setFuture(QtConcurrent::run([snapshot,gate,canceled] {MidiGateProcessor p;return p.process(snapshot,gate,[canceled]{return canceled->load();});}));
+            watcher.setFuture(QtConcurrent::run([snapshot,post,canceled] {return prepareMidiPostprocess(snapshot,post,[canceled]{return canceled->load();});}));
             };
-      connect(&watcher,&QFutureWatcher<QVector<MidiGateNote>>::finished,&dialog,[&] {rows=watcher.result();loading=false;if(queued){queued=false;calculate();return;}roll->setEnabled(true);originalPlay->setEnabled(true);proposedPlay->setEnabled(true);editorMode->setEnabled(true);exclude->setEnabled(true);recompute->setEnabled(true);scoreBox->setEnabled(true);targets->setEnabled(true);int needed=0,natural=0;for(const auto& note:rows){needed+=note.reason=="hand-release";natural+=note.reason=="pedal-release";}
+      connect(&watcher,&QFutureWatcher<QVector<MidiGateNote>>::finished,&dialog,[&] {rows=watcher.result();loading=false;if(queued){queued=false;calculate();return;}roll->setEnabled(true);originalPlay->setEnabled(true);proposedPlay->setEnabled(true);editorMode->setEnabled(true);exclude->setEnabled(true);recompute->setEnabled(true);scoreBox->setEnabled(true);targets->setEnabled(true);int needed=0,natural=0;for(const auto& note:rows){needed+=note.reason=="hand-release"||note.reason=="finger-release";natural+=note.reason=="pedal-release";}
             int manual=0,kept=0;for(const auto& note:rows){manual+=note.reason=="manual-release";kept+=note.newOff==note.off;}
             caption->setText(tr("%1个音 · 提前松手%2 · 自然松手%3 · 手动%4 · 保持%5").arg(rows.size()).arg(needed).arg(natural).arg(manual).arg(kept));present();if(fitPending){fitPending=false;roll->fitContent();}if(updateTransport)updateTransport();});
       connect(this,&MidiCropPanel::exportEditsChanged,&dialog,[&](Score* score) {

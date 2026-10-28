@@ -18,6 +18,6 @@
 
 保存乐谱时，这些分手和指法仍按原方式保存。导出及查看对比会保持乐谱原有的保存状态和撤销位置。
 
-同音换指如“1-3”的具体实施时间，接着按完整计划继续核对；当前进度见[进度与后续安排](REWORK_PROGRESS.md)。已有备选指法如“2(3)”见[使用说明](MIDI_FINGER_GUIDE.md)。
+同音换指如“1-3”的实施时间已在0.131.0补齐，操作见[换指与导出](MIDI_HAND_EXPORT_GUIDE.md#同音换指与松手)；当前进度见[进度与后续安排](REWORK_PROGRESS.md)。已有备选指法如“2(3)”见[使用说明](MIDI_FINGER_GUIDE.md)。
 
 ![延音后段的分手和指法](images/midi-tied-instructions.png)

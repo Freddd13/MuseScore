@@ -611,7 +611,7 @@ void ExportDialog::accept()
                                     break;
                               }
                         }
-                  if (saveFormat == "mid" && (midiCrop->enabled() || midiCrop->usesWrittenPedal())) {
+                  if (saveFormat == "mid" && (midiCrop->enabled() || midiCrop->splitsHands() || midiCrop->usesWrittenPedal())) {
                         midiCrop->savePreferences();
                         QString original;
                         if (midiCrop->includeOriginal()) {
