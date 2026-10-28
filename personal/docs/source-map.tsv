@@ -608,3 +608,7 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方
 文字分手读取	audio/exports/midihandannotations.inc	exportWrittenHands	1	r.h.／l.h.、跨谱表与折线范围	nativeStaffHandTextAndRangeEditing / nativeHandTextAndCrossStaffExport
 左右手导出预览	mscore/midicrop/midihandpanel.inc	MidiCropPanel::compareHands	1	多选、范围、恢复自动与撤销	midiHandPreviewEditsAndExport
 同音换指松手	audio/exports/midigate.h	MidiGateProcessor::processPass	159	手指空出时机、整条路线重算与手动保留	midiSubstitutionReleasesAndManualRestore / nativeSubstitutionFlowAndSave
+
+必要松手的选择	libmscore/pianohands.h	releaseForHand	109	最少松键与提前时长、同音共同保持	pianoReleaseKeepsLongerHeldKey / midiNecessaryReleaseMatchesEnumeration
+相接同音与自然开关	audio/exports/midigate.h	MidiGateProcessor::processPass	160	明确音继续计算、成组自然变化、必要松手单独使用	midiTouchingNotesKeepUniquePairing / midiOnlyNecessaryAndGroupedNatural
+踏板对比与设置	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::settings / compare	173	设置显隐、取消保存与选定踏板	midiComparisonUsesChosenPedal / nativeOnlyNecessaryPreviewAndFile

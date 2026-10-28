@@ -52,6 +52,7 @@ QString reasonText(const QString& code) {
             {"ambiguous-retrigger",MidiCropPanel::tr("同音重触关系不清楚，保留")},
             {"excluded",MidiCropPanel::tr("已手动排除")},
             {"short-note",MidiCropPanel::tr("原音已短于最小长度")},
+            {"natural-disabled",MidiCropPanel::tr("其余音保持原长度")},
             {"no-shortening",MidiCropPanel::tr("没有合适的提前松手位置")},
             {"no-pedal",MidiCropPanel::tr("没有可保持发声的踏板")},
             {"unsupported-pedal",MidiCropPanel::tr("踏板或控制事件不能可靠判断，保留")},
@@ -138,7 +139,7 @@ MidiCropPanel::MidiCropPanel(QWidget* parent,std::function<QList<Score*>()> scor
       _original=new QCheckBox(tr("同时导出处理前版本"),this);_original->setChecked(preferences.getBool("export/midi/cropOriginal"));layout->addWidget(_original);
       _gate.lengthRatio=preferences.getDouble("export/midi/cropLength");_gate.nextAttackRatio=preferences.getDouble("export/midi/cropNext");
       _gate.minimumMs=preferences.getDouble("export/midi/cropMinimumMs");_gate.jitter=preferences.getDouble("export/midi/cropJitter");_gate.seed=preferences.getInt("export/midi/cropSeed");
-      QSettings handSettings;_gate.releaseLeadMs=handSettings.value("export/midi/releaseLeadMs",60.).toDouble();
+      QSettings handSettings;_gate.naturalRelease=handSettings.value("export/midi/naturalRelease",true).toBool();_gate.releaseLeadMs=handSettings.value("export/midi/releaseLeadMs",60.).toDouble();
       for(int side=0;side<2;++side) {const auto key=QString("export/midi/hand%1/").arg(side);_gate.hands[side].comfort=handSettings.value(key+"comfort",14).toInt();_gate.hands[side].maximum=handSettings.value(key+"maximum",15).toInt();_gate.hands[side].white=handSettings.value(key+"white",16).toInt();}
       _fromMeasure=preferences.getInt("export/midi/cropFromMeasure");_untilMeasure=preferences.getInt("export/midi/cropUntilMeasure");_gate.protectMelody=preferences.getBool("export/midi/cropProtectMelody");
       const QString voiceText=preferences.getString("export/midi/cropVoices"),protectText=preferences.getString("export/midi/cropProtectedVoices");
@@ -161,7 +162,7 @@ MidiExportOptions MidiCropPanel::options(Score* score) const {
       }
 void MidiCropPanel::savePreferences() const {
       if (!personalFeaturesEnabled()) return;
-      QSettings handSettings;handSettings.setValue("export/midi/splitHands",splitsHands());handSettings.setValue("export/midi/writtenPedal",usesWrittenPedal());handSettings.setValue("export/midi/releaseLeadMs",_gate.releaseLeadMs);
+      QSettings handSettings;handSettings.setValue("export/midi/splitHands",splitsHands());handSettings.setValue("export/midi/naturalRelease",_gate.naturalRelease);handSettings.setValue("export/midi/writtenPedal",usesWrittenPedal());handSettings.setValue("export/midi/releaseLeadMs",_gate.releaseLeadMs);
       for(int side=0;side<2;++side) {const auto key=QString("export/midi/hand%1/").arg(side);handSettings.setValue(key+"comfort",_gate.hands[side].comfort);handSettings.setValue(key+"maximum",_gate.hands[side].maximum);handSettings.setValue(key+"white",_gate.hands[side].white);}handSettings.sync();
       preferences.setPreference("export/midi/cropFromMeasure",_fromMeasure);preferences.setPreference("export/midi/cropUntilMeasure",_untilMeasure);preferences.setPreference("export/midi/cropProtectMelody",_gate.protectMelody);
       auto text=[](const QSet<int>& values){QList<int> list=values.values();std::sort(list.begin(),list.end());QStringList result;for(int v:list)result<<QString::number(v);return result.join(',');};
@@ -172,8 +173,10 @@ void MidiCropPanel::savePreferences() const {
       }
 bool MidiCropPanel::settings() {
       QDialog dialog(this);dialog.setObjectName("midiCropSettings");dialog.setWindowTitle(tr("MIDI松手设置"));auto form=new QFormLayout(&dialog);
-      auto length=new QDoubleSpinBox(&dialog);length->setRange(10,100);length->setValue(_gate.lengthRatio*100);length->setSuffix(" %");form->addRow(tr("自然松手长度比例"),length);
-      auto next=new QDoubleSpinBox(&dialog);next->setRange(10,100);next->setValue(_gate.nextAttackRatio*100);next->setSuffix(" %");form->addRow(tr("相邻起音间隔比例"),next);
+      auto natural=new QCheckBox(tr("其余音加入自然松手"),&dialog);natural->setObjectName("cropNaturalRelease");natural->setChecked(_gate.naturalRelease);form->addRow(natural);
+      natural->setToolTip(tr("关闭后，只为下一组音或谱上换指安排必要松手。手动拖尾端仍可使用。"));
+      auto length=new QDoubleSpinBox(&dialog);length->setObjectName("cropNaturalLength");length->setRange(10,100);length->setValue(_gate.lengthRatio*100);length->setSuffix(" %");form->addRow(tr("自然松手长度比例"),length);
+      auto next=new QDoubleSpinBox(&dialog);next->setObjectName("cropNaturalNext");next->setRange(10,100);next->setValue(_gate.nextAttackRatio*100);next->setSuffix(" %");form->addRow(tr("相邻起音间隔比例"),next);
       auto minimum=new QSpinBox(&dialog);minimum->setRange(1,5000);minimum->setValue(int(_gate.minimumMs));minimum->setSuffix(" ms");form->addRow(tr("导出最短音长"),minimum);
       auto lead=new QSpinBox(&dialog);lead->setObjectName("cropReleaseLead");lead->setRange(0,500);lead->setSuffix(" ms");lead->setValue(qRound(_gate.releaseLeadMs));form->addRow(tr("为下一次按键提前松手"),lead);
       PianoHands::Limits editedHands[2]={_gate.hands[0],_gate.hands[1]};
@@ -184,19 +187,23 @@ bool MidiCropPanel::settings() {
             auto buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,&setup);layout->addRow(buttons);connect(buttons,&QDialogButtonBox::accepted,&setup,&QDialog::accept);connect(buttons,&QDialogButtonBox::rejected,&setup,&QDialog::reject);
             if(setup.exec()==QDialog::Accepted)for(int side=0;side<2;++side)editedHands[side]={values[side][0]->value(),values[side][1]->value(),values[side][2]->value()};
             });
-      auto jitter=new QDoubleSpinBox(&dialog);jitter->setRange(0,5);jitter->setValue(_gate.jitter*100);jitter->setSuffix(" %");form->addRow(tr("成组随机变化 ±（0关闭）"),jitter);
-      auto seed=new QSpinBox(&dialog);seed->setRange(0,INT_MAX);seed->setValue(int(_gate.seed));form->addRow(tr("随机种子（相同设置可复现）"),seed);
+      auto jitter=new QDoubleSpinBox(&dialog);jitter->setObjectName("cropNaturalJitter");jitter->setRange(0,5);jitter->setValue(_gate.jitter*100);jitter->setSuffix(" %");form->addRow(tr("成组随机变化 ±（0关闭）"),jitter);
+      auto seed=new QSpinBox(&dialog);seed->setObjectName("cropNaturalSeed");seed->setRange(0,INT_MAX);seed->setValue(int(_gate.seed));form->addRow(tr("随机种子（相同设置可复现）"),seed);
+      auto updateNatural=[=](bool enabled){for(auto widget:QList<QWidget*>{length,next,jitter,seed})widget->setEnabled(enabled);};
+      connect(natural,&QCheckBox::toggled,&dialog,updateNatural);updateNatural(natural->isChecked());
       auto from=new QSpinBox(&dialog),until=new QSpinBox(&dialog);from->setObjectName("cropFromMeasure");until->setObjectName("cropUntilMeasure");from->setRange(0,99999);until->setRange(0,99999);from->setSpecialValueText(tr("全谱"));until->setSpecialValueText(tr("全谱"));from->setValue(_fromMeasure);until->setValue(_untilMeasure);form->addRow(tr("开始小节（按谱面顺序）"),from);form->addRow(tr("结束小节"),until);
       auto voiceRow=new QWidget(&dialog),protectRow=new QWidget(&dialog);auto voiceLayout=new QHBoxLayout(voiceRow),protectLayout=new QHBoxLayout(protectRow);voiceLayout->setContentsMargins(0,0,0,0);protectLayout->setContentsMargins(0,0,0,0);QVector<QCheckBox*> voices,protectedVoices;
       for(int i=0;i<4;++i){auto v=new QCheckBox(QString::number(i+1),voiceRow),p=new QCheckBox(QString::number(i+1),protectRow);v->setChecked(_gate.voices.isEmpty()||_gate.voices.contains(i));p->setChecked(_gate.protectedVoices.contains(i));voiceLayout->addWidget(v);protectLayout->addWidget(p);voices.append(v);protectedVoices.append(p);}
       form->addRow(tr("处理声部"),voiceRow);form->addRow(tr("保护声部"),protectRow);auto melody=new QCheckBox(tr("保护各钢琴部分的最高起音线"),&dialog);melody->setObjectName("cropProtectMelody");melody->setChecked(_gate.protectMelody);form->addRow(melody);
-      auto info=new QLabel(tr("先为下一组音安排松手，再为同时弹下的一组音加入接近的自然变化。踏板继续保持声音时，程序会按这里的最短音长和个人跨度安排松手。"),&dialog);info->setWordWrap(true);form->addRow(info);
+      auto info=new QLabel(&dialog);info->setWordWrap(true);form->addRow(info);
+      auto updateInfo=[=](bool enabled){info->setText(enabled?tr("先为下一组音安排松手，再为同时弹下的一组音加入接近的自然变化。踏板继续保持声音时，程序会按这里的最短音长和个人跨度安排松手。"):tr("根据分手、指法和个人跨度安排必要松手，其余音保留原长度。仍可在对比图中拖动尾端调整。"));};
+      connect(natural,&QCheckBox::toggled,&dialog,updateInfo);updateInfo(natural->isChecked());
       auto buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,&dialog);form->addRow(buttons);
       connect(buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
       if(dialog.exec()==QDialog::Accepted) {
             QSet<int> selected,protectedSet;for(int i=0;i<4;++i){if(voices[i]->isChecked())selected.insert(i);if(protectedVoices[i]->isChecked())protectedSet.insert(i);}if(selected.isEmpty()||(from->value()>0&&until->value()<from->value())){QMessageBox::warning(this,tr("MIDI松手处理"),tr("请至少选择一个声部，并填写有效的小节范围。"));return false;}
             _fromMeasure=from->value();_untilMeasure=_fromMeasure?until->value():0;_gate.voices=selected;_gate.protectedVoices=protectedSet;_gate.protectMelody=melody->isChecked();
-            _gate.lengthRatio=length->value()/100.;_gate.nextAttackRatio=next->value()/100.;_gate.minimumMs=minimum->value();_gate.releaseLeadMs=lead->value();_gate.hands[0]=editedHands[0];_gate.hands[1]=editedHands[1];_gate.jitter=jitter->value()/100.;_gate.seed=quint32(seed->value());savePreferences();return true;}
+            _gate.naturalRelease=natural->isChecked();_gate.lengthRatio=length->value()/100.;_gate.nextAttackRatio=next->value()/100.;_gate.minimumMs=minimum->value();_gate.releaseLeadMs=lead->value();_gate.hands[0]=editedHands[0];_gate.hands[1]=editedHands[1];_gate.jitter=jitter->value()/100.;_gate.seed=quint32(seed->value());savePreferences();return true;}
       return false;
       }
 bool MidiCropPanel::write(Score* score,const QString& path,const QString& original) {
@@ -384,7 +391,8 @@ void MidiCropPanel::compare() {
                   }
             _releaseStates[targetScore]=targetScore->masterScore()->state();
             ExportMidi exporter(scores[scoreBox->currentIndex()]);exporter.collectGateData=true;QBuffer bytes;bytes.open(QIODevice::WriteOnly);
-            if(!exporter.write(&bytes,preferences.getBool(PREF_IO_MIDI_EXPANDREPEATS),preferences.getBool(PREF_IO_MIDI_EXPORTRPNS),mscore->synthesizerState()))return;
+            MidiExportOptions renderOptions;renderOptions.writtenPedal=usesWrittenPedal();
+            if(!exporter.write(&bytes,preferences.getBool(PREF_IO_MIDI_EXPANDREPEATS),preferences.getBool(PREF_IO_MIDI_EXPORTRPNS),mscore->synthesizerState(),renderOptions))return;
             targets->blockSignals(true);targets->clear();targets->addItem(tr("全部钢琴部分"),-1);
             for(const auto piano:scores[scoreBox->currentIndex()]->parts())if(piano->instrumentId().contains("piano",Qt::CaseInsensitive))targets->addItem(piano->instrumentName(),piano->startTrack());
             const auto chosen=_staves.value(scores[scoreBox->currentIndex()]);for(int i=1;i<targets->count();++i)if(chosen.contains(targets->itemData(i).toInt()/VOICES))targets->setCurrentIndex(i);targets->blockSignals(false);

@@ -75,6 +75,7 @@ struct Group {
       QVector<int> members;
       int finger=0;
       int fingerMask=31;
+      double releaseLoss=0; // Remaining held seconds lost by releasing this key.
       };
 inline bool assignFinger(int key,const int* masks,int* owners,int& visited) {
       for(int finger=0;finger<5;++finger)if((masks[key]&(1<<finger)) && !(visited&(1<<finger))) {
@@ -108,7 +109,7 @@ inline double strain(const Hand& hand) {
 inline bool releaseForHand(const QVector<Group>& keys,const QVector<int>& hands,int side,const Limits& limits,QVector<bool>* removed) {
       QVector<int> positions;for(int i=0;i<keys.size();++i)if(hands[i]==side)positions.append(i);
       if(positions.isEmpty())return true;
-      double best=std::numeric_limits<double>::infinity();QVector<bool> bestRemoved;
+      int bestCount=std::numeric_limits<int>::max();double bestLoss=std::numeric_limits<double>::infinity(),bestShape=bestLoss;QVector<bool> bestRemoved;
       // Enumerate retained low/high keys. Inside that interval, at most five keys
       // can be retained with distinct specified fingers. This minimizes released
       // physical keys without an exponential subset search.
@@ -127,17 +128,21 @@ inline bool releaseForHand(const QVector<Group>& keys,const QVector<int>& hands,
                   if(p<low || p>high)valid=false;else valid=retain(positions[p]);
                   }
             if(!valid)continue;
-            for(int p=low;p<=high && count<5;++p) {
-                  const int i=positions[p];
-                  if(!kept[i] && keys[i].releasable)retain(i);
-                  }
-            auto candidate=*removed;int released=0;
-            for(int i:positions){candidate[i]=!kept[i];released+=!kept[i];}
+            QVector<int> optional;
+            for(int p=low;p<=high;++p)if(!kept[positions[p]]&&keys[positions[p]].releasable)optional.append(positions[p]);
+            // Keep the longest remaining holds first. Finger matching preserves
+            // all compulsory keys while maximizing the number that can stay down.
+            std::stable_sort(optional.begin(),optional.end(),[&](int a,int b){return keys[a].releaseLoss>keys[b].releaseLoss;});
+            for(int i:optional)if(count<5)retain(i);
+            auto candidate=*removed;int released=0;double loss=0;
+            for(int i:positions){candidate[i]=!kept[i];released+=!kept[i];if(!kept[i])loss+=keys[i].releaseLoss;}
             const auto after=describe(keys,hands,side,limits,candidate);if(!after.fits)continue;
-            const double cost=released*100.+std::max(0,after.high-after.low-limits.comfort)*.1+after.crowdedBlackKeys*.08;
-            if(cost<best-1e-9){best=cost;bestRemoved=candidate;}
+            const double shape=std::max(0,after.high-after.low-limits.comfort)*.1+after.crowdedBlackKeys*.08;
+            if(released<bestCount || (released==bestCount && (loss<bestLoss-1e-9 || (std::abs(loss-bestLoss)<=1e-9&&shape<bestShape-1e-9)))) {
+                  bestCount=released;bestLoss=loss;bestShape=shape;bestRemoved=candidate;
+                  }
             }
-      if(!std::isfinite(best))return false;*removed=bestRemoved;return true;
+      if(bestCount==std::numeric_limits<int>::max())return false;*removed=bestRemoved;return true;
       }
 inline QVector<Plan> candidates(const QVector<Key>& input,const Limits (&limits)[2],const Position (&previous)[2],double seconds,int width) {
       Plan best;QVector<Plan> choices;best.hands.fill(-1,input.size());if(input.isEmpty()){best.cost=0;return {best};}
@@ -148,6 +153,7 @@ inline QVector<Plan> candidates(const QVector<Key>& input,const Limits (&limits)
             const auto& key=input[i];if(groups.isEmpty() || groups.back().pitch!=key.pitch){Group g;g.pitch=key.pitch;groups.append(g);}
             if(key.finger<0)uncertain=true;
             auto& group=groups.back();group.members.append(i);group.attack|=key.attack;group.releasable&=!key.attack && key.releasable;
+            if(std::isfinite(key.endSeconds)&&std::isfinite(key.releaseSeconds))group.releaseLoss=std::max(group.releaseLoss,std::max(0.,key.endSeconds-key.releaseSeconds));
             if(key.hand>=0 && key.hand<2) {
                   if(group.hand>=0 && group.hand!=key.hand)uncertain=true;
                   else group.hand=key.hand;

@@ -28,6 +28,7 @@ struct MidiGateOptions {
       QSet<int> tracks,protectedTracks; // explicit staff+voice; empty selection = all
       QSet<int> voices,protectedVoices; // local voice numbers 0..3
       bool protectMelody=false;
+      bool naturalRelease=true;
       double releaseLeadMs=60.;
       PianoHands::Limits hands[2];
       };
@@ -174,7 +175,7 @@ class MidiGateProcessor {
                   // Connected overlap components; each interval is visited only twice.
                   for(int begin=0;begin<group.size();) {
                         int end=begin+1,maxOff=result[group[begin]].off;
-                        while(end<group.size() && result[group[end]].on<=maxOff) {
+                        while(end<group.size() && result[group[end]].on<maxOff) {
                               maxOff=qMax(maxOff,result[group[end]].off);++end;
                               }
                         if(end-begin>1)for(int i=begin;i<end;++i)result[group[i]].ambiguous=true;
@@ -253,6 +254,7 @@ class MidiGateProcessor {
                               }
                         active.erase(std::remove_if(active.begin(),active.end(),[&](int i){return result[i].newOff<=tick;}),active.end());active+=frame.value();
                         for(int i:active) {
+                              if(preserved(result[i],option)=="hand-conflict")continue;
                               int epoch=0;const auto sequence=sequenceAt(i,tick,&epoch);auto old=substitutions.find(i);
                               if(old!=substitutions.end()&&old->epoch!=epoch) {
                                     if(!old->complete())result[i].fingeringUnresolved=true;
@@ -260,10 +262,10 @@ class MidiGateProcessor {
                                     }
                               if(!unresolved.contains(result[i].id)&&sequence.size()>1&&old==substitutions.end())substitutions.insert(i,{epoch,sequence,{}});
                               }
-                        QVector<PianoHands::Key> keys;QVector<int> releaseAt;bool uncertain=false;
+                        QVector<PianoHands::Key> keys;QVector<int> releaseAt;
                         for(int i:active) {
                               const int candidate=tickAt(now-qBound(0.,option.releaseLeadMs,500.)/1000.);
-                              keys.append(keyAt(i,tick));releaseAt.append(candidate);uncertain|=keys.last().hand==-2;
+                              keys.append(keyAt(i,tick));releaseAt.append(candidate);
                               }
                         QVector<PianoHands::Future> future;QVector<int> futureTicks;
                         auto nextFrame=frame;
@@ -280,7 +282,7 @@ class MidiGateProcessor {
                               futureTicks.append(nextTick);
                               }
                         auto plan=PianoHands::planWithContext(keys,option.hands,previous,now,future);
-                        if(plan.limited || plan.uncertain || uncertain)continue;
+                        if(plan.limited || plan.uncertain)continue;
                         auto refresh=[&] {
                               active.erase(std::remove_if(active.begin(),active.end(),[&](int i){return result[i].newOff<=tick;}),active.end());
                               keys.clear();releaseAt.clear();for(int i:active){keys.append(keyAt(i,tick));releaseAt.append(tickAt(now-qBound(0.,option.releaseLeadMs,500.)/1000.));}
@@ -363,6 +365,7 @@ class MidiGateProcessor {
                               }
                         bool changedHand[2]={false,false};
                         for(int k=0;k<active.size();++k) {
+                              if(keys[k].hand==-2)continue;
                               const int index=active[k];auto& n=result[index];const int side=plan.hands[k];if(side<0)continue;
                               const int before=assignedHands[index];if(before!=side){if(before>=0)changedHand[before]=true;changedHand[side]=true;}
                               assignedHands[index]=side;if(n.on==tick)n.hand=side;
@@ -399,6 +402,7 @@ class MidiGateProcessor {
                   auto preserve=[&](const char* reason){n.reason=QString::fromLatin1(reason);};
                   const auto protection=preserved(n,option);if(!protection.isEmpty()){n.newOff=n.off;n.reason=protection;continue;}
                   if(physicalRelease(n.reason)||fixedReleases.contains(n.id))continue;
+                  if(!option.naturalRelease){preserve("natural-disabled");continue;}
                   const double start=seconds(n.on), length=seconds(n.off)-start;
                   const double minimum=qBound(1.,option.minimumMs,5000.)/1000.;
                   if(length<=minimum) {preserve("short-note");continue;}

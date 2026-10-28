@@ -43,6 +43,9 @@
 #include "libmscore/measure.h"
 #include "libmscore/undo.h"
 #include "libmscore/pedal.h"
+#include "libmscore/pedalplayback.h"
+#include <QCheckBox>
+#include <QDialogButtonBox>
 #include "libmscore/synthesizerstate.h"
 #include "libmscore/tie.h"
 #include "libmscore/tempo.h"
@@ -422,6 +425,76 @@ class TestP0Native : public QObject {
             QVector<PianoHands::Key> impossible={{0,60,1,1,true,false},{1,84,1,1,true,false}};auto onset=PianoHands::plan(impossible,limits,positions,0);QVERIFY(!onset.possible);QVERIFY(onset.released.isEmpty());
             QVector<PianoHands::Key> layered={{0,60,0,0,false,true},{1,61,0,0,false,true},{2,62,0,0,true,false},{3,76,0,0,true,false},{4,78,0,0,false,true},{5,79,0,0,false,true}};auto plateau=PianoHands::plan(layered,limits,positions,.5);QVERIFY(plateau.possible);QCOMPARE(plateau.after[0].high-plateau.after[0].low,16);QCOMPARE(plateau.released.size(),2);QVERIFY(!plateau.released.contains(2) && !plateau.released.contains(3));
             QVector<PianoHands::Key> flexible={{0,36,0,0,false,true},{1,60,-1,0,true,false},{2,64,-1,0,true,false},{3,67,-1,0,true,false},{4,84,-1,1,true,false}};auto hands=PianoHands::plan(flexible,limits,positions,.5);QVERIFY(hands.possible);QVERIFY(hands.released.contains(0));QCOMPARE(hands.hands[4],1);
+            }
+
+
+
+
+      void nativeOnlyNecessaryPreviewAndFile() {
+            const bool previousNatural=QSettings().value("export/midi/naturalRelease",true).toBool(),previousEnabled=preferences.getBool("export/midi/cropEnabled");QSettings().setValue("export/midi/naturalRelease",false);preferences.setPreference("export/midi/cropEnabled",true);
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx"));QVERIFY(score);auto pedal=new Pedal(score.get());pedal->setTick(Fraction());pedal->setTicks(Fraction::fromTicks(1920));pedal->setTrack(4);pedal->setTrack2(4);score->addSpanner(pedal);score->doLayout();const auto state=score->state();const bool dirty=score->dirty();const int undo=score->undoStack()->getCurIdx();
+            MidiCropPanel panel(nullptr,[&]{return QList<Score*>{score.get()};});panel.show();QTimer timer;timer.setInterval(40);int stage=0,tries=0;bool mismatch=false;
+            connect(&timer,&QTimer::timeout,&panel,[&]{auto dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());if(!dialog)return;if(++tries>150){dialog->reject();return;}auto table=dialog->findChild<QTableView*>("midiCropNotes");auto roll=dialog->findChild<QAbstractScrollArea*>("midiCropRoll");if(!table||!roll||!roll->isEnabled()||!table->model()->rowCount())return;int root=-1,shorter=0;for(int i=0;i<table->model()->rowCount();++i){if(table->model()->index(i,0).data().toString()=="C2")root=i;shorter+=table->model()->index(i,3).data().toInt()<table->model()->index(i,2).data().toInt();}if(root<0)return;
+                  if(stage==0){mismatch|=shorter!=1;table->selectRow(root);QTest::mouseClick(dialog->findChild<QPushButton*>("midiCropExclude"),Qt::LeftButton);++stage;}
+                  else if(stage==1){mismatch|=shorter!=0;dialog->findChild<QAction*>("midiCropUndoAction")->trigger();++stage;}
+                  else if(stage==2){mismatch|=shorter!=1;timer.stop();dialog->grab().save(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS")+"/midi-only-necessary-preview.png");dialog->accept();++stage;}
+                  });timer.start();QTest::mouseClick(panel.findChild<QPushButton*>("midiCropCompare"),Qt::LeftButton);timer.stop();QCOMPARE(stage,3);QVERIFY(!mismatch);
+            const auto file=settings.filePath("only-necessary.mid"),original=settings.filePath("only-necessary-original.mid");QVERIFY(panel.write(score.get(),file,original));ExportMidi expected(score.get());QBuffer bytes;bytes.open(QIODevice::WriteOnly);QVERIFY(expected.write(&bytes,preferences.getBool(PREF_IO_MIDI_EXPANDREPEATS),preferences.getBool(PREF_IO_MIDI_EXPORTRPNS),mscore->synthesizerState(),panel.options(score.get())));int count=0;for(const auto& n:expected.gateReport)if(n.newOff<n.off){QCOMPARE(n.pitch,36);QCOMPARE(n.reason,QString("hand-release"));++count;}QCOMPARE(count,1);QFile result(file);QVERIFY(result.open(QIODevice::ReadOnly));QCOMPARE(result.readAll(),bytes.data());QVERIFY(score->state()==state);QCOMPARE(score->dirty(),dirty);QCOMPARE(score->undoStack()->getCurIdx(),undo);
+            const auto font=qEnvironmentVariable("P0_TEST_SOUNDFONT");QVERIFY(!font.isEmpty());const auto before=render(expected.gateBaseline,expected.gateData,font),after=render(expected.mf,expected.gateData,font);QVERIFY(!before.isEmpty());QCOMPARE(before,after);QSettings().setValue("export/midi/naturalRelease",previousNatural);preferences.setPreference("export/midi/cropEnabled",previousEnabled);
+            }
+      void midiOnlyNecessaryAndGroupedNatural() {
+            auto note=[](QString id,int pitch,int on,int off,int hand){MidiGateNote n;n.id=id;n.pitch=pitch;n.on=on;n.off=n.newOff=off;n.hand=n.handHint=hand;n.piano=n.known=true;n.partId=0;n.voice=hand==0?4:0;n.staff=hand==0?1:0;n.offOrdinal=pitch;n.sourceTick=on;return n;};
+            MidiGateData data;data.pedals={{0,0,-1,2500,true}};data.notes={note("root",36,0,1800,0),note("new",60,480,960,0)};MidiGateOptions options;options.naturalRelease=false;MidiGateProcessor processor;auto rows=processor.process(data,options);QCOMPARE(rows[0].reason,QString("hand-release"));QCOMPARE(rows[1].newOff,960);QCOMPARE(rows[1].reason,QString("natural-disabled"));
+            options.releaseOverrides["new"]=700;rows=processor.process(data,options);QCOMPARE(rows[1].newOff,700);QCOMPARE(rows[1].reason,QString("manual-release"));
+            data.notes.clear();data.pedals={{0,0,-1,241000,true}};for(int group=0;group<100;++group)for(int pitch:{60,64,67})data.notes.append(note(QString("%1-%2").arg(group).arg(pitch),pitch,group*2400,group*2400+960,1));options=MidiGateOptions();QElapsedTimer timer;timer.start();rows=processor.process(data,options);const auto again=processor.process(data,options);QMap<QString,int> ends;
+            for(int group=0;group<100;++group){int first=INT_MAX,last=0;for(int k=0;k<3;++k){const int i=group*3+k;QCOMPARE(rows[i].newOff,again[i].newOff);QVERIFY(rows[i].newOff>data.notes[i].on);QVERIFY(rows[i].newOff<data.notes[i].off);first=qMin(first,rows[i].newOff);last=qMax(last,rows[i].newOff);ends[rows[i].id]=rows[i].newOff;}QVERIFY(last-first<=5);}
+            std::reverse(data.notes.begin(),data.notes.end());const auto reordered=processor.process(data,options);for(const auto& n:reordered)QCOMPARE(n.newOff,ends[n.id]);qInfo()<<"Natural release 100 chords including replay and reordered input ms"<<timer.elapsed();
+            }
+      void midiNecessarySettingUseAndCancel() {
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx"));QVERIFY(score);QSettings().remove("export/midi/naturalRelease");MidiCropPanel panel(nullptr,[&]{return QList<Score*>{score.get()};});QVERIFY(panel.options(score.get()).gate.naturalRelease);
+            auto configure=[&](MidiCropPanel& target,bool wanted,bool save,bool screenshot){QTimer timer;timer.setInterval(40);bool done=false;int tries=0;connect(&timer,&QTimer::timeout,&target,[&]{auto dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());if(!dialog)return;if(++tries>60){dialog->reject();return;}auto check=dialog->findChild<QCheckBox*>("cropNaturalRelease");if(!check)return;timer.stop();if(check->isChecked()!=wanted)QTest::mouseClick(check,Qt::LeftButton,Qt::NoModifier,QPoint(7,check->height()/2));bool enabled=true;for(const auto& name:{"cropNaturalLength","cropNaturalNext","cropNaturalJitter","cropNaturalSeed"}){auto control=dialog->findChild<QWidget*>(name);enabled&=control&&control->isEnabled()==wanted;}done=enabled&&check->isChecked()==wanted;if(screenshot)dialog->grab().save(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS")+"/midi-necessary-settings.png");auto buttons=dialog->findChild<QDialogButtonBox*>();QTest::mouseClick(buttons->button(save?QDialogButtonBox::Ok:QDialogButtonBox::Cancel),Qt::LeftButton);});timer.start();QTest::mouseClick(target.findChild<QPushButton*>("midiCropSettingsButton"),Qt::LeftButton);timer.stop();return done;};
+            QVERIFY(configure(panel,false,true,true));QVERIFY(!panel.options(score.get()).gate.naturalRelease);MidiCropPanel reopened(nullptr,[&]{return QList<Score*>{score.get()};});QVERIFY(!reopened.options(score.get()).gate.naturalRelease);QVERIFY(configure(reopened,true,false,false));QVERIFY(!reopened.options(score.get()).gate.naturalRelease);QVERIFY(configure(panel,true,true,false));QVERIFY(panel.options(score.get()).gate.naturalRelease);
+            }
+      void midiComparisonUsesChosenPedal() {
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx"));QVERIFY(score);
+            auto pedal=new Pedal(score.get());pedal->setTick(Fraction());pedal->setTicks(Fraction::fromTicks(1920));pedal->setTrack(4);pedal->setTrack2(4);score->addSpanner(pedal);PedalPlayback::Settings settings;settings.piano=true;settings.downMs=500;settings.delayFirst=true;score->parts().front()->setProperty(Pid::PEDAL_PLAYBACK,PedalPlayback::encode(settings));score->doLayout();
+            ExportMidi expected(score.get()),other(score.get());MidiExportOptions options;options.crop=true;options.writtenPedal=true;QBuffer bytes;bytes.open(QIODevice::WriteOnly);QVERIFY(expected.write(&bytes,true,true,mscore->synthesizerState(),options));options.writtenPedal=false;QBuffer second;second.open(QIODevice::WriteOnly);QVERIFY(other.write(&second,true,true,mscore->synthesizerState(),options));
+            int expectedMs=-1,otherMs=-1;MidiGateProcessor clock;clock.setClock(expected.gateData);for(const auto& n:expected.gateReport)if(n.pitch==36)expectedMs=qRound(clock.durationMs(n.on,n.newOff));clock.setClock(other.gateData);for(const auto& n:other.gateReport)if(n.pitch==36)otherMs=qRound(clock.durationMs(n.on,n.newOff));QVERIFY(expectedMs>=0);QVERIFY(expectedMs!=otherMs);
+            MidiCropPanel panel(nullptr,[&]{return QList<Score*>{score.get()};});panel.findChild<QCheckBox*>("midiWrittenPedal")->setChecked(true);panel.show();QTimer timer;timer.setInterval(40);int actualMs=-1,tries=0;
+            connect(&timer,&QTimer::timeout,&panel,[&]{auto dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());if(!dialog)return;if(++tries>100){dialog->reject();return;}auto table=dialog->findChild<QTableView*>("midiCropNotes");auto roll=dialog->findChild<QAbstractScrollArea*>("midiCropRoll");if(!table||!roll||!roll->isEnabled()||!table->model()->rowCount())return;for(int row=0;row<table->model()->rowCount();++row)if(table->model()->index(row,0).data().toString()=="C2"){actualMs=table->model()->index(row,3).data().toInt();timer.stop();dialog->accept();return;}});
+            timer.start();QTest::mouseClick(panel.findChild<QPushButton*>("midiCropCompare"),Qt::LeftButton);timer.stop();QSettings().setValue("export/midi/writtenPedal",false);qInfo()<<"Chosen pedal preview/export ms"<<actualMs<<expectedMs<<"piano pedal"<<otherMs;QCOMPARE(actualMs,expectedMs);
+            }
+      void midiTouchingNotesKeepUniquePairing() {
+            MidiFile file;file.setDivision(480);file.setFormat(1);MidiTrack track;track.setOutPort(0);track.setOutChannel(0);
+            track.insert(0,MidiEvent(ME_CONTROLLER,0,64,127));track.insert(0,MidiEvent(ME_NOTEON,0,60,85));track.insert(480,MidiEvent(ME_NOTEON,0,60,0));track.insert(480,MidiEvent(ME_NOTEON,0,60,90));track.insert(960,MidiEvent(ME_NOTEON,0,60,0));track.insert(1200,MidiEvent(ME_CONTROLLER,0,64,0));file.tracks().append(track);
+            MidiGateSource first;first.piano=true;first.pitch=60;first.staff=first.voice=0;first.hand=1;first.handHint=1;first.partId=0;first.sourceTick=0;auto second=first;second.on=second.sourceTick=480;
+            auto data=midiGateSnapshot(file,{first,second});QCOMPARE(data.notes.size(),2);QVERIFY(!data.notes[0].ambiguous);QVERIFY(!data.notes[1].ambiguous);MidiGateProcessor processor;MidiGateOptions options;options.jitter=0;const auto rows=processor.process(data,options);
+            for(int i=0;i<2;++i){QVERIFY2(!rows[i].ambiguous,qPrintable(rows[i].reason));QVERIFY(rows[i].newOff<rows[i].off);}
+            auto& events=file.tracks()[0].events();auto at=events.equal_range(480);events.erase(at.first,at.second);track=MidiTrack();file.tracks()[0].insert(480,MidiEvent(ME_NOTEON,0,60,90));file.tracks()[0].insert(480,MidiEvent(ME_NOTEON,0,60,0));
+            data=midiGateSnapshot(file,{first,second});QVERIFY(data.notes[0].ambiguous);QVERIFY(data.notes[1].ambiguous);const auto overlapping=processor.process(data,options);for(const auto& n:overlapping)QCOMPARE(n.newOff,n.off);
+            }
+      void midiUncertainHandKeepsCertainRelease() {
+            auto note=[](QString id,int pitch,int on,int off,int hand){MidiGateNote n;n.id=id;n.pitch=pitch;n.on=on;n.off=off;n.hand=hand;n.handHint=hand==0?0:1;n.partId=0;n.staff=hand==0?1:0;n.voice=hand==0?4:0;n.known=n.piano=true;n.offOrdinal=pitch;n.sourceTick=on;return n;};
+            MidiGateData data;data.pedals={{0,0,0,1900,true}};data.notes={note("root",36,0,1800,0),note("uncertain",100,0,1800,-2),note("c",60,480,960,0),note("e",64,480,960,0),note("g",67,480,960,0)};
+            MidiGateProcessor processor;MidiGateOptions options;options.jitter=0;const auto rows=processor.process(data,options);QCOMPARE(rows[0].reason,QString("hand-release"));QVERIFY(rows[0].newOff<480);QCOMPARE(rows[1].hand,-2);QCOMPARE(rows[1].reason,QString("hand-conflict"));QCOMPARE(rows[1].newOff,1800);
+            }
+      void pianoReleaseKeepsLongerHeldKey() {
+            PianoHands::Limits limits[2];PianoHands::Position positions[2];
+            QVector<PianoHands::Key> keys={{0,48,1,1,false,true,1},{1,60,1,1,false,true,2},{2,54,1,1,true,false}};
+            keys[0].endSeconds=.51;keys[0].releaseSeconds=.44;keys[1].endSeconds=1.9;keys[1].releaseSeconds=.44;keys[2].fingerMask=3;
+            const auto plan=PianoHands::plan(keys,limits,positions,.5);QVERIFY(plan.possible);QCOMPARE(plan.released,QVector<int>{0});
+            auto duplicate=keys[0];duplicate.id=3;duplicate.endSeconds=1.9;keys[1].endSeconds=.7;keys.append(duplicate);const auto physical=PianoHands::plan(keys,limits,positions,.5);QVERIFY(physical.possible);QCOMPARE(physical.released,QVector<int>{1});QCOMPARE(physical.before[1].count,3);
+            }
+      void midiNecessaryReleaseMatchesEnumeration() {
+            const int oldPitches[]={48,52,55,59},off[]={490,700,1100,1800},newPitches[]={60,64,67};QStringList differences;int cases=0;
+            auto canFinger=[](const QVector<int>& masks){std::function<bool(int,int)> assign=[&](int at,int used){if(at==masks.size())return true;for(int f=0;f<5;++f)if((masks[at]&(1<<f))&&!(used&(1<<f))&&assign(at+1,used|(1<<f)))return true;return false;};return assign(0,0);};
+            for(int variant=0;variant<3;++variant)for(int oldMask=1;oldMask<16;++oldMask)for(int newMask=1;newMask<8;++newMask){
+                  MidiGateData data;data.tempos={{0,500000.}};data.pedals={{0,0,0,2200,true}};QVector<int> oldIndices;
+                  for(int k=0;k<7;++k){const bool old=k<4;const int pos=old?k:k-4;if(!(old?oldMask&(1<<pos):newMask&(1<<pos)))continue;MidiGateNote n;n.id=QString::number(k);n.pitch=old?oldPitches[pos]:newPitches[pos];n.hand=n.handHint=0;n.partId=0;n.piano=n.known=true;n.offOrdinal=k;n.voice=old?4:5;n.staff=1;n.on=old?0:480;n.off=n.newOff=old?off[pos]:960;n.sourceTick=n.on;n.finger=old?pos+1:variant==0?pos+2:0;n.fingerMask=old||variant==0?1<<(n.finger-1):variant==1?31:7;if(old)oldIndices.append(data.notes.size());data.notes.append(n);}
+                  int bestCount=100,bestLoss=INT_MAX;for(int keep=0;keep<(1<<oldIndices.size());++keep){QVector<int> pitches,masks;int count=0,loss=0;for(int i=0;i<data.notes.size();++i){const auto& n=data.notes[i];const int index=oldIndices.indexOf(i);if(index>=0&&!(keep&(1<<index))){++count;loss+=n.off-423;continue;}pitches.append(n.pitch);masks.append(n.fingerMask);}if(pitches.size()>5||!canFinger(masks))continue;const auto bounds=std::minmax_element(pitches.cbegin(),pitches.cend());const int maximum=PianoHands::white(*bounds.first)&&PianoHands::white(*bounds.second)?16:15;if(*bounds.second-*bounds.first>maximum)continue;if(count<bestCount||count==bestCount&&loss<bestLoss){bestCount=count;bestLoss=loss;}}
+                  MidiGateProcessor processor;MidiGateOptions options;options.jitter=0;const auto rows=processor.process(data,options);int actualCount=0,actualLoss=0;for(const auto& n:rows)if(n.reason=="hand-release"){++actualCount;actualLoss+=n.off-n.newOff;}if(bestCount!=actualCount||bestLoss!=actualLoss)differences.append(QString("variant%1 old%2/new%3: %4,%5 != %6,%7").arg(variant).arg(oldMask).arg(newMask).arg(actualCount).arg(actualLoss).arg(bestCount).arg(bestLoss));++cases;
+                  }
+            qInfo()<<"Necessary release enumeration"<<cases<<"cases,"<<differences.size()<<"different";QVERIFY2(differences.isEmpty(),qPrintable(differences.mid(0,5).join("; ")));
             }
       void midiConflictReleaseAndGroupedVariation() {
             MidiGateData data;data.pedals={{0,0,0,1900,true}};
