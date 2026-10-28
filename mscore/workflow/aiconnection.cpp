@@ -34,6 +34,14 @@
 #include <QTcpServer>
 #include <QTextBrowser>
 #include <QTimer>
+#include <QSettings>
+#include <QSignalBlocker>
+#include <QTreeWidget>
+#include <QHeaderView>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QCheckBox>
+#include <QToolButton>
 #include <QUuid>
 #include <QVBoxLayout>
 #ifdef Q_OS_WIN
@@ -59,8 +67,16 @@ bool saveJson(const QString &path, const QJsonObject &value) {
   return file.write(data) == data.size() && file.commit();
 }
 QString mcpProgram() {
-  return QDir(QCoreApplication::applicationDirPath())
-      .filePath("tools/mcp/MuseScoreMCP.exe");
+  const QDir root(QDir(QCoreApplication::applicationDirPath()).filePath("tools/mcp"));
+  QFile pointer(root.filePath("current.json"));
+  if (pointer.open(QIODevice::ReadOnly)) {
+    const auto directory = QJsonDocument::fromJson(pointer.readAll()).object().value("directory").toString();
+    if (!directory.isEmpty() && !directory.contains('/') && !directory.contains('\\') && directory != "." && directory != "..") {
+      const auto program = root.filePath(directory + "/MuseScoreMCP.exe");
+      if (QFileInfo::exists(program)) return program;
+    }
+  }
+  return root.filePath("MuseScoreMCP.exe");
 }
 bool alive(qint64 pid) {
   if (pid <= 0)
@@ -223,203 +239,7 @@ QPointer<Bridge> bridge;
 QPointer<QDialog> dialog, guide;
 QPointer<QTextBrowser> browser;
 
-class ConnectionDialog : public QDialog {
-  QLabel *status;
-  QLabel *connectionState;
-  QListWidget *windows;
-  QList<QPushButton *> operations;
-  QTimer refresh;
-  bool busy = false;
-  QString lastWindows;
-  void refreshWindows() {
-    const auto files =
-        QDir(stateDirectory()).entryList({"instance-*.json"}, QDir::Files);
-    QJsonArray values;
-    for (const auto &file : files) {
-      auto value = readJson(QDir(stateDirectory()).filePath(file));
-      if (!value.isEmpty() && alive(qint64(value.value("pid").toDouble())))
-        values.append(value);
-    }
-    const QString key =
-        QString::fromUtf8(QJsonDocument(values).toJson(QJsonDocument::Compact));
-    if (key == lastWindows)
-      return;
-    lastWindows = key;
-    const QString selected =
-        readJson(QDir(stateDirectory()).filePath("selection.json"))
-            .value("id")
-            .toString();
-    windows->clear();
-    for (const auto &item : values) {
-      const auto value = item.toObject();
-      auto row = new QListWidgetItem(
-          tr("%1 · %2").arg(value.value("score").toString(),
-                            value.value("version").toString()),
-          windows);
-      row->setData(Qt::UserRole, value.value("id").toString());
-      row->setData(Qt::UserRole + 1, value.value("application").toString());
-      row->setToolTip(value.value("application").toString());
-      if (value.value("id").toString() == selected)
-        windows->setCurrentItem(row);
-    }
-    if (windows->currentRow() < 0 && windows->count() == 1)
-      windows->setCurrentRow(0);
-  }
-  void run(const QString &mode) {
-    if (busy)
-      return;
-    if (!QFileInfo::exists(mcpProgram())) {
-      status->setText(
-          tr("MCP 程序未找到，请安装完整程序包。\n%1").arg(mcpProgram()));
-      return;
-    }
-    busy = true;
-    for (auto button : operations)
-      button->setEnabled(false);
-    status->setText(mode == "--register-codex" ? tr("正在保存 Codex 连接配置…")
-                                               : tr("正在检查程序与乐谱连接…"));
-    auto process = new QProcess(this);
-#ifdef Q_OS_WIN
-    process->setCreateProcessArgumentsModifier(
-        [](QProcess::CreateProcessArguments *args) {
-          args->flags |= 0x08000000;
-        });
-#endif
-    auto timer = new QTimer(process);
-    timer->setSingleShot(true);
-    timer->start(30000);
-    connect(timer, &QTimer::timeout, process, [process] { process->kill(); });
-    connect(process, &QProcess::errorOccurred, this,
-            [this, process](QProcess::ProcessError e) {
-              if (e == QProcess::FailedToStart) {
-                busy = false;
-                for (auto button : operations)
-                  button->setEnabled(true);
-                status->setText(
-                    tr("MCP 程序无法启动：%1").arg(process->errorString()));
-                process->deleteLater();
-              }
-            });
-    connect(process,
-            QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-            [this, process, mode](int, QProcess::ExitStatus) {
-              busy = false;
-              for (auto button : operations)
-                button->setEnabled(true);
-              const auto result =
-                  QJsonDocument::fromJson(process->readAllStandardOutput())
-                      .object();
-              if (result.value("ok").toBool())
-                status->setText(mode == "--register-codex"
-                                    ? result.value("message").toString()
-                                    : tr("连接成功。Codex 可以读取当前乐谱。"));
-              else
-                status->setText(result.value("error").toString(
-                    tr("检查未完成。请确认 kumo.ini "
-                       "已开启扩展、程序包完整，并重新检查连接。")));
-              process->deleteLater();
-              refreshWindows();
-            });
-    const auto item = windows->currentItem();
-    const QString target = item ? item->data(Qt::UserRole + 1).toString()
-                                : QCoreApplication::applicationFilePath();
-    process->start(mcpProgram(), {mode, "--application", target});
-  }
-  void showEvent(QShowEvent *e) override {
-    QDialog::showEvent(e);
-    refreshWindows();
-    refresh.start();
-  }
-  void hideEvent(QHideEvent *e) override {
-    refresh.stop();
-    QDialog::hideEvent(e);
-  }
-
-public:
-  explicit ConnectionDialog(QWidget *parent) : QDialog(parent) {
-    setWindowTitle(tr("AI 连接"));
-    setObjectName("kumoAIConnection");
-    setModal(false);
-    resize(580, 390);
-    auto layout = new QVBoxLayout(this);
-    auto intro =
-        new QLabel(tr("连接一次后，在 Codex 中直接说明要分析或修改的谱段。"));
-    intro->setWordWrap(true);
-    layout->addWidget(intro);
-    auto path = new QLabel(QCoreApplication::applicationFilePath());
-    path->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    path->setWordWrap(true);
-    layout->addWidget(path);
-    connectionState = new QLabel;
-    connectionState->setWordWrap(true);
-    layout->addWidget(connectionState);
-    windows = new QListWidget;
-    windows->setObjectName("aiConnectionWindows");
-    layout->addWidget(windows, 1);
-    auto use = new QPushButton(tr("使用选中的窗口"));
-    setComponentToolIcon(use, "panel");
-    layout->addWidget(use);
-    connect(use, &QPushButton::clicked, this, [this] {
-      auto item = windows->currentItem();
-      if (!item)
-        return;
-      if (saveJson(QDir(stateDirectory()).filePath("selection.json"),
-                   {{"id", item->data(Qt::UserRole).toString()}}))
-        status->setText(tr("已选择，后续 Codex 操作使用这个窗口。"));
-    });
-    auto row = new QHBoxLayout;
-    layout->addLayout(row);
-    auto configure = new QPushButton(tr("配置 Codex"));
-    setComponentToolIcon(configure, "settings");
-    configure->setObjectName("aiConfigureCodex");
-    row->addWidget(configure);
-    auto check = new QPushButton(tr("检查连接"));
-    setComponentToolIcon(check, "refresh");
-    check->setObjectName("aiCheckConnection");
-    row->addWidget(check);
-    auto copy = new QPushButton(tr("复制配置"));
-    setComponentToolIcon(copy, "copy");
-    row->addWidget(copy);
-    operations = {configure, check, copy, use};
-    connect(configure, &QPushButton::clicked, this,
-            [this] { run("--register-codex"); });
-    connect(check, &QPushButton::clicked, this, [this] { run("--diagnose"); });
-    connect(copy, &QPushButton::clicked, this, [this] {
-      const auto item = windows->currentItem();
-      const QString target = item ? item->data(Qt::UserRole + 1).toString()
-                                  : QCoreApplication::applicationFilePath();
-      const auto args = QString::fromUtf8(
-          QJsonDocument(QJsonArray{"--stdio", "--application", target})
-              .toJson(QJsonDocument::Compact));
-      QApplication::clipboard()->setText(
-          "[mcp_servers.musescore]\ncommand = " + quoted(mcpProgram()) +
-          "\nargs = " + args +
-          "\nstartup_timeout_sec = 20\ntool_timeout_sec = 60\n");
-      status->setText(
-          tr("已复制。在 Codex 配置文件中加入这段内容，再重新连接。"));
-    });
-    connectionState->setText(bridge ? bridge->status()
-                                    : personalFeatureStatus());
-    status = new QLabel(
-        tr("首次使用请点击“配置 Codex”，随后重新打开 Codex 对话并检查连接。"));
-    status->setWordWrap(true);
-    status->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    status->setObjectName("aiConnectionStatus");
-    layout->addWidget(status);
-    auto buttons =
-        new QDialogButtonBox(QDialogButtonBox::Help | QDialogButtonBox::Close);
-    layout->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::helpRequested, this,
-            [] { showPersonalGuide("docs/WORKSPACE_063_GUIDE.md"); });
-    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::close);
-    refresh.setInterval(1500);
-    connect(&refresh, &QTimer::timeout, this, [this] {
-      refreshWindows();
-      connectionState->setText(bridge ? bridge->status()
-                                      : personalFeatureStatus());
-    });
-  }
-};
+#include "aiconnectionpanel.inc"
 void loadGuide(const QString &page) {
   if (!browser)
     return;
@@ -443,7 +263,8 @@ QString builtinPanelPath(const QString &name) {
          ".view.qml";
 }
 void initializeBuiltinAI() {
-  if (!personalFeaturesEnabled() || bridge || !mscore)
+  if (!personalFeaturesEnabled() || bridge || !mscore ||
+      !QSettings().value("workflow/aiEnabled", true).toBool())
     return;
   bridge = new Bridge(qApp);
 }
@@ -456,7 +277,6 @@ void shutdownBuiltinAI() {
 void showAIConnection() {
   if (!personalFeaturesEnabled() || !mscore)
     return;
-  initializeBuiltinAI();
   if (!dialog)
     dialog = new ConnectionDialog(mscore);
   dialog->show();
@@ -483,8 +303,12 @@ void addAIConnectionAction(QMenu *menu) {
     Workspace::addActionAndString(action, "kumo-ai-connection");
     QObject::connect(action, &QAction::triggered, qApp,
                      [] { showAIConnection(); });
-    if (qEnvironmentVariable("KUMO_MCP_AUTOSTART") != "0")
-      QTimer::singleShot(0, owner, [] { initializeBuiltinAI(); });
+    if (qEnvironmentVariable("KUMO_MCP_AUTOSTART") != "0" &&
+        QSettings().value("workflow/aiAutostart", true).toBool())
+      QTimer::singleShot(0, owner, [] {
+        QSettings().setValue("workflow/aiEnabled", true);
+        initializeBuiltinAI();
+      });
   }
   action->setText(QObject::tr("AI 连接"));
   if (!menu->actions().contains(action))

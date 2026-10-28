@@ -612,3 +612,6 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方
 必要松手的选择	libmscore/pianohands.h	releaseForHand	109	最少松键与提前时长、同音共同保持	pianoReleaseKeepsLongerHeldKey / midiNecessaryReleaseMatchesEnumeration
 相接同音与自然开关	audio/exports/midigate.h	MidiGateProcessor::processPass	160	明确音继续计算、成组自然变化、必要松手单独使用	midiTouchingNotesKeepUniquePairing / midiOnlyNecessaryAndGroupedNatural
 踏板对比与设置	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::settings / compare	173	设置显隐、取消保存与选定踏板	midiComparisonUsesChosenPedal / nativeOnlyNecessaryPreviewAndFile
+
+AI连接独立控制	mscore/workflow/aiconnectionpanel.inc	ConnectionDialog	2	读谱启停、自动开启、Codex及会话列表	aiConnectionServiceControls133 / aiConnectionCodexProcessControls133
+MCP会话控制	mcp-musescore/src/sessions.py	sessions / end_session / ClientSession	1	进程身份、活动记录及所选连接退出	tests/test_sessions.py

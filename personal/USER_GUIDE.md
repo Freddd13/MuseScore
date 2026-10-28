@@ -1,5 +1,7 @@
 # MuseScore Evolution 个人功能说明
 
+0.133.0增加AI读谱独立启停、Codex启动开关和MCP进程列表，操作见[管理AI连接](docs/AI_CONNECTION_133_GUIDE.md)。
+
 0.132.0补齐必要松手选择、自然松手开关及踏板预览，操作见[按需要安排松手](docs/MIDI_RELEASE_132_GUIDE.md)。
 
 0.131.0新增MIDI左右手分轨，可预览、批量指定及撤销，操作见[按实际左右手导出](docs/MIDI_HAND_EXPORT_GUIDE.md)。
@@ -38,7 +40,7 @@
 
 AI怎样读取当前谱、标题和图片，见[当前实现与后续安排](docs/AI_WORKFLOW_REVIEW_20261024.md)。当前旧画谱入口会根据音符重新排版；MuseScore原生选段图片与数据一起提供的功能安排在E阶段。
 
-本文对应个人版本：**0.132.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+本文对应个人版本：**0.133.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
 
 从完整MIDI寻找选段、分别选择两音改对应、撤销重做及使用力度，见[演奏表达操作](docs/EXPRESSION_096_GUIDE.md)。采用演奏中的快慢、分范围使用速度与长休止录制，见[速度与录制](docs/EXPRESSION_097_GUIDE.md)。
 
@@ -608,6 +610,8 @@ Ctrl+Z撤销，编辑菜单中的“重做”可恢复这一步。节点位置�
 ## 16. 其它工具与常见情况
 
 ### 连接 Codex
+
+“停止读谱连接”暂停AI读写；“启动软件时自动开启”控制下次打开软件。“允许Codex启动MuseScore MCP”控制Codex端，展开“Codex连接”可刷新和结束所选进程。完整步骤见[开启、停止和管理MCP](docs/AI_CONNECTION_133_GUIDE.md)。
 
 打开“视图 → AI连接”，选择当前MuseScore窗口，点“配置Codex”，再点“检查连接”。程序使用安装目录里附带的连接工具。连接成功后，在Codex询问“当前谱名和选区是什么”，便可开始读取和讨论编配。完整例子见[第一次连接](docs/WORKSPACE_063_GUIDE.md)。
 

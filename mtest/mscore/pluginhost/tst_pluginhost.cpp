@@ -16,6 +16,8 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QTimer>
+#include <QScopeGuard>
+#include <QProcess>
 #include <QScopedValueRollback>
 #include <QtConcurrent>
 #include "mscore/mssplashscreen.h"
@@ -204,6 +206,8 @@ class TestPluginHost : public QObject {
       void metadataSkipsSupportComponents();
       void contentWidthControlsWrapWithoutOverlap();
       void restoredWorkspaceKeepsPersonalTools();
+      void aiConnectionServiceControls133();
+      void aiConnectionCodexProcessControls133();
       void vstFirstUseControls();
       void toolWindowScreenAndFullscreenRoundTrip();
       void spectrumButtonsAndFirstOpenContent();
@@ -1476,6 +1480,7 @@ class TestPluginHost : public QObject {
             }
       };
 #include "usability_072_tests.inc"
+#include "ai_133_tests.inc"
 #include "score_editing_075_tests.inc"
 #include "harmony_display_075_tests.inc"
 #include "variant_metadata_076_tests.inc"
