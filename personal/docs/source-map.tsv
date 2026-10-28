@@ -615,3 +615,6 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方
 
 AI连接独立控制	mscore/workflow/aiconnectionpanel.inc	ConnectionDialog	2	读谱启停、自动开启、Codex及会话列表	aiConnectionServiceControls133 / aiConnectionCodexProcessControls133
 MCP会话控制	mcp-musescore/src/sessions.py	sessions / end_session / ClientSession	1	进程身份、活动记录及所选连接退出	tests/test_sessions.py
+MIDI反复与导出时间	audio/exports/exportmidi.cpp	ExportMidi::write	265	当前反复、暂停和提前起音元数据	midiRepeatHeaderUsesRequestedPolicy / midiAnticipationKeepsFirstBeatMetadata
+导出选项与音符身份	audio/exports/midigatefile.cpp	midiGateSnapshot	29	RPN变化保留手别与松手	midiHandOverridesSurviveExportChoices
+MIDI试听与提前区定位	mscore/workflow/playbackpreview.cpp	startPlaybackPreview	190	第二遍、声音位置、暂停和普通设置恢复	midiRepeatedExportAudition134 / midiAnticipatedExportAudition134

@@ -68,7 +68,7 @@ ExportDialog::ExportDialog(Score* s, QWidget* parent)
                   if(item->isChecked())scores.append(item->score());
                   }
             return scores;
-            });
+            }, [this] { return MidiRenderSettings{midiExpandRepeats->isChecked(),midiExportRPNs->isChecked()}; });
       qobject_cast<QGridLayout*>(midiPage->layout())->addWidget(midiCrop,2,0);
       setWindowFlags(this->windowFlags() & ~Qt::WindowContextHelpButtonHint);
 

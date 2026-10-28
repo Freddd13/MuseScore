@@ -75,6 +75,7 @@ struct MidiGateTempo { int tick=0; double micros=500000.; };
 struct MidiGateData {
       int division = 480;
       bool writtenPedal = false;
+      bool expandRepeats = true, exportRPNs = true;
       QVector<MidiGateNote> notes;
       QVector<MidiGatePedal> pedals;
       QVector<MidiGateTempo> tempos;

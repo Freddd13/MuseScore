@@ -9,6 +9,9 @@ class QCheckBox;
 class QUndoStack;
 namespace Ms {
 class Score;
+struct MidiRenderSettings {
+      bool expandRepeats = true, exportRPNs = true;
+      };
 class MidiCropPanel : public QWidget {
       Q_OBJECT
       QCheckBox* _enabled;
@@ -22,6 +25,8 @@ class MidiCropPanel : public QWidget {
       MidiGateOptions _gate;
       int _fromMeasure=0,_untilMeasure=0;
       std::function<QList<Score*>()> _scores;
+      std::function<MidiRenderSettings()> _renderSettings;
+      MidiRenderSettings renderSettings() const;
       QMap<Score*,QSet<QString>> _exclusions;
       QMap<Score*,QMap<QString,int>> _releaseOverrides;
       QMap<Score*,ScoreContentState> _releaseStates;
@@ -35,7 +40,7 @@ class MidiCropPanel : public QWidget {
       void compare();
       bool voiceSelection(Score*);
    public:
-      MidiCropPanel(QWidget*,std::function<QList<Score*>()>);
+      MidiCropPanel(QWidget*,std::function<QList<Score*>()>,std::function<MidiRenderSettings()> = {});
       bool enabled() const;
       bool splitsHands() const;
       bool includeOriginal() const;

@@ -1,83 +1,13 @@
 # MuseScore Evolution 个人功能说明
 
-0.133.0增加AI读谱独立启停、Codex启动开关和MCP进程列表，操作见[管理AI连接](docs/AI_CONNECTION_133_GUIDE.md)。
-
-0.132.0补齐必要松手选择、自然松手开关及踏板预览，操作见[按需要安排松手](docs/MIDI_RELEASE_132_GUIDE.md)。
-
-0.131.0新增MIDI左右手分轨，可预览、批量指定及撤销，操作见[按实际左右手导出](docs/MIDI_HAND_EXPORT_GUIDE.md)。
-
-0.130.0的延音后段分手、指法及MIDI松手，见[操作说明](docs/MIDI_TIED_GUIDE.md)。
-
-本次 0.129.0 的编配检查、指法建议、MIDI 松手和音源运行方式，见[这版怎样使用](docs/RELEASE_129_GUIDE.md)。
-
-多份乐谱共用钢琴的连续播放修复，见[切谱与钢琴音源](docs/PIANO_PLAYBACK_128_GUIDE.md)。
-连续打开工具的绘图修复与首次音源入口，见[播放与音源入口](docs/DRAWING_127_GUIDE.md)。
-当前修复进度、各功能剩余检查与后续顺序见[进度与完整计划](docs/REWORK_PROGRESS.md)。
-
-多谱播放的卡顿修复、原曲准备与扒谱页区域开关，见[多谱播放与显示](docs/COMBINED_GUI_126_GUIDE.md)。
-
-播放时的力度参考线、滚轮和本轮界面性能检查，见[播放与力度显示](docs/PLAYBACK_GUI_125_GUIDE.md)。
-
-同时打开多份谱时的音源共用、保留与释放，见[多谱音源安排](docs/MULTISCORE_AUDIO_GUIDE.md)。0.124修复了停播换谱后，返回旧谱时力度预览一直等待的问题。
-
-关闭和弦助手、普通听原曲、选段循环、互相停止及谱面片段播放按钮，见[完整操作](docs/PERFORMANCE_REFERENCE_123_GUIDE.md)。
-
-低音排列按实际起音、松键与踏板检查；手调音长、起音和踏板后怎样更新，见[完整操作](docs/ARRANGEMENT_122_GUIDE.md)。
-
-尺寸拖动后继续操作面板、编曲工具栏图标与用途见[操作说明](docs/INPUT_121_GUIDE.md)。
-
-和弦音名、低音与转位级数，以及连续换谱后的自动显示，见[和弦例子与操作](docs/HARMONY_109_GUIDE.md)。踏板内单个／多个和弦、导入解释和调号变化见[踏板内的和弦](docs/HARMONY_110_GUIDE.md)。分解伴奏、八度重复与中途换和弦见[连续伴奏](docs/HARMONY_111_GUIDE.md)。即时摘要、全谱调号与无踏板聚合见[操作例子](docs/HARMONY_112_GUIDE.md)。导入、保存、重新检测和临时显示的打印效果见[分析文件](docs/HARMONY_113_GUIDE.md)。问号、识别点增删和跨行范围见[修改和弦](docs/HARMONY_114_GUIDE.md)。
-
-希望换谱后继续使用同一套CFX、Pianoteq或SF2声音，见[所有谱子共用钢琴](docs/COMMON_PIANO_108_GUIDE.md)。每份谱可单独切回自己的音源；本批实际结果见[检查记录](docs/COMMON_PIANO_108_CHECKS.md)。
-
-换谱时复用各谱的音源、释放闲置音源，见[音源保留操作](docs/SOURCE_SESSIONS_107_GUIDE.md)。
-
-钢琴换踏板的整架乐器／单段设置、实际踩踏区间和MIDI选择见[完整操作](docs/PEDAL_106_GUIDE.md)。本批声音及界面结果见[检查记录](docs/PEDAL_106_CHECKS.md)。
-
-踏板相接两端的拖动、画抬起间隙、重画和删除恢复，见[踏板编辑](docs/PEDAL_105_GUIDE.md)。
-
-本次补充的音源面板、换谱保留和两种踏板方式见[后续安排](docs/SOUND_PEDAL_PLAN.md)。这些选项随对应批次交付，当前音源操作见[使用步骤](docs/VST_088_GUIDE.md)。
-
-AI怎样读取当前谱、标题和图片，见[当前实现与后续安排](docs/AI_WORKFLOW_REVIEW_20261024.md)。当前旧画谱入口会根据音符重新排版；MuseScore原生选段图片与数据一起提供的功能安排在E阶段。
-
-本文对应个人版本：**0.133.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
-
-从完整MIDI寻找选段、分别选择两音改对应、撤销重做及使用力度，见[演奏表达操作](docs/EXPRESSION_096_GUIDE.md)。采用演奏中的快慢、分范围使用速度与长休止录制，见[速度与录制](docs/EXPRESSION_097_GUIDE.md)。
-
-分段A/B的修改、组合、保存和删除见[分段写法](docs/VARIANTS_070_GUIDE.md)；完整谱工作区另存后会自动更新文件位置，见[完整谱保存](docs/VARIANTS_076_GUIDE.md)。
-
-密集音符的力度数字、临时查看和谱行带高度调整，见[看清力度与谱行带](docs/VALUES_094_GUIDE.md)。
-
-切换工作视图后保留两侧宽度，以及从编辑器返回原曲参考、符号面板的操作，见[工作视图与面板操作](docs/WORKSPACE_093_GUIDE.md)。
-
-常用按钮图标、音轨静音／独听及新的音源分组见[图标与音源面板](docs/COMPONENTS_092_GUIDE.md)。
-
-不同谱表一起调力度、参考线、固定／跟随和悬浮卷帘查看数值，见[日常调力度](docs/DYNAMICS_090_GUIDE.md)。
-
-混音器与编辑器共同使用、标签组高度恢复和工具图标见[组合面板操作](docs/WINDOWS_089_GUIDE.md)。
-
-写节奏录完后的音名选择、忽略敲击和撤销见[校正操作](docs/WRITING_087_GUIDE.md#改正漏敲多敲和对应位置)。卷帘画音、跨小节延音和拖动中断后的操作见[卷帘写音](docs/WORKSPACE_067_GUIDE.md)；草稿的继续修改、删除与恢复，以及写节奏的录制、试听和采用见[完整步骤](docs/WRITING_087_GUIDE.md)。
-
-工作视图的尺寸与工具页返回见[窗口操作](docs/LAYOUT_079_GUIDE.md)。
-
-原曲的精确选段、一起播放和修改关联见[从同一位置比较原曲与乐谱](docs/REFERENCE_081_GUIDE.md)。原曲暂停继续、Ctrl+空格及与乐谱轮流播放见[播放和快捷键](docs/REFERENCE_098_GUIDE.md)。
-
-播放中静音、独听、切换查看音轨，以及多个片段的采用、修改、删除恢复和保存，见[多轨比较与关联操作](docs/REFERENCE_099_GUIDE.md)。
-
-移动乐谱与录音文件夹、找回音频、取消读取，以及反复中的片段关联，见[文件与遍次操作](docs/REFERENCE_100_GUIDE.md)。
-
-扒谱显示范围由时间下拉框选择：“整条录音 · 原曲时间”用于浏览整首；“按谱对齐”用于对照关联谱段，并与卷帘一起缩放。叠加显示时，编辑器的“全曲”“选区”和参数区缩放也会同步改变频谱范围。完整步骤见[频谱范围](docs/SPECTRUM_078_GUIDE.md)。乐谱保存与本次检查见[保存和范围检查](docs/SAVE_RANGE_0801_CHECKS.md)。
-
-从录音找音到写谱：在“扒谱”选轨、点“播放原曲”，用底部时间条找到要听的位置；点亮线后按“标注这个音”，再去乐谱选择输入位置、声部和时值，点“输入乐谱”。下方“写入”显示当前目的位置，写完会跟随输入光标更新。连续输入、长录音浏览及保存方法见[完整操作](docs/WORKSPACE_066_GUIDE.md)。
-
-循环听辨中可以直接调速度、均衡和选频，继续听当前位置；片段播完后也可以重新点选播放位置。A4调律、移调及列表中的“输入…”音名见同一章的[调律与移调](docs/WORKSPACE_066_GUIDE.md#录音的调律与写入的调性)。
-
-本轮[完整使用检查与返工进度](docs/USABILITY_REWORK_20261019.md)按功能逐项记录。
+当前版本：**0.134.0 · Kumo branch / Freddd13**。
 
 先按下面的任务找到入口。每章有完整操作例子、按钮说明、保存和撤销方法。“帮助 → 个人功能说明”可以在软件里直接阅读。
 
 | 想完成的事 | 从哪里开始 |
 |---|---|
+| 开关AI连接、管理多个MCP进程 | [AI连接的开启、停止与连接列表](docs/AI_CONNECTION_133_GUIDE.md) |
+| 导出反复、从第二遍试听或调整左右手 | [MIDI导出与试听](docs/MIDI_REPEAT_134_GUIDE.md)、[左右手分轨](docs/MIDI_HAND_EXPORT_GUIDE.md) |
 | 面板单独全屏、回到原位置、处理窗口跑到屏幕外 | [面板窗口与工具栏](docs/WINDOWS_072_GUIDE.md) |
 | 调整编辑器尺寸、切换工作视图和工具页 | [窗口操作与区域高度](docs/LAYOUT_079_GUIDE.md) |
 | 把区域移到右侧或悬浮 | [区域摆放](docs/WORKSPACE_064_GUIDE.md) |
@@ -549,6 +479,8 @@ Ctrl+Z撤销，编辑菜单中的“重做”可恢复这一步。节点位置�
 
 谱上写满的音可以借踏板继续发声，手指往往会提前松开去弹下一组音。MIDI松手处理调整导出文件里的按键长度，方便制作钢琴瀑布流视频。
 
+导出窗口刚改过的“展开反复”和RPN选项会立即用于预览及文件；第二遍与开头提前起音的定位、暂停和切换见[导出时间与试听](docs/MIDI_REPEAT_134_GUIDE.md)。
+
 ### 第一次导出并比较
 
 1. 文件 → 导出，选择MIDI。
@@ -643,3 +575,81 @@ Ctrl+Z撤销，编辑菜单中的“重做”可恢复这一步。节点位置�
 - [截至0.75的说明、设计记录与字体研究](docs/USER_GUIDE_HISTORY_075.md)
 - [版本更新日志](CHANGELOG.md)
 - [本轮使用检查与返工记录](docs/USABILITY_REWORK_20261019.md)
+
+## 附录：各次更新的操作链接
+
+0.134.0修复MIDI导出反复、试听位置及人工分手随选项变化的问题，操作见[反复、试听与导出时间](docs/MIDI_REPEAT_134_GUIDE.md)。
+
+0.133.0增加AI读谱独立启停、Codex启动开关和MCP进程列表，操作见[管理AI连接](docs/AI_CONNECTION_133_GUIDE.md)。
+
+0.132.0补齐必要松手选择、自然松手开关及踏板预览，操作见[按需要安排松手](docs/MIDI_RELEASE_132_GUIDE.md)。
+
+0.131.0新增MIDI左右手分轨，可预览、批量指定及撤销，操作见[按实际左右手导出](docs/MIDI_HAND_EXPORT_GUIDE.md)。
+
+0.130.0的延音后段分手、指法及MIDI松手，见[操作说明](docs/MIDI_TIED_GUIDE.md)。
+
+本次 0.129.0 的编配检查、指法建议、MIDI 松手和音源运行方式，见[这版怎样使用](docs/RELEASE_129_GUIDE.md)。
+
+多份乐谱共用钢琴的连续播放修复，见[切谱与钢琴音源](docs/PIANO_PLAYBACK_128_GUIDE.md)。
+连续打开工具的绘图修复与首次音源入口，见[播放与音源入口](docs/DRAWING_127_GUIDE.md)。
+当前修复进度、各功能剩余检查与后续顺序见[进度与完整计划](docs/REWORK_PROGRESS.md)。
+
+多谱播放的卡顿修复、原曲准备与扒谱页区域开关，见[多谱播放与显示](docs/COMBINED_GUI_126_GUIDE.md)。
+
+播放时的力度参考线、滚轮和本轮界面性能检查，见[播放与力度显示](docs/PLAYBACK_GUI_125_GUIDE.md)。
+
+同时打开多份谱时的音源共用、保留与释放，见[多谱音源安排](docs/MULTISCORE_AUDIO_GUIDE.md)。0.124修复了停播换谱后，返回旧谱时力度预览一直等待的问题。
+
+关闭和弦助手、普通听原曲、选段循环、互相停止及谱面片段播放按钮，见[完整操作](docs/PERFORMANCE_REFERENCE_123_GUIDE.md)。
+
+低音排列按实际起音、松键与踏板检查；手调音长、起音和踏板后怎样更新，见[完整操作](docs/ARRANGEMENT_122_GUIDE.md)。
+
+尺寸拖动后继续操作面板、编曲工具栏图标与用途见[操作说明](docs/INPUT_121_GUIDE.md)。
+
+和弦音名、低音与转位级数，以及连续换谱后的自动显示，见[和弦例子与操作](docs/HARMONY_109_GUIDE.md)。踏板内单个／多个和弦、导入解释和调号变化见[踏板内的和弦](docs/HARMONY_110_GUIDE.md)。分解伴奏、八度重复与中途换和弦见[连续伴奏](docs/HARMONY_111_GUIDE.md)。即时摘要、全谱调号与无踏板聚合见[操作例子](docs/HARMONY_112_GUIDE.md)。导入、保存、重新检测和临时显示的打印效果见[分析文件](docs/HARMONY_113_GUIDE.md)。问号、识别点增删和跨行范围见[修改和弦](docs/HARMONY_114_GUIDE.md)。
+
+希望换谱后继续使用同一套CFX、Pianoteq或SF2声音，见[所有谱子共用钢琴](docs/COMMON_PIANO_108_GUIDE.md)。每份谱可单独切回自己的音源；本批实际结果见[检查记录](docs/COMMON_PIANO_108_CHECKS.md)。
+
+换谱时复用各谱的音源、释放闲置音源，见[音源保留操作](docs/SOURCE_SESSIONS_107_GUIDE.md)。
+
+钢琴换踏板的整架乐器／单段设置、实际踩踏区间和MIDI选择见[完整操作](docs/PEDAL_106_GUIDE.md)。本批声音及界面结果见[检查记录](docs/PEDAL_106_CHECKS.md)。
+
+踏板相接两端的拖动、画抬起间隙、重画和删除恢复，见[踏板编辑](docs/PEDAL_105_GUIDE.md)。
+
+本次补充的音源面板、换谱保留和两种踏板方式见[后续安排](docs/SOUND_PEDAL_PLAN.md)。这些选项随对应批次交付，当前音源操作见[使用步骤](docs/VST_088_GUIDE.md)。
+
+AI怎样读取当前谱、标题和图片，见[当前实现与后续安排](docs/AI_WORKFLOW_REVIEW_20261024.md)。当前旧画谱入口会根据音符重新排版；MuseScore原生选段图片与数据一起提供的功能安排在E阶段。
+
+这一阶段说明对应的个人版本：**0.133.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+
+从完整MIDI寻找选段、分别选择两音改对应、撤销重做及使用力度，见[演奏表达操作](docs/EXPRESSION_096_GUIDE.md)。采用演奏中的快慢、分范围使用速度与长休止录制，见[速度与录制](docs/EXPRESSION_097_GUIDE.md)。
+
+分段A/B的修改、组合、保存和删除见[分段写法](docs/VARIANTS_070_GUIDE.md)；完整谱工作区另存后会自动更新文件位置，见[完整谱保存](docs/VARIANTS_076_GUIDE.md)。
+
+密集音符的力度数字、临时查看和谱行带高度调整，见[看清力度与谱行带](docs/VALUES_094_GUIDE.md)。
+
+切换工作视图后保留两侧宽度，以及从编辑器返回原曲参考、符号面板的操作，见[工作视图与面板操作](docs/WORKSPACE_093_GUIDE.md)。
+
+常用按钮图标、音轨静音／独听及新的音源分组见[图标与音源面板](docs/COMPONENTS_092_GUIDE.md)。
+
+不同谱表一起调力度、参考线、固定／跟随和悬浮卷帘查看数值，见[日常调力度](docs/DYNAMICS_090_GUIDE.md)。
+
+混音器与编辑器共同使用、标签组高度恢复和工具图标见[组合面板操作](docs/WINDOWS_089_GUIDE.md)。
+
+写节奏录完后的音名选择、忽略敲击和撤销见[校正操作](docs/WRITING_087_GUIDE.md#改正漏敲多敲和对应位置)。卷帘画音、跨小节延音和拖动中断后的操作见[卷帘写音](docs/WORKSPACE_067_GUIDE.md)；草稿的继续修改、删除与恢复，以及写节奏的录制、试听和采用见[完整步骤](docs/WRITING_087_GUIDE.md)。
+
+工作视图的尺寸与工具页返回见[窗口操作](docs/LAYOUT_079_GUIDE.md)。
+
+原曲的精确选段、一起播放和修改关联见[从同一位置比较原曲与乐谱](docs/REFERENCE_081_GUIDE.md)。原曲暂停继续、Ctrl+空格及与乐谱轮流播放见[播放和快捷键](docs/REFERENCE_098_GUIDE.md)。
+
+播放中静音、独听、切换查看音轨，以及多个片段的采用、修改、删除恢复和保存，见[多轨比较与关联操作](docs/REFERENCE_099_GUIDE.md)。
+
+移动乐谱与录音文件夹、找回音频、取消读取，以及反复中的片段关联，见[文件与遍次操作](docs/REFERENCE_100_GUIDE.md)。
+
+扒谱显示范围由时间下拉框选择：“整条录音 · 原曲时间”用于浏览整首；“按谱对齐”用于对照关联谱段，并与卷帘一起缩放。叠加显示时，编辑器的“全曲”“选区”和参数区缩放也会同步改变频谱范围。完整步骤见[频谱范围](docs/SPECTRUM_078_GUIDE.md)。乐谱保存与本次检查见[保存和范围检查](docs/SAVE_RANGE_0801_CHECKS.md)。
+
+从录音找音到写谱：在“扒谱”选轨、点“播放原曲”，用底部时间条找到要听的位置；点亮线后按“标注这个音”，再去乐谱选择输入位置、声部和时值，点“输入乐谱”。下方“写入”显示当前目的位置，写完会跟随输入光标更新。连续输入、长录音浏览及保存方法见[完整操作](docs/WORKSPACE_066_GUIDE.md)。
+
+循环听辨中可以直接调速度、均衡和选频，继续听当前位置；片段播完后也可以重新点选播放位置。A4调律、移调及列表中的“输入…”音名见同一章的[调律与移调](docs/WORKSPACE_066_GUIDE.md#录音的调律与写入的调性)。
+
+本轮[完整使用检查与返工进度](docs/USABILITY_REWORK_20261019.md)按功能逐项记录。

@@ -12,6 +12,9 @@
 #include "mscore/workspace.h"
 #include "libmscore/xml.h"
 #include "mscore/midicrop/midicroppanel.h"
+#include "mscore/exportdialog.h"
+#include "mscore/midicrop/gateaudition.h"
+#include <QScopeGuard>
 #include <QQuickView>
 #include "mtest/testutils.h"
 #include "mscore/musescore.h"
@@ -49,6 +52,8 @@
 #include "libmscore/synthesizerstate.h"
 #include "libmscore/tie.h"
 #include "libmscore/tempo.h"
+#include "libmscore/lyrics.h"
+#include "libmscore/rehearsalmark.h"
 static void initP0Resources() { Q_INIT_RESOURCE(musescorefonts_Petaluma); }
 using namespace Ms;
 class TestP0Native : public QObject {
@@ -150,6 +155,99 @@ class TestP0Native : public QObject {
             }
       void midiClockActualSecondsAndInverse() {
             MidiGateData data;data.tempos={{0,500000.},{480,1000000.}};MidiGateProcessor clock;clock.setClock(data);QCOMPARE(clock.durationMs(0,480),500.);QCOMPARE(clock.durationMs(0,960),1500.);QCOMPARE(clock.tickForMilliseconds(750.),600);QCOMPARE(clock.tickForMilliseconds(1500.),960);
+            }
+      void midiRepeatHeaderUsesRequestedPolicy() {
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx"));QVERIFY(score);
+            score->firstMeasure()->setRepeatStart(true);score->firstMeasure()->setRepeatEnd(true);score->tempomap()->setTempo(0,2.);score->tempomap()->setRelTempo(1.);score->tempomap()->setTempo(960,1.5);score->tempomap()->setPause(480,.25);
+            const auto state=score->state();const auto undo=score->undoStack()->getCurIdx();const auto dirty=score->dirty();
+            for(bool repeat:{false,true})for(bool written:{false,true}){
+                  MidiExportOptions options;options.writtenPedal=written;QByteArray expected;
+                  score->setExpandRepeats(repeat);{ExportMidi exporter(score.get());QBuffer buffer(&expected);buffer.open(QIODevice::WriteOnly);QVERIFY(exporter.write(&buffer,repeat,true,mscore->synthesizerState(),options));}
+                  score->setExpandRepeats(!repeat);ExportMidi exporter(score.get());exporter.collectGateData=true;QBuffer buffer;buffer.open(QIODevice::WriteOnly);QVERIFY(exporter.write(&buffer,repeat,true,mscore->synthesizerState(),options));
+                  qInfo()<<"Requested repeat / written pedal"<<repeat<<written<<"expected / actual bytes"<<expected.size()<<buffer.size();
+                  QFile saved(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS")+QString("/repeat-policy-%1-%2.mid").arg(repeat).arg(written));QVERIFY(saved.open(QIODevice::WriteOnly));saved.write(buffer.data());saved.close();
+                  QCOMPARE(exporter.gateData.expandRepeats,repeat);QVERIFY(exporter.gateData.exportRPNs);
+                  QCOMPARE(buffer.data(),expected);QCOMPARE(score->expandRepeats(),!repeat);QCOMPARE(score->state(),state);QCOMPARE(score->undoStack()->getCurIdx(),undo);QCOMPARE(score->dirty(),dirty);
+                  }
+            }
+      void midiExportDialogUsesCurrentChoices() {
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx"));QVERIFY(score);score->firstMeasure()->setRepeatStart(true);score->firstMeasure()->setRepeatEnd(true);
+            const bool oldRepeat=preferences.getBool(PREF_IO_MIDI_EXPANDREPEATS),oldRpn=preferences.getBool(PREF_IO_MIDI_EXPORTRPNS);
+            auto restore=qScopeGuard([&]{preferences.setPreference(PREF_IO_MIDI_EXPANDREPEATS,oldRepeat);preferences.setPreference(PREF_IO_MIDI_EXPORTRPNS,oldRpn);});
+            preferences.setPreference(PREF_IO_MIDI_EXPANDREPEATS,false);preferences.setPreference(PREF_IO_MIDI_EXPORTRPNS,false);
+            ExportDialog dialog(score.get(),mscore);dialog.show();dialog.fileTypeComboBox->setCurrentIndex(7);QTest::qWait(80);
+            QVERIFY(dialog.midiExpandRepeats->isVisible());QTest::mouseClick(dialog.midiExpandRepeats,Qt::LeftButton,Qt::NoModifier,QPoint(8,dialog.midiExpandRepeats->height()/2));QTest::mouseClick(dialog.midiExportRPNs,Qt::LeftButton,Qt::NoModifier,QPoint(8,dialog.midiExportRPNs->height()/2));
+            QVERIFY(dialog.midiExpandRepeats->isChecked());QVERIFY(dialog.midiExportRPNs->isChecked());QVERIFY(!preferences.getBool(PREF_IO_MIDI_EXPANDREPEATS));QVERIFY(!preferences.getBool(PREF_IO_MIDI_EXPORTRPNS));
+            auto panel=dialog.findChild<MidiCropPanel*>();QVERIFY(panel);const auto path=settings.filePath("current-midi-options.mid");QVERIFY(panel->write(score.get(),path,{}));
+            QFile file(path);QVERIFY(file.open(QIODevice::ReadOnly));MidiFile midi;QVERIFY(midi.read(&file));int attacks=0,rpn=0;for(const auto& track:midi.tracks())for(const auto& pair:track.events()){const auto& e=pair.second;attacks+=e.type()==ME_NOTEON&&e.velo()>0;rpn+=e.type()==ME_CONTROLLER&&(e.dataA()==CTRL_HRPN||e.dataA()==CTRL_LRPN);}
+            qInfo()<<"Live export choices attacks / RPN"<<attacks<<rpn;QVERIFY(rpn>0);QCOMPARE(attacks,12);dialog.close();
+            }
+      void midiPreviewUsesCurrentRepeatChoice() {
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx"));QVERIFY(score);score->firstMeasure()->setRepeatStart(true);score->firstMeasure()->setRepeatEnd(true);
+            const bool previous=preferences.getBool(PREF_IO_MIDI_EXPANDREPEATS);auto restore=qScopeGuard([&]{preferences.setPreference(PREF_IO_MIDI_EXPANDREPEATS,previous);});preferences.setPreference(PREF_IO_MIDI_EXPANDREPEATS,false);
+            ExportDialog dialog(score.get(),mscore);dialog.show();dialog.fileTypeComboBox->setCurrentIndex(7);QTest::qWait(60);dialog.midiExpandRepeats->setChecked(true);auto panel=dialog.findChild<MidiCropPanel*>();QVERIFY(panel);
+            int observed=-1,attempts=0;QTimer timer;timer.setInterval(30);connect(&timer,&QTimer::timeout,&dialog,[&]{auto active=qobject_cast<QDialog*>(QApplication::activeModalWidget());if(!active||active->objectName()!="midiCropComparison")return;
+                  auto table=active->findChild<QTableView*>("midiCropNotes");auto roll=active->findChild<QAbstractScrollArea*>("midiCropRoll");if(++attempts>140){active->reject();return;}if(!table||!roll||!roll->isEnabled()||!table->model()->rowCount())return;observed=table->model()->rowCount();timer.stop();active->accept();});
+            timer.start();QTest::mouseClick(panel->findChild<QPushButton*>("midiCropCompare"),Qt::LeftButton);timer.stop();qInfo()<<"Live preview note rows"<<observed;QCOMPARE(observed,12);dialog.close();
+            }
+      void midiAuditionUsesExportRepeatChoice() {
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx"));QVERIFY(score);score->firstMeasure()->setRepeatStart(true);score->firstMeasure()->setRepeatEnd(true);
+            auto pedal=new Pedal(score.get());pedal->setTick(Fraction::fromTicks(0));pedal->setTicks(score->lastMeasure()->endTick());pedal->setTrack(4);pedal->setTrack2(4);score->addSpanner(pedal);
+            const bool original=MScore::playRepeats;auto restore=qScopeGuard([&]{MScore::playRepeats=original;});MScore::playRepeats=false;score->setExpandRepeats(false);
+            ExportMidi exporter(score.get());exporter.collectGateData=true;MidiExportOptions options;options.crop=true;options.gate.jitter=0;options.writtenPedal=true;QBuffer output;output.open(QIODevice::WriteOnly);QVERIFY(exporter.write(&output,true,true,mscore->synthesizerState(),options));
+            const auto audition=prepareGateAudition(score.get(),exporter.gateData,exporter.gateReport);int attacks=0;for(const auto& event:audition.original.events)if(event.second.type()==ME_NOTEON&&event.second.velo()>0&&(event.second.note()||event.second.noteEventOwner()))++attacks;
+            qInfo()<<"Export / audition attacks; unmatched"<<exporter.gateData.notes.size()<<attacks<<audition.unmatched;QCOMPARE(attacks,exporter.gateData.notes.size());QCOMPARE(audition.unmatched,0);QVERIFY(!MScore::playRepeats);QVERIFY(!score->expandRepeats());
+            }
+      void midiExportChoicesKeepNoteIdentity() {
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx"));QVERIFY(score);score->firstMeasure()->setRepeatStart(true);score->firstMeasure()->setRepeatEnd(true);
+            auto snapshot=[&](bool repeat,bool rpn){ExportMidi exporter(score.get());exporter.collectGateData=true;QBuffer output;output.open(QIODevice::WriteOnly);if(!exporter.write(&output,repeat,rpn,mscore->synthesizerState()))return MidiGateData{};return exporter.gateData;};
+            auto reference=snapshot(true,true);QVERIFY(!reference.notes.isEmpty());
+            auto key=[](const MidiGateNote& n){return QString("%1:%2:%3:%4").arg(n.sourceTick).arg(n.sourceUtick).arg(n.voice).arg(n.pitch);};QMap<QString,QString> ids;for(const auto& n:reference.notes)if(n.known)ids[key(n)]=n.id;
+            for(bool repeat:{true,false})for(bool rpn:{false,true}){const auto changed=snapshot(repeat,rpn);for(const auto& n:changed.notes)if(n.known)QCOMPARE(n.id,ids.value(key(n)));}
+            }
+      void midiPauseAlignsLyricsAndMarks() {
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx"));QVERIFY(score);score->firstMeasure()->setRepeatStart(true);score->firstMeasure()->setRepeatEnd(true);
+            auto chord=toChord(score->findCR(Fraction::fromTicks(480),0));QVERIFY(chord);auto lyric=new Lyrics(score.get());lyric->setParent(chord);lyric->setTrack(0);lyric->setXmlText("word");auto mark=new RehearsalMark(score.get());mark->setParent(chord->segment());mark->setTrack(0);mark->setXmlText("A");
+            score->startCmd();score->undoAddElement(lyric);score->undoAddElement(mark);score->endCmd();score->tempomap()->setPause(480,.25);
+            ExportMidi exporter(score.get());exporter.collectGateData=true;QBuffer output;output.open(QIODevice::WriteOnly);QVERIFY(exporter.write(&output,true,true,mscore->synthesizerState()));
+            QVector<int> expected,lyrics,marks;for(const auto& n:exporter.gateData.notes)if(n.pitch==59)expected.append(n.on);
+            for(const auto& track:exporter.mf.tracks())for(const auto& pair:track.events())if(pair.second.type()==ME_META){if(pair.second.metaType()==META_LYRIC)lyrics.append(pair.first);else if(pair.second.metaType()==META_MARKER)marks.append(pair.first);}
+            qInfo()<<"Pause note / lyric / marker ticks"<<expected<<lyrics<<marks;QCOMPARE(lyrics,expected);QCOMPARE(marks,expected);
+            QFile saved(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS")+"/pause-metadata-134.mid");QVERIFY(saved.open(QIODevice::WriteOnly));saved.write(output.data());
+            }
+      void midiAnticipationKeepsFirstBeatMetadata() {
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx"));QVERIFY(score);
+            auto chord=toChord(score->firstSegment(SegmentType::ChordRest)->element(4));QVERIFY(chord);chord->downNote()->setOnTimeOffset(-100);
+            auto lyric=new Lyrics(score.get());lyric->setParent(chord);lyric->setTrack(4);lyric->setXmlText("word");
+            auto mark=new RehearsalMark(score.get());mark->setParent(chord->segment());mark->setTrack(0);mark->setXmlText("A");
+            score->startCmd();score->undoAddElement(lyric);score->undoAddElement(mark);score->endCmd();
+            auto pedal=new Pedal(score.get());pedal->setTick(Fraction::fromTicks(0));pedal->setTicks(score->lastMeasure()->endTick());pedal->setTrack(4);pedal->setTrack2(4);score->addSpanner(pedal);
+            MidiExportOptions options;options.writtenPedal=true;ExportMidi exporter(score.get());exporter.collectGateData=true;QBuffer output;output.open(QIODevice::WriteOnly);QVERIFY(exporter.write(&output,false,true,mscore->synthesizerState(),options));
+            int firstBeat=-1,lyricAt=-1,markAt=-1,firstOn=-1,pedalAt=-1;bool setupAtZero=false;
+            for(const auto& track:exporter.mf.tracks())for(const auto& pair:track.events()){
+                  const auto& event=pair.second;
+                  if(event.type()==ME_NOTEON&&event.velo()>0&&event.pitch()==36)firstOn=pair.first;
+                  if(event.type()==ME_CONTROLLER&&event.dataA()==64&&event.dataB()>=64)pedalAt=pair.first;
+                  if(event.type()==ME_META){const auto text=QByteArray(reinterpret_cast<const char*>(event.edata()),event.len());
+                        if(event.metaType()==META_LYRIC)lyricAt=pair.first;
+                        if(event.metaType()==META_MARKER){if(text.startsWith("Kumo: score first beat"))firstBeat=pair.first;else if(text.startsWith("A"))markAt=pair.first;}
+                        if(event.metaType()==META_TEMPO&&pair.first==0)setupAtZero=true;
+                        }
+                  }
+            auto material=renderPlaybackPreview(score.get(),score.get(),false,0);int expectedPedal=-1;
+            for(const auto& pair:material.events)if(pair.second.type()==ME_CONTROLLER&&pair.second.controller()==64&&pair.second.value()>=64)expectedPedal=pair.first+firstBeat;
+            qInfo()<<"Anticipation onset / first beat / lyric / mark / pedal"<<firstOn<<firstBeat<<lyricAt<<markAt<<pedalAt;
+            QVERIFY(firstBeat>0);QCOMPARE(firstOn,0);QVERIFY(setupAtZero);QCOMPARE(lyricAt,firstBeat);QCOMPARE(markAt,firstBeat);QVERIFY(expectedPedal>=firstBeat);QCOMPARE(pedalAt,expectedPedal);
+            QVERIFY(output.data().contains("Kumo: score first beat"));
+            QFile saved(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS")+"/anticipation-metadata-134.mid");QVERIFY(saved.open(QIODevice::WriteOnly));saved.write(output.data());
+            }
+      void midiHandOverridesSurviveExportChoices() {
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx"));QVERIFY(score);score->firstMeasure()->setRepeatStart(true);score->firstMeasure()->setRepeatEnd(true);
+            auto pedal=new Pedal(score.get());pedal->setTick(Fraction::fromTicks(0));pedal->setTicks(score->lastMeasure()->endTick());pedal->setTrack(4);pedal->setTrack2(4);score->addSpanner(pedal);
+            ExportMidi first(score.get());first.collectGateData=true;QBuffer baseline;baseline.open(QIODevice::WriteOnly);QVERIFY(first.write(&baseline,true,true,mscore->synthesizerState()));MidiExportOptions options;options.splitHands=true;
+            options.crop=true;options.gate.protectMelody=false;options.gate.jitter=0;
+            int expected=0;for(const auto& note:first.gateData.notes)if(note.pitch==84){options.handOverrides[note.id]=0;options.gate.releaseOverrides[note.id]=note.on+240;++expected;}QCOMPARE(expected,2);
+            for(bool repeat:{false,true})for(bool rpn:{false,true}){ExportMidi changed(score.get());QBuffer output;output.open(QIODevice::WriteOnly);QVERIFY(changed.write(&output,repeat,rpn,mscore->synthesizerState(),options));int kept=0;for(const auto& note:changed.gateReport)if(note.pitch==84){QCOMPARE(note.exportHand,0);QCOMPARE(note.reason,QString("manual-release"));QCOMPARE(note.newOff,note.on+240);++kept;}QCOMPARE(kept,repeat?2:1);}
             }
       void nativeHandRangeAssignment() {
             std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/performanceeditor/freeslur.mscx"));QVERIFY(score);auto measure=score->firstMeasure();
@@ -319,7 +417,7 @@ class TestP0Native : public QObject {
             const auto saved=settings.filePath("three-hand-export.mscz");QFileInfo info(saved);QVERIFY(score->saveCompressedFile(info,false,false));std::unique_ptr<MasterScore> reopened(mscore->readScore(saved));QVERIFY(reopened);QVERIFY(verify(reopened.get()));
             }
       void midiHandPreviewEditsAndExport() {
-            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx"));QVERIFY(score);MidiCropPanel panel(nullptr,[&]{return QList<Score*>{score.get()};});panel.show();QTimer timer;timer.setInterval(50);int stage=0,tries=0;QString id;const auto state=score->state();const int undo=score->undoStack()->getCurIdx();
+            std::unique_ptr<MasterScore> score(mscore->readScore(QString(TESTROOT)+"/mtest/mscore/p0native/longroot.mscx"));QVERIFY(score);bool rpns=true;MidiCropPanel panel(nullptr,[&]{return QList<Score*>{score.get()};},[&]{return MidiRenderSettings{true,rpns};});panel.show();QTimer timer;timer.setInterval(50);int stage=0,tries=0;QString id;const auto state=score->state();const int undo=score->undoStack()->getCurIdx();
             connect(&timer,&QTimer::timeout,&panel,[&]{auto dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());if(!dialog)return;if(++tries>180){dialog->reject();return;}auto table=dialog->findChild<QTableView*>("midiHandNotes");auto roll=dialog->findChild<QAbstractScrollArea*>("midiHandRoll");auto left=dialog->findChild<QPushButton*>("midiHandLeft"),right=dialog->findChild<QPushButton*>("midiHandRight");if(!table||!roll||!left||!roll->isEnabled()||!table->model()->rowCount())return;
                   int row=-1;for(int i=0;i<table->model()->rowCount();++i)if(table->model()->index(i,0).data().toString()=="C2")row=i;if(row<0)return;
                   if(stage==0){QCOMPARE(table->model()->index(row,2).data().toString(),QString::fromUtf8("左手"));table->selectRow(row);QTest::mouseClick(right,Qt::LeftButton);++stage;}
@@ -332,6 +430,8 @@ class TestP0Native : public QObject {
                   else if(stage==7){QCOMPARE(table->model()->index(row,2).data().toString(),QString::fromUtf8("右手"));const auto out=qEnvironmentVariable("HARMONY_TEST_ARTIFACTS");QVERIFY(!out.isEmpty());QVERIFY(dialog->grab().save(out+"/midi-hand-export.png"));timer.stop();++stage;dialog->accept();}
                   });timer.start();QTest::mouseClick(panel.findChild<QPushButton*>("midiHandPreview"),Qt::LeftButton);timer.stop();QCOMPARE(stage,8);QVERIFY(score->state()==state);QCOMPARE(score->undoStack()->getCurIdx(),undo);
             const auto output=settings.filePath("hands.mid");QVERIFY(panel.write(score.get(),output,{}));QFile::copy(output,qEnvironmentVariable("HARMONY_TEST_ARTIFACTS")+"/midi-hand-preview.mid");QFile file(output);QVERIFY(file.open(QIODevice::ReadOnly));MidiFile midi;QVERIFY(midi.read(&file));bool rootRight=false;for(const auto& track:midi.tracks()){bool right=false;for(const auto& e:track.events())if(e.second.type()==ME_META&&e.second.metaType()==META_TRACK_NAME)right|=QByteArray(reinterpret_cast<const char*>(e.second.edata()),e.second.len()).contains("Right Hand");if(right)for(const auto& e:track.events())if(e.second.type()==ME_NOTEON&&e.second.velo()>0&&e.second.pitch()==36)rootRight=true;}QVERIFY(rootRight);
+            rpns=false;const auto other=settings.filePath("hands-rpn-off.mid");QVERIFY(panel.write(score.get(),other,{}));QFile alternate(other);QVERIFY(alternate.open(QIODevice::ReadOnly));MidiFile reduced;QVERIFY(reduced.read(&alternate));bool rootRightWithRpnOff=false;
+            for(const auto& track:reduced.tracks()){bool right=false;for(const auto& e:track.events())if(e.second.type()==ME_META&&e.second.metaType()==META_TRACK_NAME)right|=QByteArray(reinterpret_cast<const char*>(e.second.edata()),e.second.len()).contains("Right Hand");if(right)for(const auto& e:track.events())if(e.second.type()==ME_NOTEON&&e.second.velo()>0&&e.second.pitch()==36)rootRightWithRpnOff=true;}QVERIFY(rootRightWithRpnOff);
             }
       void midiTiedInstructionProtection() {
             MidiGateData data;data.tempos={{0,500000.}};data.pedals={{0,0,-1,2200,true}};

@@ -427,10 +427,11 @@ bool Seq::canStart()
 
 void Seq::synchronizeStoppedGui() { Q_ASSERT(!isPlaying()); QCoreApplication::sendPostedEvents(this,QEvent::MetaCall); }
 
-void Seq::startAtUTick(int utick, int context) {
+void Seq::startAtUTick(int utick, int context, int anticipatedStart) {
       if(!cs || isPlaying() || utick<0 || utick>cs->repeatList().ticks())return;
       _workflowStartUTick=utick;_workflowStartContext=context>=0?qMin(context,utick):-1;
-      start();_workflowStartUTick=-1;_workflowStartContext=-1;
+      _workflowAnticipatedStart=utick==0?qMin(0,anticipatedStart):0;
+      start();_workflowStartUTick=-1;_workflowStartContext=-1;_workflowAnticipatedStart=0;
       }
 
 void Seq::start()
@@ -1707,6 +1708,12 @@ int Seq::getCurTick()
       return cs->utime2utick(referenceScoreTime(qreal(playFrame) / qreal(MScore::sampleRate)));
       }
 
+int Seq::getCurEventTick()
+      {
+      const double seconds=referenceScoreTime(qreal(playFrame) / qreal(MScore::sampleRate));
+      return seconds<0?qRound(seconds*DIVISION*cs->tempomap()->tempo(0)*cs->tempomap()->relTempo()):cs->utime2utick(seconds);
+      }
+
 //---------------------------------------------------------
 //   setRelTempo
 //    relTempo = 1.0 = normal tempo
@@ -1784,6 +1791,7 @@ void Seq::seekCommon(int utick)
       mutex.lock();
       _preparedStartTarget = utick;
       _preparedStartTick = PlaybackTiming::startTick(events, utick, cs);
+      if(utick==0&&_workflowAnticipatedStart<0)_preparedStartTick=_workflowAnticipatedStart;
       mutex.unlock();
       mscore->setPos(Fraction::fromTicks(cs->repeatList().utick2tick(utick)));
       unmarkNotes();

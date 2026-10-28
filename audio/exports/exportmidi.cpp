@@ -34,6 +34,7 @@
 #include "libmscore/part.h"
 #include "libmscore/rehearsalmark.h"
 #include "libmscore/repeatlist.h"
+#include "libmscore/repeatexpansion.h"
 #include "libmscore/score.h"
 #include "libmscore/sig.h"
 #include "libmscore/staff.h"
@@ -259,6 +260,7 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
 
 bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPNs, const SynthesizerState& synthState, const MidiExportOptions& options)
       {
+      RepeatExpansionScope repeatPolicy(cs->masterScore(),midiExpandRepeats);
       QVector<MidiGateSource> sources;
       QHash<const Note*,QString> handSources;
       const auto handAssignments=(collectGateData || options.crop || options.splitHands)?exportWrittenHands(cs,handSources):QHash<const Note*,int>{};
@@ -327,8 +329,21 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
             }
       else cs->renderMidi(&events, false, midiExpandRepeats, synthState);
 
+      const int preRoll = PlaybackTiming::exportOffset(events);
       pauseMap.calculate(cs);
       writeHeader(tempoTrack);
+      if (preRoll) {
+            // Initial setup precedes anticipated notes. Later tempo, meter and key
+            // changes stay attached to their score positions.
+            auto shiftHeader = [preRoll](MidiTrack& track) {
+                  std::multimap<int, MidiEvent> shifted;
+                  for (const auto& event : track.events())
+                        shifted.emplace(event.first == 0 ? 0 : event.first + preRoll, event.second);
+                  track.events().swap(shifted);
+                  };
+            shiftHeader(tempoTrack);
+            for (auto& track : tracks) shiftHeader(track);
+            }
       struct GatePass {int start,end,writtenEnd;};QVector<GatePass> gatePasses;
       if(collectGateData || options.crop || options.splitHands)for(auto pass:cs->repeatList())
             gatePasses.append({pass->utick,pass->utick+pass->len(),pass->tick+pass->len()});
@@ -410,7 +425,7 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                     continue;
                               if (event.discard() == staffIdx + 1 && event.velo() > 0)
                                     // turn note off so we can restrike it in another track
-                                    track.insert(pauseMap.addPauseTicks(i->first), MidiEvent(ME_NOTEON, channel,
+                                    track.insert(preRoll + pauseMap.addPauseTicks(i->first), MidiEvent(ME_NOTEON, channel,
                                                                      event.pitch(), 0));
 
                               if (event.getOriginatingStaff() != staffIdx)
@@ -469,18 +484,18 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                           }
                                     // use the note values instead of the event values if portamento is suppressed
                                     if (!exportRPNs && event.portamento())
-                                          track.insert(pauseMap.addPauseTicks(i->first), MidiEvent(ME_NOTEON, channel,
+                                          track.insert(preRoll + pauseMap.addPauseTicks(i->first), MidiEvent(ME_NOTEON, channel,
                                                 event.note()->pitch(), event.velo()));
                                     else
-                                          track.insert(pauseMap.addPauseTicks(i->first), MidiEvent(ME_NOTEON, channel,
+                                          track.insert(preRoll + pauseMap.addPauseTicks(i->first), MidiEvent(ME_NOTEON, channel,
                                                 event.pitch(), event.velo()));
                                     }
                               else if (event.type() == ME_CONTROLLER) {
-                                    track.insert(pauseMap.addPauseTicks(i->first), MidiEvent(ME_CONTROLLER, channel,
+                                    track.insert(preRoll + pauseMap.addPauseTicks(i->first), MidiEvent(ME_CONTROLLER, channel,
                                           event.controller(), vst && event.controller()==CTRL_HBANK ? ((exportedBank>>7)&127) : vst && event.controller()==CTRL_LBANK ? (exportedBank&127) : vst && event.controller()==CTRL_PROGRAM ? exportedProgram : event.value()));
                                     }
                               else if(event.type() == ME_PITCHBEND) {
-                                    track.insert(pauseMap.addPauseTicks(i->first), MidiEvent(ME_PITCHBEND, channel,
+                                    track.insert(preRoll + pauseMap.addPauseTicks(i->first), MidiEvent(ME_PITCHBEND, channel,
                                                                      event.dataA(), event.dataB()));
                                     }
                               else {
@@ -499,7 +514,7 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                   SegmentType st = SegmentType::ChordRest;
                   for (Segment* seg = rs->firstMeasure()->first(st); seg && seg->tick().ticks() < endTick; seg = seg->next1(st)) {
                         // export lyrics
-                        for (int i = part->startTrack(); i < part->endTrack(); ++i) {
+                        for (int i = staffIdx * VOICES; i < (staffIdx + 1) * VOICES; ++i) {
                               ChordRest* cr = toChordRest(seg->element(i));
                               if (cr) {
                                     for (const auto& lyric : cr->lyrics()) {
@@ -519,7 +534,7 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                           ev.setLen(static_cast<int>(len));
 
                                           int tick = cr->tick().ticks() + tickOffset;
-                                          track.insert(tick, ev);
+                                          track.insert(preRoll + pauseMap.addPauseTicks(tick), ev);
                                           }
                                     }
                               }
@@ -539,7 +554,7 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                           ev.setLen(static_cast<int>(len));
 
                                           int tick = r->segment()->tick().ticks() + tickOffset;
-                                          track.insert(tick, ev);
+                                          track.insert(preRoll + pauseMap.addPauseTicks(tick), ev);
                                           }
                                     }
                               }
@@ -548,21 +563,12 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
             ++staffIdx;
             }
       tracks.prepend(tempoTrack);
-      const int preRoll = PlaybackTiming::exportOffset(events);
       if (preRoll) {
-            for (auto& track : tracks) {
-                  std::multimap<int, MidiEvent> shifted;
-                  // Channel setup must precede the first anticipated note, also at tick zero.
-                  for (const auto& event : track.events())
-                        if (event.first == 0 && event.second.type() != ME_NOTEON && event.second.type() != ME_NOTEOFF) shifted.emplace(0, event.second);
-                  for (const auto& event : track.events())
-                        if (!(event.first == 0 && event.second.type() != ME_NOTEON && event.second.type() != ME_NOTEOFF)) shifted.emplace(event.first + preRoll, event.second);
-                  track.events().swap(shifted);
-                  }
             MidiEvent marker;
             marker.setType(ME_META);
             marker.setMetaType(META_MARKER);
             QByteArray text("Kumo: score first beat");
+            text.append('\0'); // MidiFile stores text lengths including the terminator.
             marker.setLen(text.size());
             marker.setEData(std::vector<unsigned char>(text.begin(), text.end()));
             tracks.front().insert(preRoll, marker);
@@ -572,6 +578,8 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
             for (auto& source : sources) source.on += preRoll;
             gateData = midiGateSnapshot(mf, sources);
             gateData.writtenPedal = options.writtenPedal;
+            gateData.expandRepeats = midiExpandRepeats;
+            gateData.exportRPNs = exportRPNs;
             if (options.crop || options.splitHands) {
                   gateBaseline = mf;gateReport=prepareMidiPostprocess(gateData,options);
                   if(options.splitHands)applyMidiHands(mf,gateReport);else applyMidiGate(mf,gateReport);

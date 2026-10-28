@@ -7,6 +7,7 @@
 #include "mscore/workflow/controlflowlayout.h"
 #include "libmscore/playbacktiming.h"
 #include "libmscore/repeatlist.h"
+#include "libmscore/repeatexpansion.h"
 #include "mscore/performanceeditor/performanceeditor.h"
 #include "mscore/scoreview.h"
 #include "mscore/workflow/workflowcontext.h"
@@ -119,7 +120,7 @@ class GateModel : public QAbstractTableModel {
       };
 }
 #include "midihandpanel.inc"
-MidiCropPanel::MidiCropPanel(QWidget* parent,std::function<QList<Score*>()> scores):QWidget(parent),_scores(std::move(scores)) {
+MidiCropPanel::MidiCropPanel(QWidget* parent,std::function<QList<Score*>()> scores,std::function<MidiRenderSettings()> render):QWidget(parent),_scores(std::move(scores)),_renderSettings(std::move(render)) {
       auto layout=new QVBoxLayout(this);layout->setContentsMargins(0,6,0,0);
       setVisible(personalFeaturesEnabled());
       _writtenPedal=new QCheckBox(tr("导出谱上原始踏板"),this);_writtenPedal->setObjectName("midiWrittenPedal");
@@ -154,6 +155,9 @@ bool MidiCropPanel::enabled() const {return personalFeaturesEnabled() && _enable
 bool MidiCropPanel::splitsHands() const {return personalFeaturesEnabled() && _splitHands->isChecked();}
 bool MidiCropPanel::includeOriginal() const {return (enabled()||splitsHands()) && _original->isChecked();}
 bool MidiCropPanel::usesWrittenPedal() const {return personalFeaturesEnabled() && _writtenPedal->isChecked();}
+MidiRenderSettings MidiCropPanel::renderSettings() const {
+      return _renderSettings ? _renderSettings() : MidiRenderSettings{preferences.getBool(PREF_IO_MIDI_EXPANDREPEATS),preferences.getBool(PREF_IO_MIDI_EXPORTRPNS)};
+      }
 MidiExportOptions MidiCropPanel::options(Score* score) const {
       MidiExportOptions result;result.crop=enabled();result.splitHands=splitsHands();if(_handStates.value(score)==score->masterScore()->state())result.handOverrides=_handOverrides.value(score);result.gate=_gate;result.writtenPedal=usesWrittenPedal();
       if(_fromMeasure>0){result.gate.scoreStart=INT_MAX;result.gate.scoreEnd=INT_MAX;int bar=1;for(auto m=score->firstMeasure();m;m=m->nextMeasure(),++bar){if(bar==_fromMeasure)result.gate.scoreStart=m->tick().ticks();if(bar==_untilMeasure)result.gate.scoreEnd=m->endTick().ticks();}if(_untilMeasure<_fromMeasure||_untilMeasure>score->nmeasures())result.gate.scoreStart=result.gate.scoreEnd=INT_MAX;}
@@ -212,7 +216,8 @@ bool MidiCropPanel::write(Score* score,const QString& path,const QString& origin
       if(enabled()&&!_releaseOverrides.value(score).isEmpty()&&_releaseStates.value(score)!=score->masterScore()->state()){QMessageBox::information(this,tr("MIDI松手处理"),tr("乐谱已改变，请打开“查看对比”更新手动松手位置，再导出。"));return false;}
       if(splitsHands()&&!_handOverrides.value(score).isEmpty()&&_handStates.value(score)!=score->masterScore()->state()){QMessageBox::information(this,tr("左右手分轨"),tr("乐谱已修改，请打开“检查左右手”重新核对。"));return false;}
       ExportMidi exporter(score);QBuffer buffer;buffer.open(QIODevice::WriteOnly);
-      if(!exporter.write(&buffer,preferences.getBool(PREF_IO_MIDI_EXPANDREPEATS),preferences.getBool(PREF_IO_MIDI_EXPORTRPNS),mscore->synthesizerState(),options(score)))return false;
+      const auto render=renderSettings();
+      if(!exporter.write(&buffer,render.expandRepeats,render.exportRPNs,mscore->synthesizerState(),options(score)))return false;
       auto store=[&](const QString& name,const QByteArray& bytes) {QSaveFile f(name);if(!f.open(QIODevice::WriteOnly) || f.write(bytes)!=bytes.size() || !f.commit()) {QMessageBox::warning(this,tr("MIDI导出"),tr("无法写入%1：%2").arg(name,f.errorString()));return false;}return true;};
       if(!original.isEmpty()) {
             QBuffer bytes;bytes.open(QIODevice::WriteOnly);
@@ -384,6 +389,7 @@ void MidiCropPanel::compare() {
             playStatus->setText(tr("已更新这次导出的调整。"));calculate();
             });
       auto load=[&] {
+            stopPlaybackPreview();auditionKey.clear();if(updateTransport)updateTransport();
             targetScore=scores[scoreBox->currentIndex()];if(!targetScore)return;fitPending=true;requestedMs=-1.;seekPending=false;
             auto history=editHistory(targetScore);histories->addStack(history);histories->setActiveStack(history);
             if(_releaseStates.value(targetScore)!=targetScore->masterScore()->state()) {
@@ -392,7 +398,8 @@ void MidiCropPanel::compare() {
             _releaseStates[targetScore]=targetScore->masterScore()->state();
             ExportMidi exporter(scores[scoreBox->currentIndex()]);exporter.collectGateData=true;QBuffer bytes;bytes.open(QIODevice::WriteOnly);
             MidiExportOptions renderOptions;renderOptions.writtenPedal=usesWrittenPedal();
-            if(!exporter.write(&bytes,preferences.getBool(PREF_IO_MIDI_EXPANDREPEATS),preferences.getBool(PREF_IO_MIDI_EXPORTRPNS),mscore->synthesizerState(),renderOptions))return;
+            const auto render=renderSettings();
+            if(!exporter.write(&bytes,render.expandRepeats,render.exportRPNs,mscore->synthesizerState(),renderOptions))return;
             targets->blockSignals(true);targets->clear();targets->addItem(tr("全部钢琴部分"),-1);
             for(const auto piano:scores[scoreBox->currentIndex()]->parts())if(piano->instrumentId().contains("piano",Qt::CaseInsensitive))targets->addItem(piano->instrumentName(),piano->startTrack());
             const auto chosen=_staves.value(scores[scoreBox->currentIndex()]);for(int i=1;i<targets->count();++i)if(chosen.contains(targets->itemData(i).toInt()/VOICES))targets->setCurrentIndex(i);targets->blockSignals(false);
@@ -436,10 +443,14 @@ void MidiCropPanel::compare() {
                   if(prepared.unmatched){playStatus->setText(tr("%1个导出音还需要核对演奏对应。可先导出前后MIDI听这一段。").arg(prepared.unmatched));return;}
                   auditionKey="midi-gate-"+QString::number(quintptr(targetScore.data()))+"-"+QString::number(QDateTime::currentMSecsSinceEpoch());preparePlaybackPreview(targetScore,auditionKey,std::move(prepared.original),std::move(prepared.proposed));
                   }
-            int start=0,occurrence=1;
+            int start=0,occurrence=1,untilUtick=-1,anticipatedStart=0;bool seekAnticipation=false;
+            {
+            RepeatExpansionScope repeatPolicy(targetScore->masterScore(),data.expandRepeats);
+            untilUtick=targetScore->masterScore()->repeatList().ticks();
             if(requestedMs>=0.) {
-                  for(const auto& anchor:data.notes)if(anchor.known&&anchor.sourceUtick>=0) {
-                        const double seconds=qMax(0.,PlaybackTiming::time(targetScore,anchor.sourceUtick)+(requestedMs-roll->clock.durationMs(0,anchor.on))/1000.);
+                  for(const auto& anchor:data.notes)if(anchor.known) {
+                        const double seconds=PlaybackTiming::time(targetScore,anchor.sourceUtick)+(requestedMs-roll->clock.durationMs(0,anchor.on))/1000.;
+                        if(seconds<=0.){anticipatedStart=qRound(seconds*DIVISION*targetScore->tempomap()->tempo(0)*targetScore->tempomap()->relTempo());seekAnticipation=true;break;}
                         int utick=targetScore->utime2utick(seconds);const auto& repeats=targetScore->masterScore()->repeatList();
                         if(!repeats.empty())utick=qBound(0,utick,repeats.back()->utick+repeats.back()->len()-1);
                         start=repeats.utick2tick(utick);occurrence=occurrenceAt(start,utick);break;
@@ -448,8 +459,11 @@ void MidiCropPanel::compare() {
             else if(roll->selected>=0&&roll->selected<roll->notes.size()) {
                   const auto& note=roll->notes[roll->selected];start=qMax(0,note.sourceTick);occurrence=occurrenceAt(start,note.sourceUtick);
                   }
+            }
             if(seekPending){stopPlaybackPreview(true);seekPending=false;}
-            auto result=startPlaybackPreview(targetScore,proposed,{{"start",start},{"end",targetScore->lastMeasure()->endTick().ticks()},{"occurrence",occurrence},{"exactStart",true}});
+            QVariantMap range{{"start",start},{"end",targetScore->lastMeasure()->endTick().ticks()},{"untilUtick",untilUtick},{"occurrence",occurrence},{"exactStart",true}};
+            if(seekAnticipation)range["fromEventTick"]=anticipatedStart;
+            auto result=startPlaybackPreview(targetScore,proposed,range);
             if(result.contains("error")){playStatus->setText(result.value("error").toString());if(updateTransport)updateTransport();return;}
             proposedMode=proposed;if(updateTransport)updateTransport();
             };
@@ -469,7 +483,7 @@ void MidiCropPanel::compare() {
       bool wasPlaying=false;
       QTimer playhead;playhead.setInterval(40);connect(&playhead,&QTimer::timeout,&dialog,[&]{
             const bool playing=ownPreview()&&seq&&seq->isPlaying()&&(playbackPreviewActive(targetScore,false)||playbackPreviewActive(targetScore,true));
-            if(playing)for(const auto& n:data.notes)if(n.known&&n.sourceUtick>=0){roll->setPlayhead(roll->clock.durationMs(0,n.on)+(PlaybackTiming::time(targetScore,seq->getCurTick())-PlaybackTiming::time(targetScore,n.sourceUtick))*1000.);break;}
+            if(playing)for(const auto& n:data.notes)if(n.known){roll->setPlayhead(roll->clock.durationMs(0,n.on)+(PlaybackTiming::time(targetScore,seq->getCurEventTick())-PlaybackTiming::time(targetScore,n.sourceUtick))*1000.);break;}
             if(wasPlaying&&!playing){updateTransport();playStatus->setText(tr("播放已停。可继续试听，或在图中选择新的起点。"));}
             wasPlaying=playing;
             });playhead.start();
@@ -525,8 +539,8 @@ void MidiCropPanel::compare() {
             }roll->refresh();});
       connect(exclude,&QPushButton::clicked,&dialog,[&] {const auto index=table->currentIndex();if(!index.isValid())return;const auto& n=rows[model->visible[index.row()]];toggleExclusion(scores[scoreBox->currentIndex()],n.id);});
       connect(recompute,&QPushButton::clicked,&dialog,load);
-      connect(config,&QPushButton::clicked,&dialog,[&]{if(settings())calculate();});
-      connect(specific,&QPushButton::clicked,&dialog,[&]{if(voiceSelection(scores[scoreBox->currentIndex()]))calculate();});
+      connect(config,&QPushButton::clicked,&dialog,[&]{if(ownPreview())stopPlaybackPreview();if(settings())calculate();});
+      connect(specific,&QPushButton::clicked,&dialog,[&]{if(ownPreview())stopPlaybackPreview();if(voiceSelection(scores[scoreBox->currentIndex()]))calculate();});
       connect(reset,&QPushButton::clicked,&dialog,[&] {_gate=MidiGateOptions();_fromMeasure=_untilMeasure=0;_tracks[scores[scoreBox->currentIndex()]].clear();_protectedTracks[scores[scoreBox->currentIndex()]].clear();_exclusions[scores[scoreBox->currentIndex()]].clear();_releaseOverrides[scores[scoreBox->currentIndex()]].clear();_staves[scores[scoreBox->currentIndex()]].clear();editHistory(scores[scoreBox->currentIndex()])->clear();{QSignalBlocker block(targets);targets->setCurrentIndex(0);}savePreferences();calculate();});
       connect(close,&QPushButton::clicked,&dialog,&QDialog::accept);
       QTimer::singleShot(0,&dialog,load);dialog.exec();

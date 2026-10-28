@@ -5,11 +5,24 @@
 #include "libmscore/score.h"
 #include "libmscore/playbacktiming.h"
 #include "libmscore/tempo.h"
+#include "libmscore/repeatexpansion.h"
 #include <QHash>
 #include <QSet>
 namespace Ms {
 GateAudition prepareGateAudition(Score* score,const MidiGateData& data,const QVector<MidiGateNote>& rows){
-      GateAudition result;if(!score)return result;result.original=renderPlaybackPreview(score,score,!data.writtenPedal);result.proposed=result.original;result.proposed.events.clear();
+      GateAudition result;if(!score)return result;RepeatExpansionScope repeatPolicy(score->masterScore(),data.expandRepeats);
+      result.original=renderPlaybackPreview(score,score,!data.writtenPedal,data.expandRepeats?1:0);
+      if(!data.exportRPNs) {
+            EventMap filtered;
+            for(const auto& pair:result.original.events) {
+                  auto event=pair.second;
+                  if(event.type()==ME_CONTROLLER&&event.portamento())continue;
+                  if(event.type()==ME_NOTEON&&event.portamento()&&event.note())event.setPitch(event.note()->pitch());
+                  filtered.insert({pair.first,event});
+                  }
+            result.original.events.swap(filtered);
+            }
+      result.proposed=result.original;result.proposed.events.clear();
       MidiGateProcessor clock;clock.setClock(data);QHash<QString,int> sources;QSet<int> expected,changed;
       auto sourceKey=[](int tick,int track,int pitch,int port,int channel){return QString("%1:%2:%3:%4:%5").arg(tick).arg(track).arg(pitch).arg(port).arg(channel);};
       for(int i=0;i<rows.size();++i){const auto& n=rows[i];if(n.known)sources[sourceKey(n.sourceUtick,n.voice,n.pitch,n.port,n.channel)]=i;if(n.newOff<n.off)expected.insert(i);}

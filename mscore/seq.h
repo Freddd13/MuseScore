@@ -329,6 +329,7 @@ class Seq : public QObject, public Sequencer {
 
       int getPlayStartUtick();
       int _workflowStartUTick = -1;
+      int _workflowAnticipatedStart = 0;
       int _workflowStartContext = -1;
       bool _workflowRestoredNotes = false;
 
@@ -347,7 +348,7 @@ class Seq : public QObject, public Sequencer {
       void seekRT(int utick);
       void stopNotes(int channel = -1, bool realTime = false);
       void start();
-      void startAtUTick(int utick, int context = -1);
+      void startAtUTick(int utick, int context = -1, int anticipatedStart = 0);
       void stop();
       void setPos(POS, unsigned);
       void setMetronomeGain(float val);
@@ -414,6 +415,7 @@ class Seq : public QObject, public Sequencer {
       void setMasterSynthesizer(MasterSynthesizer* ms) { _synti = ms;    }
 
       int getCurTick();
+      int getCurEventTick();
       double curTempo() const;
 
       void putEvent(const NPlayEvent&, unsigned framePos = 0);

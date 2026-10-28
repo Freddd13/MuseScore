@@ -15,6 +15,7 @@ MidiGateData midiGateSnapshot(const MidiFile& file,const QVector<MidiGateSource>
       int trackIndex=0,lastTick=0;
       for(const auto& track:file.tracks()) {
             QMap<int,QVector<int>> pending;
+            QMap<int,int> onsetCounts;int onsetTick=-1;
             int ordinal=0;
             for(const auto& pair:track.events()) {
                   const int tick=pair.first;const auto& e=pair.second;lastTick=qMax(lastTick,tick);
@@ -33,7 +34,8 @@ MidiGateData midiGateSnapshot(const MidiFile& file,const QVector<MidiGateSource>
                   const int key=e.channel()*128+e.pitch();
                   if(e.type()==ME_NOTEON && e.velo()>0) {
                         MidiGateNote n;n.track=trackIndex;n.port=track.outPort();n.channel=e.channel();n.pitch=e.pitch();n.on=tick;n.onOrdinal=ordinal;
-                        n.id=sourceKey(trackIndex,tick,e.channel(),e.pitch())+":"+QString::number(ordinal);
+                        if(tick!=onsetTick){onsetCounts.clear();onsetTick=tick;}
+                        n.id=sourceKey(trackIndex,tick,e.channel(),e.pitch())+":"+QString::number(onsetCounts[key]++);
                         const auto list=tags.value(sourceKey(trackIndex,tick,e.channel(),e.pitch()));
                         if(!list.isEmpty()) {const auto& s=list.first();n.known=list.size()==1;n.sourceTick=s.sourceTick;n.sourceUtick=s.sourceUtick;n.sourceMeasure=s.sourceMeasure;n.melody=s.melody;n.partId=s.partId;n.hand=s.hand;n.handHint=s.handHint;n.finger=s.finger;n.fingerMask=s.fingerMask;n.fingerings=s.fingerings;n.instructions=s.instructions;n.staff=s.staff;n.voice=s.voice;n.partName=s.partName;n.displayStaff=s.displayStaff;n.handSource=s.handSource;n.piano=s.piano;n.manual=s.manual;}
                         pending[key].append(data.notes.size());data.notes.append(n);

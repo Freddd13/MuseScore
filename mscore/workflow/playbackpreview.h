@@ -13,8 +13,9 @@ struct PlaybackPreviewMaterial {
       EventMap events;
       QVector<QPair<double,double>> clock;
       QVariantMap reference;
+      int repeatPolicy = -1; // -1 keeps ordinary playback; 0/1 is an explicit export choice.
 };
-PlaybackPreviewMaterial renderPlaybackPreview(Score* original, Score* rendered, bool pianoPedal = true);
+PlaybackPreviewMaterial renderPlaybackPreview(Score* original, Score* rendered, bool pianoPedal = true, int repeatPolicy = -1);
 EventMap restoredPlaybackEvents(const EventMap&,int tick);
 EventMap resumePlaybackPreview(const EventMap&,int tick);
 void alignPreviewReference(PlaybackPreviewMaterial&);

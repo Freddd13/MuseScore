@@ -1,4 +1,5 @@
 #include <QJsonArray>
+#include <QScopeGuard>
 #include <QGridLayout>
 #include <QJsonDocument>
 #include "mscore/plugin/api/score.h"
@@ -1007,6 +1008,8 @@ class TestPerformanceEditor : public QObject, public MTest {
       void freeSlurEndpointEditsAcrossSystems();
       void midiGateHistoryAndLayout();
       void midiGateAuditionTransport();
+      void midiRepeatedExportAudition134();
+      void midiAnticipatedExportAudition134();
       void rollDraftReopenAndContinue();
       void rollDraftAuditionStartsAtScope();
       void rhythmShowsActualLengths();
@@ -1219,6 +1222,7 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "endpoints_085_tests.inc"
 #include "midi_gate_086_tests.inc"
 #include "midi_transport_086_tests.inc"
+#include "midi_repeat_134_tests.inc"
 #include "writing_087_tests.inc"
 #include "writing_103_tests.inc"
 #include "writing_104_tests.inc"
