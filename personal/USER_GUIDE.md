@@ -1,5 +1,7 @@
 # MuseScore Evolution 个人功能说明
 
+0.130.0的延音后段分手、指法及MIDI松手，见[操作说明](docs/MIDI_TIED_GUIDE.md)。
+
 本次 0.129.0 的编配检查、指法建议、MIDI 松手和音源运行方式，见[这版怎样使用](docs/RELEASE_129_GUIDE.md)。
 
 多份乐谱共用钢琴的连续播放修复，见[切谱与钢琴音源](docs/PIANO_PLAYBACK_128_GUIDE.md)。
@@ -32,7 +34,7 @@
 
 AI怎样读取当前谱、标题和图片，见[当前实现与后续安排](docs/AI_WORKFLOW_REVIEW_20261024.md)。当前旧画谱入口会根据音符重新排版；MuseScore原生选段图片与数据一起提供的功能安排在E阶段。
 
-本文对应个人版本：**0.129.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
+本文对应个人版本：**0.130.0** · Kumo branch / Freddd13。和弦面板见[外观与人工修改](docs/HARMONY_077_GUIDE.md)，完整谱试写见[保存与切换](docs/VARIANTS_076_GUIDE.md)，谱面调节见[操作步骤](docs/SCORE_HARMONY_075_GUIDE.md)，频谱范围与缩放见[完整录音和对齐片段](docs/SPECTRUM_078_GUIDE.md)。
 
 从完整MIDI寻找选段、分别选择两音改对应、撤销重做及使用力度，见[演奏表达操作](docs/EXPRESSION_096_GUIDE.md)。采用演奏中的快慢、分范围使用速度与长休止录制，见[速度与录制](docs/EXPRESSION_097_GUIDE.md)。
 

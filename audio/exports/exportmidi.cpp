@@ -37,6 +37,7 @@
 #include "libmscore/staff.h"
 #include "libmscore/synthesizerstate.h"
 #include "libmscore/tempo.h"
+#include "libmscore/tie.h"
 
 #include "mscore/preferences.h"
 
@@ -249,7 +250,48 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
 bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPNs, const SynthesizerState& synthState, const MidiExportOptions& options)
       {
       QVector<MidiGateSource> sources;
-      const auto handAssignments=(collectGateData || options.crop)?HandBracket::assignments(cs):QHash<const Note*,int>{};
+      const auto handAssignments=(collectGateData || options.crop)?HandBracket::assignments(cs,false):QHash<const Note*,int>{};
+      QHash<const Note*,QVector<MidiGateInstruction>> tiedInstructions;
+      auto readFingers=[](const Note* note,MidiGateInstruction& point) {
+            for(auto e:note->el())if(e->isFingering()) {
+                  const auto text=toFingering(e)->plainText();point.fingerings.append(text);
+                  const int mask=PianoFingering::choices(text);if(!mask)continue;
+                  point.fingeringSet=true;
+                  if(point.finger<0)continue;
+                  if(point.fingerMask && !(point.fingerMask&mask)){point.finger=-1;point.fingerMask=0;}
+                  else point.fingerMask=point.fingerMask?point.fingerMask&mask:mask;
+                  }
+            if(point.finger>=0 && point.fingerMask && !(point.fingerMask&(point.fingerMask-1)))
+                  for(int finger=1;finger<=5;++finger)if(point.fingerMask==(1<<(finger-1)))point.finger=finger;
+            };
+      auto hasHandMark=[](const Note* note) {
+            QList<const Symbol*> symbols;
+            for(const auto& list:{note->el(),note->chord()->el()})for(auto e:list)if(e->isSymbol())symbols.append(toSymbol(e));
+            for(int i=0;i<symbols.size();++i) {
+                  if(symbols[i]->handEligible())return true;
+                  for(auto e:symbols[i]->leafs())if(e->isSymbol())symbols.append(toSymbol(e));
+                  }
+            return false;
+            };
+      auto writtenInstructions=[&](const Note* origin) {
+            auto cached=tiedInstructions.constFind(origin);if(cached!=tiedInstructions.cend())return cached.value();
+            QVector<MidiGateInstruction> result;QSet<const Note*> visited;
+            auto current=origin;int previousHand=handAssignments.value(origin,-1);
+            while(current && !visited.contains(current)) {
+                  visited.insert(current);
+                  if(current!=origin) {
+                        MidiGateInstruction point;point.sourceTick=current->chord()->tick().ticks();
+                        const auto measure=current->chord()->measure();point.measure=measure->no()+1;point.beat=1.+double(point.sourceTick-measure->tick().ticks())/(DIVISION*4./measure->timesig().denominator());
+                        const int hand=handAssignments.value(current,-1);
+                        point.handSet=hasHandMark(current) || hand!=-1&&hand!=previousHand;
+                        point.hand=hand;readFingers(current,point);
+                        if(point.handSet)previousHand=hand;
+                        if(point.handSet || !point.fingerings.isEmpty())result.append(point);
+                        }
+                  current=current->tieFor()?current->tieFor()->endNote():nullptr;
+                  }
+            tiedInstructions.insert(origin,result);return result;
+            };
       mf.tracks().clear();
       mf.setDivision(DIVISION);
       mf.setFormat(1);
@@ -273,6 +315,9 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
 
       pauseMap.calculate(cs);
       writeHeader(tempoTrack);
+      struct GatePass {int start,end,writtenEnd;};QVector<GatePass> gatePasses;
+      if(collectGateData || options.crop)for(auto pass:cs->repeatList())
+            gatePasses.append({pass->utick,pass->utick+pass->len(),pass->tick+pass->len()});
 
       int staffIdx = 0;
       for (auto &track: tracks) {
@@ -390,13 +435,16 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                                       }
                                                 tag.partId=part->startTrack();tag.handHint=staffIdx==part->startTrack()/VOICES?1:0;
                                                 tag.hand=handAssignments.value(note,-1);
-                                                for(auto e:note->el())if(e->isFingering() && tag.finger>=0) {
-                                                      const int mask=PianoFingering::choices(toFingering(e)->plainText());if(!mask)continue;
-                                                      if(tag.fingerMask && !(tag.fingerMask&mask)){tag.finger=-1;tag.fingerMask=0;}
-                                                      else tag.fingerMask=tag.fingerMask?tag.fingerMask&mask:mask;
+                                                MidiGateInstruction initial;readFingers(note,initial);tag.finger=initial.finger;tag.fingerMask=initial.fingerMask;
+                                                const int offset=event.nominalTick()-tag.sourceTick;
+                                                // A repeat jump ends this written continuation. Later passes
+                                                // receive their own mapping and pause compensation.
+                                                auto pass=std::upper_bound(gatePasses.cbegin(),gatePasses.cend(),event.nominalTick(),[](int tick,const GatePass& p){return tick<p.start;});
+                                                if(pass!=gatePasses.cbegin())--pass;
+                                                const int writtenEnd=pass!=gatePasses.cend() && event.nominalTick()>=pass->start && event.nominalTick()<pass->end?pass->writtenEnd:tag.sourceTick;
+                                                for(auto point:writtenInstructions(note))if(point.sourceTick<writtenEnd) {
+                                                      point.tick=pauseMap.addPauseTicks(point.sourceTick+offset);tag.instructions.append(point);
                                                       }
-                                                if(tag.finger>=0 && tag.fingerMask && !(tag.fingerMask&(tag.fingerMask-1)))
-                                                      for(int finger=1;finger<=5;++finger)if(tag.fingerMask==(1<<(finger-1)))tag.finger=finger;
                                                 tag.melody = note->ppitch()>=highest;
                                                 tag.partName = part->instrumentName(note->tick());
                                                 tag.piano = part->instrumentId(note->tick()).contains("piano", Qt::CaseInsensitive);

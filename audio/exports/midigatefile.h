@@ -10,6 +10,7 @@ struct MidiGateSource {
       int sourceTick=-1,sourceMeasure=-1,sourceUtick=-1;
       int partId=-1,hand=-1,handHint=-1,finger=0;
       int fingerMask=0;
+      QVector<MidiGateInstruction> instructions;
       bool melody=false;
       QString partName;
       bool piano=false,manual=false;

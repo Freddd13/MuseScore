@@ -12,6 +12,6 @@ struct Style { double horizontal=2,vertical=-1,width=.12;bool text=false; };
 Style defaults(SymId);
 bool setDefaults(SymId,const Style&);
 QPointF position(const Symbol*);
-QHash<const Note*,int> assignments(const Score*);
+QHash<const Note*,int> assignments(const Score*,bool foldTiedChanges=true);
 }
 }

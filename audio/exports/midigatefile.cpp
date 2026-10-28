@@ -35,7 +35,7 @@ MidiGateData midiGateSnapshot(const MidiFile& file,const QVector<MidiGateSource>
                         MidiGateNote n;n.track=trackIndex;n.port=track.outPort();n.channel=e.channel();n.pitch=e.pitch();n.on=tick;
                         n.id=sourceKey(trackIndex,tick,e.channel(),e.pitch())+":"+QString::number(ordinal);
                         const auto list=tags.value(sourceKey(trackIndex,tick,e.channel(),e.pitch()));
-                        if(list.size()==1) {const auto& s=list.first();n.known=true;n.sourceTick=s.sourceTick;n.sourceUtick=s.sourceUtick;n.sourceMeasure=s.sourceMeasure;n.melody=s.melody;n.partId=s.partId;n.hand=s.hand;n.handHint=s.handHint;n.finger=s.finger;n.fingerMask=s.fingerMask;n.staff=s.staff;n.voice=s.voice;n.partName=s.partName;n.piano=s.piano;n.manual=s.manual;}
+                        if(list.size()==1) {const auto& s=list.first();n.known=true;n.sourceTick=s.sourceTick;n.sourceUtick=s.sourceUtick;n.sourceMeasure=s.sourceMeasure;n.melody=s.melody;n.partId=s.partId;n.hand=s.hand;n.handHint=s.handHint;n.finger=s.finger;n.fingerMask=s.fingerMask;n.instructions=s.instructions;n.staff=s.staff;n.voice=s.voice;n.partName=s.partName;n.piano=s.piano;n.manual=s.manual;}
                         pending[key].append(data.notes.size());data.notes.append(n);
                         }
                   else if(e.type()==ME_NOTEOFF || (e.type()==ME_NOTEON && e.velo()==0)) {
@@ -49,6 +49,11 @@ MidiGateData midiGateSnapshot(const MidiFile& file,const QVector<MidiGateSource>
                   }
             for(const auto& list:pending)for(int index:list) {data.notes[index].ambiguous=true;data.notes[index].off=lastTick;}
             ++trackIndex;
+            }
+      for(auto& n:data.notes) {
+            n.instructions.erase(std::remove_if(n.instructions.begin(),n.instructions.end(),[&](const auto& p){return p.tick<=n.on || p.tick>=n.off;}),n.instructions.end());
+            std::stable_sort(n.instructions.begin(),n.instructions.end(),[](const auto& a,const auto& b){return a.tick<b.tick;});
+            if(!n.instructions.isEmpty())n.requiredUntil=n.instructions.last().tick;
             }
       for(auto i=controls.begin();i!=controls.end();++i) {
             auto& stream=i.value();std::stable_sort(stream.begin(),stream.end(),[](const auto& a,const auto& b){return a.tick<b.tick;});

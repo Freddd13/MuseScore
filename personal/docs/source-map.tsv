@@ -600,3 +600,6 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	64	固定来源、官方
 
 已载入音源运行方式	mscore/workflow/vstpanel.cpp	Panel::changeSourceMode	486	直接与独立运行切换、保留音色效果和撤销	sourceModeSwitch129 / sourceModeDuringPlayback129
 独立音源声音块记录	audio/vst/proxy.cpp	Proxy::processingDiagnostics	269	记录声音块返回、遗漏、占用及处理失败	combinedPlaybackGui126
+
+延音后段与每次导出	audio/exports/exportmidi.cpp	ExportMidi::write / writtenInstructions	254	按延音链、反复与暂停读取分手指法	nativeTiedInstructionOccurrences
+延音保护与拖尾端	audio/exports/midigate.h	MidiGateProcessor::process / releaseBounds	104	后续指法保持、按时换手与手动范围	midiTiedInstructionProtection / midiTiedHandAndFingerFrames

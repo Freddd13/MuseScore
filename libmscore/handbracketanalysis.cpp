@@ -49,7 +49,7 @@ int resolve(const Track& track,const Note* note) {
       return uncertain?-2:found;
       }
 }
-QHash<const Note*,int> assignments(const Score* score) {
+QHash<const Note*,int> assignments(const Score* score,bool foldTiedChanges) {
       QHash<const Note*,int> result;if(!score)return result;QMap<int,Track> tracks;
       for(auto segment=score->firstSegment(SegmentType::ChordRest);segment;segment=segment->next1(SegmentType::ChordRest))for(int number=0;number<score->nstaves()*VOICES;++number) {
             auto element=segment->element(number);if(!element || !element->isChord())continue;
@@ -59,7 +59,7 @@ QHash<const Note*,int> assignments(const Score* score) {
       for(auto& track:tracks) {
             build(track);for(auto note:track.notes){const int hand=resolve(track,note);if(hand!=-1)result[note]=hand;}
             // A hand change inside a tie needs a richer timed explanation; do not guess it in export.
-            for(auto note:track.notes)if(note->tieBack() && result.contains(note)) {
+            for(auto note:track.notes)if(foldTiedChanges && note->tieBack() && result.contains(note)) {
                   auto origin=note;QSet<const Note*> visited;
                   while(origin->tieBack() && origin->tieBack()->startNote() && !visited.contains(origin)){visited.insert(origin);origin=origin->tieBack()->startNote();}
                   if(result.value(origin,-1)!=result[note])result[origin]=-2;
