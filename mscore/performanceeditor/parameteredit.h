@@ -18,6 +18,7 @@ struct VelocityEdit {
 namespace ParameterEdit {
 bool expression(Score*,const QMap<Note*,VelocityEdit>&,const QMap<int,double>&,QString* error = nullptr,bool saveOriginal = false,bool ownCommand = true);
 bool writeTapTempo(Score*,int tick,double bpm,bool selectedExisting,QString* error = nullptr);
+bool writeTapTempo(TempoText* target,double bpm,QString* error = nullptr);
 bool velocities(Score*, const QMap<Note*, VelocityEdit>&);
 // Map keys are existing ChordRest ticks; visible markers are protected unless explicitly selected.
 bool tempos(Score*, const QMap<int, double>& bpm, int unlockedTick, QString* error = nullptr);

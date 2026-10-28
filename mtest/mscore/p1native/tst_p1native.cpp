@@ -30,6 +30,7 @@
 #include "mscore/midicrop/gateaudition.h"
 #include "mscore/preferences.h"
 #include <QScopedValueRollback>
+#include <QScopeGuard>
 #include "mscore/musescore.h"
 #include "mscore/palette.h"
 #include "mscore/palette/palettetree.h"
@@ -119,9 +120,16 @@ private slots:
  void playableTempoPaletteReadAndApply();
  void tapMarkPreviewCancelAndSave();
  void tapMarkRestoreAndRitProtection();
+ void tapFormattedTempo135_data();
+ void tapFormattedTempo135();
+ void tapSelectedTempo135();
+ void tapSelectedTempo135_data();
+ void tempoWorkspaceImport135();
+ void ritFactoryTargetStyle135();
 #else
 #include "tempo_palette_tests.inc"
 #include "tap_mark_tests.inc"
+#include "notation_135_tests.inc"
 #endif
  void liveMatcherRecovery(){
   QVector<RealtimeMatcher::Group> groups;const QList<int> pitches{60,62,64,67,65,69,71,72};

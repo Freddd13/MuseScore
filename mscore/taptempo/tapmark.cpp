@@ -25,15 +25,45 @@
 #include <QTimer>
 
 namespace Ms {
+namespace {
+struct TempoSource {
+      QString text;
+      QVector<int> positions;
+      };
+TempoSource tempoSource(const QString& xml)
+      {
+      TempoSource result;
+      static const QString spaceSymbol=QStringLiteral("<sym>space</sym>");
+      for(int i=0;i<xml.size();) {
+            if(xml.midRef(i,spaceSymbol.size())==spaceSymbol) { result.text+=' ';result.positions.append(i);i+=spaceSymbol.size();continue; }
+            if(xml[i]=='<') {
+                  const int end=xml.indexOf('>',i);
+                  if(end>=0) {
+                        const auto tag=xml.midRef(i,end-i+1);
+                        if(tag!="<sym>"&&tag!="</sym>"){i=end+1;continue;}
+                        }
+                  }
+            result.text+=xml[i];result.positions.append(i++);
+            }
+      return result;
+      }
+double tapBeatUnit(const QString& original)
+      {
+      const double value=TempoText::findTempoValue(tempoSource(original).text);
+      return value>0?value*60.:1.;
+      }
+}
 QString tapTempoText(const QString& original, double quarterBpm, bool appendNumber)
       {
       QString result = original;
-      static const QRegularExpression number("(=\\s*)([0-9]+(?:[.,][0-9]+)?)");
-      const auto match = number.match(result);
+      const auto source=tempoSource(original);
+      static const QRegularExpression number("[=≒≈~](?:\\s|&nbsp;|&#160;)*(?:(?:ca\\.|c\\.|approx\\.)\\s*)?([0-9]+(?:[.,][0-9]+)?)",QRegularExpression::CaseInsensitiveOption);
+      const auto match = number.match(source.text);
       if (match.hasMatch()) {
-            const double factor = TempoText::findTempoValue(original);
-            const double beats = factor > 0 ? factor * 60. : 1.;
-            result.replace(match.capturedStart(2), match.capturedLength(2), QString::number(quarterBpm / beats, 'f', 2));
+            const auto value=QString::number(quarterBpm/tapBeatUnit(original),'f',2);
+            // Keep the surrounding rich-text tags, including formatting between digits.
+            for(int i=match.capturedEnd(1)-1;i>=match.capturedStart(1);--i)
+                  result.replace(source.positions[i],1,i==match.capturedStart(1)?value:QString());
             }
       else if (appendNumber) result += QString(" <sym>metNoteQuarterUp</sym> = %1").arg(quarterBpm, 0, 'f', 2);
       return result;
@@ -92,7 +122,7 @@ class TapMarkDialog : public QDialog {
             const bool inRange = _bpm >= 5 && _bpm <= 999;
             _value->setText(_bpm ? tr("四分音符：%1 BPM · 本次点击单位：%2 BPM")
                   .arg(_bpm, 0, 'f', 2).arg(_bpm / _unit->currentData().toDouble(), 0, 'f', 2)
-                  : tr("请点击 Tap；每次点击代表所选的一拍。"));
+                  : tr("敲击下方按钮开始测速；每次点击代表所选的一拍。"));
             const bool stopped = _score && !_score->readOnly() && !_score->isPlaying()
                   && (!seq || (!seq->isPlaying() && seq->backgroundRenderingIdle()));
             _save->setEnabled(element && supported() && _estimate.ready() && inRange && stopped);
@@ -162,8 +192,7 @@ class TapMarkDialog : public QDialog {
                   _score->startCmd(); toTempoText(target)->undoSetTempo(_bpm/60.); _score->endCmd(); changed = true;
                   }
             else {
-                  if (qFuzzyCompare(_oldTempo,_bpm/60.)) { accept(); return; }
-                  changed = ParameterEdit::writeTapTempo(_score, _tick, _bpm, true, &error);
+                  changed = ParameterEdit::writeTapTempo(toTempoText(target), _bpm, &error);
                   }
             if (!changed) { _status->setText(error.isEmpty() ? tr("未写入，请检查目标和乐谱状态。") : error); return; }
             mscore->endCmd(); accept();
@@ -191,7 +220,7 @@ class TapMarkDialog : public QDialog {
             layout->addRow(_meaning);
             _unit = new QComboBox(this); _unit->setObjectName("tapMarkUnit");
             TapTempo::populateUnits(_unit);
-            double beats = tempo ? TempoText::findTempoValue(_original)*60. : 1.;
+            double beats = tempo ? tapBeatUnit(_original) : 1.;
             int index = _unit->findData(beats); _unit->setCurrentIndex(index >= 0 ? index : _unit->findData(1.));
             layout->addRow(tr("每次点击代表"),_unit);
             _value = new QLabel(this); _value->setObjectName("tapMarkValue"); _value->setMinimumWidth(440); layout->addRow(_value);

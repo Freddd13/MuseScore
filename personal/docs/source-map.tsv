@@ -618,3 +618,8 @@ MCP会话控制	mcp-musescore/src/sessions.py	sessions / end_session / ClientSes
 MIDI反复与导出时间	audio/exports/exportmidi.cpp	ExportMidi::write	265	当前反复、暂停和提前起音元数据	midiRepeatHeaderUsesRequestedPolicy / midiAnticipationKeepsFirstBeatMetadata
 导出选项与音符身份	audio/exports/midigatefile.cpp	midiGateSnapshot	29	RPN变化保留手别与松手	midiHandOverridesSurviveExportChoices
 MIDI试听与提前区定位	mscore/workflow/playbackpreview.cpp	startPlaybackPreview	190	第二遍、声音位置、暂停和普通设置恢复	midiRepeatedExportAudition134 / midiAnticipatedExportAudition134
+Tap格式与指定标记	mscore/taptempo/tapmark.cpp	tapTempoText / TapMarkDialog::save	27	格式、拍单位与精确目标	tapFormattedTempo135 / tapSelectedTempo135
+渐慢默认文字	mscore/temposymbols.cpp	applyPlayableTempoTextStyle	26	当前谱默认字体及个人字体保留	ritFactoryTargetStyle135 / ritRangeLayout135
+D1输入与线条操作	mtest/mscore/performanceeditor/notation_135_tests.inc	notationInputActions135 / ritRangeLayout135	1	两个4/4、端点拖动、保存重开	D1
+同拍速度标记的撤销顺序	libmscore/segment.h	swapAnnotations	175	交换同一批附属对象的顺序，供Tap一次撤销	tapSelectedTempo135
+演奏材料的独立预览	share/workflow/panels/PerformanceExpression/PerformanceExpression.view.qml	freshMaterialSettings	251	成功导入后重建逐音速度与力度调整	expressionTempoSelectedRanges

@@ -13,14 +13,32 @@
 #include "libmscore/tempotext.h"
 namespace Ms {
 static QString lineFontFace(Score* score) { TempoText text(score); return text.getProperty(Pid::FONT_FACE).toString(); }
+static const QPair<Pid,Pid> tempoTextProperties[]={{Pid::BEGIN_FONT_FACE,Pid::FONT_FACE},{Pid::CONTINUE_FONT_FACE,Pid::FONT_FACE},{Pid::END_FONT_FACE,Pid::FONT_FACE},
+      {Pid::BEGIN_FONT_SIZE,Pid::FONT_SIZE},{Pid::CONTINUE_FONT_SIZE,Pid::FONT_SIZE},{Pid::END_FONT_SIZE,Pid::FONT_SIZE},
+      {Pid::BEGIN_FONT_STYLE,Pid::FONT_STYLE},{Pid::CONTINUE_FONT_STYLE,Pid::FONT_STYLE},{Pid::END_FONT_STYLE,Pid::FONT_STYLE}};
+bool usesPlayableTempoTextStyle(const TextLine* line)
+      {
+      TempoText prototype(line->score());
+      for(const auto& property:tempoTextProperties)if(line->getProperty(property.first)!=prototype.getProperty(property.second))return false;
+      return true;
+      }
+void applyPlayableTempoTextStyle(TextLine* line,bool styledOnly)
+      {
+      TempoText prototype(line->score());
+      for(const auto& property:tempoTextProperties)if(!styledOnly||line->propertyFlags(property.first)==PropertyFlags::STYLED) {
+            const auto value=prototype.getProperty(property.second);
+            if(line->getProperty(property.first)!=value)line->setProperty(property.first,value);
+            line->setPropertyFlags(property.first,PropertyFlags::NOSTYLE);
+            }
+      }
 void appendPlayableTempoSymbols(PalettePanel* panel)
       {
       if (!personalFeaturesEnabled()) return;
       if(!panel||panel->type()!=PalettePanel::Type::Tempo||!gscore)return;
       auto makeRit=[](){
-            auto line=new TextLine(gscore,true);line->setLen(4*gscore->spatium());TempoText prototype(gscore);
+            auto line=new TextLine(gscore,true);line->setLen(4*gscore->spatium());
             line->setBeginText("rit.");line->setContinueText("(rit.)");
-            line->setProperty(Pid::BEGIN_FONT_FACE,prototype.getProperty(Pid::FONT_FACE));line->setProperty(Pid::BEGIN_FONT_SIZE,prototype.getProperty(Pid::FONT_SIZE));line->setProperty(Pid::BEGIN_FONT_STYLE,prototype.getProperty(Pid::FONT_STYLE));
+            applyPlayableTempoTextStyle(line);
             line->setLineStyle(Qt::DashLine);line->setProperty(Pid::RIT_MODE,true);line->setProperty(Pid::RIT_PLAY,true);return line;
             };
       auto makeRestore=[](){auto text=new TempoText(gscore);text->setFollowText(false);text->setXmlText("a tempo");text->setProperty(Pid::TEMPO_RESTORE_MODE,1);text->setProperty(Pid::FONT_FACE,lineFontFace(gscore));return text;};
@@ -36,7 +54,7 @@ void appendPlayableTempoSymbols(PalettePanel* panel)
             if(found[role]){panel->takeCells(i,1);continue;}found[role]=true;
             if(oldRit||oldRestore){cell->element.reset(role==0?static_cast<Element*>(makeRit()):static_cast<Element*>(makeRestore()));cell->custom=false;e=cell->element.get();}
             cell->tag.clear();cell->name=role==0?QObject::tr("渐慢 rit.（可播放）"):QObject::tr("a tempo（恢复渐变前的速度）");
-            cell->mag=role==0?1.:1.1;if(role==0)toTextLine(e)->setLen(4*gscore->spatium());++i;
+            cell->mag=role==0?1.:1.1;if(role==0){applyPlayableTempoTextStyle(toTextLine(e),true);toTextLine(e)->setLen(4*gscore->spatium());}++i;
             }
       if(!found[0])panel->append(makeRit(),QObject::tr("渐慢 rit.（可播放）"),QString(),1.);
       if(!found[1])panel->append(makeRestore(),QObject::tr("a tempo（恢复渐变前的速度）"),QString(),1.1);

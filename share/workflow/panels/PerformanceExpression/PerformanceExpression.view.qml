@@ -248,7 +248,7 @@ MuseScore {
  function fail(e){status=Messages.readable(e)}
  function passageHint(){var p=result.passage;return p&&p.ambiguous&&!p.chosen?"发现几处相似的演奏，请在“演奏片段”选择本次时间。 ":""}
  function choosePassage(index){if(!prepareEditing())return;pushPreviewUndo();passageChoice=index;passageFrom=result.passage.candidates[index].from;dirtyProject=true;runAlignment()}
- function freshVelocitySettings(){var next=Project.copy(config);next.velocityStrength=100;next.velocityWriteMode="fixed";config=next}
+ function freshMaterialSettings(){var next=Project.copy(config);next.velocityStrength=100;next.velocityWriteMode="fixed";next.previewVelocity={};next.previewTempo={};config=next}
  function velocityWriteText(item){var mode=item.writeMode||"preserve";return mode==="fixed"||mode==="preserve"&&item.oldType===1?"固定力度 "+item.target:"跟随力度记号 "+Math.round((item.target-item.oldBase)*100/item.oldBase)+"%"}
  function cancel(){var wasBusy=busy||captureState.recording||captureState.stopping||captureState.saving;readForCapture=false;refreshingApplication=false;newImportPending=false;pendingProjectRestore=null;midiToken="";if(captureSession)captureSession.cancel();pendingAudition=null;auditionRetry.stop();paging.stop();if(observer){observer.cancelReadOnlyJob();if(typeof observer.cancelPerformanceMidi==="function")observer.cancelPerformanceMidi()}busy=false;if(wasBusy)status="已取消，可以继续导入或录制。"}
  function runAlignment(){
@@ -263,7 +263,7 @@ MuseScore {
   cancel();candidateTimer.stop();newImportPending=true;busy=true;status="正在读取演奏 MIDI…";midiToken=observer.readPerformanceMidi(String(path));
  }
  function acceptNewMaterial(){
-  newImportPending=false;revealResultsPending=true;dirtyProject=true;freshVelocitySettings();
+  newImportPending=false;revealResultsPending=true;dirtyProject=true;freshMaterialSettings();
   appliedProgress=({velocity:{},tempos:{}});loadedSourceHash="";passageChoice=-1;passageFrom=-1;
   fromSeconds=0;untilSeconds=999999;manualAnchors=[];links=[];previewUndo=[];previewRedo=[];candidate=null;
  }

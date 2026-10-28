@@ -171,6 +171,8 @@ class Segment final : public Element {
       bool splitsTuplet() const;
 
       const std::vector<Element*>& annotations() const { return _annotations;        }
+      // Exchange a permutation of the same attached objects for an undoable order change.
+      void swapAnnotations(std::vector<Element*>& order) { _annotations.swap(order); }
       void clearAnnotations();
       void removeAnnotation(Element* e);
       bool hasAnnotationOrElement(ElementType type, int minTrack, int maxTrack) const;
@@ -305,4 +307,3 @@ inline Segment* Segment::prevEnabled() const
 Q_DECLARE_METATYPE(Ms::SegmentType);
 
 #endif
-

@@ -81,8 +81,11 @@ void TestPerformanceEditor::expressionTempoSelectedRanges()
     auto observer=qobject_cast<PluginAPI::ScoreObserver*>(root->property("observer").value<QObject*>());QVERIFY(observer);observer->workflowInfo();
     auto notes=observer->performanceRange(0,7680,0,4,0,100,observer->analysisRevision()).value("notes").toList();QCOMPARE(notes.size(),16);
     auto midi=_directory.filePath("tempo-selected-097.mid");QVERIFY(expressionMidi097(midi,notes));
+    QVERIFY(QMetaObject::invokeMethod(root,"editConfig",Q_ARG(QVariant,"previewTempo"),Q_ARG(QVariant,QVariantMap({{"480",130.}}))));
+    QVERIFY(QMetaObject::invokeMethod(root,"editConfig",Q_ARG(QVariant,"previewVelocity"),Q_ARG(QVariant,QVariantMap({{"previous-material",20}}))));
     QVERIFY(QMetaObject::invokeMethod(root,"importMidi",Q_ARG(QVariant,QUrl::fromLocalFile(midi).toString())));
     QTRY_VERIFY_WITH_TIMEOUT(!root->property("busy").toBool()&&expressionMap080(root,"candidate").value("velocity").toList().size()==16,15000);
+    QVERIFY(expressionMap080(root,"config").value("previewTempo").toMap().isEmpty());QVERIFY(expressionMap080(root,"config").value("previewVelocity").toMap().isEmpty());
     QVERIFY(QMetaObject::invokeMethod(root,"editConfig",Q_ARG(QVariant,"rubato"),Q_ARG(QVariant,true)));
     QVERIFY(QMetaObject::invokeMethod(root,"editConfig",Q_ARG(QVariant,"keepDuration"),Q_ARG(QVariant,false)));
     QVERIFY(QMetaObject::invokeMethod(root,"editConfig",Q_ARG(QVariant,"rubatoStrength"),Q_ARG(QVariant,100)));

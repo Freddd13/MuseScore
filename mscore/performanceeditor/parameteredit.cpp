@@ -1,5 +1,6 @@
 #include "parameteredit.h"
 #include "../taptempo/tapmark.h"
+#include "../temposymbols.h"
 #include "mscore/seq.h"
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
@@ -51,6 +52,25 @@ class TempoBoundary : public UndoCommand {
    public:
       TempoBoundary(Score* score, bool begin) : _score(score), _begin(begin) {}
       UNDO_NAME("PerformanceTempoBatchBoundary")
+      };
+// Simultaneous tempo marks use the last annotation for playback. Keep the
+// explicitly edited mark last among them, and restore its original order on undo.
+class TapTempoOrder : public UndoCommand {
+      Segment* _segment;
+      std::vector<Element*> _order;
+      void flip(EditData*) override
+            {
+            _segment->swapAnnotations(_order);
+            _segment->score()->requestTempoMapRebuild();
+            _segment->triggerLayout();
+            }
+   public:
+      explicit TapTempoOrder(TempoText* target):_segment(target->segment()),_order(_segment->annotations()) {
+            auto first=std::find(_order.begin(),_order.end(),target);
+            auto after=std::find_if(_order.rbegin(),_order.rend(),[](Element* e){return e->isTempoText();}).base();
+            std::rotate(first,first+1,after);
+            }
+      UNDO_NAME("TapTempoAnnotationOrder")
       };
 }
 namespace ParameterEdit {
@@ -172,6 +192,25 @@ bool writeTapTempo(Score* score,int tick,double bpm,bool selectedExisting,QStrin
  return temposImpl(score,{{tick,bpm}},selectedExisting?tick:-1,error,true,false,true);
 }
 
+bool writeTapTempo(TempoText* target,double bpm,QString* error) {
+ if(!target||!editable(target->score()))return false;
+ if(!std::isfinite(bpm)||bpm<5.||bpm>999.){if(error)*error=QObject::tr("速度必须在5–999 BPM内。");return false;}
+ if(target->isRelative()||target->restoreMode()){if(error)*error=QObject::tr("请选择固定速度标记，或使用面板中的恢复速度设置。");return false;}
+ auto score=target->score()->masterScore();const int tick=target->tick().ticks();
+ for(auto curve:TempoExpression::curves(score))if(tick>=curve->tick().ticks()&&tick<curve->tick2().ticks()){
+  if(error)*error=QObject::tr("这一拍正在渐变速度，请从rit.面板设置起始或结束速度。");return false;
+ }
+ const auto text=tapTempoText(target->xmlText(),bpm,true);
+ if(text==target->xmlText()&&qFuzzyCompare(target->tempo(),bpm/60.)&&!target->followText()&&qFuzzyCompare(score->tempo(target->tick()),bpm/60.))return true;
+ score->startCmd();score->undo(new TempoBoundary(score,true));
+ target->undoSetFollowText(false);static_cast<Element*>(target)->undoChangeProperty(Pid::TEXT,text);target->undoSetTempo(bpm/60.);
+ for(auto linked:target->linkList())if(linked->isTempoText()){
+  auto mark=toTempoText(linked);const auto& annotations=mark->segment()->annotations();auto last=std::find_if(annotations.rbegin(),annotations.rend(),[](Element* e){return e->isTempoText();});
+  if(last!=annotations.rend()&&*last!=mark)score->undo(new TapTempoOrder(mark));
+ }
+ score->undo(new TempoBoundary(score,false));score->endCmd();return true;
+}
+
 bool tempoCurve(Score* input, int from, int until, TextLine* target, bool replace, QString* error, const TextLine* prototype)
       {
       if (!editable(input)) return false;
@@ -199,7 +238,8 @@ bool tempoCurve(Score* input, int from, int until, TextLine* target, bool replac
             target = prototype ? prototype->clone() : new TextLine(score, true);
             target->eraseSpannerSegments(); target->setScore(score); target->setParent(nullptr); target->setSystemFlag(true);
             target->setTrack(0); target->setTick(Fraction::fromTicks(from)); target->setTicks(Fraction::fromTicks(until - from));
-            if(!prototype){target->setBeginText("rit."); target->setContinueText("(rit.)"); target->setBeginFontStyle(FontStyle::Italic); target->setLineStyle(Qt::DashLine);}
+            if(!prototype){target->setBeginText("rit."); target->setContinueText("(rit.)"); applyPlayableTempoTextStyle(target); target->setLineStyle(Qt::DashLine);}
+            else if(usesPlayableTempoTextStyle(prototype))applyPlayableTempoTextStyle(target);
             target->setProperty(Pid::RIT_MODE, true); target->setProperty(Pid::RIT_PLAY, true); score->undoAddElement(target);
             }
       else {

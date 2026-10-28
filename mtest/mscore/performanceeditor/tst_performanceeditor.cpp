@@ -101,6 +101,10 @@
 #include "libmscore/measure.h"
 #include "libmscore/system.h"
 #include "libmscore/layoutbreak.h"
+#include "libmscore/inputrhythm.h"
+#include "libmscore/inputnotation.h"
+#include "libmscore/beam.h"
+#include "mscore/zoombox.h"
 #include "libmscore/dynamic.h"
 #include "libmscore/xml.h"
 #include "mscore/palette.h"
@@ -1010,6 +1014,10 @@ class TestPerformanceEditor : public QObject, public MTest {
       void midiGateAuditionTransport();
       void midiRepeatedExportAudition134();
       void midiAnticipatedExportAudition134();
+      void notationInputActions135_data();
+      void notationInputActions135();
+      void ritRangeLayout135_data();
+      void ritRangeLayout135();
       void rollDraftReopenAndContinue();
       void rollDraftAuditionStartsAtScope();
       void rhythmShowsActualLengths();
@@ -1223,6 +1231,7 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "midi_gate_086_tests.inc"
 #include "midi_transport_086_tests.inc"
 #include "midi_repeat_134_tests.inc"
+#include "notation_135_tests.inc"
 #include "writing_087_tests.inc"
 #include "writing_103_tests.inc"
 #include "writing_104_tests.inc"
