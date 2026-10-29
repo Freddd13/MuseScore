@@ -34,13 +34,23 @@
 #include <algorithm>
 #include <cmath>
 namespace Ms {
-// This filter only listens for the held display key. Gesture filters can be
-// removed on mouse release without disabling this independent shortcut.
+// Keep display and canvas keys independent of the temporary gesture filter.
+// The application's Escape handler dispatches directly to widgets, so canvas
+// keys must be claimed here before that handler moves focus to the score.
 class PerformancePeekKeys : public QObject {
       PerformanceEditor* _editor;
    public:
       explicit PerformancePeekKeys(PerformanceEditor* editor):QObject(editor),_editor(editor) { qApp->installEventFilter(this); }
-      bool eventFilter(QObject* object,QEvent* event) override { return _editor->peekKeyEvent(object,event); }
+      bool eventFilter(QObject* object,QEvent* event) override {
+            if (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) {
+                  auto key = static_cast<QKeyEvent*>(event);
+                  if (key->modifiers() == Qt::NoModifier && (key->key() == Qt::Key_Escape || key->key() == Qt::Key_Home)
+                      && (object == _editor->_canvas || object == _editor->_noteCanvas || object == _editor->_ruler
+                          || (object->property("performanceExtraRuler").toBool() && object->parent() == _editor->_noteCanvas->parent())))
+                        if (_editor->eventFilter(object, event)) return true;
+                  }
+            return _editor->peekKeyEvent(object,event);
+            }
       };
 void PerformanceEditor::setupUsabilityControls()
       {
@@ -51,7 +61,10 @@ void PerformanceEditor::setupUsabilityControls()
       _peekKey=QKeySequence(settings.value("performanceEditor/peekKey","Ctrl+Alt+V").toString())[0];
       new PerformancePeekKeys(this);
       connect(&_wheelFeedbackTimer,&QTimer::timeout,this,[this]{
-            ++_wheelFeedbackTicks;if(_wheelFeedbackTicks>=30){_wheelFeedbackTimer.stop();}
+            // Hold the unchanged badge without repainting, then fade it out.
+            _wheelFeedbackTicks = _wheelFeedbackTicks ? _wheelFeedbackTicks + 1 : 23;
+            _wheelFeedbackTimer.setInterval(30);
+            if(_wheelFeedbackTicks>=30){_wheelFeedbackTimer.stop();}
             if(_wheelFeedbackSurface){auto damage=wheelBadge(_wheelFeedbackSurface).adjusted(-3,-3,3,3);if(_wheelFeedbackSurface==_view)damage=damage.united(_view->matrix().mapRect(_wheelFeedbackHead).adjusted(-6,-6,6,6));_wheelFeedbackSurface->update(damage.toAlignedRect());}
             });
       auto add=[this](QWidget* w){_topRow->addWidget(w);};

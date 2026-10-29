@@ -17,7 +17,7 @@
 namespace Ms {
 SpectrumDisplayControls::SpectrumDisplayControls(QWidget *parent) : QWidget(parent) {
     setObjectName("spectrumDisplayControls");
-    const QVariantMap defaults{{"palette", 0},
+    const QVariantMap defaults{{"palette", 4},
                                {"gain", 0.},
                                {"contrast", 1.},
                                {"fundamental", 0.},
@@ -33,8 +33,8 @@ SpectrumDisplayControls::SpectrumDisplayControls(QWidget *parent) : QWidget(pare
     grid->setHorizontalSpacing(8);
     auto palette = new QComboBox;
     palette->setObjectName("spectrumPalette");
-    palette->addItems({tr("蓝金"), tr("绿紫"), tr("灰度"), tr("自定颜色")});
-    palette->setCurrentIndex(qBound(0, _values["palette"].toInt(), 3));
+    palette->addItems({tr("蓝金"), tr("绿紫"), tr("灰度"), tr("自定颜色"), tr("WaveTone 强弱色")});
+    palette->setCurrentIndex(qBound(0, _values["palette"].toInt(), 4));
     grid->addWidget(new QLabel(tr("配色")), 0, 0);
     grid->addWidget(palette, 0, 1);
     connect(palette, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -95,7 +95,7 @@ SpectrumDisplayControls::SpectrumDisplayControls(QWidget *parent) : QWidget(pare
     grid->addWidget(notes, 5, 0, 1, 3);
     connect(notes, &QCheckBox::clicked, this, [this](bool on) { save("showNotes", on); });
     auto help =
-        new QLabel(tr("灵敏度和对比度调整亮线。突出基音会淡化符合低音倍频关系的线条，归零可对照原始频谱。"));
+        new QLabel(tr("WaveTone 强弱色：黑、蓝、青、绿、黄、橙、红依次增强。灵敏度和对比度调整亮线；“突出基音”淡化倍频线，归零查看原始频谱。"));
     help->setWordWrap(true);
     grid->addWidget(help, 6, 0, 1, 3);
     grid->setColumnStretch(1, 1);
@@ -137,6 +137,17 @@ QImage colorSpectrum(const QImage &raw, const QVariantMap &style, bool overlay) 
         const double t = upper ? (value - .6) / .4 : value / .6;
         QColor c(qRound(a.red() + (b.red() - a.red()) * t), qRound(a.green() + (b.green() - a.green()) * t),
                  qRound(a.blue() + (b.blue() - a.blue()) * t));
+        if (style.value("palette", 4).toInt() == 4) {
+            static const QColor colors[] = {QColor("#000000"), QColor("#0046dc"), QColor("#00cfff"),
+                QColor("#20d34b"), QColor("#ffe32d"), QColor("#ff921c"), QColor("#ef3434")};
+            const double position = value * 6;
+            const int stop = qMin(5, int(position));
+            const double blend = position - stop;
+            const auto& left = colors[stop]; const auto& right = colors[stop + 1];
+            c = QColor(qRound(left.red() + (right.red() - left.red()) * blend),
+                       qRound(left.green() + (right.green() - left.green()) * blend),
+                       qRound(left.blue() + (right.blue() - left.blue()) * blend));
+        }
         if (overlay)
             c.setAlpha(qRound(255 * value * style.value("opacity", .55).toDouble()));
         table.append(c.rgba());

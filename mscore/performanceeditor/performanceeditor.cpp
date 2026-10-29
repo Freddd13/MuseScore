@@ -439,6 +439,9 @@ void PerformanceEditor::refresh()
       {
       if (!_score) { status(); updateSurfaces(); return; }
       if (!surfacesActive()) return;
+      // The sound engine can be created after an already visible editor.
+      // A native playback update must attach that new transport as well.
+      if (_sequencer != seq) syncTransport();
       // A late-opened panel may copy stable notation while playing, but must not
       // regenerate/read mutable playback events or velocity maps until stopped.
       const bool live = _score->isPlaying() || (seq && seq->isPlaying() && seq->score() == _score->masterScore());
@@ -792,7 +795,9 @@ void PerformanceEditor::setSelectedValue(double value)
 void PerformanceEditor::applyPending()
       {
       if (_dragging || _wheelIndex >= 0 || !_score || !hasPending()) { status(); return; }
-      if (_score->isPlaying() || (seq && seq->isPlaying())) { _commitTimer.start(100); status(); return; }
+      // Seq::stopped already submits these edits. Keep playback free of a
+      // repeating commit timer while the user is previewing velocity changes.
+      if (_score->isPlaying() || (seq && seq->isPlaying())) { _commitTimer.stop(); status(); return; }
       if (seq && !seq->backgroundRenderingIdle()) { _commitTimer.start(20); return; }
       if (_score->masterScore()->state() != _state) {
             _pending.clear(); _propertyPending.clear(); _dirty = true; scheduleRefresh();

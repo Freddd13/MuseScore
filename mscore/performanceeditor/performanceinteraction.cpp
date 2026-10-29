@@ -424,6 +424,31 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
 #ifdef SCRIPT_INTERFACE
       if(notes&&_rollWriting&&_rollWriting->handle(event))return true;
 #endif
+      if (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) {
+            auto key = static_cast<QKeyEvent*>(event);
+            if (key->modifiers() == Qt::NoModifier && (key->key() == Qt::Key_Escape || key->key() == Qt::Key_Home)) {
+                  // Parameter drags keep their existing restore-on-Escape path.
+                  if (key->key() == Qt::Key_Escape && _dragging) return false;
+                  event->accept();
+                  if (event->type() == QEvent::ShortcutOverride || key->isAutoRepeat()) return true;
+                  if (key->key() == Qt::Key_Escape) {
+                        if (_score && _score->noteEntryMode() && _view) _view->cmd("escape");
+                        else PerformanceSelection::apply(_score, {});
+                        _selectedCurve = nullptr; _selectedPedal = nullptr; _selectedTempoTick = -1;
+                        syncPedalSelection(); updateSelection(); updateHover(-1); updateSurfaces();
+                        }
+                  else {
+                        cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); finishWheel();
+                        seek(0);
+                        if (seq && seq->isPlaying() && _score && seq->score() == _score->masterScore()) _following = true;
+                        _followButton->setChecked(_following);
+                        _followButton->setText(_following ? tr("跟随播放") : tr("跟随：暂停"));
+                        _automaticScroll = true; _scroll->setValue(0); _automaticScroll = false;
+                        syncTransport();
+                        }
+                  return true;
+                  }
+            }
       if ((event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Space) {
             event->accept(); if (event->type() == QEvent::KeyPress) togglePlayback(); return true;
             }

@@ -138,6 +138,17 @@ void PerformanceEditor::syncPedalSelection()
     }
     if (_pedalDelete) _pedalDelete->setEnabled(_selectedPedal && _score && !_score->readOnly()
         && !_score->isPlaying() && (!seq || (!seq->isPlaying() && seq->backgroundRenderingIdle())));
+    if (_pedalPlaybackButton && _score && _score->nstaves()) {
+        const auto part = _selectedPedal ? _selectedPedal->part()
+            : _score->staff(qBound(0, _contextTrack / VOICES, _score->nstaves() - 1))->part();
+        const auto settings = _selectedPedal ? PedalPlayback::effective(_selectedPedal)
+            : PedalPlayback::decode(PedalPlayback::partData(part));
+        _pedalPlaybackButton->setText(settings.piano ? tr("踏板：钢琴…") : tr("踏板：SF2…"));
+        _pedalPlaybackButton->setToolTip(tr("踏板播放方式：%1。%2\n点击设置整架乐器或选中踏板段；播放时机可在图中对照。")
+            .arg(settings.piano ? tr("钢琴换踏板（VST）") : tr("SF2原有方式"),
+                 settings.piano ? tr("抬起间隔%1 ms，音后踩下%2 ms").arg(settings.releaseMs).arg(settings.downMs)
+                                : tr("沿用谱上踏板的原有时机")));
+    }
 }
 bool PerformanceEditor::beginPedalGesture(QPointF point, const QRectF& rect, bool onScore)
 {
@@ -255,6 +266,7 @@ void PerformanceEditor::showPedalPlayback()
     auto target = _selectedPedal;
     auto dialog = new QDialog(this, Qt::Window); dialog->setObjectName("performancePedalPlaybackDialog");
     dialog->setAttribute(Qt::WA_DeleteOnClose); dialog->setWindowTitle(tr("踏板播放 · %1").arg(part->partName()));
+    dialog->setMinimumWidth(420);
     const auto theme = mscore ? mscore->palette() : QApplication::palette();
     dialog->setPalette(theme); dialog->setFont(QApplication::font());
     dialog->setStyleSheet(QString("QDialog {background:%1;color:%2;} QLabel,QCheckBox {color:%2;} QComboBox,QSpinBox,QPushButton {background:%3;color:%2;} QComboBox QAbstractItemView {background:%3;color:%2;selection-background-color:%4;selection-color:%5;}")
@@ -267,7 +279,7 @@ void PerformanceEditor::showPedalPlayback()
     auto lift = new QSpinBox(dialog); lift->setObjectName("pedalPlaybackReleaseMs"); lift->setRange(1, 300); lift->setSuffix(tr(" ms"));
     auto down = new QSpinBox(dialog); down->setObjectName("pedalPlaybackDownMs"); down->setRange(0, 500); down->setSuffix(tr(" ms"));
     auto first = new QCheckBox(tr("开始处也在音后踩下"), dialog); first->setObjectName("pedalPlaybackDelayFirst");
-    auto explanation = new QLabel(tr("钢琴方式在相接踏板之间安排抬起间隙，再于起音后踩下。谱上已画出的空隙继续保留。"), dialog);
+    auto explanation = new QLabel(tr("SF2原有方式沿用原来的踩下、抬起时机。CFX、Pianoteq等VST钢琴可选“钢琴换踏板”：换踏板时先抬起，等新音弹下后再踩下。下方分别设置抬起间隔和音后踩下时间；音符播放长度保持原值。"), dialog);
     explanation->setWordWrap(true); explanation->setMaximumWidth(400);
     auto message = new QLabel(dialog); message->setWordWrap(true); message->setMaximumWidth(400); message->setObjectName("pedalPlaybackResult");
     form->addRow(tr("应用于"), scope); form->addRow(tr("方式"), mode); form->addRow(tr("抬起间隔"), lift);

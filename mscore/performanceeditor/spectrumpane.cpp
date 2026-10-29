@@ -1444,6 +1444,32 @@ void SpectrumPane::paintOverlay(QPainter &p, const QRectF &rect) {
         paint(p, rect, true);
 }
 void SpectrumPane::pointer(QMouseEvent *e, bool release) {
+    // Right-click only auditions pitch; it leaves the audio position, loop,
+    // annotations and the selected writing tool where the user put them.
+    if (e->button() == Qt::RightButton || (e->buttons() & Qt::RightButton)) {
+        if (e->type() == QEvent::MouseButtonPress) {
+            const bool overlay = _display->currentIndex() == 1;
+            const int pitch = e->x() < gutter && !overlay
+                ? PerformanceKeyboard::pitchAt(e->localPos(), _high - .5 + _transpose->value(),
+                                               _canvas->height() / (_high - _low), gutter)
+                : qBound(0, qRound(pitchAtY(e->y(), overlay)) + _transpose->value(), 127);
+            if (pitch >= 0) {
+                if (!seq || !seq->isRunning() || !_editor->_score || seq->score() != _editor->_score->masterScore())
+                    setStatus(tr("请先启用声音设备并打开当前乐谱，然后右键试音。"));
+                else if (seq->isPlaying())
+                    setStatus(tr("暂停乐谱后可试音；原曲可以继续播放。"));
+                else {
+                    const bool enabled = _editor->_auditionButton->isChecked();
+                    _editor->_auditionButton->setChecked(true);
+                    _editor->auditionPitch(pitch);
+                    _editor->_auditionButton->setChecked(enabled);
+                    setStatus(tr("试音 %1 · 右键只试音，左键按当前工具操作").arg(pitchName(pitch)));
+                }
+            }
+        }
+        e->accept();
+        return;
+    }
     if (e->x() < gutter && _display->currentIndex() == 0) {
         if (e->type() == QEvent::MouseButtonPress && e->button() == Qt::LeftButton) {
             const int pitch = PerformanceKeyboard::pitchAt(e->localPos(), _high - .5 + _transpose->value(),

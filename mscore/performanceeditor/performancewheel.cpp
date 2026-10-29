@@ -26,7 +26,7 @@ bool PerformanceEditor::adjustNearestScoreVelocity(ScoreView* view,QWheelEvent* 
 void PerformanceEditor::finishWheel(bool commit)
       {
       if (_wheelIndex >= 0) { repaintWheelTarget(_wheelIndex); if (_wheelSurface) _wheelSurface->update(wheelBadge(_wheelSurface).adjusted(-2, -2, 2, 2).toAlignedRect()); }
-      if(_wheelIndex>=0){rememberWheelFeedback();_wheelFeedbackTicks=0;_wheelFeedbackTimer.start(30);}
+      if(_wheelIndex>=0){rememberWheelFeedback();_wheelFeedbackTicks=0;_wheelFeedbackTimer.start(660);}
       _wheelTimer.stop(); _wheelSurface = nullptr; _wheelIndex = -1; _wheelRemainder = 0; _wheelBefore.clear();
       if (!_dragging && !_marquee && !_seeking && !_rangePanning) qApp->removeEventFilter(this);
       if (commit) applyPending();

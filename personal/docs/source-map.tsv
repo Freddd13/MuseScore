@@ -636,3 +636,4 @@ D1输入与线条操作	mtest/mscore/performanceeditor/notation_135_tests.inc	no
 锁行插入接线	libmscore/edit.cpp	Score::insertMeasure	3281	插入后沿用当前谱自己的锁行，和插入共同撤销	systemLockIndependentParts138
 标题框锁行边界	mscore/workflow/systemlocks.cpp	require	71	沿用框的固有换行，保存重开保持分组	systemLockInsertAndPart138
 谱行菜单操作	mtest/mscore/pluginhost/engraving_138_tests.inc	systemLockMenuRange138	93	鼠标点击跨行锁定与全谱解锁，保留手工标记	systemLockMenuRange138
+0.139	编辑器按键、播放滚轮与频谱试音	mscore/performanceeditor/performanceinteraction.cpp;performanceux.cpp;performancewheel.cpp;spectrumpane.cpp;spectrumdisplay.cpp;performancecontrols.cpp	INTERACTION_139_GUIDE.md
