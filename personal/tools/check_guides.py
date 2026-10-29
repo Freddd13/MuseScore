@@ -15,6 +15,11 @@ from urllib.parse import unquote, urlsplit
 REPO = Path(__file__).resolve().parents[2]
 PERSONAL = REPO / "personal"
 DOCS = PERSONAL / "docs"
+PROJECTS = (REPO, REPO.parents[1] / "mcp-musescore", REPO.parents[1] / "muse3_plugins")
+
+
+def in_projects(path):
+    return any(path == root or root in path.parents for root in PROJECTS)
 
 
 def main():
@@ -32,32 +37,34 @@ def main():
             if parsed.scheme or parsed.netloc or not parsed.path:
                 continue
             destination = (document.parent / unquote(parsed.path)).resolve()
-            try:
-                destination.relative_to(REPO)
-            except ValueError:
-                # The preserved MCP appendix links to the sibling project's documentation.
-                sibling = REPO.parents[1] / "mcp-musescore"
-                try:
-                    destination.relative_to(sibling)
-                except ValueError:
-                    errors.append(f"{document.name}: link leaves project folders: {target}")
-                    continue
+            if not in_projects(destination):
+                errors.append(f"{document.name}: link leaves project folders: {target}")
+                continue
+            # This copied planning chapter uses the original review screenshots.
+            if not destination.exists() and parsed.path.startswith("review-images/"):
+                destination = PROJECTS[2] / "Planning" / unquote(parsed.path)
             links += 1
             if not destination.exists():
                 errors.append(f"{document.name}: broken link: {target}")
 
     with (DOCS / "source-map.tsv").open(encoding="utf-8", newline="") as stream:
-        rows = list(csv.DictReader(stream, delimiter="\t"))
-    expected_fields = {"topic", "path", "symbol", "line", "role", "tests"}
-    if not rows or set(rows[0]) != expected_fields:
+        table = list(csv.reader(stream, delimiter="\t"))
+    expected_fields = ["topic", "path", "symbol", "line", "role", "tests"]
+    if not table or table[0] != expected_fields:
         errors.append("source-map.tsv: missing rows or unexpected columns")
+    rows = []
+    for number, values in enumerate(table[1:], 2):
+        if not values:
+            continue
+        if len(values) != len(expected_fields):
+            errors.append(f"source-map.tsv:{number}: expected six columns, found {len(values)}")
+            continue
+        rows.append(dict(zip(expected_fields, values)))
     cache = {}
     for row in rows:
         source = (REPO / row["path"]).resolve()
-        try:
-            source.relative_to(REPO)
-        except ValueError:
-            errors.append(f"source map path leaves repository: {row['path']}")
+        if not in_projects(source):
+            errors.append(f"source map path leaves project folders: {row['path']}")
             continue
         if not source.is_file():
             errors.append(f"source map file missing: {row['path']}")
@@ -82,16 +89,7 @@ def main():
             anchors += 1
         for test_path in (path.strip() for path in row["tests"].split(";") if path.strip() and path.strip() != "-"):
             destination = (REPO / test_path).resolve()
-            try:
-                destination.relative_to(REPO)
-                inside_repo = True
-            except ValueError:
-                try:
-                    destination.relative_to(REPO.parents[1] / "muse3_plugins")
-                    inside_repo = True
-                except ValueError:
-                    inside_repo = False
-            if not inside_repo or not destination.exists():
+            if not in_projects(destination) or not destination.exists():
                 errors.append(f"source map test path missing/invalid: {test_path}")
 
     version = (PERSONAL / "VERSION").read_text(encoding="utf-8").strip()
@@ -104,7 +102,7 @@ def main():
         errors.append(f"CHANGELOG.md: missing current version tag locator {version}")
 
     user_guide = (PERSONAL / "USER_GUIDE.md").read_text(encoding="utf-8")
-    if f"**{version}**" not in user_guide or f"personal-v{version}" not in user_guide:
+    if not re.search(r"\*\*" + re.escape(version) + r"(?:\*\*|\s|·)", user_guide) or f"personal-v{version}" not in user_guide:
         errors.append(f"USER_GUIDE.md: missing current user version/tag locator {version}")
 
     baseline = json.loads((DOCS / "baseline.json").read_text(encoding="utf-8"))

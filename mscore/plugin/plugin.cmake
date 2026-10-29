@@ -114,6 +114,8 @@ endif()
 
 list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/aiconnection.cpp ${PROJECT_SOURCE_DIR}/mscore/workflow/aiconnection.h)
 list(APPEND PLUGIN_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/aiconnection.cpp ${PROJECT_SOURCE_DIR}/mscore/workflow/aiconnection.h)
+list(APPEND PLUGIN_API_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/userguide.cpp)
+list(APPEND PLUGIN_SRC ${PROJECT_SOURCE_DIR}/mscore/workflow/userguide.cpp)
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/share/workflow/ DESTINATION ${Mscore_SHARE_NAME}${Mscore_INSTALL_NAME}workflow)
 
 install(CODE "

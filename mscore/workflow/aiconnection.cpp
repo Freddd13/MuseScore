@@ -33,7 +33,6 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QTcpServer>
-#include <QTextBrowser>
 #include <QTimer>
 #include <QSettings>
 #include <QSignalBlocker>
@@ -240,27 +239,9 @@ public:
   }
 };
 QPointer<Bridge> bridge;
-QPointer<QDialog> dialog, guide;
-QPointer<QTextBrowser> browser;
+QPointer<QDialog> dialog;
 
 #include "aiconnectionpanel.inc"
-void loadGuide(const QString &page) {
-  if (!browser)
-    return;
-  const QString base = QDir(mscoreGlobalShare + "personal").absolutePath();
-  const QString path =
-      QDir(base).absoluteFilePath(page.isEmpty() ? "USER_GUIDE.md" : page);
-  if (!QDir::cleanPath(path).startsWith(base + "/"))
-    return;
-  QFile file(path);
-  if (!file.open(QIODevice::ReadOnly)) {
-    browser->setPlainText(QObject::tr("说明文件未找到：%1").arg(path));
-    return;
-  }
-  browser->document()->setBaseUrl(
-      QUrl::fromLocalFile(QFileInfo(path).absolutePath() + "/"));
-  browser->setMarkdown(QString::fromUtf8(file.readAll()));
-}
 } // namespace
 QString builtinPanelPath(const QString &name) {
   return mscoreGlobalShare + "workflow/panels/" + name + "/" + name +
@@ -317,34 +298,5 @@ void addAIConnectionAction(QMenu *menu) {
   action->setText(QObject::tr("AI 连接"));
   if (!menu->actions().contains(action))
     menu->addAction(action);
-}
-void showPersonalGuide(const QString &page) {
-  if (!mscore)
-    return;
-  if (!guide) {
-    guide = new QDialog(mscore);
-    guide->setWindowTitle(QObject::tr("个人功能说明"));
-    guide->resize(850, 680);
-    auto layout = new QVBoxLayout(guide);
-    browser = new QTextBrowser;
-    browser->setOpenLinks(false);
-    layout->addWidget(browser);
-    QObject::connect(
-        browser, &QTextBrowser::anchorClicked, guide, [](const QUrl &url) {
-          if (url.scheme() == "http" || url.scheme() == "https")
-            QDesktopServices::openUrl(url);
-          else if (url.path().endsWith(".md")) {
-            auto full =
-                browser->document()->baseUrl().resolved(url).toLocalFile();
-            loadGuide(
-                QDir(mscoreGlobalShare + "personal").relativeFilePath(full));
-          } else if (!url.fragment().isEmpty())
-            browser->scrollToAnchor(url.fragment());
-        });
-  }
-  loadGuide(page);
-  guide->show();
-  guide->raise();
-  guide->activateWindow();
 }
 } // namespace Ms
