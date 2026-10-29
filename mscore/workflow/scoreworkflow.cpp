@@ -28,6 +28,7 @@
 #include <QPointer>
 #include <QSet>
 #include <QAction>
+#include <QSignalBlocker>
 #include "mscore/shortcut.h"
 #include "libmscore/spannermap.h"
 #include "libmscore/spanner.h"
@@ -190,7 +191,9 @@ QVariantMap ScoreObserver::navigateWorkflow(const QVariantMap& range,bool auditi
    if(current>=endUtick){seq->stop();seq->stopNotes();session->deleteLater();}
   });
   connect(seq,&Seq::stopped,session,[session]{session->deleteLater();});
-  seq->setScoreView(view);seq->startAtUTick(fromUtick);
+  seq->setScoreView(view);
+  if(auto play=getAction("play")){QSignalBlocker block(play);play->setChecked(true);}
+  seq->startAtUTick(fromUtick);
   return {{"ok",true},{"start",actualContext},{"end",end},{"occurrence",occurrence},{"fromUtick",fromUtick},{"untilUtick",endUtick},{"stopPrecision","GUI heartbeat"}};
  }
  return {{"ok",true},{"start",tick}};

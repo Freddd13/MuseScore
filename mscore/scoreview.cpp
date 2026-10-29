@@ -2418,7 +2418,13 @@ void ScoreView::cmd(const char* s)
                   // ??
                   }},
             {{"play"}, [](ScoreView* cv, const QByteArray&) {
-                  if (seq && seq->canStart()) {
+                  if (seq && seq->isPlaying()) {
+                        if (cv->state == ViewState::PLAY)
+                              cv->changeState(ViewState::NORMAL);
+                        else
+                              seq->stop();
+                        }
+                  else if (seq && seq->canStart()) {
                         if (cv->state == ViewState::NORMAL || cv->state == ViewState::NOTE_ENTRY)
                               cv->changeState(ViewState::PLAY);
                         else if (cv->state == ViewState::PLAY)
@@ -4150,6 +4156,14 @@ void ScoreView::adjustCanvasPosition(const Element* el, bool playBack, int staff
                                   sys->width(),
                                   sys->staff(staff)->bbox().height());
             showRect = mRect.intersected(stave).adjusted(-border, -border, border, border);
+            }
+
+      if (visiblePlayback && staff == -1 && sysRect.height() <= r.height()) {
+            // Keep both staves visible when only their usual outer margins do not fit.
+            const qreal verticalBorder = qMin(border, qMax(qreal(0),
+                        (r.height() - sysRect.height()) / 2 - 1 / physicalZoomLevel()));
+            showRect.setTop(sysRect.top() - verticalBorder);
+            showRect.setBottom(sysRect.bottom() + verticalBorder);
             }
 
 /*printf("%f %f %f %f   %f %f %f %f  %d\n",
