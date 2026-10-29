@@ -15,6 +15,8 @@
 - 47项Python检查通过，包含新导航、连接、任务、资料与图片。随包MCP2.7.1完成原生导航、图像、采用、文件保存、撤销和重做。
 - 发布程序PDF7446字节，MIDI181字节、独立读取6个音。
 
+0.144与MCP2.7.1已安装。安装程序的PDF7446字节、MIDI181字节，独立读取6个音；个人配置、Qt5Quick及旧MCP客户端保持。MuseScore的Codex启动路径已更新到随包2.7.1，并核对其它Codex设置保持。
+
 ## 需要继续核对的窗口情况
 
 锁屏时，默认绘制下的编配检查插件在测试调用QQuickWindow::grabWindow截图时崩溃，栈指向QSGThreadedRenderLoop::grab。相同流程在软件绘制下3项通过。原始失败记录保留于P2/out/e2w144-final-console.txt，成功记录为e2w144-qml-software-pluginhost.txt。
