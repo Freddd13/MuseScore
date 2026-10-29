@@ -282,6 +282,9 @@ class TestPluginHost : public QObject {
       void shareEnabledRestore145();
       void guideNavigation146();
       void guidePublishedBook146();
+      void continuousComposition_data();
+      void continuousComposition();
+      void regionalSidebarLifecycle();
       void visiblePlaybackFollow142();
       void visiblePlaybackAudio142();
       void context143Notation();
@@ -1557,6 +1560,7 @@ class TestPluginHost : public QObject {
 #include "regional_142_tests.inc"
 #include "follow_142_tests.inc"
 #include "sharing_145_tests.inc"
+#include "composition_flow_tests.inc"
 #include "guide_146_tests.inc"
 #include "context_143_tests.inc"
 #include "ai_workflow_144_tests.inc"

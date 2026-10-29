@@ -1,6 +1,8 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2.
 #include "regionalpanel.h"
 #include "toolicons.h"
+#include "controlflowlayout.h"
+#include "aiconnection.h"
 #include "featuregate.h"
 #include "libmscore/chord.h"
 #include "libmscore/measure.h"
@@ -90,6 +92,8 @@ class RegionalPanel : public QWidget {
       QTreeWidget *_tree;
       QLabel *_status;
       QLabel *_scope;
+      QLabel *_help;
+      QScrollArea *_quickStrip;
       QPushButton *_delete = nullptr, *_deleteCombination = nullptr;
       QCheckBox *_scoreButtons = nullptr;
       QHBoxLayout *_choices;
@@ -210,6 +214,9 @@ class RegionalPanel : public QWidget {
                   delete item;
             }
             auto g = selectedGroup();
+            _help->setVisible(g.isEmpty());
+            _scope->setVisible(!g.isEmpty());
+            _quickStrip->setVisible(!g.isEmpty());
             if (_delete) {
                   _delete->setEnabled(!g.isEmpty());
                   _delete->setToolTip(variant().isEmpty() ? tr("删除选中的方案组，保留当前谱面内容。")
@@ -705,10 +712,11 @@ class RegionalPanel : public QWidget {
             auto help = new QLabel(
                 tr("保存当前写法为A，再增加B。修改后，点写法名称切换比较。Ctrl+S保存全部写法。"), this);
             help->setWordWrap(true);
+            _help=help;
             layout->addWidget(help);
-            auto primary = new QHBoxLayout;
+            auto primary = new ControlFlowLayout;
             layout->addLayout(primary);
-            auto button = [&](QHBoxLayout *row, const QString &text, const char *id, auto call) {
+            auto button = [&](QLayout *row, const QString &text, const char *id, auto call) {
                   auto b = new QPushButton(text, this);
                   b->setObjectName(id);
                   const QHash<QString,QString> iconKeys{{"regionalCreateButton","save"},{"regionalCopy","add"},
@@ -748,6 +756,7 @@ class RegionalPanel : public QWidget {
             action(tr("显示主方案组合"), "regionalShowMain", [this] { showMain(); });
             action(tr("导出普通版副本…"), "regionalOrdinary", [this] { ordinary(); });
             action(tr("导入旧写法…"), "regionalImport", [this] { importLegacy(); });
+            action(tr("使用说明"), "regionalHelp", [] { showPersonalGuide("docs/VARIANTS_070_GUIDE.md"); });
             menu->addSeparator();
             auto controls = menu->addAction(tr("谱上显示切换按钮"));
             controls->setObjectName("regionalScoreButtons");
@@ -768,6 +777,7 @@ class RegionalPanel : public QWidget {
             _scope->setWordWrap(true);
             layout->addWidget(_scope);
             auto strip = new QScrollArea(this);
+            _quickStrip=strip;
             strip->setWidgetResizable(true);
             strip->setFixedHeight(58);
             strip->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -777,6 +787,8 @@ class RegionalPanel : public QWidget {
             _choices->setSizeConstraint(QLayout::SetMinimumSize);
             strip->setWidget(host);
             layout->addWidget(strip);
+            layout->removeWidget(_scope);layout->removeWidget(strip);
+            layout->insertWidget(0,_scope);layout->insertWidget(1,strip);
             _tree = new QTreeWidget(this);
             _tree->setObjectName("regionalTree");
             _tree->setColumnCount(2);
@@ -791,12 +803,15 @@ class RegionalPanel : public QWidget {
             connect(_tree, &QTreeWidget::currentItemChanged, this, [this] { choices(); });
             _compare=new QCheckBox(tr("显示差异"),this);_compare->setObjectName("regionalCompare");
             _compareWith=new QComboBox(this);_compareWith->setObjectName("regionalCompareWith");_compareWith->hide();
-            auto comparisonRow=new QHBoxLayout;comparisonRow->addWidget(_compare);comparisonRow->addWidget(_compareWith,1);layout->addLayout(comparisonRow);
+            _compareWith->setMinimumContentsLength(10);_compareWith->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+            auto comparisonRow=new ControlFlowLayout;comparisonRow->addWidget(_compare);comparisonRow->addWidget(_compareWith);layout->addLayout(comparisonRow);
             _differenceStatus=new QLabel(this);_differenceStatus->setWordWrap(true);_differenceStatus->hide();layout->addWidget(_differenceStatus);
             _differences=new QTreeWidget(this);_differences->setObjectName("regionalDifferences");_differences->setHeaderLabels({tr("位置"),tr("变化")});_differences->setMaximumHeight(160);_differences->hide();layout->addWidget(_differences);
             connect(_compare,&QCheckBox::toggled,this,[this]{comparisonChoices();});connect(_compareWith,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this]{compare();});
             connect(_differences,&QTreeWidget::itemClicked,this,[this](QTreeWidgetItem* item,int){const auto row=item->data(0,Qt::UserRole).toMap();PluginAPI::Score wrapped(score());_observer->setScore(&wrapped);_observer->navigateWorkflow({{"start",row.value("tick")},{"end",row.value("tick").toInt()+1},{"firstTrack",row.value("track")}},false);});
-            auto combinationRow=new QHBoxLayout;_combinations=new QComboBox(this);_combinations->setObjectName("regionalCombinations");combinationRow->addWidget(_combinations,1);button(combinationRow,tr("保存组合…"),"regionalSaveCombination",[this]{saveCombination();});layout->addLayout(combinationRow);
+            auto combinationRow=new ControlFlowLayout;_combinations=new QComboBox(this);_combinations->setObjectName("regionalCombinations");
+            _combinations->setMinimumContentsLength(10);_combinations->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+            combinationRow->addWidget(_combinations);button(combinationRow,tr("保存组合…"),"regionalSaveCombination",[this]{saveCombination();});layout->addLayout(combinationRow);
             _deleteCombination=button(combinationRow,tr("删除"),"regionalDeleteCombination",[this]{removeSavedCombination();});
             _deleteCombination->setToolTip(tr("删除所选组合；各组写法继续保留，Ctrl+Z可恢复。"));
             _deleteCombination->setEnabled(false);
@@ -804,7 +819,7 @@ class RegionalPanel : public QWidget {
                     [this](int index){ _deleteCombination->setEnabled(index > 0); });
             connect(_combinations,QOverload<int>::of(&QComboBox::activated),this,[this](int i){if(i<=0||!idle())return;report(RegionalVariants::selectCombination(score(),_combinations->itemData(i).toString()),tr("已切换整组选择；Ctrl+Z可一起恢复。"));if(regionalAuditionEnabled())audition();});
             _listen=new QCheckBox(tr("试听比较：切换后从同处听"),this);_listen->setObjectName("regionalAuditionCompare");_listen->setChecked(regionalAuditionEnabled());layout->addWidget(_listen);connect(_listen,&QCheckBox::toggled,this,[](bool value){setRegionalAuditionEnabled(value);});
-            auto transport = new QHBoxLayout;
+            auto transport = new ControlFlowLayout;
             layout->addLayout(transport);
             button(transport, tr("切换所选写法"), "regionalSwitch", [this] { switchTo(); });
             button(transport, tr("从同处听"), "regionalAudition", [this] { audition(); });

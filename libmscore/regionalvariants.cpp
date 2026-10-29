@@ -567,7 +567,7 @@ QVariantMap create(Score *score, int start, int end, const QVariantList &values,
       rememberImages(data, bytes);
       QString group = id(), variant = id();
       QVariantMap v{{"id", variant},
-                    {"name", QObject::tr("A · 当前写法")},
+                    {"name", QObject::tr("A")},
                     {"data", QString::fromLatin1(packed(bytes))},
                     {"connections", RegionalConnections::capture(score, start, end, tracks, &problem)}};
       groups.append(QVariantMap{{"id", group},

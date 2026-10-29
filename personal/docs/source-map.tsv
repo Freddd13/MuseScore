@@ -241,7 +241,7 @@ MIDI对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare()	237	�
 共同项目	mscore/workflow/workflowcontext.h	class WorkflowContext	8	乐谱归属、结果更新和操作反馈	mtest/mscore/p1native;../../muse3_plugins/Repairs/tests/tst_referenceproject.cpp
 分段方案	libmscore/regionalvariants.cpp	QVariantMap select(	622	压缩写法、声部范围、原生撤销和连线保护	mtest/mscore/p1native/regional_tests.inc
 方案保存	libmscore/regionalvariants.cpp	bool save(	795	普通主方案入口和本分支当前组合恢复	mtest/mscore/p1native/regional_tests.inc
-方案面板	mscore/workflow/regionalpanel.cpp	void showRegionalVariantPanel(	827	菜单、停靠、复制切换、旧文件和普通版导出	mtest/mscore/p1native/regional_tests.inc
+方案面板	mscore/workflow/regionalpanel.cpp	void showRegionalVariantPanel(	842	菜单、停靠、复制切换、旧文件和普通版导出	mtest/mscore/p1native/regional_tests.inc
 演奏快捷调整	mscore/events.cpp	ScoreView::wheelEvent	157	最近音力度入口	mscore/performanceeditor
 和弦独立摘要	mscore/plugin/qmlplugin.cpp	void QmlPlugin::showSummaryPanel(	214	顶部摘要与右侧面板独立显示	mtest/mscore/performanceeditor;mtest/mscore/p1native
 参考播放空格	mscore/plugin/qmlplugin.cpp	bool QmlPlugin::eventFilter(	142	只在参考面板获得焦点时处理空格，文字输入沿用原行为	mtest/mscore/p1native
@@ -339,7 +339,7 @@ SF2 单乐器效果	audio/vst/fluidsource.cpp	class FluidSource	12	按需创建�
 波浪滑音墨迹布局	libmscore/glissando.cpp	static WavyGlissandoRun wavyGlissandoRun	65	重复居中、短段横向适配与旋转外框	mtest/mscore/fontengraving/tst_fontengraving.cpp
 分段写法删除	libmscore/regionalvariants.cpp	QVariantMap remove(	699	删除写法、整组与组合，保留当前谱面并一次撤销	mtest/mscore/p1native/regional_070_tests.inc
 谱面按钮位置	libmscore/regionalvariants.cpp	QVariantMap setControlPlacement(	776	手动位置、单组显隐、随谱保存及撤销	mtest/mscore/p1native/regional_070_tests.inc
-分段写法列表操作	mscore/workflow/regionalpanel.cpp	void removeSelected(	461	单击切换、明确当前写法、删除与恢复入口	mtest/mscore/p1native/regional_070_tests.inc
+分段写法列表操作	mscore/workflow/regionalpanel.cpp	void removeSelected(	468	单击切换、明确当前写法、删除与恢复入口	mtest/mscore/p1native/regional_070_tests.inc
 工具窗口全屏与位置	mscore/workflow/panelwindowcontrols.h	class PanelWindowControls	20	浮动窗口可见范围、独立全屏、退出及原位置恢复	mtest/mscore/pluginhost/usability_072_tests.inc
 紧凑控件换行	mscore/workflow/controlflowlayout.h	class ControlFlowLayout	13	实际控件宽度、换行及工具栏占高	mtest/mscore/pluginhost/usability_072_tests.inc
 工作视图恢复顺序	mscore/workflow/editorareas.cpp	void settleEditorAreaLayout	603	在主窗口恢复停靠后恢复内部高度	mtest/mscore/pluginhost/usability_072_tests.inc
@@ -409,7 +409,7 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	285	空列�
 滚轮力度浮标	mscore/performanceeditor/performancewheel.cpp	void PerformanceEditor::rememberWheelFeedback()	136	显示实际固定值或保存的百分比、声部颜色及力度参考值	mtest/mscore/performanceeditor/dynamics_090_tests.inc
 写法会话标识	mscore/workflow/workflowcontext.cpp	QString workflowScoreSession(	10	另存与标签切换持续识别当前完整谱写法	mtest/mscore/pluginhost/variants_091_tests.inc
 另存文件通知	mscore/file.cpp	notifyWorkflowScoreFileChanged(cs_);	1990	成功另存后同步工作区路径，保存副本沿用原路径	mtest/mscore/pluginhost/variants_091_tests.inc
-写法范围说明	mscore/workflow/regionalpanel.cpp	QString scopeSummary(	70	相同声部按谱表范围合并，保留当前写法	mtest/mscore/p1native/regional_091_tests.inc
+写法范围说明	mscore/workflow/regionalpanel.cpp	QString scopeSummary(	72	相同声部按谱表范围合并，保留当前写法	mtest/mscore/p1native/regional_091_tests.inc
 组件动作图标	mscore/workflow/toolicons.cpp	QIcon componentToolIcon(	63	按真实动作复用原图形与独立图形，支持面板主题	mtest/mscore/pluginhost/components_092_tests.inc
 QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this);	38	在实际插件引擎注册共用图标，颜色由页面给出	mtest/mscore/pluginhost/components_092_tests.inc
 音源操作分组	mscore/workflow/vstpanel.cpp	auto sourceGroup = new QGroupBox	698	当前音源、插件选择、效果链分别操作，SF2返回直接可见	mtest/mscore/pluginhost/components_092_tests.inc
@@ -677,3 +677,6 @@ D1输入与线条操作	mtest/mscore/performanceeditor/notation_135_tests.inc	ri
 章节小标题	mscore/workflow/userguide.cpp	void preparePage(	65	Markdown标题位置与章节内跳转	mtest/mscore/pluginhost/guide_146_tests.inc
 帮助图片尺寸	mscore/workflow/userguide.cpp	void fitImages(	34	图片随可用宽度保持比例	mtest/mscore/pluginhost/guide_146_tests.inc
 说明与源码检查	personal/tools/check_guides.py	def main():	25	实际文件、六列格式、函数行号和版本核对	personal/docs/HELP_146_CHECKS.md
+写法侧栏排列	mscore/workflow/regionalpanel.cpp	auto primary = new ControlFlowLayout	717	自然宽度换行，顶部保留当前写法和切换	mtest/mscore/pluginhost/composition_flow_tests.inc
+连续编曲操作	mtest/mscore/pluginhost/composition_flow_tests.inc	void TestPluginHost::continuousComposition()	20	实际修改、播放、切换、保存重开与303像素侧栏	personal/docs/COMPOSITION_147_CHECKS.md
+普通版与MIDI往返	../../muse3_plugins/P2/check_composition_exports.py	def main():	20	独立读取A/B、普通版主方案及全部控制事件	personal/docs/COMPOSITION_147_CHECKS.md
