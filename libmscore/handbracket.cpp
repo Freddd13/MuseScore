@@ -14,6 +14,7 @@
 #include "segment.h"
 #include "measure.h"
 #include "system.h"
+#include "score.h"
 #include <cmath>
 #include <climits>
 namespace Ms { namespace HandBracket {
@@ -22,7 +23,8 @@ int role(SymId id) {
       switch(id) {case SymId::keyboardPlayWithLH:return 0;case SymId::keyboardPlayWithLHEnd:return 1;
       case SymId::keyboardPlayWithRH:return 2;case SymId::keyboardPlayWithRHEnd:return 3;default:return -1;}
       }
-Style styles[4]={{.6,-2.5,.12,false},{-.6,-2.5,.12,false},{.6,-2.5,.12,false},{-.6,-2.5,.12,false}};
+const Style factoryStyles[4]={{.6,-2.5,.12,false},{-.6,-2.5,.12,false},{.6,-2.5,.12,false},{-.6,-2.5,.12,false}};
+Style styles[4]={factoryStyles[0],factoryStyles[1],factoryStyles[2],factoryStyles[3]};
 void chordRects(Chord* chord,const QPointF& origin,const QRectF& window,QVector<QRectF>* result) {
       auto add=[&](QRectF r){if(r.right()>=window.left()&&r.left()<=window.right())result->append(r);};
       for(auto note:chord->notes()) {
@@ -55,6 +57,7 @@ void beamRects(Beam* beam,const QPointF& origin,const QRectF& window,QVector<QRe
       }
 }
 Style defaults(SymId id) {const int i=role(id);return i<0 ? Style{}:styles[i];}
+Style factoryDefaults(SymId id) {const int i=role(id);return i<0 ? Style{}:factoryStyles[i];}
 bool setDefaults(SymId id,const Style& style) {
       const int i=role(id);if(i<0 || !std::isfinite(style.horizontal) || !std::isfinite(style.vertical) || !std::isfinite(style.width)
             || std::abs(style.horizontal)>40 || std::abs(style.vertical)>40 || style.width<.02 || style.width>2)return false;
@@ -109,5 +112,22 @@ QPointF position(const Symbol* symbol) {
             if(cost<bestCost){bestCost=cost;best=candidate;}
             }
       return best;
+      }
+void layout(Segment* segment)
+      {
+      QSet<int> changedStaves;
+      auto layoutChord=[&](Chord* chord) {
+            auto attached=[&](const ElementList& elements) {
+                  for(auto element:elements)if(element->isSymbol()&&toSymbol(element)->handBracket()&&element->score()->tagIsValid(element->tag())) {
+                        const auto old=element->pos();element->layout();
+                        if(old!=element->pos())changedStaves.insert(chord->vStaffIdx());
+                        }
+                  };
+            attached(chord->el());for(auto note:chord->notes())attached(note->el());
+            };
+      for(auto element:segment->elist())if(element&&element->isChord()) {
+            auto chord=toChord(element);for(auto grace:chord->graceNotes())layoutChord(grace);layoutChord(chord);
+            }
+      for(auto staff:changedStaves)segment->createShape(staff);
       }
 } }

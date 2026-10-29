@@ -293,6 +293,7 @@ void Symbol::write(XmlWriter& xml) const
             xml.tag("font", _scoreFont->name());
       for (Pid id : {Pid::HAND_BRACKET_MODE,Pid::HAND_BRACKET_H,Pid::HAND_BRACKET_V,Pid::HAND_BRACKET_WIDTH,Pid::HAND_BRACKET_TEXT,Pid::HAND_TEXT_OFFSET,Pid::HAND_TEXT_FONT,Pid::HAND_TEXT_SIZE,Pid::HAND_TEXT_AUTO})
             writeProperty(xml,id);
+      if(handBracket() && (!_handLegacyAnchor || (!_handGeometryEdited && offset().isNull() && autoplace())))xml.tag("handPlacement",1);
       if(handBracket() && _handBaseValid && (!offset().isNull() || !autoplace() || _handGeometryEdited))xml.tag("handAnchor",_handBase);
       BSymbol::writeProperties(xml);
       xml.etag();
@@ -305,6 +306,7 @@ void Symbol::write(XmlWriter& xml) const
 void Symbol::read(XmlReader& e)
       {
       QPointF pos;
+      bool currentHandPlacement=false;
       while (e.readNextStartElement()) {
             const QStringRef& tag(e.name());
             if (tag == "name") {
@@ -327,6 +329,7 @@ void Symbol::read(XmlReader& e)
             else if (tag == "handAnchor") {
                   const auto point=e.readPoint();if(std::isfinite(point.x()) && std::isfinite(point.y()) && std::abs(point.x())<=100 && std::abs(point.y())<=100) {_handBase=point;_handBaseValid=true;_handGeometryEdited=true;}
                   }
+            else if (tag == "handPlacement") currentHandPlacement=e.readInt()==1;
             else if (tag == "font")
                   _scoreFont = ScoreFont::fontFactory(e.readElementText());
             else if (tag == "Symbol") {
@@ -357,7 +360,8 @@ void Symbol::read(XmlReader& e)
             else if (!BSymbol::readProperties(e))
                   e.unknown();
             }
-      _handLegacyAnchor=!_handBaseValid;
+      _handLegacyAnchor=!currentHandPlacement&&!_handBaseValid;
+      if(currentHandPlacement&&!_handBaseValid)_handGeometryEdited=false;
       setPos(pos);
       }
 

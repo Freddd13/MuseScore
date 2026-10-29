@@ -623,3 +623,8 @@ Tap格式与指定标记	mscore/taptempo/tapmark.cpp	tapTempoText / TapMarkDialo
 D1输入与线条操作	mtest/mscore/performanceeditor/notation_135_tests.inc	notationInputActions135 / ritRangeLayout135	1	两个4/4、端点拖动、保存重开	D1
 同拍速度标记的撤销顺序	libmscore/segment.h	swapAnnotations	175	交换同一批附属对象的顺序，供Tap一次撤销	tapSelectedTempo135
 演奏材料的独立预览	share/workflow/panels/PerformanceExpression/PerformanceExpression.view.qml	freshMaterialSettings	251	成功导入后重建逐音速度与力度调整	expressionTempoSelectedRanges
+分手记号保存位置	libmscore/symbol.cpp	Symbol::write / read	296	区分当前自动摆放、人工位置及旧版坐标	handPlacementRange136 / handLegacyAutomaticRecovery136
+分手记号最终摆放	libmscore/handbracket.cpp	HandBracket::layout	116	采用最终音符与符杠位置，局部更新形状	handPlacementRange136
+分手形状复位	mscore/inspector/inspector.cpp	InspectorHandSymbol	1445	个人默认长度与基础形状分别恢复	handBasicReset136
+分手排版接线	libmscore/layout.cpp	Score::layoutSystemElements	4469	符杠完成后更新当前谱行的分手记号	handPlacementRange136
+零尺寸图标	mscore/miconengine.cpp	MIconEngine::pixmap	192	空尺寸请求直接返回，正常SVG继续绘制	iconEmptySize136

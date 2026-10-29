@@ -18,6 +18,7 @@
 #include "freeslurinspector.h"
 #include "../handbracketsettings.h"
 #include "libmscore/symbol.h"
+#include "libmscore/handbracket.h"
 #include "../performanceeditor/performanceeditor.h"
 
 #include "musescore.h"
@@ -1465,8 +1466,12 @@ InspectorHandSymbol::InspectorHandSymbol(QWidget* parent)
             connect(spin,QOverload<double>::of(&QDoubleSpinBox::valueChanged),this,[lengthChanged,item](double value){lengthChanged(item.t,value);});
             connect(qobject_cast<QToolButton*>(item.r),&QToolButton::clicked,this,[this,item,spin] {
                   const QSignalBlocker block(spin);
-                  const double value=std::abs(inspector->element()->propertyDefault(item.t).toDouble());spin->setValue(value);
-                  for(auto e:*inspector->el())if(e->isSymbol())mscore->performanceEditor()->queueProperty(e,item.t,(e->getProperty(item.t).toDouble()<0?-1:1)*value);
+                  const auto style=HandBracket::defaults(toSymbol(inspector->element())->sym());
+                  const double value=std::abs(item.t==Pid::HAND_BRACKET_H?style.horizontal:style.vertical);spin->setValue(value);
+                  for(auto e:*inspector->el())if(e->isSymbol()) {
+                        const auto own=HandBracket::defaults(toSymbol(e)->sym());const double length=std::abs(item.t==Pid::HAND_BRACKET_H?own.horizontal:own.vertical);
+                        mscore->performanceEditor()->queueProperty(e,item.t,(e->getProperty(item.t).toDouble()<0?-1:1)*length);
+                        }
                   });
             }
       auto flip=[this,h,v](Pid id) {
@@ -1485,7 +1490,9 @@ InspectorHandSymbol::InspectorHandSymbol(QWidget* parent)
       connect(preset,&QPushButton::clicked,this,[this] {
             for (auto e:*inspector->el()) if(e->isSymbol() && toSymbol(e)->handEligible()) {
                   auto editor=mscore->performanceEditor();
-                  for (Pid id:{Pid::HAND_BRACKET_H,Pid::HAND_BRACKET_V,Pid::HAND_BRACKET_WIDTH,Pid::HAND_BRACKET_TEXT}) editor->queueProperty(e,id,e->propertyDefault(id));
+                  const auto shape=HandBracket::factoryDefaults(toSymbol(e)->sym());
+                  editor->queueProperty(e,Pid::HAND_BRACKET_H,shape.horizontal);editor->queueProperty(e,Pid::HAND_BRACKET_V,shape.vertical);
+                  editor->queueProperty(e,Pid::HAND_BRACKET_WIDTH,shape.width);editor->queueProperty(e,Pid::HAND_BRACKET_TEXT,shape.text);
                   editor->queueProperty(e,Pid::HAND_BRACKET_MODE,true);
                   }
             });

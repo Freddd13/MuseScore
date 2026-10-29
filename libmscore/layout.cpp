@@ -16,6 +16,7 @@
 #include "articulation.h"
 #include "barline.h"
 #include "beam.h"
+#include "handbracket.h"
 #include "inputnotation.h"
 #include "bracket.h"
 #include "box.h"
@@ -4464,6 +4465,10 @@ void Score::layoutSystemElements(System* system, LayoutContext& lc)
                         }
                   }
             }
+
+      // Hand marks use the final note and beam geometry when choosing a position.
+      for (auto segment : sl)
+            HandBracket::layout(segment);
 
       //-------------------------------------------------------------
       //    create skylines

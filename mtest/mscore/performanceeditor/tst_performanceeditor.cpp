@@ -1004,6 +1004,13 @@ class TestPerformanceEditor : public QObject, public MTest {
       void handSymbolPlacementAndDefaults();
       void restoredTempoLayout();
       void handSymbolInspectorAndGrips();
+      void handPlacementRange136_data();
+      void handPlacementRange136();
+      void handLegacyConversion136_data();
+      void handLegacyConversion136();
+      void handBasicReset136();
+      void handLegacyAutomaticRecovery136();
+      void iconEmptySize136();
       void freeSlurNodeFreezeKeepsShape();
       void freeSlurSmoothingKeepsVisiblePoints();
       void freeSlurSmoothingKeepsHandlesLocal();
@@ -1232,6 +1239,7 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "midi_transport_086_tests.inc"
 #include "midi_repeat_134_tests.inc"
 #include "notation_135_tests.inc"
+#include "hands_136_tests.inc"
 #include "writing_087_tests.inc"
 #include "writing_103_tests.inc"
 #include "writing_104_tests.inc"

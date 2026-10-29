@@ -191,6 +191,8 @@ static const QRectF getBounds(const QSize outerSize, const QSize innerSize)
 
 QPixmap MIconEngine::pixmap(const QSize &size, QIcon::Mode mode, QIcon::State state)
       {
+      if (size.isEmpty())
+            return QPixmap();
       QPixmap pm;
 
       QString pmckey(d->pmcKey(size, mode, state));
