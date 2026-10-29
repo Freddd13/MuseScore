@@ -14,6 +14,8 @@
 
 ## 当前进度
 
+0.143／MCP2.7已安装到原目录。安装程序的PDF为7446字节，MIDI为181字节、独立读取6个音；个人配置、Qt绘图组件和旧客户端保持。Codex现有配置保留，实际对话重连继续E2-W。
+
 本批完成E2-C资料组织和随包程序操作。实际Codex对话中的工具重连、自然语言提出完整写法和试听继续E2-W；随后是E3、E4与F。
 
 操作见[AI读谱与继续编配任务](AI_TASK_143_GUIDE.md)。原始记录位于插件仓库P2/out/context143-regression-pluginhost.txt、context143-python-final.txt与context143-transport-latest.json。
