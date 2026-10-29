@@ -271,6 +271,9 @@ class TestPluginHost : public QObject {
       void scoreIdentityTitles140();
       void scoreIdentityParts140();
       void scoreIdentityTransport140();
+      void nativeScoreImageContent141();
+      void nativeScoreImageRanges141();
+      void nativeScoreImageNotation141();
       void systemLockIndependentParts138();
       void systemLockMenuRange138();
       void metronomeFontCompatibility() {
@@ -1535,5 +1538,6 @@ class TestPluginHost : public QObject {
 #include "arrangement_candidate_quality_tests.inc"
 #include "engraving_138_tests.inc"
 #include "identity_140_tests.inc"
+#include "images_141_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

@@ -210,7 +210,7 @@ public:
     auto path = new QLabel(QCoreApplication::applicationFilePath()); path->setTextInteractionFlags(Qt::TextSelectableByMouse); path->setWordWrap(true); layout->addWidget(path); layout->addStretch();
     status = new QLabel(tr("首次使用请点击“配置 Codex”，再到 Codex 重新连接。")); status->setObjectName("aiConnectionStatus"); status->setWordWrap(true); status->setTextInteractionFlags(Qt::TextSelectableByMouse); outer->addWidget(status);
     auto buttons = new QDialogButtonBox(QDialogButtonBox::Help | QDialogButtonBox::Close); outer->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::helpRequested, this, [] { showPersonalGuide("docs/AI_IDENTITY_140_GUIDE.md"); });
+    connect(buttons, &QDialogButtonBox::helpRequested, this, [] { showPersonalGuide("docs/AI_IMAGES_141_GUIDE.md"); });
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::close);
     operations = {configure, check, copy, use, reload, serviceToggle}; updateOperations(); refreshService();
     refresh.setInterval(1500);

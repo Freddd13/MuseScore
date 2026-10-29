@@ -356,6 +356,8 @@ QVariantMap ScoreObserver::arrangementRequest(const QString &action, const QVari
         return arrangementState(request);
     if (action == "arrangementRange")
         return arrangementRange(request);
+    if (action == "arrangementImage")
+        return arrangementImage(request);
     return arrangementOperation(this, _score, action, request);
 }
 } // namespace PluginAPI

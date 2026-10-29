@@ -108,6 +108,7 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE void prepareLocalBridge();
       Q_INVOKABLE QVariantMap arrangementState(const QVariantMap& request = QVariantMap());
       Q_INVOKABLE QVariantMap arrangementRange(const QVariantMap& request);
+      Q_INVOKABLE QVariantMap arrangementImage(const QVariantMap& request);
       Q_INVOKABLE QVariantMap arrangementRequest(const QString& action,const QVariantMap& request);
       Q_INVOKABLE void publishHarmonyAnalysis(const QVariantMap& result);
       Q_INVOKABLE void publishPianoSettings(const QVariantMap& settings);

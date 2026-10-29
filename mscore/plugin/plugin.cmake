@@ -18,6 +18,7 @@ set (PLUGIN_API_SRC
     ${PROJECT_SOURCE_DIR}/mscore/workflow/scoreworkflow.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/workflowexpression.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/analysisidentity.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/arrangementimages.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/harmonylabel.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/chordeditor.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/positionhint.h
