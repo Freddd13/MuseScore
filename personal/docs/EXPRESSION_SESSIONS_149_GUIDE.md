@@ -28,3 +28,5 @@
 ![对应结果与使用力度入口](images/expression-session-149.png)
 
 完整录制和使用步骤见[演奏表达说明](EXPRESSION_080_GUIDE.md)；人工调整对应见[分别选音并连接](EXPRESSION_096_GUIDE.md)。
+
+录制时切谱和关闭后的找回见[录制后继续处理](EXPRESSION_RECORDING_150_GUIDE.md)。

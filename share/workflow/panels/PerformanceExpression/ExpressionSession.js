@@ -6,7 +6,7 @@ var fields = [
     "progressVersion", "showApplied", "applicationScope", "selected", "selectedMidiId",
     "selectedIssueScoreId", "mode", "role", "selectedTrack", "occurrence", "fromSeconds",
     "untilSeconds", "passageChoice", "passageFrom", "auditionAudio", "auditionLoop",
-    "requestedMidiPath", "pendingProjectRestore", "status"
+    "requestedMidiPath", "pendingProjectRestore", "recordingImport", "recordedPath", "alignmentOnShow", "status"
 ];
 function empty(config) {
     return {
@@ -17,6 +17,7 @@ function empty(config) {
         showApplied:false,applicationScope:1,selected:-1,selectedMidiId:"",selectedIssueScoreId:"",
         mode:0,role:0,selectedTrack:0,occurrence:1,fromSeconds:0,untilSeconds:999999,
         passageChoice:-1,passageFrom:-1,auditionAudio:false,auditionLoop:false,requestedMidiPath:"",pendingProjectRestore:null,
+        recordingImport:false,recordedPath:"",alignmentOnShow:false,
         status:"选择谱段并导入演奏 MIDI"
     };
 }

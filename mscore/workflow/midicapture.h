@@ -21,6 +21,7 @@ void stopMidiCaptureInput(const QString& reason);
 class MidiCaptureSession : public QObject {
       Q_OBJECT
       Q_PROPERTY(QVariantMap state READ state NOTIFY changed)
+      Q_PROPERTY(QVariantMap completed READ completed NOTIFY changed)
       struct RecordedEvent { qint64 time; int type, channel, a, b; };
       QVector<RecordedEvent> _events;
       QVector<RealtimeMatcher::Group> _target;
@@ -29,6 +30,10 @@ class MidiCaptureSession : public QObject {
       QMap<int,int> _keys, _pedals;
       QMap<int,QString> _positions;
       QPointer<Score> _source;
+      QPointer<Score> _boundScore;
+      bool _bound=false;
+      QVariantMap _completed;
+      QString _sourceName;
       QPointer<ScoreView> _captureView;
       ScoreContentState _sourceState;
       QTimer _timer;
@@ -51,15 +56,17 @@ class MidiCaptureSession : public QObject {
       friend bool captureMidiInput(const NPlayEvent&, qint64);
       friend void stopMidiCaptureInput(const QString&);
 public:
-      explicit MidiCaptureSession(QObject* parent=nullptr);
+      explicit MidiCaptureSession(QObject* parent=nullptr,Score* target=nullptr);
       ~MidiCaptureSession() override;
       QVariantMap state() const;
+      QVariantMap completed() const {return _completed;}
       Q_INVOKABLE QVariantMap inputState() const;
       Q_INVOKABLE void setInputEnabled(bool enabled);
       Q_INVOKABLE QVariantMap start(const QVariantMap& options);
       // C++ test harnesses may supply a synthetic MIDI source without a sound device.
       QVariantMap begin(const QVariantMap& options, bool requireDevice);
       Q_INVOKABLE void stop();
+      Q_INVOKABLE void finishBeforeLeaving();
       Q_INVOKABLE void cancel();
 signals:
       void changed();

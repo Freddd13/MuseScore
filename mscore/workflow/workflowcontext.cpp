@@ -1,11 +1,38 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2.
 #include "workflowcontext.h"
 #include "mscore/plugin/api/score.h"
+#include "midicapture.h"
+#include <QQmlEngine>
+#include <QSettings>
+#include <QFileInfo>
+#include <QUrl>
 #include <QCoreApplication>
 #include <QUuid>
 namespace Ms {
 namespace { QPointer<WorkflowContext> context; }
 WorkflowContext* workflowContext(){if(!context)context=new WorkflowContext(qApp);return context;}
+WorkflowContext* workflowContextIfCreated(){return context;}
+QObject* WorkflowContext::expressionCaptureSession(QObject* object) {
+      auto wrapped=qobject_cast<PluginAPI::Score*>(object);auto score=wrapped?wrapped->score():nullptr;
+      if(!score)return nullptr;
+      if(auto saved=_expressionCaptures.value(score))return saved;
+      auto capture=new MidiCaptureSession(this,score);QQmlEngine::setObjectOwnership(capture,QQmlEngine::CppOwnership);
+      _expressionCaptures.insert(score,capture);
+      connect(score,&QObject::destroyed,this,[this,score,capture]{
+            _expressionCaptures.remove(score);capture->finishBeforeLeaving();
+            const auto state=capture->state();
+            if(state.value("stopping").toBool()||state.value("saving").toBool()){
+                  connect(capture,&MidiCaptureSession::finished,capture,&QObject::deleteLater);
+                  connect(capture,&MidiCaptureSession::failed,capture,&QObject::deleteLater);
+                  }
+            else capture->deleteLater();
+            });
+      return capture;
+}
+QVariantMap WorkflowContext::lastRecording() const {
+      const auto take=QSettings().value("workflow/lastRecording").toMap();
+      return QFileInfo(QUrl(take.value("path").toString()).toLocalFile()).isFile()?take:QVariantMap();
+}
 QVariantMap WorkflowContext::expressionSession(QObject* object) const {
       auto wrapped=qobject_cast<PluginAPI::Score*>(object);
       auto score=wrapped?wrapped->score():nullptr;

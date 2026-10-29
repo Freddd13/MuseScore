@@ -289,6 +289,9 @@ class TestPluginHost : public QObject {
       void continuousWorkflowScoreSwitching_data();
       void continuousWorkflowScoreSwitching();
       void velocityBackupKeepsOnlyScoreNotes149();
+      void expressionRecordingAcrossScores_data();
+      void expressionRecordingAcrossScores();
+      void expressionRecordingCloseAndRecover();
       void visiblePlaybackFollow142();
       void visiblePlaybackAudio142();
       void context143Notation();
@@ -1567,6 +1570,7 @@ class TestPluginHost : public QObject {
 #include "composition_flow_tests.inc"
 #include "workflow_sessions_tests.inc"
 #include "workflow_score_switching_tests.inc"
+#include "workflow_recording_switch_tests.inc"
 #include "guide_146_tests.inc"
 #include "context_143_tests.inc"
 #include "ai_workflow_144_tests.inc"

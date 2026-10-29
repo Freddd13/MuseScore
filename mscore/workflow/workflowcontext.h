@@ -6,12 +6,14 @@
 #include <QHash>
 #include "libmscore/score.h"
 namespace Ms {
+class MidiCaptureSession;
 class WorkflowContext : public QObject {
       Q_OBJECT
       Q_PROPERTY(QVariantMap expression READ expression NOTIFY changed)
       Q_PROPERTY(QString feedback MEMBER _feedback NOTIFY feedbackChanged)
       Q_PROPERTY(QVariantMap audition READ audition NOTIFY auditionChanged)
       Q_PROPERTY(QVariantMap capture READ capture NOTIFY captureChanged)
+      Q_PROPERTY(QVariantMap lastRecording READ lastRecording NOTIFY lastRecordingChanged)
       QVariantMap _capture;
       QPointer<QObject> _captureOwner;
       QPointer<Score> _captureScore;
@@ -27,10 +29,14 @@ class WorkflowContext : public QObject {
       ScoreContentState _previewState;
       struct ExpressionSessionData {ScoreContentState content;QVariantMap values;};
       QHash<Score*,ExpressionSessionData> _expressionSessions;
+      QHash<Score*,QPointer<MidiCaptureSession>> _expressionCaptures;
 public:
       explicit WorkflowContext(QObject* parent):QObject(parent){}
       Q_INVOKABLE QVariantMap expressionSession(QObject* score) const;
       Q_INVOKABLE bool rememberExpressionSession(QObject* score,const QVariantMap& value);
+      Q_INVOKABLE QObject* expressionCaptureSession(QObject* score);
+      QVariantMap lastRecording() const;
+      void notifyRecordingSaved(){emit lastRecordingChanged();}
       void setActiveScore(Score* score){if(_activeScore==score)return;_activeScore=score;emit activeScoreChanged();}
       QVariantMap expression()const{return _expression;}
       QVariantMap audition()const{return _audition;}
@@ -56,9 +62,11 @@ signals:
       void feedbackChanged();
       void auditionChanged();
       void captureChanged();
+      void lastRecordingChanged();
       void requested(const QString& action,const QString& scoreId,const QString& midiId);
 };
 WorkflowContext* workflowContext();
+WorkflowContext* workflowContextIfCreated();
 void notifyWorkflowCurrentScore(Score*);
 void notifyWorkflowScoreFileChanged(Score*);
 QString workflowScoreSession(Score*);

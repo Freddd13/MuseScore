@@ -24,6 +24,7 @@
 #include <QSettings>
 #include <QDir>
 #include <QUrl>
+#include <QDateTime>
 #include <QUuid>
 #include <QtConcurrent>
 #include <chrono>
@@ -54,9 +55,13 @@ bool captureMidiInput(const NPlayEvent& event, qint64 timestamp) {
 void stopMidiCaptureInput(const QString& reason) {
       if(activeCapture && activeCapture->_recording) {activeCapture->_reason=reason;activeCapture->stop();}
       }
-MidiCaptureSession::MidiCaptureSession(QObject* parent):QObject(parent) {
+MidiCaptureSession::MidiCaptureSession(QObject* parent,Score* target):QObject(parent),_boundScore(target),_bound(target!=nullptr) {
       _timer.setInterval(50);
       connect(&_timer,&QTimer::timeout,this,&MidiCaptureSession::pulse);
+      connect(workflowContext(),&WorkflowContext::activeScoreChanged,this,[this]{
+            if((_recording||_stopping)&&_checkSource&&(!mscore||mscore->currentScore()!=_source))finishBeforeLeaving();
+            });
+      connect(qApp,&QCoreApplication::aboutToQuit,this,&MidiCaptureSession::finishBeforeLeaving);
       }
 MidiCaptureSession::~MidiCaptureSession() { cancel(); }
 QVariantMap MidiCaptureSession::state() const {
@@ -86,6 +91,7 @@ void MidiCaptureSession::setInputEnabled(bool enabled) {
 QVariantMap MidiCaptureSession::start(const QVariantMap& options) { return begin(options,true); }
 QVariantMap MidiCaptureSession::begin(const QVariantMap& options, bool requireDevice) {
       if (!personalFeaturesEnabled()) return {{"error",tr("个人扩展功能已关闭。")}};
+      if(_bound&&(!_boundScore||!mscore||mscore->currentScore()!=_boundScore))return {{"error",tr("切回这份乐谱后可以录制。")}};
       if (_recording||_stopping||_saving) return {{"error",tr("本次录制正在进行，请先停止。")}};
       if (activeCapture && activeCapture!=this) return {{"error",tr("另一个演奏表达窗口正在录制，请先在那个窗口停止。")}};
       if (requireDevice && (!seq || !seq->isRunning() || !seq->driver())) return {{"error",tr("MIDI 输入设备尚未就绪。请在编辑 → 偏好设置 → 输入／输出中选择键盘和声音设备。")}};
@@ -131,7 +137,7 @@ QVariantMap MidiCaptureSession::begin(const QVariantMap& options, bool requireDe
       if (_device.isEmpty()) _device=tr("软件当前 MIDI 输入");
       _events.clear(); _keys.clear(); _pedals.clear(); _onset.clear(); _matcher.reset(_target,_tap);
       _count=0; _groups=0; _lastPitch=-1; _lastVelocity=0; _lastOn=0; _groupTime=0; _atEnd=false;
-      ++_generation; _reason.clear(); _end=0; _firstNote=0;_cursorTick=-1;_start=midiInputTime(); _recording=true; activeCapture=this;
+      ++_generation; _reason.clear();_completed.clear();_sourceName=_source?_source->name():QString(); _end=0; _firstNote=0;_cursorTick=-1;_start=midiInputTime(); _recording=true; activeCapture=this;
       _captureView=mscore?mscore->currentScoreView():nullptr;_restoreInputCursor=_captureView&&_captureView->noteEntryMode();
       _timer.start(); emit changed(); return {{"ok",true}};
       }
@@ -161,7 +167,7 @@ void MidiCaptureSession::releaseMonitor() {
       _monitor=false;
       }
 void MidiCaptureSession::releaseCaptureVisual() {
-      workflowContext()->clearCapture(this);
+      if(auto context=workflowContextIfCreated())context->clearCapture(this);
       if(_captureView){_captureView->setCursorVisible(false);if(_restoreInputCursor&&_captureView->noteEntryMode())_captureView->moveCursor();}
       _captureView.clear();
       }
@@ -194,8 +200,8 @@ void MidiCaptureSession::finishGroup() {
       _onset.clear();
       }
 void MidiCaptureSession::pulse() {
-      if(_checkSource && (!_source || !mscore || !mscore->currentScoreView() || mscore->currentScoreView()->score()!=_source || _source->masterScore()->state()!=_sourceState)) {
-            cancel();emit failed(tr("乐谱或选段内容已改变。重新选段后可以继续录制。"));return;
+      if(_recording && _checkSource && (!_source || !mscore || !mscore->currentScoreView() || mscore->currentScoreView()->score()!=_source || _source->masterScore()->state()!=_sourceState)) {
+            finishBeforeLeaving();return;
             }
       if(_requireDevice&&(!seq||!seq->isRunning()||!seq->driver()||!mscore->isMidiInEnabled())){_reason=tr("MIDI 输入已停止，已保留收到的演奏");stop();}
       const qint64 now=midiInputTime();
@@ -219,11 +225,17 @@ void MidiCaptureSession::stop() {
       finishGroup();releaseCaptureVisual();
       if(_reason.isEmpty())_reason=tr("已停止录制");emit changed();
       }
+void MidiCaptureSession::finishBeforeLeaving() {
+      if(!_recording&&!_stopping)return;
+      if(_recording)_reason=tr("刚才的录制已结束");
+      stop();if(_stopping)finish();
+      }
 void MidiCaptureSession::cancel() {
       ++_generation;_timer.stop();if(activeCapture==this){discardThrough=midiInputTime();activeCapture.clear();}
       releaseMonitor();releaseCaptureVisual();_recording=false;_stopping=false;_saving=false;_keys.clear();_pedals.clear();emit changed();
       }
 void MidiCaptureSession::finish() {
+      if(!_stopping)return;
       _timer.stop();discardThrough=_end;activeCapture.clear();releaseMonitor();
       // Close held keys in the saved take at the user's stop time.
       for(auto key=_keys.cbegin();key!=_keys.cend();++key)for(int i=0;i<key.value();++i)_events.append({_end,ME_NOTEOFF,key.key()/128,key.key()%128,0});
@@ -232,11 +244,15 @@ void MidiCaptureSession::finish() {
       if(!_count){emit changed();emit failed(tr("这次还没有收到音符。检查键盘连接和 MIDI 输入设置后再录制。"));return;}
       _saving=true;emit changed();
       auto events=std::move(_events);auto start=_firstNote?_firstNote:_start;auto generation=_generation;auto watcher=new QFutureWatcher<QString>(this);
-      connect(watcher,&QFutureWatcher<QString>::finished,this,[this,watcher,generation] {
-            const QString path=watcher->result();watcher->deleteLater();if(generation!=_generation)return;_saving=false;emit changed();
-            if(path.isEmpty())emit failed(tr("录制文件未能保存。请检查临时文件夹的可用空间。"));else emit finished(QUrl::fromLocalFile(path).toString(),_reason);
+      const QVariantMap take{{"source",_sourceName},{"count",_count},{"seconds",qMax(0.,double(_end-start)/1e9)},{"recordedAt",QDateTime::currentDateTime().toString(Qt::ISODate)},{"reason",_reason}};
+      connect(watcher,&QFutureWatcher<QString>::finished,this,[this,watcher,generation,take] {
+            const QString path=watcher->result();watcher->deleteLater();if(generation!=_generation)return;_saving=false;
+            if(path.isEmpty()){emit changed();emit failed(tr("录制文件未能保存。请检查录音目录的写入权限和磁盘空间。"));}else {
+                  _completed=take;_completed["path"]=QUrl::fromLocalFile(path).toString();emit changed();
+                  workflowContext()->notifyRecordingSaved();emit finished(QUrl::fromLocalFile(path).toString(),take.value("reason").toString());
+                  }
             });
-      watcher->setFuture(QtConcurrent::run([events,start] {
+      watcher->setFuture(QtConcurrent::run([events,start,take] {
             auto ordered=events;std::stable_sort(ordered.begin(),ordered.end(),[](const RecordedEvent&a,const RecordedEvent&b){return a.time<b.time;});
             QByteArray track=QByteArray::fromHex("00ff510307a120");quint32 previous=0;
             for(const auto& event:ordered) {
@@ -253,7 +269,10 @@ void MidiCaptureSession::finish() {
 #endif
             const QString folder=QSettings().value("workflow/recordingDirectory",defaultFolder).toString();
             if(!QDir().mkpath(folder))return QString();const QString path=folder+"/recording-"+QUuid::createUuid().toString(QUuid::WithoutBraces)+".mid";
-            QSaveFile file(path);if(!file.open(QIODevice::WriteOnly)||file.write(data)!=data.size()||!file.commit())return QString();return path;
+            QSaveFile file(path);if(!file.open(QIODevice::WriteOnly)||file.write(data)!=data.size()||!file.commit())return QString();
+            // Keep the saved take accessible after its score or panel has closed.
+            auto saved=take;saved["path"]=QUrl::fromLocalFile(path).toString();QSettings settings;settings.setValue("workflow/lastRecording",saved);settings.sync();
+            return path;
             }));
       }
 }

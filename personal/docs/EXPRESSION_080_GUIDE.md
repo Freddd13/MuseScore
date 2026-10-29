@@ -44,3 +44,5 @@ Ctrl+S保存乐谱。已经采用的力度和应用前的力度记录会随MSCZ�
 窗口、悬浮与返回操作见[区域与编辑器大小](LAYOUT_079_GUIDE.md)。
 
 多份谱之间继续处理、关闭后的恢复见[换谱与表达项目](EXPRESSION_SESSIONS_149_GUIDE.md)。
+
+录制时切谱和关闭后的找回见[录制后继续处理](EXPRESSION_RECORDING_150_GUIDE.md)。

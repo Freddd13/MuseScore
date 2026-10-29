@@ -115,6 +115,7 @@ private slots:
   QCoreApplication::setOrganizationName("KumoP1Regression");QCoreApplication::setApplicationName("P1");
   QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,settings.path());dataPath=settings.path();
   MScore::noGui=true;noSeq=true;converterMode=true;initMuseScoreResources();initP1Resources();QStringList args;MuseScore::init(args);QVERIFY(mscore);
+  QSettings().setValue("workflow/recordingDirectory",settings.filePath("recordings"));
  }
 #ifdef Q_MOC_RUN
  void playableTempoPaletteReadAndApply();
@@ -208,10 +209,13 @@ private slots:
  }
  void midiCaptureScoreChange(){
   auto score=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);mscore->setCurrentScoreView(mscore->appendScore(score));
-  MidiCaptureSession capture;QSignalSpy failed(&capture,&MidiCaptureSession::failed);
+  QSettings().setValue("workflow/recordingDirectory",settings.filePath("score-change-recordings"));
+  MidiCaptureSession capture;QSignalSpy failed(&capture,&MidiCaptureSession::failed),finished(&capture,&MidiCaptureSession::finished);
   QVERIFY(!capture.begin({},false).contains("error"));captureMidiInput(NPlayEvent(ME_NOTEON,0,60,80),midiInputTime());
   auto other=mscore->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(other);mscore->setCurrentScoreView(mscore->appendScore(other));
-  QTRY_COMPARE(failed.count(),1);QVERIFY(!capture.state()["recording"].toBool());
+  QTRY_COMPARE(finished.count(),1);QCOMPARE(failed.count(),0);QVERIFY(!capture.state()["recording"].toBool());
+  std::atomic_bool cancel(false);auto saved=readPerformanceMidi(finished[0][0].toString(),cancel);QCOMPARE(saved.value("notes").toList().size(),1);
+  QCOMPARE(saved.value("notes").toList().front().toMap().value("pitch").toInt(),60);QVERIFY(!saved.value("notes").toList().front().toMap().value("unreleased").toBool());
   QVERIFY(!captureMidiInput(NPlayEvent(ME_NOTEOFF,0,60,0),midiInputTime()));
  }
  void compatibleSnapshot(){
