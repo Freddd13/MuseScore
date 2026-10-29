@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QVariantMap>
+#include <QHash>
 #include "libmscore/score.h"
 namespace Ms {
 class WorkflowContext : public QObject {
@@ -24,8 +25,12 @@ class WorkflowContext : public QObject {
       QPointer<Score> _previewScore,_previewOrigin;
       const Score* _previewKey=nullptr;
       ScoreContentState _previewState;
+      struct ExpressionSessionData {ScoreContentState content;QVariantMap values;};
+      QHash<Score*,ExpressionSessionData> _expressionSessions;
 public:
       explicit WorkflowContext(QObject* parent):QObject(parent){}
+      Q_INVOKABLE QVariantMap expressionSession(QObject* score) const;
+      Q_INVOKABLE bool rememberExpressionSession(QObject* score,const QVariantMap& value);
       void setActiveScore(Score* score){if(_activeScore==score)return;_activeScore=score;emit activeScoreChanged();}
       QVariantMap expression()const{return _expression;}
       QVariantMap audition()const{return _audition;}

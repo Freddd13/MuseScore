@@ -271,6 +271,10 @@ void TestPluginHost::paletteRemainsInteractiveAfterPlayback()
     auto note = chord->notes().front(); score->select(note);
     QCOMPARE(main->currentScore(), score);
     const auto count = chord->articulations().size();
+    // Capturing a native Quick window can finish pending polish/layout. Resolve
+    // the click position afterwards, just as the user sees the resulting cell.
+    QVERIFY(window->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS", _settings.path())).filePath("palette-before-apply-093.png")));
+    QVERIFY(main->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS", _settings.path())).filePath("palette-layout-before-apply-093.png")));
     QPoint point(-1, -1);
     QVERIFY(QTest::qWaitFor([&] {
         const auto actual = symbol->mapToScene(QPointF(symbol->width()/2, symbol->height()/2)).toPoint();
@@ -280,8 +284,6 @@ void TestPluginHost::paletteRemainsInteractiveAfterPlayback()
     qInfo() << "symbol" << symbolName << point << "window" << window->size()
             << "palette" << palette->geometry() << "selection" << score->selection().elements().size()
             << "score playing" << score->isPlaying() << "state" << main->state();
-    QVERIFY(window->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS", _settings.path())).filePath("palette-before-apply-093.png")));
-    QVERIFY(main->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS", _settings.path())).filePath("palette-layout-before-apply-093.png")));
     QTest::mouseMove(window, point);
     qInfo() << "palette hover" << symbol->property("hovered");
     QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);

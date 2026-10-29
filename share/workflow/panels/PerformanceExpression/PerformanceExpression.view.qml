@@ -1,4 +1,5 @@
 import "ExpressionSettings.js" as ExpressionSettings
+import "ExpressionSession.js" as Session
 import QtQuick 2.9
 import QtQuick.Window 2.2
 import QtQuick.Controls 2.2
@@ -35,7 +36,7 @@ MuseScore {
 
  menuPath:"Plugins.Performance Expression"
  description:"演奏表达：把 MIDI 演奏的力度和速度用于选中的乐谱。"
- version:"1.6.3";requiresScore:true;pluginType:"dock";dockArea:"right"
+ version:"1.6.4";requiresScore:true;pluginType:"dock";dockArea:"right"
  implicitWidth:embeddedWorkflow?700:440;implicitHeight:embeddedWorkflow?180:720
  property var observer:null
  property var editorContext:null
@@ -68,6 +69,9 @@ MuseScore {
  onCaptureStateChanged:if(captureState.input)midiInputInfo=captureState.input
  property var retainedScope:null
  property var scopeOwner:null
+ property var sessionOwner:null
+ property bool switchingScore:false
+ property string requestedMidiPath:""
  property var displayedScope:retainedScope||liveSelection.scope||scope
  property string targetDescription:displayedScope&&displayedScope.firstMeasure ? "第 "+displayedScope.firstMeasure+"–"+displayedScope.lastMeasure+" 小节"+(displayedScope.partial&&displayedScope.firstBeat!==undefined?" · 第 "+Number(displayedScope.firstBeat.toFixed(3))+" 拍起，至第 "+displayedScope.endMeasure+" 小节"+(displayedScope.endAtBar?"末尾":"第 "+Number(displayedScope.endBeat.toFixed(3))+" 拍前"):"")+" · "+(displayedScope.part||"乐谱")+" · 谱表 "+(Math.floor(displayedScope.firstTrack/4)+1)+"–"+Math.ceil(displayedScope.endTrack/4) : "选中要演奏的一段，再点“当前选区”"
  function sameScore(a,b){return a&&b&&(a===b||a.is(b))}
@@ -95,7 +99,7 @@ MuseScore {
  property bool auditionLoop:false
  property string publishedComparisonKey:""
  function publishComparison(){
-  if(!observer||typeof observer.setEditorComparison!=="function"||stale)return;
+  if(!observer||typeof observer.setEditorComparison!=="function"||stale||switchingScore)return;
   var state={owner:editorOwner,revision:revision,selectedMidiId:selectedMidiId,previewCanUndo:previewUndo.length>0,previewCanRedo:previewRedo.length>0,busy:busy||(candidate!==null&&previewUpdating),applyCounts:{velocity:scopedCandidate.velocity.length,tempos:scopedCandidate.tempos.length},selectedScoreId:selected>=0&&selected<result.matches.length?result.matches[selected].scoreId:selectedIssueScoreId};
   var key=revision+":"+previewVersion+":"+resultVersion;
   if(publishedComparisonKey===key&&typeof observer.updateEditorComparisonState==="function"){
@@ -149,7 +153,7 @@ MuseScore {
  onResultChanged:{publishComparison();candidateTimer.restart()}
  onCandidateChanged:{previewVersion++;publishComparison();if(candidate&&previewing&&!legacyAudition&&playbackState.playing&&playbackState.mode==="candidate"&&!applying&&!refreshingApplication){pendingAudition=true;auditionRetry.restart()}}
  onSelectedChanged:{selectedIssueScoreId="";publishComparison()}
- onStatusChanged:{if(editorContext)editorContext.feedback=status}
+ onStatusChanged:{if(editorContext&&!switchingScore)editorContext.feedback=status}
  Connections {target:root.editorContext;ignoreUnknownSignals:true;onRequested:root.editorRequest(action,scoreId,midiId)}
  property string workerSource:""
  property var midi:null
@@ -250,7 +254,7 @@ MuseScore {
  function choosePassage(index){if(!prepareEditing())return;pushPreviewUndo();passageChoice=index;passageFrom=result.passage.candidates[index].from;dirtyProject=true;runAlignment()}
  function freshMaterialSettings(){var next=Project.copy(config);next.velocityStrength=100;next.velocityWriteMode="fixed";next.previewVelocity={};next.previewTempo={};config=next}
  function velocityWriteText(item){var mode=item.writeMode||"preserve";return mode==="fixed"||mode==="preserve"&&item.oldType===1?"固定力度 "+item.target:"跟随力度记号 "+Math.round((item.target-item.oldBase)*100/item.oldBase)+"%"}
- function cancel(){var wasBusy=busy||captureState.recording||captureState.stopping||captureState.saving;readForCapture=false;refreshingApplication=false;newImportPending=false;pendingProjectRestore=null;midiToken="";if(captureSession)captureSession.cancel();pendingAudition=null;auditionRetry.stop();paging.stop();if(observer){observer.cancelReadOnlyJob();if(typeof observer.cancelPerformanceMidi==="function")observer.cancelPerformanceMidi()}busy=false;if(wasBusy)status="已取消，可以继续导入或录制。"}
+ function cancel(){var wasBusy=busy||captureState.recording||captureState.stopping||captureState.saving;readForCapture=false;refreshingApplication=false;newImportPending=false;pendingProjectRestore=null;requestedMidiPath="";midiToken="";if(captureSession)captureSession.cancel();pendingAudition=null;auditionRetry.stop();paging.stop();if(observer){observer.cancelReadOnlyJob();if(typeof observer.cancelPerformanceMidi==="function")observer.cancelPerformanceMidi()}busy=false;if(wasBusy)status="已取消，可以继续导入或录制。"}
  function runAlignment(){
   if(!midi||!notes.length){status="需要谱面起音与 MIDI";return}
   if(stale || observer.analysisRevision()!==revision){status="谱面已变化，请重新读取";return}
@@ -260,7 +264,7 @@ MuseScore {
  function importMidi(path){
   if(!path)return;
   if(!prepareEditing())return;
-  cancel();candidateTimer.stop();newImportPending=true;busy=true;status="正在读取演奏 MIDI…";midiToken=observer.readPerformanceMidi(String(path));
+  cancel();candidateTimer.stop();requestedMidiPath=String(path);newImportPending=true;busy=true;status="正在读取演奏 MIDI…";midiToken=observer.readPerformanceMidi(String(path));
  }
  function acceptNewMaterial(){
   newImportPending=false;revealResultsPending=true;dirtyProject=true;freshMaterialSettings();
@@ -460,10 +464,45 @@ MuseScore {
   var recording=observer.loadConfiguration("expression-recording");if(recording){captureEndMode=Math.max(0,Math.min(2,recording.endMode||0));captureDuration=Math.max(1,Math.min(3600,recording.duration||30));captureMonitor=recording.monitor!==false;}
   workerSource=observer.readTextFile(String(Qt.resolvedUrl("Alignment.js")));
   if(typeof observer.performanceRange!=="function")status="需要支持 P1 演奏快照的版本";
+  updateScoreContext();
+ }
+ function rememberSession(){
+  if(!sessionOwner||!editorContext||typeof editorContext.rememberExpressionSession!=="function")return;
+  var scroll=embeddedWorkflow&&embeddedScroll.contentItem?embeddedScroll.contentItem.contentY:0;
+  editorContext.rememberExpressionSession(sessionOwner,Session.snapshot(root,scroll||0));
+ }
+ function changeSession(){
+  switchingScore=true;
+  if(previewing&&observer)returnOriginal();
+  rememberSession();cancel();candidateTimer.stop();
+  if(embeddedActiveDialog)embeddedActiveDialog.close();
+  previewing=false;legacyAudition=false;selected=-1;stale=false;publishedComparisonKey="";
+  sessionOwner=curScore;observer.score=curScore;
+  var saved=sessionOwner&&editorContext&&typeof editorContext.expressionSession==="function"?editorContext.expressionSession(sessionOwner):({});
+  Session.restore(root,saved,ExpressionSettings.defaults());scopeOwner=retainedScope?curScore:null;
+  refreshHistory();refreshLiveSelection();candidateTimer.stop();
+  var valid=notes.length&&saved.contentCurrent===true;
+  var sameRanges=!config.rubato||Session.rangesKey(saved.tempoRanges)===Session.rangesKey(tempoTargetRanges());
+  if(valid){revision=observer.analysisRevision();info=observer.workflowInfo();if(candidate){var restored=Project.copy(candidate);restored.revision=revision;candidate=restored;if(!saved.incomplete&&sameRanges)candidateConfig=candidateRequestKey();}}
+  stale=notes.length>0&&(!valid||saved.incomplete===true);
+  if(stale){candidate=null;status="乐谱已有修改，点击“重新对应”更新演奏结果。";}
+  else if(midi)status="已恢复这份谱的演奏对应"+(dirtyProject?"；表达项目有未保存的调整。":"。");
+  switchingScore=false;
+  if(valid&&candidate&&!saved.incomplete&&!sameRanges)candidateTimer.restart();
+  if(editorContext)editorContext.feedback=status;
+  if(candidate)publishComparison();else observer.setEditorComparison({});
+  var owner=sessionOwner,request=requestedMidiPath,project=pendingProjectRestore;
+  Qt.callLater(function(){
+   if(!root.sameScore(owner,root.curScore))return;
+   if(root.embeddedWorkflow&&embeddedScroll.contentItem)embeddedScroll.contentItem.contentY=Math.max(0,Number(saved.scroll)||0);
+   if(project)root.load(project.url);
+   else if(request)root.importMidi(request);
+   else if(saved.incomplete&&valid&&root.midi){if(root.visible)root.analyze();else root.alignmentOnShow=true;}
+  });
  }
  function updateScoreContext(){
-  if((previewing&&legacyAudition)||applying||refreshingApplication)return;
-  if(scopeOwner&&!sameScore(scopeOwner,curScore)){cancel();retainedScope=null;scopeOwner=null;scope=({});notes=[];result=({matches:[],missing:[],extra:[],pending:0});candidate=null;stale=false;status="已切换乐谱，请选择目标谱段。";}
+  if(switchingScore||(previewing&&legacyAudition)||applying||refreshingApplication)return;
+  if(sessionOwner!==curScore&&!sameScore(sessionOwner,curScore)){changeSession();return;}
   if(observer&&!sameScore(observer.score,curScore))observer.score=curScore;
   refreshLiveSelection();
   if(notes.length&&observer&&observer.analysisRevision()!==revision){stale=true;candidate=null;cancel();status="乐谱已修改，点击“重新对应”更新效果"}
@@ -472,7 +511,7 @@ MuseScore {
  onScoreStateChanged:root.updateScoreContext()
  onVisibleChanged:{if(!visible){candidateTimer.stop();if(!captureState.recording&&!captureState.stopping&&!captureState.saving&&!recordingImport){cancel();if(observer&&typeof observer.cancelPerformanceMidi==="function")observer.cancelPerformanceMidi()}}else if(alignmentOnShow){alignmentOnShow=false;analyze()}else if(candidate&&previewUpdating)candidateTimer.restart()}
  Connections {target:observer;ignoreUnknownSignals:true;onWorkflowPlaybackError:root.fail(message);onActiveScoreChanged:root.updateScoreContext()}
- Component.onDestruction:{if(previewing&&observer)returnOriginal();cancel()}
+ Component.onDestruction:{if(previewing&&observer)returnOriginal();rememberSession();cancel()}
  Connections {
   target:root.captureSession;ignoreUnknownSignals:true
   onFailed:{root.busy=false;root.fail(message)}
@@ -489,12 +528,12 @@ MuseScore {
   target:observer;ignoreUnknownSignals:true
   onPerformanceMidiReady:{
    if(token!==root.midiToken)return;
-   if(result.error){root.newImportPending=false;root.pendingProjectRestore=null;root.recordingImport=false;root.busy=false;root.fail(result.error);return}
+   if(result.error){root.requestedMidiPath="";root.newImportPending=false;root.pendingProjectRestore=null;root.recordingImport=false;root.busy=false;root.fail(result.error);return}
    var expected=root.pendingProjectRestore?root.pendingProjectRestore.data.sha256:root.newImportPending?"":root.loadedSourceHash;
    if(expected&&expected!==result.sha256){root.pendingProjectRestore=null;root.busy=false;root.fail("项目原始 MIDI 已变化，请重新导入并核查人工对应");return}
    if(root.pendingProjectRestore){var project=root.pendingProjectRestore;root.pendingProjectRestore=null;root.restoreProject(project.data,project.url);}
    else if(root.newImportPending)root.acceptNewMaterial();
-   root.busy=false;root.loadedSourceHash="";root.midi=result;root.status="已导入 "+result.notes.length+" 个音，正在寻找所选谱段";if(root.recordingImport){root.recordingImport=false;if(!root.visible){root.alignmentOnShow=true;root.status="录制已保存，打开面板后显示对应结果。";}else if(root.revision===root.observer.analysisRevision())root.runAlignment();else root.analyze()}else root.analyze();
+   root.busy=false;root.loadedSourceHash="";root.requestedMidiPath="";root.midi=result;root.status="已导入 "+result.notes.length+" 个音，正在寻找所选谱段";if(root.recordingImport){root.recordingImport=false;if(!root.visible){root.alignmentOnShow=true;root.status="录制已保存，打开面板后显示对应结果。";}else if(root.revision===root.observer.analysisRevision())root.runAlignment();else root.analyze()}else if(!root.visible){root.alignmentOnShow=true;root.status="已读取演奏，打开演奏表达后显示对应。";}else root.analyze();
   }
   onReadOnlyJobFinished:{
    if(token!==root.token)return;
@@ -516,11 +555,11 @@ MuseScore {
    Loader {Layout.fillWidth:true;active:root.embeddedWorkflow;sourceComponent:Component {ExpressionScopeBar {workflow:root}}}
    Flow {
     Layout.fillWidth:true;spacing:6
-    Desk.DeskButton {objectName:"embeddedExpressionImport";iconName:"open";text:"导入 MIDI";enabled:!root.busy&&!root.captureState.recording;onClicked:root.chooseMidi()}
-    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionRecord":"embedded_expressionRecord";iconName:root.captureState.recording?"stop":"record";text:root.captureState.recording?"停止录制":"录制";enabled:root.captureSession!==null&&!root.captureState.stopping&&!root.captureState.saving&&(!root.busy||root.captureState.recording);onClicked:{if(root.captureState.recording)root.captureSession.stop();else root.startRecording()}}
-    Desk.DeskButton {iconName:"refresh";text:"重新对应";enabled:!!root.midi&&!root.busy&&!root.captureState.recording;onClicked:root.analyze()}
-    Desk.DeskButton {objectName:"expressionShowResults";iconName:"list";text:"对应结果";visible:!!root.midi;enabled:!root.busy;onClicked:root.revealResults()}
-    Desk.DeskButton {objectName:"embeddedExpressionSettings";iconName:"settings";text:"设置与详情";onClicked:root.openToolDialog(expressionSettings)}
+    Desk.DeskButton {objectName:"embeddedExpressionImport";text:"导入 MIDI";enabled:!root.busy&&!root.captureState.recording;onClicked:root.chooseMidi()}
+    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionRecord":"embedded_expressionRecord";text:root.captureState.recording?"停止录制":"录制";enabled:root.captureSession!==null&&!root.captureState.stopping&&!root.captureState.saving&&(!root.busy||root.captureState.recording);onClicked:{if(root.captureState.recording)root.captureSession.stop();else root.startRecording()}}
+    Desk.DeskButton {text:"重新对应";enabled:!!root.midi&&!root.busy&&!root.captureState.recording;onClicked:root.analyze()}
+    Desk.DeskButton {objectName:"expressionShowResults";text:"对应结果";visible:!!root.midi;enabled:!root.busy;onClicked:root.revealResults()}
+    Desk.DeskButton {objectName:"embeddedExpressionSettings";text:"设置与详情";onClicked:root.openToolDialog(expressionSettings)}
     Desk.DeskButton {id:embeddedOperations;objectName:root.embeddedWorkflow?"expressionApplicationMenuButton":"embedded_expressionApplicationMenuButton";text:"更多操作";onClicked:root.openMenu(applicationMenu,embeddedOperations)}
    }
    Flow {
@@ -530,7 +569,7 @@ MuseScore {
     Label {text:"%";height:28;verticalAlignment:Text.AlignVCenter;color:theme.muted;font:Qt.application.font}
     Desk.DeskComboBox {objectName:root.embeddedWorkflow?"expressionVelocityWriteMode":"embedded_expressionVelocityWriteMode";width:172;model:["逐音固定力度","继续跟随力度记号","保留原保存方式"];currentIndex:root.config.velocityWriteMode==="fixed"?0:root.config.velocityWriteMode==="follow"?1:2;enabled:!root.busy;onActivated:root.editConfig("velocityWriteMode",["fixed","follow","preserve"][currentIndex])}
     Desk.DeskSwitch {objectName:root.embeddedWorkflow?"expressionKeepManual":"embedded_expressionKeepManual";text:"保留手动调整";checked:root.config.keepManual===true;enabled:!root.busy;onClicked:root.editConfig("keepManual",checked)}
-    Desk.DeskSwitch {objectName:"expressionUseTempo";text:"使用速度";checked:root.config.rubato;enabled:!root.busy;onClicked:root.editConfig("rubato",checked)}
+    Desk.DeskSwitch {text:"使用速度";checked:root.config.rubato;enabled:!root.busy;onClicked:root.editConfig("rubato",checked)}
    }
    Flow {
     Layout.fillWidth:true;spacing:6
@@ -542,23 +581,22 @@ MuseScore {
    Flow {
     id:embeddedComparisonTools
     Layout.fillWidth:true;spacing:6
-    ExpressionPassageChoice {width:Math.min(360,embeddedComparisonTools.width);workflow:root;selectorName:root.embeddedWorkflow?"expressionPassageChoice":"embedded_expressionPassageChoice"}
-    Label {text:"比较试听"+(!(root.result.passage&&root.result.passage.candidates&&root.result.passage.candidates.length>1)&&root.scope.firstMeasure?" · "+root.targetDescription:"");width:Math.min(implicitWidth,embeddedComparisonTools.width);height:28;elide:Text.ElideRight;verticalAlignment:Text.AlignVCenter;color:theme.muted;font:Qt.application.font}
-    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionOriginalAudition":"embedded_expressionOriginalAudition";iconName:"score";text:"谱中效果";checkable:true;checked:root.previewing&&(root.playbackState.mode==="score"||root.playbackState.mode==="original");enabled:root.notes.length>0&&!root.busy&&!root.stale;onClicked:root.audition(false)}
-    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionCandidateAudition":"embedded_expressionCandidateAudition";iconName:"audition";text:"拟采用效果";checkable:true;checked:root.previewing&&root.playbackState.mode==="candidate";enabled:root.candidate!==null&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.audition(true)}
-    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionStop":"embedded_expressionStop";iconName:"stop";text:"停止试听";enabled:root.previewing&&(root.legacyAudition||!!root.playbackState.playing||!!root.playbackState.preparing);onClicked:root.stopAudition()}
+    Label {text:"比较试听"+(root.scope.firstMeasure?" · "+root.targetDescription:"");width:Math.min(implicitWidth,embeddedComparisonTools.width);height:28;elide:Text.ElideRight;verticalAlignment:Text.AlignVCenter;color:theme.muted;font:Qt.application.font}
+    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionOriginalAudition":"embedded_expressionOriginalAudition";text:"谱中效果";checkable:true;checked:root.previewing&&(root.playbackState.mode==="score"||root.playbackState.mode==="original");enabled:root.notes.length>0&&!root.busy&&!root.stale;onClicked:root.audition(false)}
+    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionCandidateAudition":"embedded_expressionCandidateAudition";text:"拟采用效果";checkable:true;checked:root.previewing&&root.playbackState.mode==="candidate";enabled:root.candidate!==null&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.audition(true)}
+    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionStop":"embedded_expressionStop";text:"停止试听";enabled:root.previewing&&(root.legacyAudition||!!root.playbackState.playing||!!root.playbackState.preparing);onClicked:root.stopAudition()}
     Desk.DeskSwitch {text:"循环";checked:root.auditionLoop;onClicked:{root.auditionLoop=checked;if(root.observer&&typeof root.observer.setExpressionAuditionLoop==="function")root.observer.setExpressionAuditionLoop(checked)}}
    }
    Flow {
     Layout.fillWidth:true;spacing:6
     Label {text:"应用范围";height:28;verticalAlignment:Text.AlignVCenter;color:theme.muted;font:Qt.application.font}
     Desk.DeskComboBox {objectName:root.embeddedWorkflow?"expressionApplicationScope":"embedded_expressionApplicationScope";width:148;model:["选中音","当前选段","全部已对应范围"];currentIndex:root.applicationScope;enabled:!root.busy;onActivated:root.applicationScope=currentIndex}
-    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionApplyVelocity":"embedded_expressionApplyVelocity";iconName:"apply";text:"使用力度 · "+root.scopedCandidate.velocity.length+"音";enabled:root.candidate!==null&&root.scopedCandidate.velocity.length>0&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.applyPart("velocity")}
-    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionApplyTempo":"embedded_expressionApplyTempo";iconName:"tempo";text:"使用速度 · "+root.scopedCandidate.tempos.length+"处";visible:root.config.rubato;enabled:root.candidate!==null&&root.scopedCandidate.tempos.length>0&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.applyPart("tempo")}
+    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionApplyVelocity":"embedded_expressionApplyVelocity";text:"使用力度 · "+root.scopedCandidate.velocity.length+"音";enabled:root.candidate!==null&&root.scopedCandidate.velocity.length>0&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.applyPart("velocity")}
+    Desk.DeskButton {objectName:root.embeddedWorkflow?"expressionApplyTempo":"embedded_expressionApplyTempo";text:"使用速度 · "+root.scopedCandidate.tempos.length+"处";visible:root.config.rubato;enabled:root.candidate!==null&&root.scopedCandidate.tempos.length>0&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.applyPart("tempo")}
    }
    Label {Layout.fillWidth:true;wrapMode:Text.Wrap;color:root.previewing?theme.text:theme.muted;font.family:Qt.application.font.family;font.pointSize:Qt.application.font.pointSize;font.bold:root.previewing
-    text:root.previewing&&!root.legacyAudition?(root.playbackState.preparing?"正在准备：":root.playbackState.playing?"正在播放：":"试听已停止：")+(root.playbackState.mode==="candidate"?"拟采用效果":"谱中效果"):root.statusText()}
-  ExpressionResults {id:embeddedResults;Layout.fillWidth:true;Layout.preferredHeight:Math.max(180,Math.min(360,root.height-y-12));workflow:root}
+    text:root.previewing&&!root.legacyAudition?(root.playbackState.preparing?"正在准备：":root.playbackState.playing?"正在播放：":"试听已停止：")+(root.playbackState.mode==="candidate"?"拟采用效果":"谱中效果"):root.status}
+   ExpressionResults {id:embeddedResults;Layout.fillWidth:true;Layout.preferredHeight:Math.max(180,Math.min(360,root.height-y-12));workflow:root}
   }
  }
 
@@ -570,25 +608,25 @@ MuseScore {
    Layout.fillWidth:true
    Label {text:"演奏表达";font.bold:true;color:theme.text}
    Item {Layout.fillWidth:true}
-   Desk.DeskButton {iconName:"stop";text:"停止";visible:root.compact&&root.previewing;onClicked:root.stopAudition()}
+   Desk.DeskButton {text:"停止";visible:root.compact&&root.previewing;onClicked:root.stopAudition()}
    Desk.DeskButton {text:"返回";visible:root.compact&&root.previewing;onClicked:root.returnOriginal()}
-   Desk.DeskButton {iconName:"open";text:"导入 MIDI";enabled:!root.busy&&!root.captureState.recording&&!root.captureState.stopping&&!root.captureState.saving;onClicked:root.chooseMidi()}
-   Desk.DeskButton {id:projectButton;iconName:"panel";text:"项目";onClicked:root.openMenu(projectMenu,projectButton)}
-   Desk.DeskButton {iconName:"panel";text:"悬浮";onClicked:{if(typeof root.setPanelFloating==="function")root.setPanelFloating(!root.panelFloating)}}
+   Desk.DeskButton {text:"导入 MIDI";enabled:!root.busy&&!root.captureState.recording&&!root.captureState.stopping&&!root.captureState.saving;onClicked:root.chooseMidi()}
+   Desk.DeskButton {id:projectButton;text:"项目";onClicked:root.openMenu(projectMenu,projectButton)}
+   Desk.DeskButton {text:"悬浮";onClicked:{if(typeof root.setPanelFloating==="function")root.setPanelFloating(!root.panelFloating)}}
   }
   Loader {Layout.fillWidth:true;active:!root.embeddedWorkflow;sourceComponent:Component {ExpressionScopeBar {workflow:root}}}
   RowLayout {
    Layout.fillWidth:true
-   Desk.DeskButton {objectName:root.embeddedWorkflow?"legacy_expressionRecord":"expressionRecord";iconName:root.captureState.recording?"stop":"record";text:root.captureState.recording?"停止录制":"录制";enabled:root.captureSession!==null&&!root.captureState.stopping&&!root.captureState.saving&&(!root.busy||root.captureState.recording);onClicked:{if(root.captureState.recording)root.captureSession.stop();else root.startRecording()}}
+   Desk.DeskButton {objectName:root.embeddedWorkflow?"legacy_expressionRecord":"expressionRecord";text:root.captureState.recording?"停止录制":"录制";enabled:root.captureSession!==null&&!root.captureState.stopping&&!root.captureState.saving&&(!root.busy||root.captureState.recording);onClicked:{if(root.captureState.recording)root.captureSession.stop();else root.startRecording()}}
    Desk.DeskComboBox {objectName:root.embeddedWorkflow?"legacy_expressionRecordEnd":"expressionRecordEnd";Layout.fillWidth:true;model:["手动停止","到时停止","弹完选段停止"];currentIndex:root.captureEndMode;enabled:!root.captureState.recording&&!root.captureState.stopping;onActivated:{root.captureEndMode=currentIndex;root.saveCaptureOptions()}}
    Desk.DeskSpinBox {visible:root.captureEndMode===1;from:1;to:3600;value:root.captureDuration;onValueModified:{root.captureDuration=value;root.saveCaptureOptions()}}
    Label {visible:root.captureEndMode===1;text:"秒";color:theme.muted}
   }
   Label {visible:!!(root.captureState.recording||root.captureState.stopping||root.captureState.saving);Layout.fillWidth:true;Layout.preferredHeight:24;elide:Text.ElideRight;color:theme.accent;text:root.captureState.stopping?"正在收完最后的音…":root.captureState.saving?"正在保存录制…":(root.captureState.seconds||0).toFixed(1)+" 秒 · "+(root.captureState.count||0)+" 个音 · "+(root.captureState.pitch>=0?root.recordingPitch(root.captureState.pitch)+" · 力度 "+root.captureState.velocity:"等待键盘输入")}
-  Label {Layout.fillWidth:true;Layout.preferredHeight:28;elide:Text.ElideRight;ToolTip.visible:statusHover.containsMouse;ToolTip.text:root.status;color:root.stale?theme.accent:theme.muted;text:root.statusText();MouseArea {id:statusHover;anchors.fill:parent;hoverEnabled:true;acceptedButtons:Qt.NoButton}}
+  Label {Layout.fillWidth:true;Layout.preferredHeight:28;elide:Text.ElideRight;ToolTip.visible:statusHover.containsMouse;ToolTip.text:root.status;color:root.stale?theme.accent:theme.muted;text:root.status;MouseArea {id:statusHover;anchors.fill:parent;hoverEnabled:true;acceptedButtons:Qt.NoButton}}
   RowLayout {
    Layout.fillWidth:true
-   Desk.DeskButton {iconName:"refresh";text:"重新对应";enabled:root.midi&&!root.busy&&!root.captureState.recording&&!root.captureState.stopping&&!root.captureState.saving;onClicked:root.analyze()}
+   Desk.DeskButton {text:"重新对应";enabled:root.midi&&!root.busy&&!root.captureState.recording&&!root.captureState.stopping&&!root.captureState.saving;onClicked:root.analyze()}
    Desk.DeskButton {visible:root.advancedSettings;text:"重算对应";enabled:root.notes.length&&!root.busy&&!root.stale;onClicked:root.runAlignment()}
    Desk.DeskButton {text:"设置";onClicked:{root.advancedSettings=true;root.openToolDialog(expressionSettings)}}
    Desk.DeskButton {objectName:root.embeddedWorkflow?"legacy_expressionOpenEditor":"expressionOpenEditor";text:"编辑器对比";enabled:root.result.matches.length>0;onClicked:{root.publishComparison();if(typeof root.observer.showEditorComparison==="function"){var opened=root.observer.showEditorComparison();if(opened.error)root.fail(opened.error);else root.status="力度区已显示前后对比。实心条可拖动，使用力度后写入乐谱。"}}}
@@ -600,7 +638,7 @@ MuseScore {
    Desk.DeskButton {text:"多弹 "+root.result.extra.length;enabled:root.result.extra.length>0;onClicked:{root.issueKind="extra";root.openToolDialog(issues)}}
    Desk.DeskButton {text:"需核对 "+root.result.pending;enabled:root.result.pending>0;onClicked:{root.issueKind="pending";root.openToolDialog(issues)}}
   }
-  ExpressionPassageChoice {Layout.preferredWidth:Math.min(360,fullPanel.availableWidth);workflow:root;selectorName:root.embeddedWorkflow?"legacy_expressionPassageChoice":"expressionPassageChoice";visible:!root.embeddedWorkflow&&choices.length>1}
+  Desk.DeskComboBox {objectName:"expressionPassageChoice";Layout.fillWidth:true;visible:!!(root.result.passage&&root.result.passage.candidates&&root.result.passage.candidates.length>1);model:root.result.passage&&root.result.passage.candidates?root.result.passage.candidates.map(function(v,i){return "演奏位置 "+(i+1)+" · "+v.from.toFixed(2)+"–"+v.until.toFixed(2)+" 秒"}):[];currentIndex:root.passageChoice;onActivated:{root.passageChoice=currentIndex;root.runAlignment()}}
   Canvas {
    id:timeline;visible:root.advancedSettings&&!root.compact;Layout.fillWidth:true;Layout.preferredHeight:100
    onWidthChanged:requestPaint()
@@ -654,14 +692,14 @@ MuseScore {
   }
   Label {visible:!root.compact&&root.previewing;Layout.fillWidth:true;elide:Text.ElideRight;color:theme.accent;text:(root.playbackState.preparing?"正在准备：":root.playbackState.playing?"正在播放：":"已暂停：")+(root.playbackState.mode==="candidate"?"拟采用效果":"谱中效果")}
   RowLayout {visible:!root.compact;Layout.fillWidth:true
-   Desk.DeskButton {objectName:root.embeddedWorkflow?"legacy_expressionOriginalAudition":"expressionOriginalAudition";Layout.fillWidth:true;iconName:"score";text:"谱中效果";enabled:root.notes.length>0&&!root.busy&&!root.stale;onClicked:root.audition(false)}
-   Desk.DeskButton {objectName:root.embeddedWorkflow?"legacy_expressionCandidateAudition":"expressionCandidateAudition";Layout.fillWidth:true;iconName:"audition";text:"拟采用效果";enabled:root.candidate!==null&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.audition(true)}
-   Desk.DeskButton {iconName:"loop";text:"循环";checkable:true;checked:root.auditionLoop;onClicked:{root.auditionLoop=checked;if(root.observer&&typeof root.observer.setExpressionAuditionLoop==="function")root.observer.setExpressionAuditionLoop(checked)}}
-   Desk.DeskButton {objectName:root.embeddedWorkflow?"legacy_expressionStop":"expressionStop";iconName:"stop";text:"停止";visible:root.previewing;onClicked:root.stopAudition()}
+   Desk.DeskButton {objectName:root.embeddedWorkflow?"legacy_expressionOriginalAudition":"expressionOriginalAudition";Layout.fillWidth:true;text:"谱中效果";enabled:root.notes.length>0&&!root.busy&&!root.stale;onClicked:root.audition(false)}
+   Desk.DeskButton {objectName:root.embeddedWorkflow?"legacy_expressionCandidateAudition":"expressionCandidateAudition";Layout.fillWidth:true;text:"拟采用效果";enabled:root.candidate!==null&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.audition(true)}
+   Desk.DeskButton {text:"循环";checkable:true;checked:root.auditionLoop;onClicked:{root.auditionLoop=checked;if(root.observer&&typeof root.observer.setExpressionAuditionLoop==="function")root.observer.setExpressionAuditionLoop(checked)}}
+   Desk.DeskButton {objectName:root.embeddedWorkflow?"legacy_expressionStop":"expressionStop";text:"停止";visible:root.previewing;onClicked:root.stopAudition()}
   }
   RowLayout {visible:!root.compact;Layout.fillWidth:true
-   Desk.DeskButton {objectName:root.embeddedWorkflow?"legacy_expressionApplyVelocity":"expressionApplyVelocity";Layout.fillWidth:true;iconName:"apply";text:"使用力度 · "+root.scopedCandidate.velocity.length+"音";enabled:root.candidate!==null&&root.scopedCandidate.velocity.length>0&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.applyPart("velocity")}
-   Desk.DeskButton {objectName:root.embeddedWorkflow?"legacy_expressionApplyTempo":"expressionApplyTempo";Layout.fillWidth:true;iconName:"tempo";text:"使用速度 · "+root.scopedCandidate.tempos.length+"处";visible:root.config.rubato;enabled:root.candidate!==null&&root.scopedCandidate.tempos.length>0&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.applyPart("tempo")}
+   Desk.DeskButton {objectName:root.embeddedWorkflow?"legacy_expressionApplyVelocity":"expressionApplyVelocity";Layout.fillWidth:true;text:"使用力度 · "+root.scopedCandidate.velocity.length+"音";enabled:root.candidate!==null&&root.scopedCandidate.velocity.length>0&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.applyPart("velocity")}
+   Desk.DeskButton {objectName:root.embeddedWorkflow?"legacy_expressionApplyTempo":"expressionApplyTempo";Layout.fillWidth:true;text:"使用速度 · "+root.scopedCandidate.tempos.length+"处";visible:root.config.rubato;enabled:root.candidate!==null&&root.scopedCandidate.tempos.length>0&&!root.busy&&!root.stale&&!root.previewUpdating;onClicked:root.applyPart("tempo")}
    Desk.DeskButton {id:applicationMenuButton;objectName:root.embeddedWorkflow?"legacy_expressionApplicationMenuButton":"expressionApplicationMenuButton";text:"更多";onClicked:root.openMenu(applicationMenu,applicationMenuButton)}
   }
   CheckBox {visible:!root.compact;objectName:root.embeddedWorkflow?"legacy_expressionKeepManual":"expressionKeepManual";text:"保留手动调整";checked:root.config.keepManual===true;onClicked:root.editConfig("keepManual",checked)}
@@ -746,26 +784,16 @@ MuseScore {
  }
  Dialog {
   id:correction;title:"调整演奏对应";modal:true;width:380;height:320;standardButtons:Dialog.Close
-  onOpened:{
-   var ns=root.result.matches.map(function(m){return m.original}).concat(root.result.missing);
-   var chosen=root.selected>=0?root.result.matches[root.selected].scoreId:root.selectedIssueScoreId;
-   var scoreIndex=ns.findIndex(function(n){return n.id===chosen});if(scoreIndex>=0)scoreChoice.currentIndex=scoreIndex;
-   var midiIndex=root.midi?root.midi.notes.findIndex(function(n){return n.id===root.selectedMidiId}):-1;if(midiIndex>=0)midiChoice.currentIndex=midiIndex;
-  }
   ColumnLayout {anchors.fill:parent
    Label {text:"选择谱音与演奏事件，可重新连接或标记漏／多弹"}
-   GridLayout {columns:2;Layout.fillWidth:true
-    Label {text:"谱面音";color:theme.text;font:Qt.application.font}
-    Desk.DeskComboBox {id:scoreChoice;Layout.fillWidth:true;model:root.result.matches.map(function(m){return m.original}).concat(root.result.missing).map(function(n){return RowText.pitchName(n.writtenPitch===undefined?n.pitch:n.writtenPitch,n.writtenTpc)+" · "+RowText.position(n)+" · 谱表 "+(Math.floor(n.track/4)+1)});}
-    Label {text:"演奏音";color:theme.text;font:Qt.application.font}
-    Desk.DeskComboBox {id:midiChoice;Layout.fillWidth:true;model:root.midi?root.midi.notes.map(function(n){return RowText.pitchName(n.pitch)+" · "+n.seconds.toFixed(3)+" 秒 · 力度 "+n.velocity}):[]}
-   }
+   Desk.DeskComboBox {id:scoreChoice;Layout.fillWidth:true;model:root.result.matches.map(function(m){return m.original}).concat(root.result.missing).map(function(n){return n.id+" · "+n.pitch});}
+   Desk.DeskComboBox {id:midiChoice;Layout.fillWidth:true;model:root.midi?root.midi.notes.map(function(n){return n.id+" · "+n.seconds.toFixed(3)+"s · "+n.pitch}):[]}
    RowLayout {
-    Desk.DeskButton {iconName:"link";text:"连接这两音";enabled:!root.busy;onClicked:{var ns=root.result.matches.map(function(m){return m.original}).concat(root.result.missing),ms=root.midi.notes;if(scoreChoice.currentIndex<0||midiChoice.currentIndex<0)return;root.connectPair(ns[scoreChoice.currentIndex].id,ms[midiChoice.currentIndex].id);correction.close()}}
-    Desk.DeskButton {iconName:"delete";text:"解除对应";enabled:root.selected>=0&&!root.busy;onClicked:root.editorRequest("unlink",root.result.matches[root.selected].scoreId,"")}
+    Desk.DeskButton {text:"重新连接";onClicked:{var ns=root.result.matches.map(function(m){return m.original}).concat(root.result.missing),ms=root.midi.notes;if(scoreChoice.currentIndex<0||midiChoice.currentIndex<0)return;var l=root.links.filter(function(v){return v.scoreId!==ns[scoreChoice.currentIndex].id&&v.midiId!==ms[midiChoice.currentIndex].id});l.push({scoreId:ns[scoreChoice.currentIndex].id,midiId:ms[midiChoice.currentIndex].id});root.links=l;root.runAlignment()}}
+    Desk.DeskButton {text:"取消对应";onClicked:{if(root.selected<0)return;var m=root.result.matches[root.selected],l=Project.copy(root.links);l.push({scoreId:m.scoreId,midiId:m.midiId,disabled:true});root.links=l;root.runAlignment()}}
    }
-   Desk.DeskButton {text:"清除固定的对应位置";enabled:root.manualAnchors.length>0&&!root.busy;onClicked:{root.pushPreviewUndo();root.manualAnchors=[];root.dirtyProject=true;root.runAlignment()}}
-   Label {Layout.fillWidth:true;wrapMode:Text.Wrap;text:"漏弹 "+root.result.missing.length+" 音 · "+(root.role>0?"其它演奏音 ":"多弹 ")+root.result.extra.length+" 音。可在“对应结果”中查看具体音名和位置。";elide:Text.ElideRight;maximumLineCount:5}
+   Desk.DeskButton {text:"清除固定的对应位置";onClicked:{root.manualAnchors=[];root.runAlignment()}}
+   Label {Layout.fillWidth:true;wrapMode:Text.Wrap;text:"漏弹 "+root.result.missing.map(function(n){return n.id}).join(", ")+"\n多弹 "+root.result.extra.map(function(n){return n.id}).join(", ");elide:Text.ElideRight;maximumLineCount:5}
   }
  }
  Dialog {

@@ -9,7 +9,6 @@
 #include "xml.h"
 #include <QHash>
 #include <QGlobalStatic>
-#include <algorithm>
 namespace Ms {
 namespace VelocityBackup {
 namespace {
@@ -52,25 +51,24 @@ QPair<int, int> original(const Note* note)
 QList<Note*> notes(Score* score)
       {
       QList<Note*> result;
-      if (!storedValues.exists() || storedValues.isDestroyed())
+      if (!score || !storedValues.exists() || storedValues.isDestroyed() || values().isEmpty())
             return result;
-      QHash<const Measure*, bool> liveMeasures;
-      for (auto it = values().cbegin(); it != values().cend(); ++it) {
-            const auto note = it.key();
-            if (note->score() != score || !note->parent() || !note->parent()->isChord())
-                  continue;
-            auto chord = note->chord();
-            const auto& chordNotes = chord->notes();
-            if (std::find(chordNotes.begin(), chordNotes.end(), note) == chordNotes.end())
-                  continue;
-            auto main = chord->isGrace() ? toChord(chord->parent()) : chord;
-            if (!main || !main->segment() || main->segment()->element(main->track()) != main)
-                  continue;
-            auto measure = main->measure();
-            if (!liveMeasures.contains(measure))
-                  liveMeasures.insert(measure, score->tick2measure(measure->tick()) == measure);
-            if (liveMeasures.value(measure))
-                  result.append(const_cast<Note*>(note));
+      // Undo and temporary notes may outlive their old parents. Start from the
+      // score's live chords, then look up saved values without following those parents.
+      for (auto segment = score->firstSegment(SegmentType::ChordRest); segment;
+           segment = segment->next1(SegmentType::ChordRest)) {
+            for (int track = 0; track < score->ntracks(); ++track) {
+                  const auto element = segment->element(track);
+                  if (!element || !element->isChord())
+                        continue;
+                  const auto chord = toChord(element);
+                  auto chords = chord->graceNotes();
+                  chords.append(chord);
+                  for (auto current : chords)
+                        for (auto note : current->notes())
+                              if (values().contains(note))
+                                    result.append(note);
+                  }
             }
       return result;
       }
