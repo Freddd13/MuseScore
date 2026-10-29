@@ -1,5 +1,7 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "arrangement.h"
+#include "arrangementcontext.h"
+#include "mscore/musescore.h"
 #include "featuregate.h"
 #include "mscore/plugin/api/scoreobserver.h"
 #include "libmscore/chord.h"
@@ -108,8 +110,8 @@ QVariantMap scopeFor(Ms::Score *score, int at, const QVariantMap &request) {
         return {};
     auto m = score->tick2measure(Fraction::fromTicks(start));
     auto n = score->tick2measure(Fraction::fromTicks(end - 1));
-    scope["firstMeasure"] = m->no() + 1;
-    scope["lastMeasure"] = n->no() + 1;
+    scope["firstMeasure"] = arrangementMeasureOrdinal(m);
+    scope["lastMeasure"] = arrangementMeasureOrdinal(n);
     scope["quarterStart"] = quarters(Fraction::fromTicks(start));
     scope["quarterEnd"] = quarters(Fraction::fromTicks(end));
     return scope;
@@ -145,7 +147,7 @@ QVariantMap ScoreObserver::arrangementState(const QVariantMap &request) {
     harmony["freshness"] = harmonic.value("snapshotId") == snapshot ? "current" : "stale";
     if (harmonic.isEmpty())
         harmony = {{"availability", "notProvided"}, {"processing", "notRequested"}};
-    return {{"schemaVersion", "arrangement-context/1"},
+    auto result = QVariantMap{{"schemaVersion", "arrangement-context/1"},
             {"scoreSessionId", analysisScoreId()},
             {"documentId", scoreInfo.value("filePath")},
             {"snapshotId", snapshot},
@@ -158,7 +160,9 @@ QVariantMap ScoreObserver::arrangementState(const QVariantMap &request) {
                                          {"exactQuarterTime", true},
                                          {"localOptions", true},
                                          {"geometry", true},
-                                         {"nativeUndo", true}}},
+                                         {"nativeUndo", true},
+                                         {"contextProfiles", true},
+                                         {"renderedPerformance", true}}},
             {"information", workflowData("arrangement")},
             {"reference", workflowData("reference")},
             {"manualHarmony", workflowData("harmony")},
@@ -167,6 +171,10 @@ QVariantMap ScoreObserver::arrangementState(const QVariantMap &request) {
             {"coverage", QVariantMap{{"notation", "notesRestsAndListedRelations"},
                                      {"audioFeatures", "notRequested"},
                                      {"performance", "availableOnRequest"}}}};
+    const auto details = arrangementSourceDetails(_score, scope);
+    for (auto it=details.cbegin(); it!=details.cend(); ++it) result[it.key()] = it.value();
+    result["playbackRevision"] = analysisPlaybackRevision();
+    return result;
 }
 
 QVariantMap ScoreObserver::arrangementRange(const QVariantMap &request) {
@@ -197,7 +205,7 @@ QVariantMap ScoreObserver::arrangementRange(const QVariantMap &request) {
     const auto fields = request.value("fields").toStringList();
     auto complete = [&](QVariantMap row, Ms::Note *note, int grace = -1) {
         auto chord = note->chord();
-        row["measure"] = chord->measure()->no() + 1;
+        arrangementPitchDetails(row, note);
         row["tuningCents"] = note->tuning();
         row["quarterWrittenDuration"] = quarters(chord->ticks());
         row["quarterTime"] = quarters(chord->tick());
@@ -207,7 +215,7 @@ QVariantMap ScoreObserver::arrangementRange(const QVariantMap &request) {
         row["velocityType"] = int(note->veloType());
         row["velocityRaw"] = note->veloOffset();
         row["playEventType"]=int(chord->playEventType());QVariantList events;for(const auto &event:note->playEvents())events.append(QVariantMap{{"pitch",event.pitch()},{"onTime",event.ontime()},{"length",event.len()}});row["playEvents"]=events;
-        const int base = NoteVelocity::referenceBase(note);
+        const int base = NoteVelocity::referenceBase(note, mscore ? mscore->synthesizerState().method() : 1);
         row["velocityBase"] = base;
         row["velocity"] = NoteVelocity::effective(base, note->veloType(), note->veloOffset());
         row["graceIndex"] = grace;
@@ -218,8 +226,11 @@ QVariantMap ScoreObserver::arrangementRange(const QVariantMap &request) {
             row["tuplet"] = QVariantMap{{"ratio", chord->tuplet()->ratio().toString()},
                                         {"start", chord->tuplet()->tick().ticks()},
                                         {"duration", chord->tuplet()->actualTicks().ticks()}};
-        if (fields.contains("geometry"))
+        if (fields.contains("geometry")) {
             row["location"] = scoreLocation(chord->tick().ticks(), note->track());
+            auto box=[](const QRectF& r) { return QVariantMap{{"x",r.x()},{"y",r.y()},{"width",r.width()},{"height",r.height()}}; };
+            row["geometry"]=QVariantMap{{"canvasRect",box(note->canvasBoundingRect())},{"pageRect",box(note->pageBoundingRect())}};
+        }
         if (note->tieBack())
             relations.append(
                 QVariantMap{{"kind", "tie"},
@@ -236,6 +247,8 @@ QVariantMap ScoreObserver::arrangementRange(const QVariantMap &request) {
     QSet<Ms::Chord *> graceRead;
     for (auto value : page.value("notes").toList()) {
         auto row = value.toMap();
+        // The base reader already lists grace notes; add each grace group once below.
+        if (row.value("grace").toBool()) continue;
         auto note = resolve(row);
         if (!note)
             continue;
@@ -287,6 +300,18 @@ QVariantMap ScoreObserver::arrangementRange(const QVariantMap &request) {
         value = row;
     }
     page["rests"] = rests;
+    auto meters = page.value("meters").toList();
+    for (auto &value : meters) {
+        auto row=value.toMap(); auto measure=_score->tick2measure(Fraction::fromTicks(row.value("tick").toInt()));
+        row["measure"]=arrangementMeasureOrdinal(measure);
+        row["displayMeasureNumber"]=measure->no()+1;
+        row["irregular"]=measure->isIrregular(); value=row;
+    }
+    page["meters"]=meters;
+    if (from==start) {
+        const auto details=arrangementSourceDetails(_score,scope);
+        page["parts"]=details.value("parts"); page["staves"]=details.value("staves");
+    }
     if (from == start) {
         QVariantList tempos;
         tempos.append(QVariantMap{{"tick", start},
@@ -320,7 +345,7 @@ QVariantMap ScoreObserver::arrangementRange(const QVariantMap &request) {
                                                {"start", qMax(start, r->tick)},
                                                {"end", qMin(end, r->tick + r->len())},
                                                {"unfoldedStart", r->utick + qMax(0, start - r->tick)},
-                                               {"seconds", r->utime},
+                                               {"seconds", _score->repeatList().utick2utime(r->utick + qMax(0, start - r->tick))},
                                                {"playbackCount", r->playbackCount}});
         page["occurrences"] = occurrences;
         page["repeatCoverage"] = occurrences.isEmpty() ? "notPrepared" : "prepared";
@@ -358,6 +383,8 @@ QVariantMap ScoreObserver::arrangementRequest(const QString &action, const QVari
         return arrangementRange(request);
     if (action == "arrangementImage")
         return arrangementImage(request);
+    if (action == "arrangementPlaybackPrepare" || action == "arrangementPlaybackPage")
+        return arrangementPlaybackRead(this,_score,action,request);
     return arrangementOperation(this, _score, action, request);
 }
 } // namespace PluginAPI

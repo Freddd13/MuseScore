@@ -641,3 +641,4 @@ D1输入与线条操作	mtest/mscore/performanceeditor/notation_135_tests.inc	no
 0.140	当前谱窗口与MCP连续读取检查	mtest/mscore/pluginhost/identity_140_tests.inc;mcp-musescore/tests/test_identity.py	AI_IDENTITY_140_CHECKS.md
 0.141	AI原生谱图与音符引用	mscore/workflow/arrangementimages.cpp;mtest/mscore/pluginhost/images_141_tests.inc	AI_IMAGES_141_GUIDE.md
 0.142.0	R7-P/R7-F	libmscore/regionalvariants.cpp;libmscore/paste.cpp;libmscore/cmd.cpp;libmscore/edit.cpp;mscore/scoreview.cpp;mscore/workflow/workspaceviews.cpp	分段写法保留共用演奏标记；按实际可见谱面跟随播放	personal-v0.142.0
+0.143.0	E2-C	mscore/workflow/arrangementcontext.cpp;mscore/workflow/arrangementreader.cpp;MCP:src/context/packet.py;MCP:src/context/service.py	按任务组织原生资料、演奏与参考关联	personal-v0.143.0

@@ -278,6 +278,10 @@ class TestPluginHost : public QObject {
       void regionalSharedControls142();
       void visiblePlaybackFollow142();
       void visiblePlaybackAudio142();
+      void context143Notation();
+      void context143Performance();
+      void context143LayoutRefresh();
+      void context143Transport();
       void systemLockIndependentParts138();
       void systemLockMenuRange138();
       void metronomeFontCompatibility() {
@@ -1545,5 +1549,6 @@ class TestPluginHost : public QObject {
 #include "images_141_tests.inc"
 #include "regional_142_tests.inc"
 #include "follow_142_tests.inc"
+#include "context_143_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"
