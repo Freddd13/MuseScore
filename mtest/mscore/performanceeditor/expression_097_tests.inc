@@ -65,9 +65,11 @@ void TestPerformanceEditor::expressionTempoWithRestsAndCurves()
     QVERIFY(observer->copyWorkflowScore(saved,observer->analysisRevision(),true).value("ok").toBool());
     std::unique_ptr<MasterScore> reopened(main->readScore(saved));QVERIFY(reopened);QCOMPARE(ExpressionTempo::read(reopened.get()),ExpressionTempo::read(source));
     for(const auto& event:applied)QVERIFY(qAbs(reopened->tempomap()->tempo(event.first)-event.second.tempo)<.00001);
-    EditData edit;source->undoRedo(true,&edit);QCOMPARE(source->undoStack()->getCurIdx(),initial);QVERIFY(ExpressionTempo::read(source).isEmpty());
+    getAction("undo")->trigger();main->endCmd();QCOMPARE(source->undoStack()->getCurIdx(),initial);QVERIFY(ExpressionTempo::read(source).isEmpty());
     for(const auto& event:original)QVERIFY(qAbs(source->tempomap()->tempo(event.first)-event.second.tempo)<.00001);
-    source->undoRedo(false,&edit);QCOMPARE(source->undoStack()->getCurIdx(),initial+1);QVERIFY(!ExpressionTempo::read(source).isEmpty());
+    QTRY_VERIFY_WITH_TIMEOUT(!root->property("busy").toBool()&&!root->property("stale").toBool()&&!root->property("previewUpdating").toBool()&&!expressionMap080(root,"candidate").value("tempos").toList().isEmpty(),15000);
+    getAction("redo")->trigger();main->endCmd();QCOMPARE(source->undoStack()->getCurIdx(),initial+1);QVERIFY(!ExpressionTempo::read(source).isEmpty());
+    QTRY_VERIFY_WITH_TIMEOUT(!root->property("busy").toBool()&&!root->property("stale").toBool()&&!root->property("previewUpdating").toBool()&&expressionMap080(root,"candidate").value("tempos").toList().isEmpty(),15000);
     QVERIFY(root->window()->grabWindow().save(output.filePath("expression-tempo-used-097.png")));
 }
 
@@ -129,6 +131,7 @@ void TestPerformanceEditor::expressionRecordingAcrossLongRest()
     QVERIFY(QMetaObject::invokeMethod(root,"editConfig",Q_ARG(QVariant,"rubato"),Q_ARG(QVariant,false)));
     QVERIFY(QMetaObject::invokeMethod(root,"chooseTarget",Q_ARG(QVariant,true)));
     QVERIFY(expressionClick080(root,"expressionRecord"));QTRY_VERIFY_WITH_TIMEOUT(!root->property("busy").toBool(),10000);
+    qInfo()<<"151 record read"<<root->property("status")<<root->property("stale")<<root->property("readForCapture")<<root->property("comparisonVisible")<<expressionMap080(root,"scope")<<expressionMap080(root,"info");
     const auto notes=root->property("notes").value<QJSValue>().toVariant().toList();QCOMPARE(notes.size(),16);
     auto capture=qobject_cast<MidiCaptureSession*>(root->property("captureSession").value<QObject*>());QVERIFY(capture);
     QSignalSpy finished(capture,&MidiCaptureSession::finished),failed(capture,&MidiCaptureSession::failed);

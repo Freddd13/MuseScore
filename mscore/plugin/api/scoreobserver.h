@@ -131,6 +131,7 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QString temporaryWorkflowProject();
       Q_INVOKABLE QVariantMap showEditorComparison();
       Q_INVOKABLE QVariantMap showEditorCorrespondence();
+      Q_INVOKABLE void watchExpressionEditorVisibility();
       Q_INVOKABLE QString analysisScoreId() const;
       Q_INVOKABLE QString analysisContentRevision() const;
       Q_INVOKABLE QVariantMap scoreIdentity() const;

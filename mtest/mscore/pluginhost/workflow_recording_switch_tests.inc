@@ -83,6 +83,6 @@ void TestPluginHost::expressionRecordingCloseAndRecover()
     int changed=0;for(auto segment=second->firstSegment(SegmentType::ChordRest);segment;segment=segment->next1(SegmentType::ChordRest))for(int tr=0;tr<second->ntracks();++tr)if(auto e=segment->element(tr))if(e->isChord())for(auto n:toChord(e)->notes())changed+=n->veloType()==Note::ValueType::USER_VAL&&n->veloOffset()==106;
     QCOMPARE(changed,10);getAction("undo")->trigger();main->endCmd();QVERIFY(second->state()==before);QTest::qWait(200);
     qInfo()<<"recording recovery undo"<<root->property("stale")<<root->property("status")<<map("candidate").value("velocity").toList().size();
-    QVERIFY(QMetaObject::invokeMethod(root,"analyze"));QTRY_VERIFY_WITH_TIMEOUT(!root->property("busy").toBool()&&map("candidate").value("velocity").toList().size()==10,15000);
+    QTRY_VERIFY_WITH_TIMEOUT(!root->property("busy").toBool()&&!root->property("stale").toBool()&&map("candidate").value("velocity").toList().size()==10,15000);
     if(software)QVERIFY(root->window()->grabWindow().save(out.filePath("recording150-recovered.png")));
 }

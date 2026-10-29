@@ -110,9 +110,9 @@ void TestPluginHost::continuousWorkflowScoreSwitching()
     auto chord=first->firstSegment(SegmentType::ChordRest);while(chord&&!chord->element(0))chord=chord->next1(SegmentType::ChordRest);QVERIFY(chord);
     Note* changed=nullptr;for(int tr=0;tr<first->ntracks()&&!changed;++tr)if(auto element=chord->element(tr))if(element->isChord())changed=toChord(element)->upNote();QVERIFY(changed);
     first->startCmd();first->undoChangePitch(changed,changed->pitch()+12,changed->tpc1(),changed->tpc2());first->endCmd();
-    main->setCurrentScoreView(main->scores().indexOf(first));QTest::qWait(60);QVERIFY(root->property("stale").toBool());QVERIFY(map("candidate").isEmpty());
+    main->setCurrentScoreView(main->scores().indexOf(first));
     QCOMPARE(map("midi").value("sha256").toString(),firstMidi);QCOMPARE(map("config").value("velocityStrength").toInt(),42);
-    QVERIFY(QMetaObject::invokeMethod(root,"analyze"));QTRY_VERIFY_WITH_TIMEOUT(!root->property("busy").toBool()&&!root->property("stale").toBool()&&!map("candidate").isEmpty(),30000);
+    QTRY_VERIFY_WITH_TIMEOUT(!root->property("busy").toBool()&&!root->property("stale").toBool()&&!map("candidate").isEmpty(),30000);
     // Resume a user-requested project read after leaving and returning to its score.
     QVERIFY(QMetaObject::invokeMethod(root,"save",Q_ARG(QVariant,QUrl::fromLocalFile(workspace).toString())));
     QVERIFY(QMetaObject::invokeMethod(root,"load",Q_ARG(QVariant,QUrl::fromLocalFile(workspace).toString())));

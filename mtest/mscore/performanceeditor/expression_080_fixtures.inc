@@ -42,7 +42,13 @@ static bool expressionClick080(QmlPlugin* root,const char* name)
         point=item->mapToScene(QPointF(item->width()/2,item->height()/2));
     }
     if(!QRectF(0,0,root->width(),root->height()).contains(root->mapFromScene(point))||!QRectF(0,0,item->window()->width(),item->window()->height()).contains(point)){qInfo()<<"expression click outside"<<name<<root->mapFromScene(point)<<QSizeF(root->width(),root->height())<<point<<item->window()->size();return false;}
-    QTest::mouseClick(item->window(),Qt::LeftButton,Qt::NoModifier,point.toPoint());return true;
+    QSignalSpy clicked(item,SIGNAL(clicked()));
+    if(!clicked.isValid())return false;
+    QTest::mouseClick(item->window(),Qt::LeftButton,Qt::NoModifier,point.toPoint());
+    const bool received=QTest::qWaitFor([&]{return !clicked.isEmpty();},1000);
+    if(!received){qInfo()<<"expression missed click"<<name<<"sent"<<point<<"now"<<item->mapToScene(QPointF(item->width()/2,item->height()/2))<<"window"<<item->window()->isVisible()<<item->window()->isExposed()<<"modal"<<QGuiApplication::modalWindow()<<"grab"<<QWidget::mouseGrabber()<<item->window()->mouseGrabberItem();
+        const auto output=QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS"));item->window()->grabWindow().save(output.filePath(QString("missed-")+name+".png"));Ms::mscore->grab().save(output.filePath(QString("missed-main-")+name+".png"));}
+    return received;
 }
 static void expressionShowMain080(MuseScore* main)
 {

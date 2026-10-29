@@ -30,3 +30,5 @@
 完整录制和使用步骤见[演奏表达说明](EXPRESSION_080_GUIDE.md)；人工调整对应见[分别选音并连接](EXPRESSION_096_GUIDE.md)。
 
 录制时切谱和关闭后的找回见[录制后继续处理](EXPRESSION_RECORDING_150_GUIDE.md)。
+
+采用后撤销、重做与继续改谱，见[演奏比较自动更新](EXPRESSION_REFRESH_151_GUIDE.md)。

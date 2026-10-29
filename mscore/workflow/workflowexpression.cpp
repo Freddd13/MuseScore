@@ -15,6 +15,7 @@
 #include "mscore/musescore.h"
 #include "mscore/workflow/featuregate.h"
 #include "mscore/performanceeditor/parameteredit.h"
+#include "mscore/performanceeditor/performanceeditor.h"
 #include "mscore/performanceeditor/performanceselection.h"
 #include "mscore/plugin/api/score.h"
 #include "mscore/plugin/api/scoreobserver.h"
@@ -37,6 +38,9 @@
 #include <QDir>
 #include <QDockWidget>
 #include <QElapsedTimer>
+#include <QEvent>
+#include <QTimer>
+#include <functional>
 #include <QFileInfo>
 #include <QSaveFile>
 #include <QStandardPaths>
@@ -46,6 +50,34 @@
 #include <QUuid>
 #include <cmath>
 namespace Ms { namespace PluginAPI {
+namespace {
+class ExpressionEditorVisibility final : public QObject {
+      std::function<void()> _refresh;
+      bool eventFilter(QObject*,QEvent* event) override {
+            if(event->type()==QEvent::Show||event->type()==QEvent::Hide||event->type()==QEvent::ParentChange)
+                  QTimer::singleShot(0,this,_refresh);
+            return false;
+      }
+public:
+      ExpressionEditorVisibility(QObject* owner,std::function<void()> refresh):QObject(owner),_refresh(std::move(refresh)){}
+};
+}
+void ScoreObserver::watchExpressionEditorVisibility(){
+ if(auto previous=findChild<QObject*>("expressionEditorVisibility",Qt::FindDirectChildrenOnly))delete previous;
+ auto editor=mscore?mscore->findChild<PerformanceEditor*>():nullptr;
+ if(!editor){setAuxiliarySurfaceVisible(false);return;}
+ const auto canvas=QPointer<QWidget>(editor->findChild<QWidget*>("performanceParameterCanvas"));
+ const auto lane=QPointer<QWidget>(editor->findChild<QWidget*>("performanceWorkflowLanes"));
+ const auto toggle=QPointer<QToolButton>(editor->findChild<QToolButton*>("performanceExpressionCompare"));
+ auto refresh=[this,canvas,lane,toggle]{setAuxiliarySurfaceVisible(mscore&&mscore->currentScore()==_score&&((lane&&lane->isVisible())||(canvas&&canvas->isVisible()&&toggle&&toggle->isChecked())));};
+ auto watcher=new ExpressionEditorVisibility(this,refresh);watcher->setObjectName("expressionEditorVisibility");
+ for(auto surface:{static_cast<QWidget*>(editor),canvas.data(),lane.data()})if(surface)surface->installEventFilter(watcher);
+ if(toggle)connect(toggle,&QToolButton::toggled,watcher,refresh);
+ connect(this,&ScoreObserver::scoreChanged,watcher,refresh);
+ connect(workflowContext(),&WorkflowContext::activeScoreChanged,watcher,refresh);
+ connect(editor,&QObject::destroyed,watcher,[this]{setAuxiliarySurfaceVisible(false);});
+ refresh();
+}
 namespace {
 QString localFile(const QString& value){return QUrl(value).isLocalFile()?QUrl(value).toLocalFile():value;}
 QString canonical(const QString& path){return QDir::cleanPath(QFileInfo(path).absoluteFilePath()).toLower();}
@@ -182,7 +214,7 @@ QString ScoreObserver::temporaryWorkflowProject() {
 QVariantMap ScoreObserver::showEditorComparison() {
  if(!mscore||!_score)return {{"error",tr("打开乐谱后可以查看力度对比。")}};
  auto oldDock=mscore->findChild<QDockWidget*>("performanceEditorDock");const bool wasVisible=oldDock&&oldDock->isVisible();
- if(auto action=mscore->findChild<QAction*>("performance-editor"))action->setChecked(true);mscore->showPerformanceEditor(true);
+ if(auto action=mscore->findChild<QAction*>("performance-editor"))action->setChecked(true);mscore->showPerformanceEditor(true);watchExpressionEditorVisibility();
  if(auto button=mscore->findChild<QToolButton*>("performanceExpressionCompare"))button->setChecked(true);
  if(auto parameter=mscore->findChild<QComboBox*>("performanceParameter"))if(parameter->currentIndex()==2)parameter->setCurrentIndex(0);
  if(auto dock=mscore->findChild<QDockWidget*>("performanceEditorDock")){

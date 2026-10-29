@@ -11,14 +11,28 @@ function pending(candidate, progress) {
 }
 function record(progress, applied) {
     var done = copy(progress || {velocity:{}, tempos:{}});
-    (applied.velocity || []).forEach(function(n) { done.velocity[noteKey(n)] = n.oldType===undefined||n.oldRaw===undefined?true:{type:n.oldType,raw:n.oldRaw}; });
+    (applied.velocity || []).forEach(function(n) { done.velocity[noteKey(n)] = n.oldType===undefined||n.oldRaw===undefined?true:{type:n.oldType,raw:n.oldRaw,pitch:n.writtenPitch,tpc:n.writtenTpc}; });
     (applied.tempos || []).forEach(function(n) { done.tempos[n.tick] = n.bpm===undefined?true:{bpm:n.bpm}; });
     return done;
 }
-function reconcile(progress, notes) {
-    var done=copy(progress||{velocity:{},tempos:{}});
-    notes.forEach(function(n){var key=noteKey(n),saved=done.velocity[key];if(saved&&saved!==true&&(saved.type!==n.velocityType||saved.raw!==n.velocityRaw))delete done.velocity[key];var tempo=done.tempos[n.tick];if(tempo&&tempo!==true&&n.bpm!==undefined&&Math.abs(tempo.bpm-n.bpm)>.01)delete done.tempos[n.tick];});
+function reconcile(progress, notes, context) {
+    var records=progress||{},done={velocity:{},tempos:{}};
+    notes.forEach(function(n){var key=noteKey(n),saved=(records.velocity||{})[key];
+        if(saved&&(saved===true||saved.type===n.velocityType&&saved.raw===n.velocityRaw&&(saved.pitch===undefined||saved.pitch===n.writtenPitch)&&(saved.tpc===undefined||saved.tpc===n.writtenTpc)))done.velocity[key]=copy(saved);
+    });
+    var points=context&&context.points?context.points:notes.filter(function(n){return n.bpm!==undefined}).map(function(n){return {tick:n.tick,bpm:n.bpm}});
+    points=points.slice().sort(function(a,b){return a.tick-b.tick});
+    Object.keys(records.tempos||{}).forEach(function(key){var saved=records.tempos[key],tick=Number(key),low=0,high=points.length;
+        while(low<high){var mid=(low+high)>>1;if(points[mid].tick<=tick)low=mid+1;else high=mid;}
+        if(low&&(saved===true||Math.abs(saved.bpm-points[low-1].bpm)<.01))done.tempos[key]=copy(saved);
+    });
     return done;
+}
+function sameNotation(before, after) {
+    if(before.length!==after.length)return false;
+    var originals={},fields=["id","pitch","writtenPitch","writtenTpc","end","duration","logicalId","logicalEnd","tieBack","tieForward"];
+    before.forEach(function(n){originals[noteKey(n)]=n});
+    return after.every(function(n){var previous=originals[noteKey(n)];return previous&&fields.every(function(field){return previous[field]===n[field]})});
 }
 function inRange(note, range) {
     return note.tick >= range.start && note.tick < range.end && note.track >= range.firstTrack && note.track < range.endTrack;
