@@ -60,6 +60,8 @@ class Options final : public QObject {
     QMap<QString, QVariantMap> operations;
     QMap<QString, QByteArray> operationInputs;
     QStringList operationOrder;
+    QString adoptionText;
+    QSet<QString> adopted;
     explicit Options(Score *score) : QObject(score) { setObjectName("kumoArrangementOptions"); }
 };
 Options *store(Score *score) {
@@ -881,6 +883,18 @@ QVariantMap summary(const Option &option) {
             {"preparationMilliseconds", option.preparation},
             {"used", option.used}};
 }
+QSet<QString> adoptedOptions(Score *score) {
+    auto cache=store(score);
+    if(!cache)return {};
+    const auto text=score->masterScore()->metaTag("kumo.arrangement");
+    if(text.constData()!=cache->adoptionText.constData()&&text!=cache->adoptionText) {
+        cache->adoptionText=text;
+        cache->adopted.clear();
+        const auto saved=QJsonDocument::fromJson(text.toUtf8()).object().toVariantMap();
+        for(const auto &value:saved.value("adoptions").toList())cache->adopted.insert(value.toMap().value("id").toString());
+    }
+    return cache->adopted;
+}
 } // namespace
 
 QString rollNotationIdentity(Score* score,const QVariantMap& scope){return score?QString::fromLatin1(digest(score,scope).toHex()):QString();}
@@ -898,9 +912,12 @@ QVariantMap applyRollNotation(PluginAPI::ScoreObserver* observer,Score* score,co
 
 QVariantMap arrangementSuggestions(Score *score) {
     QVariantList items;
+    const auto adopted=adoptedOptions(score);
     if (auto values = store(score))
-        for (const auto &option : values->choices)
+        for (auto &option : values->choices) {
+            option.used=adopted.contains(option.id);
             items.append(summary(option));
+        }
     return {{"options", items}};
 }
 QVariantMap arrangementOperation(PluginAPI::ScoreObserver *observer, Score *score, const QString &action,
@@ -1046,6 +1063,7 @@ QVariantMap arrangementOperation(PluginAPI::ScoreObserver *observer, Score *scor
             }
             for (auto &option : values->choices)
                 if (option.id == id) {
+                    option.used=adoptedOptions(score).contains(option.id);
                     if (option.used)
                         return error(QObject::tr("这版已经采用，可以在乐谱中继续编辑，或按Ctrl+Z撤销。"));
                     if (option.snapshot != observer->analysisContentRevision())

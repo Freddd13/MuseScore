@@ -282,6 +282,7 @@ class TestPluginHost : public QObject {
       void context143Performance();
       void context143LayoutRefresh();
       void context143Transport();
+      void aiSuggestionState144();
       void systemLockIndependentParts138();
       void systemLockMenuRange138();
       void metronomeFontCompatibility() {
@@ -1550,5 +1551,6 @@ class TestPluginHost : public QObject {
 #include "regional_142_tests.inc"
 #include "follow_142_tests.inc"
 #include "context_143_tests.inc"
+#include "ai_workflow_144_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

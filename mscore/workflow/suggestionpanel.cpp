@@ -12,6 +12,9 @@
 #include "mscore/plugin/api/score.h"
 #include "mscore/plugin/api/scoreobserver.h"
 #include "mscore/shortcut.h"
+#include "mscore/plugin/qmlpluginengine.h"
+#include "libmscore/measure.h"
+#include "libmscore/repeatlist.h"
 #include <QAction>
 #include <QDockWidget>
 #include <QLabel>
@@ -45,6 +48,8 @@ class SuggestionPanel : public QWidget {
     QLabel *_status;
     QString _selected;
     QPushButton *_showDifferences = nullptr;
+    QPushButton *_cancelLocal = nullptr;
+    QString _seenRevision;
     QVariantList _items;
     LocalSuggestionTask _local;
     QVariantMap _localSettings;
@@ -80,8 +85,13 @@ class SuggestionPanel : public QWidget {
             && option.value("localSettings").toMap()==inputSettings()
             && score() && option.value("pianoSettings").toMap()==score()->property("kumoPianoSettings").toMap();
     }
+    bool sourceCurrent(const QVariantMap& option) {
+        return !option.isEmpty() && attach()
+            && option.value("snapshotId").toString() == _observer.analysisContentRevision();
+    }
     void updateButtons() {
-        const auto option=selected();const bool ready=!_local.running()&&!option.isEmpty()&&!option.value("used").toBool()&&matchesInputs(option);
+        const auto option=selected();const bool ready=!_local.running()&&!option.isEmpty()&&!option.value("used").toBool()&&matchesInputs(option)&&sourceCurrent(option);
+        if(_cancelLocal)_cancelLocal->setEnabled(_local.running());
         for(auto button:findChildren<QPushButton*>())if(button->objectName().startsWith("arrangement-"))
             button->setEnabled(button->objectName()=="arrangement-stop"?!option.isEmpty():ready);
     }
@@ -92,7 +102,7 @@ class SuggestionPanel : public QWidget {
     void updateDifference() {
         if (!mscore || !mscore->currentScoreView()) return;
         const auto option = selected();
-        if (isVisible() && !_local.running() && _showDifferences && _showDifferences->isChecked() && !option.isEmpty() && !option.value("used").toBool() && matchesInputs(option))
+        if (isVisible() && !_local.running() && _showDifferences && _showDifferences->isChecked() && !option.isEmpty() && !option.value("used").toBool() && matchesInputs(option) && sourceCurrent(option))
             operate("preview");
         else
             showRegionalDifference(mscore->currentScoreView(), nullptr, {});
@@ -100,10 +110,11 @@ class SuggestionPanel : public QWidget {
     void details() {
         auto option = selected();
         auto scope = option.value("scope").toMap();
+        const auto first=scope.value("firstMeasure").toInt(),last=scope.value("lastMeasure").toInt();
+        const auto measures=first==last?QString::number(first):tr("%1–%2").arg(first).arg(last);
         _scope->setText(option.isEmpty() ? tr("在乐谱中选几小节，选择要比较的内容，再点“分析选段”。Codex 发来的写法也列在这里。")
-                                         : tr("第%1–%2小节 · %3处变化")
-                                               .arg(scope.value("firstMeasure").toInt())
-                                               .arg(scope.value("lastMeasure").toInt())
+                                         : tr("第%1小节 · %2处变化")
+                                               .arg(measures)
                                                .arg(option.value("differences").toList().size()));
         _explanation->setPlainText(option.value("summary").toString());
         _changes->clear();
@@ -152,6 +163,8 @@ class SuggestionPanel : public QWidget {
                              ? tr("已采用这版 · Ctrl+Z撤销 · Ctrl+S保存")
                              : tr("已选写法的变化显示在谱上；点列表中的位置查看相关音。"));
         if(!option.isEmpty()&&!option.value("used").toBool()&&!matchesInputs(option))_status->setText(tr("设置已改变，点“分析选段”更新建议。"));
+        if(!option.isEmpty()&&!option.value("used").toBool()&&!sourceCurrent(option))
+            _status->setText(tr("谱子有修改。请让Codex更新这段写法，或点“分析选段”重新计算。"));
     }
     void operate(const QString &action) {
         if (!attach() || _selected.isEmpty())
@@ -167,8 +180,13 @@ class SuggestionPanel : public QWidget {
             _status->setText(result.value("error").toString());
         else if (action == "preview")
             _status->setText(tr("已在谱上显示%1处变化；点列表中的位置查看相关音。").arg(result.value("differences").toList().size()));
-        else if (action == "audition" || action == "original")
-            _status->setText(action == "audition" ? tr("正在听：新写法") : tr("正在听：谱中写法"));
+        else if (action == "audition" || action == "original") {
+            auto from=score()->tick2measure(Fraction::fromTicks(score()->masterScore()->repeatList().utick2tick(result.value("fromUtick").toInt())));
+            const auto label=action=="audition"?tr("新写法"):tr("谱中写法");
+            _status->setText(from ? tr("正在听：%1 · 从第%2小节开始%3").arg(label).arg(from->no()+1)
+                .arg(from->tick().ticks()<selected().value("scope").toMap().value("start").toInt()?tr("（含进入这段的前文）"):QString())
+                : tr("正在听：%1").arg(label));
+        }
         else if (action == "variant")
             _status->setText(tr("已保存另一种写法，可在“分段试写”切换。Ctrl+S保存乐谱。"));
         else if (action == "apply")
@@ -196,7 +214,8 @@ class SuggestionPanel : public QWidget {
         setComponentToolIcon(generate,"refresh");
         generate->setObjectName("localSuggestionStart");
         analysis->addWidget(generate);
-        auto cancel = new QPushButton(tr("取消"));
+        auto cancel = _cancelLocal = new QPushButton(tr("取消"));
+        cancel->setObjectName("localSuggestionCancel");
         setComponentToolIcon(cancel,"stop");
         analysis->addWidget(cancel);
         auto settings = new QPushButton(tr("参数…"));
@@ -226,6 +245,7 @@ class SuggestionPanel : public QWidget {
         });
         connect(cancel, &QPushButton::clicked, this, [this] {
             _local.cancel();
+            updateButtons();
             _status->setText(tr("已取消，可以重新选段。"));
         });
         connect(&_local, &LocalSuggestionTask::progress, this,
@@ -368,17 +388,22 @@ class SuggestionPanel : public QWidget {
             _local.cancel();
             refresh();
         });
+        if(mscore)connect(mscore->getPluginEngine(),&QmlPluginEngine::endCmd,this,[this]{
+            if(isVisible()&&!_local.running()&&!_items.isEmpty()&&attach()
+                &&_seenRevision!=_observer.analysisContentRevision())refresh();
+        });
         refresh();
     }
     void refresh() {
         _items = arrangementSuggestions(score()).value("options").toList();
+        _seenRevision=attach()?_observer.analysisContentRevision():QString();
         QSignalBlocker block(_choices);
         _choices->clear();
         for (auto v : _items) {
             auto row = v.toMap();
             auto item =
                 new QTreeWidgetItem(_choices, {row.value("title").toString(),
-                                               row.value("used").toBool() ? tr("已采用") : tr("可比较")});
+                                               row.value("used").toBool() ? tr("已采用") : sourceCurrent(row) ? tr("可比较") : tr("谱子已修改")});
             item->setData(0, Qt::UserRole, row["id"]);
             item->setToolTip(0,row.value("title").toString());
             if (row["id"] == _selected)
