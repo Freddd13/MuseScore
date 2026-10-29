@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "featuregate.h"
+#include "mscore/preferences.h"
 #include <QAction>
 #include <QApplication>
 #include <QDir>
@@ -86,7 +87,19 @@ bool retiredPersonalPlugin(const QString &path) {
       "PerformanceExpression_MS3.qml", "PerformanceExpression.view.qml",
       "ReferencePlayer_MS3.qml",       "ReferencePlayer.view.qml",
       "musescore-mcp-websocket.qml"};
-  return names.contains(QFileInfo(path).fileName());
+  if (!names.contains(QFileInfo(path).fileName()))
+    return false;
+  // Retire only the copies shipped with this program. A plugin in the user's
+  // own folder may have the same filename and must remain available.
+  const QFileInfo root(QDir(mscoreGlobalShare).filePath("plugins"));
+  const QFileInfo file(path);
+  const QString rootPath = root.canonicalFilePath().isEmpty()
+                               ? root.absoluteFilePath() : root.canonicalFilePath();
+  const QString filePath = file.canonicalFilePath().isEmpty()
+                               ? file.absoluteFilePath() : file.canonicalFilePath();
+  const QString relative = QDir(rootPath).relativeFilePath(filePath);
+  return !QDir::isAbsolutePath(relative) && relative != ".." &&
+         !relative.startsWith("../");
 }
 void markPersonalAction(QAction *action) {
   if (!action)

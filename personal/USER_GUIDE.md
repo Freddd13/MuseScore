@@ -1,11 +1,12 @@
 # MuseScore Evolution 个人功能说明
 
-当前版本：**0.144.0 · Kumo branch / Freddd13**。
+当前版本：**0.145.0 · Kumo branch / Freddd13**。
 
 先按下面的任务找到入口。每章有完整操作例子、按钮说明、保存和撤销方法。“帮助 → 个人功能说明”可以在软件里直接阅读。
 
 | 想完成的事 | 从哪里开始 |
 |---|---|
+| 关闭个人工具、保留插件或制作分享程序 | [开关、插件与分享程序](docs/SHARING_145_GUIDE.md) |
 | 让AI比较两种写法，试听、采用和撤销 | [AI编配的完整操作](docs/AI_WORKFLOW_144_GUIDE.md) |
 | 让AI继续同一选段，查看原生演奏及相关参考资料 | [AI读谱与继续编配任务](docs/AI_TASK_143_GUIDE.md) |
 | 播放跟随可见谱面、切换写法保留踏板 | [播放跟随与写法中的踏板](docs/FOLLOW_VARIANTS_142_GUIDE.md) |

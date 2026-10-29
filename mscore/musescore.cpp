@@ -9683,7 +9683,10 @@ void MuseScore::scoreUnrolled(MasterScore * original)
 namespace Ms {
 void MuseScore::showPerformanceEditor(bool visible)
       {
-      if (visible && !personalFeaturesEnabled()) return;
+      if (!personalFeaturesEnabled()) {
+            if (_performanceDock) _performanceDock->hide();
+            return;
+            }
       const QSize windowBeforeEditor=size();
       const bool opening=visible && (!_performanceDock || !_performanceDock->isVisible());
       if (!_performanceEditor) {

@@ -276,6 +276,10 @@ class TestPluginHost : public QObject {
       void nativeScoreImageNotation141();
       void regionalPedalsSurvive142();
       void regionalSharedControls142();
+      void userPluginReload145();
+      void sharePrepare145();
+      void shareDisabledRoundTrip145();
+      void shareEnabledRestore145();
       void visiblePlaybackFollow142();
       void visiblePlaybackAudio142();
       void context143Notation();
@@ -1550,6 +1554,7 @@ class TestPluginHost : public QObject {
 #include "images_141_tests.inc"
 #include "regional_142_tests.inc"
 #include "follow_142_tests.inc"
+#include "sharing_145_tests.inc"
 #include "context_143_tests.inc"
 #include "ai_workflow_144_tests.inc"
 QTEST_MAIN(TestPluginHost)

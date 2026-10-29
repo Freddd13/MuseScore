@@ -1,6 +1,6 @@
 # AI 连接与个人扩展开关
 
-0.133起可单独开启、停止AI读谱，设置Codex启动并管理MCP进程，完整操作见[连接管理](AI_CONNECTION_133_GUIDE.md)。
+当前操作适用于0.145及之后版本。AI连接、工具开关和分享设置都可从本页找到；开关和进程的完整操作见[连接管理](AI_CONNECTION_133_GUIDE.md)。
 
 ## 第一次连接 Codex
 
@@ -12,13 +12,15 @@
 
 ![AI 连接窗口](images/ai-connection-063.png)
 
-这个版本已经附带 MCP 程序和所需运行文件。连接时直接运行程序包中的 `bin/tools/mcp/MuseScoreMCP.exe`。
+程序包已附带MCP及运行文件。点“配置Codex”会使用`bin/tools/mcp`下当前版本目录里的`MuseScoreMCP.exe`；`current.json`记录当前目录。用户电脑可直接运行随包程序。移动程序目录后，再点一次“配置Codex”更新路径。
 
 ## Codex现在怎样看乐谱
 
 选段读取使用MuseScore当前内存中的音符，能包含尚未保存的修改、声部、延音、力度、踏板和反复位置。可以直接说：“读取当前选段的完整数据，再告诉我具体小节和声部。”
 
-当前`show_score`显示的是根据音符数据重新排版的画面；`get_score`还会生成LilyPond文本。标题查询采用作品信息里的标题，与谱面可编辑文字可能不同。原生选段图、标题区分和统一读取已经列入[后续AI安排](AI_WORKFLOW_REVIEW_20261024.md)，并在E阶段一起检查。
+可以接着说：“读取当前谱的身份和任务范围，取这几小节的原生谱图，与音符数据一起分析。”`get_score_identity`返回谱面标题、作品信息、文件名和分谱名；`get_score_image`裁取MuseScore已经排好的谱面，图中保留当前字体、连线和跨谱表写法。读图的完整例子见[原生谱图](AI_IMAGES_141_GUIDE.md)。
+
+旧工具`show_score`提供按音符数据画出的示意图，`get_score`保留音符文本入口。编配任务使用`read_arrangement_context`读取完整声部，继续讨论时沿用任务范围；新工具没有出现在Codex中时，重新连接MuseScore这一项。具体步骤见[AI编配完整操作](AI_WORKFLOW_144_GUIDE.md)。
 
 ## 连接窗口的按钮
 
@@ -34,7 +36,7 @@
 
 ## 怎样查看和采用建议
 
-在“编配建议”中选一项，查看变化位置，用“试听谱中”和“试听新写法”比较，点“使用这版”采用。一次采用可用一次 Ctrl+Z 撤销；Ctrl+S 保存采用后的乐谱与记录。完整步骤见[编配建议](P2_CONTEXT_060_GUIDE.md)。
+在“编配建议”中选一项，谱面显示变化位置。用“试听谱中”和“试听新写法”比较，点“使用这版”采用；一次Ctrl+Z可撤销，Ctrl+S保存乐谱和采用记录。修改过相关乐谱后，面板会提示“谱子已修改”，请让Codex更新读取并重新给出写法。完整例子见[比较两种左手写法](AI_WORKFLOW_144_GUIDE.md)。
 
 ## 连接未完成时
 
@@ -57,6 +59,10 @@ enable_exp_feature=true
 
 新装默认 true；升级保留你已有的值。配置文件缺失或内容无法读取时关闭扩展。谱中已经写入的音符和资料继续保存。
 
-## 当前 0.62.0 的旧连接方法
+关闭后，普通乐谱仍能打开、播放和保存。原曲路径与关联、人工和弦、分段A/B写法及音源设置保留在文件中，重新开启后可继续使用。分享文件夹的制作和保存往返检查见[开关、插件与分享](SHARING_145_GUIDE.md)。
+
+插件管理器会收起本程序自带、已由内置功能接替的旧入口。用户自己添加的插件保留；重载后继续使用原来的勾选和快捷键。
+
+## 使用0.62的旧程序时
 
 旧版需要将 MCP 仓库中的 `musescore-mcp-websocket.qml` 复制到程序 plugins/MuseScoreMCP 文件夹，重开软件，在插件管理器勾选它，再运行“插件 → MuseScore API Server”。本机完整路径和旧 Python 命令见[MCP 仓库配置说明](https://github.com/Freddd13/mcp-musescore/blob/codex/musescore-evolution/docs/CODEX_SETUP.md)。新版按本页开头操作即可。
