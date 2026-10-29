@@ -248,8 +248,23 @@ bool SlurSegment::computeFreeBezier(QPointF thickness)
             QVector<QRectF> obstacles,phraseGuides;QSet<Beam*> beams;
             const double padding=qMax(.2*sp,score()->styleP(Sid::slurMinDistance));
             auto ss=slur()->startSegment();auto es=slur()->endSegment();
-            const int firstStaff=qMax(0,qMin(staffIdx(),qMin(startChord?startChord->vStaffIdx():staffIdx(),endChord?endChord->vStaffIdx():staffIdx())));
-            const int lastStaff=qMin(score()->nstaves()-1,qMax(staffIdx(),qMax(startChord?startChord->vStaffIdx():staffIdx(),endChord?endChord->vStaffIdx():staffIdx())));
+            int firstStaff=qMax(0,qMin(staffIdx(),qMin(startChord?startChord->vStaffIdx():staffIdx(),endChord?endChord->vStaffIdx():staffIdx())));
+            int lastStaff=qMin(score()->nstaves()-1,qMax(staffIdx(),qMax(startChord?startChord->vStaffIdx():staffIdx(),endChord?endChord->vStaffIdx():staffIdx())));
+            // The phrase can visit another staff and return before its endpoint.
+            // Include those displayed staves before collecting note/stem shapes.
+            for(auto segment=system()->firstMeasure()->first();segment;segment=segment->next1()) {
+                  if(segment->measure()->system()!=system() || segment->tick().ticks()>last)break;
+                  if(!segment->enabled() || segment->tick().ticks()<first || segment->segmentType()!=SegmentType::ChordRest)continue;
+                  for(int track:{slur()->track(),slur()->track2()}) {
+                        auto element=segment->element(track);if(!element || !element->isChord())continue;
+                        auto include=[&](Chord* chord) {
+                              firstStaff=qMin(firstStaff,qMax(0,chord->vStaffIdx()));
+                              lastStaff=qMax(lastStaff,qMin(score()->nstaves()-1,chord->vStaffIdx()));
+                              };
+                        auto chord=toChord(element);include(chord);
+                        for(auto grace:chord->graceNotes())include(grace);
+                        }
+                  }
             // Shapes use the same local staff coordinates as native slur placement.
             for(auto segment=system()->firstMeasure()->first();segment;segment=segment->next1()) {
                   if(segment->measure()->system()!=system()) break;

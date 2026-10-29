@@ -90,9 +90,9 @@ Evaluation evaluate(const QVector<CurvePoint>& points,const ObstacleIndex& obsta
             }
       result.collisions=collided.size();return result;
       }
-bool bounded(const QVector<CurvePoint>& candidate,const QVector<CurvePoint>& original,double sp)
+bool bounded(const QVector<CurvePoint>& candidate,const QVector<CurvePoint>& original,double sp,double detourSpaces=6.)
       {
-      for(int i=0;i<=128;++i)if(std::abs(at(candidate,i/128.0).p.y()-at(original,i/128.0).p.y())>6*sp+.001)return false;
+      for(int i=0;i<=128;++i)if(std::abs(at(candidate,i/128.0).p.y()-at(original,i/128.0).p.y())>detourSpaces*sp+.001)return false;
       return true;
       }
 bool better(const Evaluation& a,const Evaluation& b)
@@ -199,8 +199,23 @@ AvoidanceResult avoid(const QVector<CurvePoint>& original,const QVector<QRectF>&
       if(routes.isEmpty()){if(automatic)result=autoAvoid(original,obstacles,up,sp);return finish();}
       const ObstacleIndex index(obstacles);auto best=routedEvaluation(original,index,up,sp,routes,guideShapes);
       if(!automatic&&!best.wrong&&!best.geometry.collisions)return finish();
-      const auto smooth=smoothRouting(original,obstacles,guideShapes,routes,sp,automatic);
-      if(!smooth.points.isEmpty() && bounded(smooth.points,original,sp)) {
+      // Cross-staff phrases can need more than six spaces to reach the chosen
+      // side of their notes. Use the actual phrase, while keeping ordinary
+      // collision-only slurs at their existing displacement bound.
+      double detourSpaces=6.;
+      for(const auto& rect:guideShapes) {
+            const double x=rect.center().x();
+            if(x<=original.front().p.x() || x>=original.back().p.x())continue;
+            double a=0,b=1;
+            for(int step=0;step<14;++step) {const double mid=(a+b)/2;if(at(original,mid).p.x()<x)a=mid;else b=mid;}
+            const double t=(a+b)/2,y=at(original,t).p.y();
+            for(const auto& route:routes)if(t>=route.from && (t<route.until || route.until==1)) {
+                  const double needed=(route.direction<0?y-rect.top():rect.bottom()-y)/sp+.5;
+                  detourSpaces=qMin(24.,qMax(detourSpaces,needed));break;
+                  }
+            }
+      const auto smooth=smoothRouting(original,obstacles,guideShapes,routes,sp,automatic,detourSpaces);
+      if(!smooth.points.isEmpty() && bounded(smooth.points,original,sp,detourSpaces)) {
             const auto score=routedEvaluation(smooth.points,index,up,sp,routes,guideShapes);++result.candidates;
             if(betterRouted(score,best)){best=score;result.points=smooth.points;result.limited=smooth.limited;}
             if(!best.wrong&&!best.geometry.collisions)return finish();

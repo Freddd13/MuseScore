@@ -20,9 +20,9 @@ inline std::vector<InspectorItem> envelopeInspectorControls(QWidget* host, Inspe
       auto layout=new QGridLayout(panel);
       auto mode=new QComboBox(panel); mode->setObjectName("envelopeMode");
       mode->addItems({QObject::tr("原样"),QObject::tr("柔和"),QObject::tr("渐强"),QObject::tr("渐弱"),QObject::tr("自定义")});
-      layout->addWidget(new QLabel(QObject::tr("发声力度包络"),panel),0,0); layout->addWidget(mode,0,1);
+      layout->addWidget(new QLabel(QObject::tr("逐次力度"),panel),0,0); layout->addWidget(mode,0,1);
       auto reset=new QToolButton(panel); reset->setObjectName("envelopePresetReset"); reset->setText(QString::fromUtf8("↺"));
-      reset->setToolTip(QObject::tr("重新应用所选包络预设；一次撤销。")); layout->addWidget(reset,0,2);
+      reset->setToolTip(QObject::tr("重新应用当前力度预设；Ctrl+Z可撤销。")); layout->addWidget(reset,0,2);
       auto apply=[inspector,mode] {
             auto editor=mscore->performanceEditor(); QSet<Element*> owners;
             for(auto element:*inspector->el()) owners.insert(envelopeInspectorOwner(element));
@@ -34,7 +34,7 @@ inline std::vector<InspectorItem> envelopeInspectorControls(QWidget* host, Inspe
             };
       QObject::connect(mode,QOverload<int>::of(&QComboBox::currentIndexChanged),panel,[apply](int){apply();});
       QObject::connect(reset,&QToolButton::clicked,panel,apply);
-      auto hint=new QLabel(QObject::tr("倍率作用于音符最终力度，绝对力度也参与。柔和模式：起始／后续；其他模式：起始／结束。交替差值为百分点，正值减弱。自定义播放事件保留原值。"),panel);
+      auto hint=new QLabel(QObject::tr("100%采用这个音的当前力度，80%会轻一些。“柔和”调整第一下和后续音；“渐强／渐弱”调整开始和结束。交替音减弱10表示每隔一下再减10个百分点。"),panel);
       hint->setWordWrap(true); layout->addWidget(hint,1,0,1,3);
       return {
             scrubProperty(panel,QObject::tr("起始倍率"),Pid::ENVELOPE_START,1,400,1," %"),

@@ -42,7 +42,7 @@ QVector<CurvePoint> fit(const QVector<Sample>& samples, const QVector<int>& chos
 
 RoutingCandidate smoothRouting(const QVector<CurvePoint>& original, const QVector<QRectF>& obstacles,
                                 const QVector<QRectF>& guides, const QVector<Route>& routes,
-                                double sp, bool automatic)
+                                double sp, bool automatic, double detourSpaces)
       {
       RoutingCandidate result;
       if(original.size()<2 || routes.isEmpty() || sp<=0)return result;
@@ -58,7 +58,7 @@ RoutingCandidate smoothRouting(const QVector<CurvePoint>& original, const QVecto
       QVector<Sample> samples;
       for(double t:times) {
             const auto point=curvePoint(original,t);
-            Sample sample{t,point.p.x(),point.p.y()/sp,point.p.y()/sp,point.p.y()/sp-5.9,point.p.y()/sp+5.9};
+            Sample sample{t,point.p.x(),point.p.y()/sp,point.p.y()/sp,point.p.y()/sp-detourSpaces+.1,point.p.y()/sp+detourSpaces-.1};
             for(int i=0;i<original.size();++i)if(original[i].t==t) {
                   sample.original=i;
                   sample.fixed=original[i].locked || i==0 || i==original.size()-1;
@@ -84,6 +84,10 @@ RoutingCandidate smoothRouting(const QVector<CurvePoint>& original, const QVecto
             };
       auto constrain=[&](Sample& sample,const QRectF& rect,int direction,bool mayReverse) {
             const double limit=(direction<0?rect.top()-.08*sp:rect.bottom()+.08*sp)/sp;
+            if(sample.fixed) {
+                  if(direction<0?sample.reference>limit:sample.reference<limit)result.limited=true;
+                  return true;
+                  }
             if(direction<0 && limit>=sample.low) {sample.high=qMin(sample.high,limit);return true;}
             if(direction>0 && limit<=sample.high) {sample.low=qMax(sample.low,limit);return true;}
             if(mayReverse) {
@@ -97,14 +101,14 @@ RoutingCandidate smoothRouting(const QVector<CurvePoint>& original, const QVecto
             const int direction=routeAtX(rect.center().x());if(!direction)continue;
             for(auto& sample:samples) {
                   if(sample.x<rect.left()-horizontalPad || sample.x>rect.right()+horizontalPad)continue;
-                  if(!constrain(sample,rect,direction,false)) {result.limited=true;return result;}
+                  if(!constrain(sample,rect,direction,false)) result.limited=true;
                   }
             }
       if(automatic)for(const auto& rect:obstacles)for(auto& sample:samples) {
             if(sample.x<rect.left()-horizontalPad || sample.x>rect.right()+horizontalPad)continue;
             const double y=sample.reference*sp;
             if(y<rect.top() || y>rect.bottom())continue;
-            if(!constrain(sample,rect,y<rect.center().y()?-1:1,true)) {result.limited=true;return result;}
+            if(!constrain(sample,rect,y<rect.center().y()?-1:1,true)) result.limited=true;
             }
       for(auto& sample:samples) {
             if(sample.fixed) {

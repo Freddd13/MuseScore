@@ -1045,6 +1045,10 @@ class TestPerformanceEditor : public QObject, public MTest {
       void freeSlurRoutedPersistenceAndControls();
       void handSymbolPlacementExamples();
       void notationPaletteMigration();
+      void notationInspectorSavedValues137();
+      void freeSlurWideStaffRouting();
+      void freeSlurDenseSystemsRoundTrip();
+      void freeSlurInteriorStaffDense();
       void freeSlurModelAndReflow();
       void freeSlurAutomaticGeometry();
       void freeSlurBeamAvoidance();
@@ -1240,6 +1244,7 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "midi_repeat_134_tests.inc"
 #include "notation_135_tests.inc"
 #include "hands_136_tests.inc"
+#include "notation_137_tests.inc"
 #include "writing_087_tests.inc"
 #include "writing_103_tests.inc"
 #include "writing_104_tests.inc"

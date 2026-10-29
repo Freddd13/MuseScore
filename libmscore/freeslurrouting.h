@@ -8,5 +8,5 @@ struct RoutingCandidate {
       };
 RoutingCandidate smoothRouting(const QVector<CurvePoint>&, const QVector<QRectF>&,
                               const QVector<QRectF>&, const QVector<Route>&,
-                              double spatium, bool automatic);
+                              double spatium, bool automatic, double detourSpaces = 6.);
 } }

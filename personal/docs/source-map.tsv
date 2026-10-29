@@ -628,3 +628,7 @@ D1输入与线条操作	mtest/mscore/performanceeditor/notation_135_tests.inc	no
 分手形状复位	mscore/inspector/inspector.cpp	InspectorHandSymbol	1445	个人默认长度与基础形状分别恢复	handBasicReset136
 分手排版接线	libmscore/layout.cpp	Score::layoutSystemElements	4469	符杠完成后更新当前谱行的分手记号	handPlacementRange136
 零尺寸图标	mscore/miconengine.cpp	MIconEngine::pixmap	192	空尺寸请求直接返回，正常SVG继续绘制	iconEmptySize136
+乐句中途跨谱表	libmscore/freeslur.cpp	SlurSegment::computeFreeBezier	255	依据完整乐句的显示谱表收集音头、符干与符杠	freeSlurInteriorStaffDense
+跨谱表绕行距离	libmscore/freesluravoidance.cpp	FreeSlur::avoid	211	按实际乐句安排较大绕行，保留普通曲线原范围	freeSlurWideStaffRouting
+密集路线平滑	libmscore/freeslurrouting.cpp	FreeSlur::smoothRouting	45	保留固定点，局部受限时继续比较平滑路线	freeSlurDenseSystemsRoundTrip
+演奏记号保存	mtest/mscore/performanceeditor/notation_137_tests.inc	notationInspectorSavedValues137	166	五类检视器真实操作、撤销、保存重开与MIDI比较	notationInspectorSavedValues137
