@@ -1406,6 +1406,7 @@ void MuseScore::populatePlaybackControls()
                         }
                   }
             }
+      addVisibleScoreFollow(transportTools);
       }
 
 //---------------------------------------------------------

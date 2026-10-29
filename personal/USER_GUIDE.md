@@ -1,11 +1,12 @@
 # MuseScore Evolution 个人功能说明
 
-当前版本：**0.141.0 · Kumo branch / Freddd13**。
+当前版本：**0.142.0 · Kumo branch / Freddd13**。
 
 先按下面的任务找到入口。每章有完整操作例子、按钮说明、保存和撤销方法。“帮助 → 个人功能说明”可以在软件里直接阅读。
 
 | 想完成的事 | 从哪里开始 |
 |---|---|
+| 播放跟随可见谱面、切换写法保留踏板 | [播放跟随与写法中的踏板](docs/FOLLOW_VARIANTS_142_GUIDE.md) |
 | 让Codex对照MuseScore原生谱图读谱 | [读取谱图、比较和采用](docs/AI_IMAGES_141_GUIDE.md) |
 | 确认Codex正在读哪份谱、哪个标题 | [当前谱与连接窗口](docs/AI_IDENTITY_140_GUIDE.md) |
 | Esc取消选择、Home回开头、踏板方式和频谱试音 | [按键、踏板与频谱操作](docs/INTERACTION_139_GUIDE.md) |
@@ -693,3 +694,8 @@ AI连接显示当前窗口的谱面标题、文件和总谱／分谱；Codex读�
 ### 0.141.0
 
 AI可按已读选段取得MuseScore原生谱图，图片与音符引用共用读取版本；增加MCP重做。操作见[读取谱图、比较和采用](docs/AI_IMAGES_141_GUIDE.md)，提交定位personal-v0.141.0。
+
+
+### 0.142.0
+
+顶部增加“跟随谱面”，播放按编辑器上方的实际可见区域移动谱面；切换分段写法保留踏板、力度与共用演奏标记。操作见[播放跟随与写法中的踏板](docs/FOLLOW_VARIANTS_142_GUIDE.md)，提交定位personal-v0.142.0。

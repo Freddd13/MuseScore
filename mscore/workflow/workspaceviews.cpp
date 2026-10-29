@@ -362,6 +362,48 @@ void addWorkspaceSelector(QToolBar *toolbar) {
           toolbar ? toolbar->parentWidget() : nullptr)))
     instance->addButton(toolbar);
 }
+void addVisibleScoreFollow(QToolBar *toolbar) {
+  if (toolbar && personalFeaturesEnabled()) {
+    auto action = getAction("pan");
+    QToolButton *button = nullptr;
+    QAction *before = nullptr;
+    const auto actions = toolbar->actions();
+    for (int i=0; i<actions.size(); ++i) {
+      auto current = qobject_cast<QToolButton*>(toolbar->widgetForAction(actions[i]));
+      if (!current) continue;
+      if (current->defaultAction() == action) button = current;
+      if (current->defaultAction() == getAction("play") && i+1<actions.size()) before=actions[i+1];
+    }
+    const bool created = !button;
+    if (created) button = new QToolButton(toolbar);
+    button->setObjectName("kumoVisibleScoreFollow");
+    button->setDefaultAction(action);
+    button->setAutoRaise(true);
+    button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    button->setIconSize(toolbar->iconSize());
+    button->setToolTip(QObject::tr("跟随谱面：播放时将当前谱行移入可见区域；保留当前缩放。"));
+    button->setAccessibleName(QObject::tr("跟随谱面"));
+    auto updateIcon = [button] { button->setIcon(personalToolIcon("kumo-score-follow")); };
+    QObject::connect(action, &QAction::changed, button, updateIcon);
+    QObject::connect(toolbar, &QToolBar::iconSizeChanged, button, &QToolButton::setIconSize);
+    updateIcon();
+    if (created) toolbar->insertWidget(before, button);
+  }
+}
+QRect playbackScoreViewport(const ScoreView *view) {
+  if (!view || !view->isVisible())
+    return {};
+  // A dock can reduce the visible central area before the score view is resized.
+  // Keep all coordinates local to the view, including clipping by its ancestors.
+  QRect visible = view->rect();
+  for (auto parent = view->parentWidget(); parent; parent = parent->parentWidget()) {
+    visible &= QRect(view->mapFrom(parent, QPoint()), parent->size());
+    if (parent->isWindow())
+      break;
+  }
+  visible &= view->visibleRegion().boundingRect();
+  return visible;
+}
 void finishToolFullscreen(QMainWindow *window) {
   if (!window)
     return;
@@ -392,7 +434,7 @@ QIcon personalToolIcon(const QString &key) {
   static const QStringList supported{
       "kumo-system-lock", "kumo-vst", "harmony-assistant", "reference-player",
       "performance-expression", "kumo-spectrum", "arrangement-suggestions", "kumo-rhythm",
-      "kumo-roll-writing", "kumo-ai-connection"};
+      "kumo-roll-writing", "kumo-ai-connection", "kumo-score-follow"};
   if (!supported.contains(key))
     return QIcon();
   QPixmap image(96, 96);
@@ -403,7 +445,14 @@ QIcon personalToolIcon(const QString &key) {
   const auto ink = qApp->palette().color(QPalette::WindowText);
   const auto accent = qApp->palette().color(QPalette::Highlight);
   p.setPen(QPen(ink, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-  if (key == "kumo-system-lock") {
+  if (key == "kumo-score-follow") {
+    p.drawRoundedRect(QRectF(3, 4, 18, 16), 1, 1);
+    for (int y : {8, 12, 16}) p.drawLine(6, y, 18, y);
+    p.setPen(QPen(accent, 2, Qt::SolidLine, Qt::RoundCap));
+    p.drawLine(11, 6, 11, 18);
+    p.drawLine(14, 7, 17, 10);
+    p.drawLine(17, 10, 14, 13);
+  } else if (key == "kumo-system-lock") {
     p.drawLine(3, 6, 21, 6);
     p.drawLine(3, 10, 21, 10);
     p.drawLine(3, 14, 9, 14);

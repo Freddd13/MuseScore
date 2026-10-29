@@ -274,6 +274,10 @@ class TestPluginHost : public QObject {
       void nativeScoreImageContent141();
       void nativeScoreImageRanges141();
       void nativeScoreImageNotation141();
+      void regionalPedalsSurvive142();
+      void regionalSharedControls142();
+      void visiblePlaybackFollow142();
+      void visiblePlaybackAudio142();
       void systemLockIndependentParts138();
       void systemLockMenuRange138();
       void metronomeFontCompatibility() {
@@ -1539,5 +1543,7 @@ class TestPluginHost : public QObject {
 #include "engraving_138_tests.inc"
 #include "identity_140_tests.inc"
 #include "images_141_tests.inc"
+#include "regional_142_tests.inc"
+#include "follow_142_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

@@ -76,7 +76,7 @@ static void transposeChord(Chord* c, Interval srcTranspose, const Fraction& tick
 //    return false if paste fails
 //---------------------------------------------------------
 
-bool Score::pasteStaff(XmlReader& e, Segment* dst, int dstStaff, Fraction scale)
+bool Score::pasteStaff(XmlReader& e, Segment* dst, int dstStaff, Fraction scale, const SelectionFilter* filter)
       {
       Q_ASSERT(dst->isChordRestType());
 
@@ -158,7 +158,7 @@ bool Score::pasteStaff(XmlReader& e, Segment* dst, int dstStaff, Fraction scale)
                                     voiceOffset[voiceId] = e.readInt();
                                     }
                               e.readNext();
-                              if (!makeGap1(dstTick, dstStaffIdx, tickLen, voiceOffset)) {
+                              if (!makeGap1(dstTick, dstStaffIdx, tickLen, voiceOffset, filter)) {
                                     qDebug("cannot make gap in staff %d at tick %d", dstStaffIdx, dstTick.ticks());
                                     done = true; // break main loop, cannot make gap
                                     break;

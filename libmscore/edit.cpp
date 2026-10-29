@@ -2479,7 +2479,7 @@ void Score::deleteSpannersFromRange(const Fraction& t1, const Fraction& t2, int 
             Spanner* sp = i.value;
             if (sp->isVolta())
                   continue;
-            if (!filter.canSelectVoice(sp->track()))
+            if (!filter.canSelectVoice(sp->track()) || !filter.canSelect(sp))
                   continue;
             if (sp->track() >= track1 && sp->track() < track2) {
                   if (sp->tick() >= t1 && sp->tick() < t2

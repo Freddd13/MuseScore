@@ -710,9 +710,9 @@ class Score : public QObject, public ScoreElement {
       void changeCRlen(ChordRest* cr, const Fraction&, bool fillWithRest=true);
       void createCRSequence(const Fraction& f, ChordRest* cr, const Fraction& tick);
 
-      Fraction makeGap(Segment*, int track, const Fraction&, Tuplet*, bool keepChord = false);
-      bool makeGap1(const Fraction& baseTick, int staffIdx, const Fraction& len, int voiceOffset[VOICES]);
-      bool makeGapVoice(Segment* seg, int track, Fraction len, const Fraction& tick);
+      Fraction makeGap(Segment*, int track, const Fraction&, Tuplet*, bool keepChord = false, const SelectionFilter* filter = nullptr);
+      bool makeGap1(const Fraction& baseTick, int staffIdx, const Fraction& len, int voiceOffset[VOICES], const SelectionFilter* filter = nullptr);
+      bool makeGapVoice(Segment* seg, int track, Fraction len, const Fraction& tick, const SelectionFilter* filter = nullptr);
 
       Rest* addRest(const Fraction& tick, int track, TDuration, Tuplet*);
       Rest* addRest(Segment* seg, int track, TDuration d, Tuplet*);
@@ -958,7 +958,7 @@ class Score : public QObject, public ScoreElement {
       void styleChanged() override;
 
       void cmdPaste(const QMimeData* ms, MuseScoreView* view, Fraction scale = Fraction(1, 1));
-      bool pasteStaff(XmlReader&, Segment* dst, int staffIdx, Fraction scale = Fraction(1, 1));
+      bool pasteStaff(XmlReader&, Segment* dst, int staffIdx, Fraction scale = Fraction(1, 1), const SelectionFilter* filter = nullptr);
       void readAddConnector(ConnectorInfoReader* info, bool pasteMode) override;
       void pasteSymbols(XmlReader& e, ChordRest* dst);
       void renderMidi(EventMap* events, const SynthesizerState& synthState);

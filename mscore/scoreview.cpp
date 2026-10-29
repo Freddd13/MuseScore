@@ -30,6 +30,7 @@
 #include "taptempo/tapmark.h"
 #include "performanceeditor/performanceeditor.h"
 #include "workflow/featuregate.h"
+#include "workflow/workspaceviews.h"
 #include "seq.h"
 #include "splitstaff.h"
 #include "textcursor.h"
@@ -3985,6 +3986,14 @@ void ScoreView::adjustCanvasPosition(const Element* el, bool playBack, int staff
       if (!mscore->panDuringPlayback())
             return;
 
+      const bool visiblePlayback = playBack && personalFeaturesEnabled();
+      const QRect visiblePixels = visiblePlayback ? playbackScoreViewport(this) : rect();
+      if (visiblePlayback && visiblePixels.isEmpty())
+            return;
+      const qreal visibleLeft = visiblePlayback ? visiblePixels.left() : 0;
+      const qreal visibleTop = visiblePlayback ? visiblePixels.top() : 0;
+      const qreal visibleWidth = visiblePlayback ? visiblePixels.width() : width();
+
       if (score()->layoutMode() == LayoutMode::LINE) {
 
             if (!el)
@@ -4014,8 +4023,8 @@ void ScoreView::adjustCanvasPosition(const Element* el, bool playBack, int staff
             qreal curPosL = curPos.left();                     // Position on the canvas
             qreal curPosScrR = curPosR * physicalZoomLevel() + xoffset(); // Position in the screen
             qreal curPosScrL = curPosL * physicalZoomLevel() + xoffset(); // Position in the screen
-            qreal marginLeft = width() * 0.05;
-            qreal marginRight = width() * 0.05; // leaves 5% margin to the right
+            qreal marginLeft = visibleLeft + visibleWidth * 0.05;
+            qreal marginRight = visibleWidth * 0.05; // leaves 5% margin to the right
 
 //            if (_continuousPanel->active())                           causes jump
 //                  marginLeft += _continuousPanel->width() * physicalZoomLevel();
@@ -4024,9 +4033,9 @@ void ScoreView::adjustCanvasPosition(const Element* el, bool playBack, int staff
             // it could potentially be enabled via more panning options
             if (playBack && _cursor && seq->isPlaying() && preferences.getBool(PREF_PAN_SMOOTHLY_ENABLED)) {
                   // keep playback cursor pinned at 35% (or at the percent of controlCursorScreenPos + 5%)
-                  xo = -curPosL * physicalZoomLevel() + marginLeft + width() * _panSettings.controlCursorScreenPos;
+                  xo = -curPosL * physicalZoomLevel() + marginLeft + visibleWidth * _panSettings.controlCursorScreenPos;
                   }
-            else if (round(curPosScrR) > round(width() - marginRight)) {
+            else if (round(curPosScrR) > round(visibleLeft + visibleWidth - marginRight)) {
                   // focus in or beyond right margin
                   // pan to left margin in playback,
                   // most of the way left in note entry,
@@ -4036,7 +4045,7 @@ void ScoreView::adjustCanvasPosition(const Element* el, bool playBack, int staff
                   else if (noteEntryMode())
                         xo = -curPosL * physicalZoomLevel() + marginLeft + width() * 0.2;
                   else
-                        xo = -curPosR * physicalZoomLevel() + width() - marginRight;
+                        xo = -curPosR * physicalZoomLevel() + visibleLeft + visibleWidth - marginRight;
                   }
             else if (round(curPosScrL) < round(marginLeft) ) {
                   // focus in or beyond left margin
@@ -4109,7 +4118,7 @@ void ScoreView::adjustCanvasPosition(const Element* el, bool playBack, int staff
             return;
 
       QPointF p(el->canvasPos());
-      QRectF r(canvasViewport());
+      QRectF r(visiblePlayback ? toLogical(QRectF(visiblePixels)) : canvasViewport());
       QRectF mRect(m->canvasBoundingRect());
       QRectF sysRect;
       if (staffIdx == -1) {
@@ -4163,6 +4172,11 @@ void ScoreView::adjustCanvasPosition(const Element* el, bool playBack, int staff
                   showRect.setY(p.y());
                   showRect.setHeight(el->height());
                   }
+            else if (visiblePlayback) {
+                  // At this zoom a whole system cannot fit. Show its beginning
+                  // rather than keeping a later system below the dock forever.
+                  showRect.setHeight(r.height());
+                  }
             else if (sys->page()->systems().size() == 1) {
                   // otherwise, just keep current vertical position if possible
                   // see issue #7724
@@ -4181,6 +4195,15 @@ void ScoreView::adjustCanvasPosition(const Element* el, bool playBack, int staff
 
       qreal oldX = x, oldY = y;
 
+      if (visiblePlayback) {
+            if (showRect.left() < r.left())
+                  x += showRect.left() - r.left() - border;
+            else if (showRect.right() > r.right())
+                  x += showRect.left() - r.left() - border;
+            if (showRect.top() < r.top() || showRect.bottom() > r.bottom())
+                  y += showRect.top() - r.top();
+            }
+      else {
       if (showRect.left() < r.left())
             x = showRect.left() - border;
       else if (showRect.left() > r.right())
@@ -4194,6 +4217,7 @@ void ScoreView::adjustCanvasPosition(const Element* el, bool playBack, int staff
       else if (r.height() >= showRect.height() && showRect.bottom() > r.bottom())
             y = showRect.top() - border;
 
+            }
       // Align to page borders if the viewport extends beyond them.
       // In Double Page view, treat the complete spread as the
       // horizontal navigation area, while retaining the physical
@@ -4207,6 +4231,10 @@ void ScoreView::adjustCanvasPosition(const Element* el, bool playBack, int staff
             navigationRect.setRight(layoutRect.right());
             }
 
+      const qreal insetX = visibleLeft / physicalZoomLevel();
+      const qreal insetY = visibleTop / physicalZoomLevel();
+      x += insetX;
+      y += insetY;
       if (x < navigationRect.left() || r.width() >= navigationRect.width())
             x = navigationRect.left();
       else if (r.width() < navigationRect.width() && r.width() + x > navigationRect.right())
@@ -4217,6 +4245,8 @@ void ScoreView::adjustCanvasPosition(const Element* el, bool playBack, int staff
       else if (r.height() < navigationRect.height() && r.height() + y > navigationRect.bottom())
             y = navigationRect.bottom() - r.height();
 
+      x -= insetX;
+      y -= insetY;
       // hack: don't update if we haven't changed the offset
       if (oldX == x && oldY == y)
             return;

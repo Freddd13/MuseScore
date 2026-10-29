@@ -932,7 +932,7 @@ Segment* Score::setNoteRest(Segment* segment, int track, NoteVal nval, Fraction 
 //    return size of actual gap
 //---------------------------------------------------------
 
-Fraction Score::makeGap(Segment* segment, int track, const Fraction& _sd, Tuplet* tuplet, bool keepChord)
+Fraction Score::makeGap(Segment* segment, int track, const Fraction& _sd, Tuplet* tuplet, bool keepChord, const SelectionFilter* selectionFilter)
       {
       Q_ASSERT(_sd.numerator());
 
@@ -1078,7 +1078,8 @@ Fraction Score::makeGap(Segment* segment, int track, const Fraction& _sd, Tuplet
             Segment* s2 = tick2rightSegment(t2);
             typedef SelectionFilterType Sel;
             // chord symbols can exist without chord/rest so they should not be removed
-            constexpr Sel filter = static_cast<Sel>(int(Sel::ALL) & ~int(Sel::CHORD_SYMBOL));
+            const SelectionFilter filter = selectionFilter ? *selectionFilter
+                        : SelectionFilter(static_cast<Sel>(int(Sel::ALL) & ~int(Sel::CHORD_SYMBOL)));
             deleteAnnotationsFromRange(s1, s2, track, track + 1, filter);
             deleteSpannersFromRange(t1, t2, track, track + 1, filter);
             }
@@ -1095,7 +1096,7 @@ Fraction Score::makeGap(Segment* segment, int track, const Fraction& _sd, Tuplet
 //    - do not stop at measure end
 //---------------------------------------------------------
 
-bool Score::makeGap1(const Fraction& baseTick, int staffIdx, const Fraction& len, int voiceOffset[VOICES])
+bool Score::makeGap1(const Fraction& baseTick, int staffIdx, const Fraction& len, int voiceOffset[VOICES], const SelectionFilter* selectionFilter)
       {
       Segment* seg = tick2segment(baseTick, true, SegmentType::ChordRest);
       if (!seg) {
@@ -1118,20 +1119,21 @@ bool Score::makeGap1(const Fraction& baseTick, int staffIdx, const Fraction& len
                   const Fraction endTick = tick + newLen;
                   typedef SelectionFilterType Sel;
                   // chord symbols can exist without chord/rest so they should not be removed
-                  constexpr Sel filter = static_cast<Sel>(int(Sel::ALL) & ~int(Sel::CHORD_SYMBOL));
+                  const SelectionFilter filter = selectionFilter ? *selectionFilter
+                        : SelectionFilter(static_cast<Sel>(int(Sel::ALL) & ~int(Sel::CHORD_SYMBOL)));
                   deleteAnnotationsFromRange(tick2rightSegment(tick), tick2rightSegment(endTick), track, track + 1, filter);
                   deleteSpannersFromRange(tick, endTick, track, track + 1, filter);
                   }
 
             seg = m->undoGetSegment(SegmentType::ChordRest, tick);
-            bool result = makeGapVoice(seg, track, newLen, tick);
+            bool result = makeGapVoice(seg, track, newLen, tick, selectionFilter);
             if (track == strack && !result) // makeGap failed for first voice
                   return false;
             }
       return true;
       }
 
-bool Score::makeGapVoice(Segment* seg, int track, Fraction len, const Fraction& tick)
+bool Score::makeGapVoice(Segment* seg, int track, Fraction len, const Fraction& tick, const SelectionFilter* filter)
       {
       ChordRest* cr = 0;
       cr = toChordRest(seg->element(track));
@@ -1144,7 +1146,7 @@ bool Score::makeGapVoice(Segment* seg, int track, Fraction len, const Fraction& 
                               qDebug("no segment before tick %d", tick.ticks());
                         // this happens only for voices other than voice 1
                         expandVoice(seg, track);
-                        return makeGapVoice(seg,track,len,tick);
+                        return makeGapVoice(seg,track,len,tick,filter);
                         }
                   if (seg1->element(track))
                         break;
@@ -1203,7 +1205,7 @@ bool Score::makeGapVoice(Segment* seg, int track, Fraction len, const Fraction& 
                   qDebug("cannot make gap");
                   return false;
                   }
-            Fraction l = makeGap(cr->segment(), cr->track(), len, 0);
+            Fraction l = makeGap(cr->segment(), cr->track(), len, 0, false, filter);
             if (l.isZero()) {
                   qDebug("returns zero gap");
                   return false;

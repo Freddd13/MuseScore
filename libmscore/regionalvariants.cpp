@@ -39,6 +39,16 @@ namespace RegionalVariants {
 namespace {
 const char *property = "kumoRegionalVariants";
 const int fragmentLimit = 16 * 1024 * 1024, documentLimit = 64 * 1024 * 1024;
+SelectionFilter writingFilter() {
+      SelectionFilter filter(SelectionFilterType::ALL);
+      for (auto kind : {SelectionFilterType::DYNAMIC, SelectionFilterType::HAIRPIN,
+                        SelectionFilterType::PEDAL_LINE, SelectionFilterType::OTHER_TEXT,
+                        SelectionFilterType::OTHER_LINE, SelectionFilterType::CHORD_SYMBOL,
+                        SelectionFilterType::FIGURED_BASS, SelectionFilterType::OTTAVA})
+            filter.setFiltered(kind, false);
+      return filter;
+}
+
 thread_local bool saving = false;
 QString id() {
       return QUuid::createUuid().toString(QUuid::WithoutBraces).remove('-');
@@ -311,7 +321,8 @@ bool replace(Score *score, const QVariantMap &group, const QByteArray &data, QSt
             score->undoRemoveElement(marking);
       XmlReader reader(data);
       reader.setPasteMode(true);
-      if (!score->pasteStaff(reader, dst, root.attribute("staff").toInt())) {
+      const auto filter = writingFilter();
+      if (!score->pasteStaff(reader, dst, root.attribute("staff").toInt(), Fraction(1, 1), &filter)) {
             *problem = QObject::tr("片段不能粘贴到这里，原内容已恢复。");
             return false;
       }
@@ -487,15 +498,10 @@ QByteArray capture(Score *score, int start, int end, const QVariantList &values,
               .arg(first)
               .arg(last - first + 1));
       for (int staff = first; staff <= last; ++staff) {
-            SelectionFilter filter(SelectionFilterType::ALL);
+            auto filter = writingFilter();
             for (int voice = 0; voice < VOICES; ++voice)
                   filter.setFiltered(SelectionFilterType(1 << voice),
                                      tracks.contains(staff * VOICES + voice));
-            for (auto kind : {SelectionFilterType::DYNAMIC, SelectionFilterType::HAIRPIN,
-                              SelectionFilterType::PEDAL_LINE, SelectionFilterType::OTHER_TEXT,
-                              SelectionFilterType::OTHER_LINE, SelectionFilterType::CHORD_SYMBOL,
-                              SelectionFilterType::FIGURED_BASS, SelectionFilterType::OTTAVA})
-                  filter.setFiltered(kind, false);
             xml.setFilter(filter);
             xml.stag(QString("Staff id=\"%1\"").arg(staff));
             xml.stag("voiceOffset");
