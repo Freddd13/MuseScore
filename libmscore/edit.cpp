@@ -28,6 +28,7 @@
 #include "instrchange.h"
 #include "key.h"
 #include "keysig.h"
+#include "layoutbreak.h"
 #include "lyrics.h"
 #include "measure.h"
 #include "navigate.h"
@@ -3277,6 +3278,7 @@ void Score::insertMeasure(ElementType type, MeasureBase* measure, bool createEmp
                   m->setTicks(f);
                   }
             undo(new InsertMeasures(mb, mb));
+            LayoutBreak::inheritSystemLock(mb);
 
             if (type == ElementType::MEASURE) {
                   Measure* m  = toMeasure(mb);  // new measure

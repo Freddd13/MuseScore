@@ -68,6 +68,10 @@ void require(Score* score, MeasureBase* measure, LayoutBreak::Type type,
             found = item;
             break;
         }
+    // A vertical frame already starts the following music on its own line.
+    // Its implicit break has no element to tag and survives reopening itself.
+    if (!found && type == LayoutBreak::LINE && !measure->isMeasure() && measure->lineBreak())
+        return;
     if (!found) {
         found = new LayoutBreak(score);
         found->setLayoutBreakType(type);

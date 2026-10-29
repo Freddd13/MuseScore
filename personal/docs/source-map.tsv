@@ -632,3 +632,7 @@ D1输入与线条操作	mtest/mscore/performanceeditor/notation_135_tests.inc	no
 跨谱表绕行距离	libmscore/freesluravoidance.cpp	FreeSlur::avoid	211	按实际乐句安排较大绕行，保留普通曲线原范围	freeSlurWideStaffRouting
 密集路线平滑	libmscore/freeslurrouting.cpp	FreeSlur::smoothRouting	45	保留固定点，局部受限时继续比较平滑路线	freeSlurDenseSystemsRoundTrip
 演奏记号保存	mtest/mscore/performanceeditor/notation_137_tests.inc	notationInspectorSavedValues137	166	五类检视器真实操作、撤销、保存重开与MIDI比较	notationInspectorSavedValues137
+插入小节延续锁行	libmscore/layoutbreak.cpp	LayoutBreak::inheritSystemLock	23	相邻小节同属锁定范围时继承本谱分行设置	systemLockInsertAndPart138 / systemLockIndependentParts138
+锁行插入接线	libmscore/edit.cpp	Score::insertMeasure	3281	插入后沿用当前谱自己的锁行，和插入共同撤销	systemLockIndependentParts138
+标题框锁行边界	mscore/workflow/systemlocks.cpp	require	71	沿用框的固有换行，保存重开保持分组	systemLockInsertAndPart138
+谱行菜单操作	mtest/mscore/pluginhost/engraving_138_tests.inc	systemLockMenuRange138	93	鼠标点击跨行锁定与全谱解锁，保留手工标记	systemLockMenuRange138

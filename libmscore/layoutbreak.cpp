@@ -15,8 +15,37 @@
 #include "mscore.h"
 #include "score.h"
 #include "xml.h"
+#include <QJsonDocument>
+#include <QJsonObject>
 
 namespace Ms {
+
+void LayoutBreak::inheritSystemLock(MeasureBase* inserted)
+      {
+      if(!inserted || !inserted->isMeasure())return;
+      auto previous=inserted->prev(),next=inserted->next();
+      if(!previous || !next || !previous->isMeasure() || !next->isMeasure())return;
+      auto groups=[](MeasureBase* bar) {
+            QJsonObject result;
+            for(auto element:bar->el())if(element->isLayoutBreak()) {
+                  const auto data=QJsonDocument::fromJson(toLayoutBreak(element)->systemLockData().toUtf8()).object();
+                  const auto owned=data.value("groups").toObject();
+                  for(auto i=owned.begin();i!=owned.end();++i)result.insert(i.key(),i.value());
+                  }
+            return result;
+            };
+      const auto before=groups(previous),after=groups(next);
+      QJsonObject common;
+      for(auto i=before.begin();i!=before.end();++i)
+            if(i.value().toString()=="inside" && (after.value(i.key()).toString()=="inside" || after.value(i.key()).toString()=="end"))
+                  common.insert(i.key(),"inside");
+      if(common.isEmpty())return;
+      // Keep each score's own lock, including independently laid-out parts.
+      auto mark=new LayoutBreak(inserted->score());mark->setLayoutBreakType(NOBREAK);
+      mark->setSystemLockData(QString::fromUtf8(QJsonDocument(QJsonObject{{"created",true},{"groups",common}}).toJson(QJsonDocument::Compact)));
+      mark->setParent(inserted);mark->setTrack(0);
+      inserted->score()->undoAddElement(mark);
+      }
 
 //---------------------------------------------------------
 //   sectionBreakStyle

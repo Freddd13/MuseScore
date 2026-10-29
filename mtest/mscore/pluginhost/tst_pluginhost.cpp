@@ -267,6 +267,9 @@ class TestPluginHost : public QObject {
       void pedalRealPianoOutput106_data();
       void pedalRealPianoOutput106();
       void personalToolWindowsRemainIndependent();
+      void systemLockInsertAndPart138();
+      void systemLockIndependentParts138();
+      void systemLockMenuRange138();
       void metronomeFontCompatibility() {
             QVERIFY(QFontDatabase().families().contains("Metronome Text 3"));
             auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);
@@ -1527,5 +1530,6 @@ class TestPluginHost : public QObject {
 #include "arrangement_substitution_tests.inc"
 #include "arrangement_suggestion_playback_tests.inc"
 #include "arrangement_candidate_quality_tests.inc"
+#include "engraving_138_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

@@ -62,6 +62,7 @@ class LayoutBreak final : public Element {
       Type layoutBreakType() const  { return _layoutBreakType; }
       const QString& systemLockData() const { return _systemLockData; }
       void setSystemLockData(const QString& value) { _systemLockData = value; }
+      static void inheritSystemLock(MeasureBase* inserted);
 
       bool acceptDrop(EditData&) const override;
       Element* drop(EditData&) override;

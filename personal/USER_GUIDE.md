@@ -1,11 +1,12 @@
 # MuseScore Evolution 个人功能说明
 
-当前版本：**0.137.0 · Kumo branch / Freddd13**。
+当前版本：**0.138.0 · Kumo branch / Freddd13**。
 
 先按下面的任务找到入口。每章有完整操作例子、按钮说明、保存和撤销方法。“帮助 → 个人功能说明”可以在软件里直接阅读。
 
 | 想完成的事 | 从哪里开始 |
 |---|---|
+| 查看标题与速度音符的字体 | [字体对照与个人样式](docs/ENGRAVING_138_GUIDE.md#标题和速度音符的字体) |
 | 调整圆滑线、琶音、小音符和连续音力度 | [完整操作与参数例子](docs/NOTATION_137_GUIDE.md) |
 | 添加和调整左右手分手记号 | [分手折线、文字、默认形状与保存](docs/HANDS_136_GUIDE.md) |
 | 输入跨拍时值、整理符干、Tap与渐慢 | [两个4/4输入例子与速度操作](docs/NOTATION_135_GUIDE.md) |
@@ -28,7 +29,7 @@
 | 在卷帘画音、移动或先试草稿 | [卷帘写音完整步骤](docs/WORKSPACE_067_GUIDE.md) |
 | 给已经写好的音高换节奏 | [写节奏](docs/P2_RHYTHM_062_GUIDE.md) |
 | 查看指法、分手、配音与对位建议 | [编配建议](docs/P2_SUGGESTIONS_061_GUIDE.md) |
-| 保留一行的小节、解除锁定 | [谱行锁定](docs/WORKSPACE_068_GUIDE.md) |
+| 锁定一行、在行内插入小节、解除锁定 | [谱行操作与保存](docs/ENGRAVING_138_GUIDE.md) |
 | 使用 Pianoteq、CFX，给乐器加效果 | [音源与效果完整步骤](docs/WORKSPACE_069_GUIDE.md) |
 | 分享前统一关闭个人工具 | [kumo.ini 开关](docs/WORKSPACE_063_GUIDE.md) |
 
@@ -590,6 +591,8 @@ Ctrl+Z撤销，编辑菜单中的“重做”可恢复这一步。节点位置�
 - [本轮使用检查与返工记录](docs/USABILITY_REWORK_20261019.md)
 
 ## 附录：各次更新的操作链接
+
+0.138.0修复锁行内插入小节与标题框边界，核对独立分谱、菜单、保存及官方字体对照，见[谱行与字体](docs/ENGRAVING_138_GUIDE.md)。
 
 0.137.0补齐乐句中途跨谱表的曲线避让与较大绕行距离，逐次力度说明改为操作用语；见[圆滑线与演奏记号](docs/NOTATION_137_GUIDE.md)。
 
