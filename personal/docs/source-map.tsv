@@ -645,3 +645,5 @@ D1输入与线条操作	mtest/mscore/performanceeditor/notation_135_tests.inc	no
 0.144.0	E2-W	mscore/workflow/suggestionpanel.cpp;mscore/workflow/arrangementoptions.cpp;MCP:src/tools/navigation.py	实际AI写法与建议状态、试听范围和导航	personal-v0.144.0
 0.145.0	E3	mscore/workflow/featuregate.cpp;mscore/musescore.cpp;mtest/mscore/pluginhost/sharing_145_tests.inc	旧入口清理限定安装目录；扩展关闭不创建编辑器；真实乐谱开关往返	SHARING_145_GUIDE.md
 0.145.0	E3分享副本	Muse3Plugins:P2/make_share_package.py;P2/test_share_package.py	复制到新位置，仅关闭副本的个人工具并保留其它设置	SHARING_145_GUIDE.md
+安装说明导出	personal/tools/package_user_guide.py	def export_guide(	43	按安装位置保留操作页和图片，发布资料使用真实仓库位置	../../muse3_plugins/P2/test_packaged_guide.py
+安装说明链接检查	personal/tools/package_user_guide.py	def check_export(	106	按安装位置保留操作页和图片，发布资料使用真实仓库位置	../../muse3_plugins/P2/test_packaged_guide.py
