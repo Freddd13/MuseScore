@@ -42,8 +42,8 @@ class Repository:
 
 def export_guide(source, destination, repositories, aliases=None):
     source, destination = Path(source).resolve(), Path(destination).resolve()
-    if source == destination or destination.is_relative_to(source):
-        raise ValueError('说明导出位置须与源码目录分开。')
+    if source == destination:
+        raise ValueError('请选择程序安装目录，保留源码说明。')
     aliases = aliases or {}
     pending = deque([Path('personal/USER_GUIDE.md')])
     seen, updates, copied, unresolved = set(), [], [], []
