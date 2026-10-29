@@ -1,11 +1,12 @@
 # MuseScore Evolution 个人功能说明
 
-当前版本：**0.139.0 · Kumo branch / Freddd13**。
+当前版本：**0.140.0 · Kumo branch / Freddd13**。
 
 先按下面的任务找到入口。每章有完整操作例子、按钮说明、保存和撤销方法。“帮助 → 个人功能说明”可以在软件里直接阅读。
 
 | 想完成的事 | 从哪里开始 |
 |---|---|
+| 确认Codex正在读哪份谱、哪个标题 | [当前谱与连接窗口](docs/AI_IDENTITY_140_GUIDE.md) |
 | Esc取消选择、Home回开头、踏板方式和频谱试音 | [按键、踏板与频谱操作](docs/INTERACTION_139_GUIDE.md) |
 | 查看标题与速度音符的字体 | [字体对照与个人样式](docs/ENGRAVING_138_GUIDE.md#标题和速度音符的字体) |
 | 调整圆滑线、琶音、小音符和连续音力度 | [完整操作与参数例子](docs/NOTATION_137_GUIDE.md) |
@@ -17,7 +18,7 @@
 | 调整编辑器尺寸、切换工作视图和工具页 | [窗口操作与区域高度](docs/LAYOUT_079_GUIDE.md) |
 | 把区域移到右侧或悬浮 | [区域摆放](docs/WORKSPACE_064_GUIDE.md) |
 | 选择原曲音轨、删除恢复、拖滑块调速度 | [原曲音轨操作](docs/WORKSPACE_064_GUIDE.md#管理多条原曲音轨) |
-| 连接 Codex，让它读取或建议写法 | 视图 → AI 连接；[第一次连接的步骤](docs/WORKSPACE_063_GUIDE.md) |
+| 连接 Codex，让它读取或建议写法 | 视图 → AI 连接；[第一次连接与当前谱](docs/AI_IDENTITY_140_GUIDE.md) |
 | 调整力度、速度、踏板 | 下文“演奏编辑器” |
 | 设置mp、mf等记号的默认力度 | 演奏编辑器 → 操作设置… → 力度记号；[完整步骤](docs/DYNAMICS_082_GUIDE.md) |
 | 谱面滚轮调力度、谱行带跟随选音、保留上一和弦 | [谱面调节与和弦显示](docs/SCORE_HARMONY_075_GUIDE.md) |
@@ -681,3 +682,8 @@ AI怎样读取当前谱、标题和图片，见[当前实现与后续安排](doc
 ### 0.139.0
 
 编辑器Esc与Home、播放中滚轮、踏板设置和频谱右键试音见[完整步骤](docs/INTERACTION_139_GUIDE.md)。提交定位personal-v0.139.0。
+
+
+### 0.140.0
+
+AI连接显示当前窗口的谱面标题、文件和总谱／分谱；Codex读取共用同一份资料。操作见[当前谱与连接窗口](docs/AI_IDENTITY_140_GUIDE.md)，提交定位personal-v0.140.0。

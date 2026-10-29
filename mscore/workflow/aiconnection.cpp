@@ -6,6 +6,7 @@
 #include "mscore/musescore.h"
 #include "mscore/plugin/qmlplugin.h"
 #include "mscore/plugin/qmlpluginengine.h"
+#include "mscore/plugin/api/scoreobserver.h"
 #include "mscore/workspace.h"
 #include "personalbranding.h"
 #include <QApplication>
@@ -113,7 +114,7 @@ class Bridge : public QObject {
   QQmlComponent *component = nullptr;
   bool starting = true, closed = false;
   QTimer update;
-  QString id = QUuid::createUuid().toString(QUuid::WithoutBraces), endpoint,
+  QString id = PluginAPI::ScoreObserver::applicationInstanceId(), endpoint,
           previous;
   int port = 0;
 
@@ -188,12 +189,14 @@ public:
     error = root->property("nativeError").toString();
     if (!error.isEmpty())
       return;
-    const QString score = owner && owner->currentScore()
-                              ? owner->currentScore()->name()
+    const auto identity = PluginAPI::ScoreObserver::scoreIdentityFor(owner ? owner->currentScore() : nullptr);
+    const QString score = identity.value("hasScore").toBool()
+                              ? identity.value("displayTitle").toString().simplified()
                               : tr("尚未打开乐谱");
     const bool active =
         QGuiApplication::applicationState() == Qt::ApplicationActive;
-    const QString key = score + (active ? "1" : "0");
+    const auto identityJson = QJsonObject::fromVariantMap(identity);
+    const QString key = QString::fromUtf8(QJsonDocument(identityJson).toJson(QJsonDocument::Compact)) + (active ? "1" : "0");
     if (key == previous)
       return;
     previous = key;
@@ -206,6 +209,7 @@ public:
               {"port", port},
               {"version", KUMO_PERSONAL_VERSION},
               {"score", score},
+              {"identity", identityJson},
               {"active", active},
               {"updated", QDateTime::currentMSecsSinceEpoch()}});
   }

@@ -9,7 +9,7 @@ MuseScore {
     requiresScore: false
     menuPath: "Plugins.MuseScore API Server"
     description: "MuseScore Evolution bridge for Codex and MCP clients"
-    version: "2.3.0"
+    version: "2.5.0"
 
     property var arrangementObserver: null
     property var clientConnections: []
@@ -100,6 +100,7 @@ MuseScore {
                 return arrangementCommand(command.action, command.params || {});
             // Core operations
             case "getScore":                return getScore(command.params);
+            case "getScoreIdentity":        return getScoreIdentity();
             case "syncStateToSelection":    return syncStateToSelection();
             case "ping":                    return "pong";
             case "getCapabilities":         return getCapabilities();
@@ -1134,16 +1135,33 @@ MuseScore {
         return { success: true, bridgeVersion: root.version,
                  museScoreVersion: mscoreVersion, ticksPerQuarter: division,
                  scoreOpen: Boolean(curScore), transport: "QtWebSockets",
-                 arrangementContext: arrangementObserver && typeof arrangementObserver.arrangementRequest === "function" ? "arrangement-context/1" : null, scoreObserver: typeof newScoreObserver === "function" };
+                 arrangementContext: arrangementObserver && typeof arrangementObserver.arrangementRequest === "function" ? "arrangement-context/1" : null,
+                 scoreIdentity: arrangementObserver && typeof arrangementObserver.scoreIdentity === "function" ? "score-identity/1" : null,
+                 scoreObserver: typeof newScoreObserver === "function" };
+    }
+
+    function getScoreIdentity() {
+        if (!arrangementObserver && typeof newScoreObserver === "function") arrangementObserver = newScoreObserver();
+        if (arrangementObserver && typeof arrangementObserver.scoreIdentity === "function") {
+            arrangementObserver.score = curScore;
+            return arrangementObserver.scoreIdentity();
+        }
+        var workTitle = curScore ? curScore.metaTag("workTitle") || "" : "";
+        var tab = curScore ? curScore.scoreName || "" : "";
+        return {schemaVersion: "score-identity/1", hasScore: Boolean(curScore), workTitle: workTitle,
+                displayTitle: workTitle || tab, titleSource: workTitle ? "workTitle" : "tabLabel",
+                tabLabel: tab, visibleTexts: [], coverage: {visibleTitles: "unavailable"}};
     }
 
     function getScoreSummary() {
         if (!curScore) return { error: "No score open" };
 
         // A detached cursor keeps analysis out of the score's input/undo state.
+        var identity = getScoreIdentity();
         var score = {
             ticksPerQuarter: division,
-            title: curScore.metaTag("workTitle") || curScore.title || "",
+            title: identity.displayTitle,
+            identity: identity,
             numMeasures: curScore.nmeasures,
             measures: [],
             staves: []

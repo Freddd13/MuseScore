@@ -139,6 +139,7 @@ QVariantMap ScoreObserver::arrangementState(const QVariantMap &request) {
     if (scope.isEmpty())
         return {{"error", tr("这个范围已经变化，请重新选择小节和声部。")}};
     const auto snapshot = analysisContentRevision();
+    const auto scoreInfo = scoreIdentity();
     const auto harmonic = _score->property("kumoSharedHarmony").toMap();
     QVariantMap harmony = harmonic;
     harmony["freshness"] = harmonic.value("snapshotId") == snapshot ? "current" : "stale";
@@ -146,9 +147,10 @@ QVariantMap ScoreObserver::arrangementState(const QVariantMap &request) {
         harmony = {{"availability", "notProvided"}, {"processing", "notRequested"}};
     return {{"schemaVersion", "arrangement-context/1"},
             {"scoreSessionId", analysisScoreId()},
-            {"documentId", _score->masterScore()->fileInfo()->absoluteFilePath()},
+            {"documentId", scoreInfo.value("filePath")},
             {"snapshotId", snapshot},
-            {"title", _score->masterScore()->metaTag("workTitle")},
+            {"title", scoreInfo.value("displayTitle")},
+            {"identity", scoreInfo},
             {"scope", scope},
             {"ticksPerQuarter", DIVISION},
             {"playing", playing()},

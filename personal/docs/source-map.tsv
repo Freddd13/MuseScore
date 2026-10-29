@@ -637,3 +637,5 @@ D1输入与线条操作	mtest/mscore/performanceeditor/notation_135_tests.inc	no
 标题框锁行边界	mscore/workflow/systemlocks.cpp	require	71	沿用框的固有换行，保存重开保持分组	systemLockInsertAndPart138
 谱行菜单操作	mtest/mscore/pluginhost/engraving_138_tests.inc	systemLockMenuRange138	93	鼠标点击跨行锁定与全谱解锁，保留手工标记	systemLockMenuRange138
 0.139	编辑器按键、播放滚轮与频谱试音	mscore/performanceeditor/performanceinteraction.cpp;performanceux.cpp;performancewheel.cpp;spectrumpane.cpp;spectrumdisplay.cpp;performancecontrols.cpp	INTERACTION_139_GUIDE.md
+0.140	当前谱身份与Codex连接	mscore/workflow/analysisidentity.cpp;arrangementreader.cpp;aiconnection.cpp;share/workflow/MuseScoreBridge.qml	AI_IDENTITY_140_GUIDE.md
+0.140	当前谱窗口与MCP连续读取检查	mtest/mscore/pluginhost/identity_140_tests.inc;mcp-musescore/tests/test_identity.py	AI_IDENTITY_140_CHECKS.md

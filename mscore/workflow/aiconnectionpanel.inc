@@ -25,23 +25,34 @@ class ConnectionDialog : public QDialog {
       auto value = readJson(QDir(stateDirectory()).filePath(file));
       if (!value.isEmpty() && alive(qint64(value.value("pid").toDouble()))) values.append(value);
     }
-    const QString key = QString::fromUtf8(QJsonDocument(values).toJson(QJsonDocument::Compact));
+    const QString selected = readJson(QDir(stateDirectory()).filePath("selection.json")).value("id").toString();
+    const QString key = QString::fromUtf8(QJsonDocument(values).toJson(QJsonDocument::Compact)) + selected;
     if (key == lastWindows) return;
     lastWindows = key;
-    const QString selected = readJson(QDir(stateDirectory()).filePath("selection.json")).value("id").toString();
+    const QString browsing = windows->currentItem() ? windows->currentItem()->data(Qt::UserRole).toString() : selected;
+    QSignalBlocker block(windows);
     windows->clear();
     for (const auto &item : values) {
       const auto value = item.toObject();
-      auto row = new QListWidgetItem(tr("%1 · %2").arg(value.value("score").toString(), value.value("version").toString()), windows);
+      const auto identity = value.value("identity").toObject();
+      const QString kind = !identity.value("hasScore").toBool() ? QString()
+          : identity.value("isMaster").toBool() ? tr("总谱") : tr("分谱：%1").arg(identity.value("partName").toString());
+      const QString detail = tr("%1 · 进程%2 · %3").arg(identity.value("fileName").toString().isEmpty() ? tr("尚未保存文件") : identity.value("fileName").toString())
+          .arg(value.value("pid").toInt()).arg(value.value("version").toString());
+      auto row = new QListWidgetItem(value.value("score").toString() + (kind.isEmpty() ? QString() : " · " + kind)
+          + (identity.value("modified").toBool() ? tr(" · 有修改") : QString())
+          + (value.value("id").toString() == selected ? tr(" · 本次使用") : QString()) + "\n" + detail, windows);
       row->setData(Qt::UserRole, value.value("id").toString());
       row->setData(Qt::UserRole + 1, value.value("application").toString());
-      row->setToolTip(value.value("application").toString());
-      if (value.value("id").toString() == selected) windows->setCurrentItem(row);
+      row->setToolTip(tr("谱面标题：%1\n作品信息：%2\n文件：%3\n程序：%4")
+          .arg(identity.value("visibleTitle").toString(), identity.value("workTitle").toString(),
+               identity.value("filePath").toString(), value.value("application").toString()));
+      if (value.value("id").toString() == browsing) windows->setCurrentItem(row);
     }
     if (windows->currentRow() < 0 && windows->count() == 1) windows->setCurrentRow(0);
     windows->setVisible(!values.isEmpty());
-    windows->setFixedHeight(qBound(36, values.size() * (windows->fontMetrics().height() + 8) + 4, 88));
-    windowCaption->setText(values.isEmpty() ? tr("读谱连接准备好后，这里会显示可用的乐谱窗口。") : tr("使用哪份乐谱"));
+    windows->setFixedHeight(qBound(48, values.size() * (windows->fontMetrics().height() * 2 + 10) + 4, 108));
+    windowCaption->setText(values.isEmpty() ? tr("读谱连接准备好后，这里会显示可用的乐谱窗口。") : tr("连接哪个程序窗口（读取该窗口当前标签页）"));
     updateOperations();
   }
   void updateOperations() {
@@ -154,12 +165,14 @@ public:
     windowCaption = new QLabel(tr("使用哪份乐谱")); windowCaption->setWordWrap(true); layout->addWidget(windowCaption);
     windows = new QListWidget; windows->setObjectName("aiConnectionWindows"); windows->setMinimumHeight(52); windows->setMaximumHeight(88); layout->addWidget(windows);
     row = new QHBoxLayout; layout->addLayout(row);
-    auto use = useWindow = new QPushButton(tr("使用选中的窗口")); setComponentToolIcon(use, "panel"); row->addWidget(use); row->addStretch();
+    auto use = useWindow = new QPushButton(tr("使用选中的窗口")); use->setObjectName("aiUseWindow"); setComponentToolIcon(use, "panel"); row->addWidget(use); row->addStretch();
     connect(windows, &QListWidget::itemSelectionChanged, this, [this] { updateOperations(); });
     connect(use, &QPushButton::clicked, this, [this] {
       auto item = windows->currentItem(); if (!item) return;
-      if (saveJson(QDir(stateDirectory()).filePath("selection.json"), {{"id", item->data(Qt::UserRole).toString()}}))
-        status->setText(tr("已选择，后续 Codex 操作使用这个窗口。"));
+      if (saveJson(QDir(stateDirectory()).filePath("selection.json"), {{"id", item->data(Qt::UserRole).toString()}})) {
+        status->setText(tr("已选择：%1。Codex 跟随该窗口的当前乐谱标签页。").arg(item->text().section('\n', 0, 0)));
+        refreshWindows();
+      }
     });
     row = new QHBoxLayout; layout->addLayout(row);
     auto configure = new QPushButton(tr("配置 Codex")); setComponentToolIcon(configure, "settings"); configure->setObjectName("aiConfigureCodex"); row->addWidget(configure);
@@ -197,7 +210,7 @@ public:
     auto path = new QLabel(QCoreApplication::applicationFilePath()); path->setTextInteractionFlags(Qt::TextSelectableByMouse); path->setWordWrap(true); layout->addWidget(path); layout->addStretch();
     status = new QLabel(tr("首次使用请点击“配置 Codex”，再到 Codex 重新连接。")); status->setObjectName("aiConnectionStatus"); status->setWordWrap(true); status->setTextInteractionFlags(Qt::TextSelectableByMouse); outer->addWidget(status);
     auto buttons = new QDialogButtonBox(QDialogButtonBox::Help | QDialogButtonBox::Close); outer->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::helpRequested, this, [] { showPersonalGuide("docs/WORKSPACE_063_GUIDE.md"); });
+    connect(buttons, &QDialogButtonBox::helpRequested, this, [] { showPersonalGuide("docs/AI_IDENTITY_140_GUIDE.md"); });
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::close);
     operations = {configure, check, copy, use, reload, serviceToggle}; updateOperations(); refreshService();
     refresh.setInterval(1500);

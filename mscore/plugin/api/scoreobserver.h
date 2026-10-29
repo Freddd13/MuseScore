@@ -132,6 +132,9 @@ class ScoreObserver : public QObject {
       Q_INVOKABLE QVariantMap showEditorCorrespondence();
       Q_INVOKABLE QString analysisScoreId() const;
       Q_INVOKABLE QString analysisContentRevision() const;
+      Q_INVOKABLE QVariantMap scoreIdentity() const;
+      static QString applicationInstanceId();
+      static QVariantMap scoreIdentityFor(Ms::Score*);
       Q_INVOKABLE QVariantMap scoreLocation(int tick,int track) const;
       Q_INVOKABLE QVariantMap previewExpression(const QString& workspace,const QVariantMap& candidate,const QVariantMap& scope);
       Q_INVOKABLE QVariantMap openWorkflowScore(const QString& filename,bool baseline = false,const QString& expectedHash = QString());
