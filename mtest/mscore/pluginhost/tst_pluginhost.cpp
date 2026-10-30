@@ -125,6 +125,13 @@ class TestPluginHost : public QObject {
       Q_OBJECT
       QTemporaryDir _settings;
    private slots:
+      void upstreamLoopRequests155_data();
+      void upstreamLoopRequests155();
+      void upstreamRepeatTempo155_data();
+      void upstreamRepeatTempo155();
+      void upstreamRecentFiles155();
+      void upstreamTextAndSections155();
+      void upstreamGp6Files155();
       void workspaceSideWidthsRoundTrip();
       void paletteRemainsInteractiveAfterPlayback();
       void referencePanelsAfterPlayback120();
@@ -1584,5 +1591,6 @@ class TestPluginHost : public QObject {
 #include "guide_146_tests.inc"
 #include "context_143_tests.inc"
 #include "ai_workflow_144_tests.inc"
+#include "upstream_155_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

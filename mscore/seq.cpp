@@ -1641,7 +1641,15 @@ void Seq::collectEvents(int utick)
             midiRenderFuture.waitForFinished();
 
       const auto preview=activePlaybackPreviewEvents(cs);
-      if(preview){events=*preview;renderEvents.clear();renderEventsStatus.clear();}
+      if (preview) {
+            // Seek uses the prepared preview. Replacing the map here would
+            // invalidate the iterator currently owned by the audio thread.
+            if (state != Transport::PLAY) {
+                  events = *preview;
+                  renderEvents.clear();
+                  renderEventsStatus.clear();
+                  }
+            }
       else if (playlistChanged) {
             midi.setScoreChanged();
             events.clear();

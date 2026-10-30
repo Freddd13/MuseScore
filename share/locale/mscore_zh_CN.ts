@@ -14757,7 +14757,11 @@ Are you sure you want to proceed?</source>
     <message>
         <location filename="../../mscore/musescore.cpp" line="3100"/>
         <source>No recent files</source>
-        <translation type="unfinished"></translation>
+        <translation>没有最近打开的文件</translation>
+    </message>
+    <message>
+        <source>All recent files are already open</source>
+        <translation>最近文件均已打开</translation>
     </message>
     <message>
         <location filename="../../mscore/musescore.cpp" line="4753"/>

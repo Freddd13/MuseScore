@@ -172,7 +172,7 @@ QString convertFromHtml(TextBase* t, const QString& ss)
                         if (font.strikeOut())
                               s += "<s>";
 #endif
-                        s += f.text().toHtmlEscaped();
+                        s += f.text().toHtmlEscaped().replace(QChar::LineSeparator, QChar::LineFeed);
 #if 0 // see above
                         if (font.strikeOut())
                               s += "</s>";

@@ -606,7 +606,11 @@ QDomNode GuitarPro6::getNode(const QString& id, QDomNode currentDomNode)
 
 int GuitarPro6::findNumMeasures(GPPartInfo* partInfo)
       {
-      QDomNode masterBar = partInfo->masterBars.nextSibling();
+      QDomNode masterBar = partInfo->masterBars;
+      if (masterBar.nodeName() != QLatin1String("MasterBar"))
+            masterBar = masterBar.nextSiblingElement("MasterBar");
+      if (masterBar.isNull())
+            return 0;
       QDomNode masterBarElement;
       while (!masterBar.isNull()) {
             GpBar gpBar;
@@ -651,9 +655,9 @@ int GuitarPro6::findNumMeasures(GPPartInfo* partInfo)
                   masterBarElement = masterBarElement.nextSibling();
                   }
             bars.append(gpBar);
-            if (masterBar.nextSibling().isNull())
+            if (masterBar.nextSiblingElement("MasterBar").isNull())
                   break;
-            masterBar = masterBar.nextSibling();
+            masterBar = masterBar.nextSiblingElement("MasterBar");
             }
       QString b = masterBar.lastChildElement("Bars").toElement().text();
       //work out the number of measures (add 1 as couning from 0, and divide by number of parts)
@@ -2090,7 +2094,10 @@ void GuitarPro6::readMasterBars(GPPartInfo* partInfo)
       Measure* measure       = score->firstMeasure();
       int bar                = 0;
       QDomNode nextMasterBar = partInfo->masterBars;
-      nextMasterBar = nextMasterBar.nextSibling();
+      if (nextMasterBar.nodeName() != QLatin1String("MasterBar"))
+            nextMasterBar = nextMasterBar.nextSiblingElement("MasterBar");
+      if (nextMasterBar.isNull())
+            return;
       int measureCounter = 0;
       //int last_counter   = -1, last_counter2 = -1, max_counter = -1;
       std::vector<ClefType> oldClefId(staves);
@@ -2425,7 +2432,7 @@ void GuitarPro6::readMasterBars(GPPartInfo* partInfo)
                         }
                   }
             measureCounter++;
-            nextMasterBar = nextMasterBar.nextSibling();
+            nextMasterBar = nextMasterBar.nextSiblingElement("MasterBar");
             measure       = measure->nextMeasure();
             bar++;
             } while (!nextMasterBar.isNull());
