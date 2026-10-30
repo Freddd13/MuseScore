@@ -1,6 +1,6 @@
 # MuseScore Evolution 个人功能说明
 
-当前版本：**0.153.0 · Kumo branch / Freddd13**。
+当前版本：**0.154.0 · Kumo branch / Freddd13**。
 
 先按下面的任务找到入口。每章有完整操作例子、按钮说明、保存和撤销方法。“帮助 → 个人功能说明”可以在软件里直接阅读。
 
@@ -10,6 +10,7 @@
 
 | 想完成的事 | 从哪里开始 |
 |---|---|
+| 更新Codex连接，确认实际运行的MCP版本 | [更新连接与读取谱图](docs/AI_CONNECTION_154_GUIDE.md) |
 | SF3钢琴初次起播、音源加载与取消 | [首次钢琴播放](docs/SF3_START_153_GUIDE.md) |
 | 多轨一起播放，切谱后继续使用原曲 | [多轨播放与保存](docs/REFERENCE_SESSIONS_153_GUIDE.md) |
 | 换谱后继续录制、查看各自的原曲与频谱 | [换谱后继续使用工具](docs/WORKFLOW_SWITCH_152_GUIDE.md) |
@@ -32,7 +33,7 @@
 | 调整编辑器尺寸、切换工作视图和工具页 | [窗口操作与区域高度](docs/LAYOUT_079_GUIDE.md) |
 | 把区域移到右侧或悬浮 | [区域摆放](docs/WORKSPACE_064_GUIDE.md) |
 | 选择原曲音轨、删除恢复、拖滑块调速度 | [原曲音轨操作](docs/WORKSPACE_064_GUIDE.md#管理多条原曲音轨) |
-| 连接 Codex，让它读取或建议写法 | 视图 → AI 连接；[第一次连接与当前谱](docs/AI_IDENTITY_140_GUIDE.md) |
+| 连接 Codex，让它读取或建议写法 | 视图 → AI 连接；[配置、更新和读取谱图](docs/AI_CONNECTION_154_GUIDE.md) |
 | 调整力度、速度、踏板 | 下文“演奏编辑器” |
 | 设置mp、mf等记号的默认力度 | 演奏编辑器 → 操作设置… → 力度记号；[完整步骤](docs/DYNAMICS_082_GUIDE.md) |
 | 谱面滚轮调力度、谱行带跟随选音、保留上一和弦 | [谱面调节与和弦显示](docs/SCORE_HARMONY_075_GUIDE.md) |
@@ -777,3 +778,7 @@ AI按分析、演奏和净谱读取需要的资料，保留真实乐器／谱表
 ### 2026-10-30：首次SF3钢琴与取消
 
 0.153提前准备默认钢琴样本，修复已有通道取消后仍报成功。操作见[首次钢琴播放](docs/SF3_START_153_GUIDE.md)，实际结果见[检查记录](docs/SF3_START_153_CHECKS.md)，当前程序提交定位personal-v0.153.0。
+
+### 2026-10-30：查看连接实际使用的版本
+
+0.154在“AI连接”分别列出每个MCP进程的版本；仍运行旧连接时，刷新和检查会显示更新方法。随包MCP2.7.2，操作见[更新连接与读取谱图](docs/AI_CONNECTION_154_GUIDE.md)，实际结果见[检查记录](docs/AI_CONNECTION_154_CHECKS.md)，提交定位personal-v0.154.0。

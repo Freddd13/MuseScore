@@ -78,12 +78,14 @@ class ConnectionDialog : public QDialog {
     for (const auto &item : values) {
       const auto value = item.toObject();
       const bool active = value.value("active").toInt() > 0;
+      const QString version = value.value("version").toString().isEmpty() ? tr("待核对") : value.value("version").toString();
       const QString phase = !value.value("known").toBool() ? tr("旧连接 · 活动状态待核对")
         : active ? tr("正在处理任务")
         : value.value("requests").toInt() > 0 ? tr("等待下一次请求") : tr("等待首次请求");
       const auto stamp = [](double seconds) { return QDateTime::fromMSecsSinceEpoch(qRound64(seconds * 1000)).toString("MM-dd HH:mm:ss"); };
-      auto row = new QTreeWidgetItem(sessions, {tr("进程 %1").arg(value.value("pid").toInt()), stamp(value.value("started").toDouble()),
+      auto row = new QTreeWidgetItem(sessions, {tr("进程 %1").arg(value.value("pid").toInt()), version, stamp(value.value("started").toDouble()),
         value.value("lastRequest").toDouble() > 0 ? stamp(value.value("lastRequest").toDouble()) : tr("未记录"), phase});
+      row->setToolTip(0, tr("MCP版本：%1\n程序：%2").arg(version, value.value("program").toString()));
       row->setData(0, Qt::UserRole, value.value("token").toString());
       row->setData(0, Qt::UserRole + 1, active);
       if (row->data(0, Qt::UserRole).toString() == token) sessions->setCurrentItem(row);
@@ -120,7 +122,7 @@ class ConnectionDialog : public QDialog {
         if (result.value("ok").toBool()) {
           if (result.contains("codex")) setCodexState(result.value("codex").toObject());
           if (result.contains("sessions")) updateSessions(result.value("sessions").toArray());
-          if (mode == "--sessions") status->setText(tr("已读取连接。结束所选项会断开该 Codex 会话的 MuseScore 工具。"));
+          if (mode == "--sessions") status->setText(result.value("message").toString(tr("已读取连接。结束所选项会断开该 Codex 会话的 MuseScore 工具。")));
           else status->setText(result.value("message").toString(tr("连接成功。Codex 可以读取当前乐谱。")));
         } else {
           setCodexState({});
@@ -194,7 +196,7 @@ public:
     sessionMore->setToolButtonStyle(Qt::ToolButtonTextBesideIcon); row->addWidget(sessionMore);
     auto reload = new QPushButton(tr("刷新连接列表")); reload->setObjectName("aiRefreshSessions"); setComponentToolIcon(reload, "refresh"); row->addWidget(reload); row->addStretch();
     sessionDetails = new QWidget; auto details = new QVBoxLayout(sessionDetails); details->setContentsMargins(0, 0, 0, 0); layout->addWidget(sessionDetails);
-    sessions = new QTreeWidget; sessions->setObjectName("aiMcpSessions"); sessions->setRootIsDecorated(false); sessions->setHeaderLabels({tr("连接"), tr("启动时间"), tr("最近请求"), tr("状态")});
+    sessions = new QTreeWidget; sessions->setObjectName("aiMcpSessions"); sessions->setRootIsDecorated(false); sessions->setHeaderLabels({tr("连接"), tr("MCP版本"), tr("启动时间"), tr("最近请求"), tr("状态")});
     sessions->setFixedHeight(72); sessions->header()->setSectionResizeMode(QHeaderView::ResizeToContents); sessions->header()->setStretchLastSection(true); details->addWidget(sessions);
     row = new QHBoxLayout; details->addLayout(row);
     endSession = new QPushButton(tr("结束所选连接")); endSession->setObjectName("aiEndSession"); setComponentToolIcon(endSession, "stop"); row->addWidget(endSession); row->addStretch();

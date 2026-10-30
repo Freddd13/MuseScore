@@ -634,10 +634,10 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	59	固定来源、官方
 相接同音与自然开关	audio/exports/midigate.h	QVector<MidiGateNote> process(	151	明确音继续计算、成组自然变化、必要松手单独使用	mtest/mscore/p0native/tst_p0native.cpp
 踏板对比与设置	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::settings	178	设置显隐、取消保存与选定踏板	mtest/mscore/p0native/tst_p0native.cpp
 踏板对比与设置	mscore/midicrop/midicroppanel.cpp	compare	237	设置显隐、取消保存与选定踏板	mtest/mscore/p0native/tst_p0native.cpp
-AI连接独立控制	mscore/workflow/aiconnectionpanel.inc	ConnectionDialog	145	读谱启停、自动开启、Codex及会话列表	mtest/mscore/pluginhost/ai_133_tests.inc
-MCP会话控制	../../mcp-musescore/src/sessions.py	sessions	89	进程身份、活动记录及所选连接退出	../../mcp-musescore/tests/test_sessions.py
-MCP会话控制	../../mcp-musescore/src/sessions.py	end_session	121	进程身份、活动记录及所选连接退出	../../mcp-musescore/tests/test_sessions.py
-MCP会话控制	../../mcp-musescore/src/sessions.py	ClientSession	161	进程身份、活动记录及所选连接退出	../../mcp-musescore/tests/test_sessions.py
+AI连接独立控制	mscore/workflow/aiconnectionpanel.inc	ConnectionDialog	147	读谱启停、自动开启、Codex及会话列表	mtest/mscore/pluginhost/ai_133_tests.inc
+MCP会话控制	../../mcp-musescore/src/sessions.py	sessions	74	进程身份、活动记录及所选连接退出	../../mcp-musescore/tests/test_sessions.py
+MCP会话控制	../../mcp-musescore/src/sessions.py	end_session	167	进程身份、活动记录及所选连接退出	../../mcp-musescore/tests/test_sessions.py
+MCP会话控制	../../mcp-musescore/src/sessions.py	ClientSession	207	进程身份、活动记录及所选连接退出	../../mcp-musescore/tests/test_sessions.py
 MIDI反复与导出时间	audio/exports/exportmidi.cpp	ExportMidi::write	261	当前反复、暂停和提前起音元数据	mtest/mscore/p0native/tst_p0native.cpp
 导出选项与音符身份	audio/exports/midigatefile.cpp	midiGateSnapshot	9	RPN变化保留手别与松手	mtest/mscore/p0native/tst_p0native.cpp
 MIDI试听与提前区定位	mscore/workflow/playbackpreview.cpp	startPlaybackPreview	193	第二遍、声音位置、暂停和普通设置恢复	mtest/mscore/performanceeditor/midi_repeat_134_tests.inc
@@ -712,3 +712,6 @@ SF3初次钢琴准备	audio/midi/fluid/fluid.cpp	bool Fluid::prepareDefaultPrese
 可见谱面边界	mscore/workflow/workspaceviews.cpp	QRect playbackScoreViewport(const ScoreView *view)	393	父窗口裁切与实际可见谱面	personal/docs/FOLLOW_VARIANTS_142_CHECKS.md
 写法共用演奏标记	libmscore/regionalvariants.cpp	SelectionFilter writingFilter()	42	捕获与替换共用筛选，保留踏板及力度	personal/docs/FOLLOW_VARIANTS_142_CHECKS.md
 写法踏板连续检查	mtest/mscore/pluginhost/regional_142_tests.inc	void TestPluginHost::regionalSharedControls142()	68	真实按钮、修改删除、分谱、保存与CC64	personal/docs/FOLLOW_VARIANTS_142_CHECKS.md
+连接版本显示	mscore/workflow/aiconnectionpanel.inc	void updateSessions(const QJsonArray &values)	73	版本独立列，保持连接列表选择	personal/docs/AI_CONNECTION_154_CHECKS.md
+双版本实际连接	mtest/mscore/pluginhost/ai_154_tests.inc	void TestPluginHost::aiConnectionRuntimeVersions154()	2	实际刷新、检查与两个stdio进程	personal/docs/AI_CONNECTION_154_CHECKS.md
+运行MCP版本	../../mcp-musescore/src/sessions.py	def connection_report(values, codex):	108	运行与配置分别记录，提示旧版本	personal/docs/AI_CONNECTION_154_CHECKS.md

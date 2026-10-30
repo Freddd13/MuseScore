@@ -9,7 +9,7 @@
 3. 第一次使用或更新连接工具后，点击“配置 Codex”，再在Codex重新连接。勾选“允许 Codex 启动 MuseScore MCP”后即可使用。
 4. 点击“检查连接”，核对显示的谱名。到Codex输入：“读取当前MuseScore，告诉我谱面标题、作品信息标题、文件名，以及当前是总谱还是哪份分谱。”
 
-连接工具随程序提供，普通使用直接运行附带的exe。配置步骤依据[Codex官方MCP说明](https://learn.chatgpt.com/docs/developer-commands#codex-mcp)。
+连接工具随程序提供，普通使用直接运行附带的exe。配置步骤依据[Codex官方MCP说明](https://developers.openai.com/codex/mcp/)。
 
 ![两个窗口中的谱名、文件和选择入口](images/ai-identity-140-A.png)
 
@@ -33,10 +33,12 @@ Codex默认用谱面可见标题称呼这份谱，同时获得另外两项及名
 
 连接工具的`get_score_identity`用于轻量确认当前谱；`read_arrangement_context`读取完整选段，`get_score_data`提供结构音符，`get_score`保留LilyPond音符文本。它们共用本次标题和谱的身份。
 
-原生选段图及更完整的AI编配过程接着按E2实现。当前音符示意图的入口仍在原有位置。
+原生选段图已经可以读取，完整操作见[对照实际谱图](AI_IMAGES_141_GUIDE.md)。
 
 ## 保存、开关与恢复
 
 查看当前谱保持原选音、播放位置和保存状态。标题仍在谱面、作品信息和“另存为”各自的原位置编辑。
 
 暂时停用或管理多个MCP进程，见[AI连接的开启、停止与连接列表](AI_CONNECTION_133_GUIDE.md)。移动程序目录后，重新点“配置 Codex”更新工具路径；已有的关闭设置继续保留。
+
+更新后先按[当前连接步骤](AI_CONNECTION_154_GUIDE.md)核对正在运行的MCP版本，再读取当前谱和原生图。
