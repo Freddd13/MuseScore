@@ -704,4 +704,4 @@ D1输入与线条操作	mtest/mscore/performanceeditor/notation_135_tests.inc	ri
 两份谱八轨资料	mtest/mscore/performanceeditor/media_152_tests.inc	void TestPerformanceEditor::referenceSpectrumAcrossScores152()	2	删除恢复、频谱选轨与保存重开	personal/docs/WORKFLOW_SWITCH_152_CHECKS.md
 八轨输出与换谱	mtest/mscore/performanceeditor/media_153_tests.inc	void TestPerformanceEditor::referenceEightTrackSessions153()	2	实际混音、停播重播、和弦与所属乐谱	personal/docs/WORKFLOW_EXPORT_153_CHECKS.md
 连续编曲的导出对照	mtest/mscore/pluginhost/workflow_sessions_tests.inc	QFile currentMidi(	113	保存前的当前组合实际MIDI	personal/docs/WORKFLOW_EXPORT_153_CHECKS.md
-安装版最终输出	../../muse3_plugins/P2/check_workflow_exports.py	def main():	22	重开后的MIDI与最终PDF	personal/docs/WORKFLOW_EXPORT_153_CHECKS.md
+安装版最终输出	../../muse3_plugins/P2/check_workflow_exports.py	def main():	23	重开后的MIDI与最终PDF	personal/docs/WORKFLOW_EXPORT_153_CHECKS.md
