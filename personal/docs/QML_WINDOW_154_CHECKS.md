@@ -4,11 +4,13 @@
 
 ## 实际原因
 
-当前Windows输入桌面为Default，主检查面板已经绘出。原操作在弹出“编配提示”后立即截图，仍会以同样调用栈中断：QQuickWindow::grabWindow → QSGThreadedRenderLoop::grab。
+默认绘制检查中，主面板已经绘出。原操作在弹出“编配提示”后立即截图，仍会以同样调用栈中断：QQuickWindow::grabWindow → QSGThreadedRenderLoop::grab。
 
 分别记录窗口状态后确认：刚执行show时，visible为true，isExposed和isSceneGraphInitialized均为false。测试只检查visible，随后立即进入Qt截图；此时Qt尚未登记该窗口的绘制线程。Qt5.15.2在这个位置只用Q_ASSERT检查，发布构建继续访问空对象。
 
-现在测试先等待窗口实际显示及首帧，再取图。三个连续流程都从true／false／false变为true／true／true，并收到首帧。此前将问题与锁屏关联的判断已经修正。
+现在测试先等待窗口实际显示及首帧，再取图。三个连续流程都从true／false／false变为true／true／true，并收到首帧。
+
+桌面状态的记录也已更正：Windows查询返回Default，随后实际桌面画面仍是锁屏。这个名称不足以说明桌面已经解锁。本项确认的是测试取图时序与默认绘制结果；CFX厂商窗口的真实鼠标操作等待解锁后继续。
 
 Qt截图接口及窗口显示状态见[Qt官方说明](https://doc.qt.io/archives/qt-5.15/qquickwindow.html#grabWindow)。
 

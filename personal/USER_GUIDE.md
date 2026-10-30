@@ -47,7 +47,7 @@
 | 给已经写好的音高换节奏 | [写节奏](docs/P2_RHYTHM_062_GUIDE.md) |
 | 查看指法、分手、配音与对位建议 | [编配建议](docs/P2_SUGGESTIONS_061_GUIDE.md) |
 | 锁定一行、在行内插入小节、解除锁定 | [谱行操作与保存](docs/ENGRAVING_138_GUIDE.md) |
-| 使用 Pianoteq、CFX，给乐器加效果 | [音源与效果完整步骤](docs/WORKSPACE_069_GUIDE.md) |
+| 使用 Pianoteq、CFX，给乐器加效果 | [音源与效果完整步骤](docs/VST_088_GUIDE.md) |
 | 分享前统一关闭个人工具 | [kumo.ini 开关](docs/WORKSPACE_063_GUIDE.md) |
 
 播放后继续操作符号面板、原曲参考和编辑器，见[播放与面板点击](docs/INPUT_120_GUIDE.md)。
@@ -679,7 +679,7 @@ Ctrl+Z撤销，编辑菜单中的“重做”可恢复这一步。节点位置�
 
 踏板相接两端的拖动、画抬起间隙、重画和删除恢复，见[踏板编辑](docs/PEDAL_105_GUIDE.md)。
 
-本次补充的音源面板、换谱保留和两种踏板方式见[后续安排](docs/SOUND_PEDAL_PLAN.md)。这些选项随对应批次交付，当前音源操作见[使用步骤](docs/VST_088_GUIDE.md)。
+多份谱共用钢琴、换谱保留音源和踏板方式已经提供。音源面板的完整操作见[使用步骤](docs/VST_088_GUIDE.md)，踏板方式见[踏板播放与编辑](docs/PEDAL_106_GUIDE.md)。
 
 AI怎样读取当前谱、标题和图片，见[当前实现与后续安排](docs/AI_WORKFLOW_REVIEW_20261024.md)。当前旧画谱入口会根据音符重新排版；MuseScore原生选段图片与数据一起提供的功能安排在E阶段。
 
