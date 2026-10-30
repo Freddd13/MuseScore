@@ -1,6 +1,6 @@
 # MuseScore Evolution 个人功能说明
 
-当前版本：**0.152.0 · Kumo branch / Freddd13**。
+当前版本：**0.153.0 · Kumo branch / Freddd13**。
 
 先按下面的任务找到入口。每章有完整操作例子、按钮说明、保存和撤销方法。“帮助 → 个人功能说明”可以在软件里直接阅读。
 
@@ -10,6 +10,7 @@
 
 | 想完成的事 | 从哪里开始 |
 |---|---|
+| SF3钢琴初次起播、音源加载与取消 | [首次钢琴播放](docs/SF3_START_153_GUIDE.md) |
 | 多轨一起播放，切谱后继续使用原曲 | [多轨播放与保存](docs/REFERENCE_SESSIONS_153_GUIDE.md) |
 | 换谱后继续录制、查看各自的原曲与频谱 | [换谱后继续使用工具](docs/WORKFLOW_SWITCH_152_GUIDE.md) |
 | 演奏采用后撤销、重做，继续修改和比较 | [演奏比较自动更新](docs/EXPRESSION_REFRESH_151_GUIDE.md) |
@@ -596,6 +597,8 @@ Ctrl+Z撤销，编辑菜单中的“重做”可恢复这一步。节点位置�
 
 ### 使用VST或回到SF2
 
+0.153在载入SF3音源时提前准备默认钢琴样本，首次起播直接使用。加载可以取消后重新尝试，完整操作见[SF3钢琴的首次播放](docs/SF3_START_153_GUIDE.md)。
+
 打开“视图 → 音源与效果（VST）”，在“乐器”里选钢琴。点“添加插件…”扫描安装好的音源，选中后点“用作此乐器音源”，再点“打开音源”选择钢琴与预设。点“使用原内置音源”恢复原来的SF2音色。效果链旁可保存、载入选中效果的预设，参数窗口支持撤销与重做。完整例子见[使用钢琴音源与效果](docs/VST_088_GUIDE.md)。
 
 ### 工作区域太小或窗口跑到外面
@@ -612,13 +615,13 @@ Ctrl+Z撤销，编辑菜单中的“重做”可恢复这一步。节点位置�
 
 ## 附录与开发记录
 
-- [正在核对的实际按键、分手与移动时间操作例子](docs/ARRANGEMENT_PHYSICAL_GUIDE.md)；安装状态见[当前进度](docs/REWORK_PROGRESS.md)。
-- [正在核对的延音换指与换手](docs/ARRANGEMENT_TIED_GUIDE.md)；安装状态见[当前进度](docs/REWORK_PROGRESS.md)。
-- [后续换指与提前松手怎样一起检查](docs/ARRANGEMENT_REQUIRED_GUIDE.md)；本批源码已检查，尚未安装。
-- [备选指法与连续琶音](docs/ARRANGEMENT_ALTERNATIVE_GUIDE.md)；源码已检查，尚未安装。
-- [同一个音上写1-3，怎样安排换指](docs/ARRANGEMENT_SUBSTITUTION_GUIDE.md)；源码已检查，尚未安装。
-- [按实际按键安排指法建议](docs/SUGGESTIONS_PHYSICAL_GUIDE.md)；源码已检查，尚未安装。
-- [比较换手、音区和声部写法](docs/SUGGESTIONS_CANDIDATES_GUIDE.md)；源码已检查，尚未安装。
+- [实际按键、分手与移动时间操作例子](docs/ARRANGEMENT_PHYSICAL_GUIDE.md)；安装状态见[当前进度](docs/REWORK_PROGRESS.md)。
+- [延音换指与换手](docs/ARRANGEMENT_TIED_GUIDE.md)；安装状态见[当前进度](docs/REWORK_PROGRESS.md)。
+- [后续换指与提前松手怎样一起检查](docs/ARRANGEMENT_REQUIRED_GUIDE.md)。
+- [备选指法与连续琶音](docs/ARRANGEMENT_ALTERNATIVE_GUIDE.md)。
+- [同一个音上写1-3，怎样安排换指](docs/ARRANGEMENT_SUBSTITUTION_GUIDE.md)。
+- [按实际按键安排指法建议](docs/SUGGESTIONS_PHYSICAL_GUIDE.md)。
+- [比较换手、音区和声部写法](docs/SUGGESTIONS_CANDIDATES_GUIDE.md)。
 - [截至0.75的说明、设计记录与字体研究](docs/USER_GUIDE_HISTORY_075.md)
 - [版本更新日志](CHANGELOG.md)
 - [本轮使用检查与返工记录](docs/USABILITY_REWORK_20261019.md)
@@ -770,3 +773,7 @@ AI按分析、演奏和净谱读取需要的资料，保留真实乐器／谱表
 ### 2026-10-30：换谱后的首次点按与八轨资料
 
 0.152修复换谱后延迟恢复滚动位置覆盖新操作、首次录制点击落空的路径，并结束旧结果的定位任务。两份谱的八轨原曲、删除恢复、频谱与保存重开见[操作](docs/WORKFLOW_SWITCH_152_GUIDE.md)及[检查记录](docs/WORKFLOW_SWITCH_152_CHECKS.md)，当前程序提交定位personal-v0.152.0。
+
+### 2026-10-30：首次SF3钢琴与取消
+
+0.153提前准备默认钢琴样本，修复已有通道取消后仍报成功。操作见[首次钢琴播放](docs/SF3_START_153_GUIDE.md)，实际结果见[检查记录](docs/SF3_START_153_CHECKS.md)，当前程序提交定位personal-v0.153.0。

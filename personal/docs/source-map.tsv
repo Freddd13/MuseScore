@@ -89,11 +89,11 @@ plugin-preview	mscore/plugin/qmlplugin.cpp	QmlPlugin::focusPanel	101	聚焦已�
 plugin-display	mscore/plugin/api/scoreobserver.cpp	static qreal previewTickX	444	变化节拍定位，无新音时插值	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-display	mscore/plugin/qmlplugin.cpp	QmlPlugin::showDetailPanel	175	共享控件的单辅助停靠窗口	mtest/mscore/pluginhost/tst_pluginhost.cpp
 plugin-display	mscore/scoreview.cpp	QRectF ScoreView::previewEditBounds	1243	原生编辑/拖动优先区域	mtest/mscore/pluginhost/tst_pluginhost.cpp
-SF2/SF3解析	audio/midi/fluid/sfont.cpp	bool SFont::load()	840	标准RIFF/LIST边界与HYDRA元数据	mtest/audio/sfloader
-大型SF2预加载	audio/midi/fluid/sfont.cpp	bool SFont::preloadSamples()	115	按引用去重预加载后发布	mtest/audio/sfloader;mtest/audio/sfloadergui
-采样缓冲提交	audio/midi/fluid/sfont.cpp	bool Sample::load()	681	宽类型偏移/分段读取/失败可重试	mtest/audio/sfloader
-SF2文件跳转	audio/midi/fluid/sfont.cpp	void SFont::safe_fseek(qint64 ofs)	1849	修复跨2GiB的signed int/long截断	mtest/audio/sfloader
-音源发布与失败	audio/midi/fluid/fluid.cpp	int Fluid::sfload(const QString& filename)	780	RAII新对象/加载原因/大型阈值	mtest/audio/sfloader
+SF2/SF3解析	audio/midi/fluid/sfont.cpp	bool SFont::load()	842	标准RIFF/LIST边界与HYDRA元数据	mtest/audio/sfloader
+大型SF2预加载	audio/midi/fluid/sfont.cpp	bool SFont::preloadSamples(Preset* selected)	115	按引用去重预加载后发布	mtest/audio/sfloader;mtest/audio/sfloadergui
+采样缓冲提交	audio/midi/fluid/sfont.cpp	bool Sample::load()	683	宽类型偏移/分段读取/失败可重试	mtest/audio/sfloader
+SF2文件跳转	audio/midi/fluid/sfont.cpp	void SFont::safe_fseek(qint64 ofs)	1851	修复跨2GiB的signed int/long截断	mtest/audio/sfloader
+音源发布与失败	audio/midi/fluid/fluid.cpp	int Fluid::sfload(const QString& filename)	813	RAII新对象/加载原因/大型阈值	mtest/audio/sfloader
 异步音源GUI	audio/midi/fluid/fluidgui.cpp	void FluidGui::loadSf()	311	先停止播放/后台进度与取消/提示原因	mtest/audio/sfloadergui
 自动节奏策略	libmscore/inputrhythm.cpp	bool InputRhythm::normalize	61	局部链比较/重组/数值选区与光标恢复	mtest/libmscore/inputrhythm
 复杂对象保护	libmscore/inputrhythm.cpp	bool InputRhythm::eligible	42	自定义事件和复杂附着保守跳过	mtest/libmscore/inputrhythm
@@ -350,7 +350,7 @@ CFX 状态比较	audio/vst/plugin.cpp	bool sameConfiguration(	116	保留完整�
 VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	285	空列表显示添加步骤，区分音源与效果	mtest/mscore/pluginhost/usability_072_tests.inc
 演奏结果逐音列表	share/workflow/panels/PerformanceExpression/ExpressionResults.qml	ColumnLayout {	7	音名、拍位、前后力度、分类与定位；预览拖动保留列表位置	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/PerformanceExpression/tests/test-results.cjs
 演奏结果文字整理	share/workflow/panels/PerformanceExpression/ExpressionRows.js	function build(	25	同音不同声部、已采用、需核对、漏弹多弹与拼写	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/PerformanceExpression/tests/test-results.cjs
-内置音源释放	audio/midi/fluid/fluid.cpp	Fluid::~Fluid()	119	停止后释放声音资源，再解锁互斥量	mtest/mscore/pluginhost/tst_pluginhost.cpp
+内置音源释放	audio/midi/fluid/fluid.cpp	Fluid::~Fluid()	120	停止后释放声音资源，再解锁互斥量	mtest/mscore/pluginhost/tst_pluginhost.cpp
 频谱标注区开关与高度	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::updateMarksVisibility()	1734	空列表收起，分隔条调整频谱与标注高度，保存个人设置	mtest/mscore/pluginhost/tst_pluginhost.cpp
 原曲面板连续播放检查	mtest/mscore/performanceeditor/reference_panel_074_tests.inc	void referencePanelRepeatedTransport()	1	实际面板按钮与演奏器、音频位置核对	mtest/mscore/performanceeditor/reference_panel_074_tests.inc
 原曲音轨开关	share/workflow/panels/ReferencePlayer/ReferencePlayer.view.qml	function setTrackFlag(	158	统一音轨开关事件，避免列表重建后访问旧行	mtest/mscore/pluginhost/tst_pluginhost.cpp
@@ -705,3 +705,6 @@ D1输入与线条操作	mtest/mscore/performanceeditor/notation_135_tests.inc	ri
 八轨输出与换谱	mtest/mscore/performanceeditor/media_153_tests.inc	void TestPerformanceEditor::referenceEightTrackSessions153()	2	实际混音、停播重播、和弦与所属乐谱	personal/docs/WORKFLOW_EXPORT_153_CHECKS.md
 连续编曲的导出对照	mtest/mscore/pluginhost/workflow_sessions_tests.inc	QFile currentMidi(	113	保存前的当前组合实际MIDI	personal/docs/WORKFLOW_EXPORT_153_CHECKS.md
 安装版最终输出	../../muse3_plugins/P2/check_workflow_exports.py	def main():	23	重开后的MIDI与最终PDF	personal/docs/WORKFLOW_EXPORT_153_CHECKS.md
+SF3初次钢琴准备	audio/midi/fluid/fluid.cpp	bool Fluid::prepareDefaultPreset()	705	随加载准备默认钢琴，复用样本	personal/docs/SF3_START_153_CHECKS.md
+加载期间的输入	audio/midi/fluid/fluid.cpp	const auto unlock = qScopeGuard	152	事件及时返回，加载共享数据有序访问	personal/docs/SF3_START_153_CHECKS.md
+冷启动与取消重试	mtest/mscore/pluginhost/fluid_153_tests.inc	void TestPluginHost::fluidColdSamples153()	22	先读取实际驻留数再测首个声音块	personal/docs/SF3_START_153_CHECKS.md

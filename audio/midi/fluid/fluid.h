@@ -321,6 +321,7 @@ class Fluid : public Synthesizer {
 
       QMutex mutex;
       void updatePatchList();
+      bool prepareDefaultPreset();
 
       //the variable is used to stop loading samples from the sf files
       std::atomic<bool> _globalTerminate { false };

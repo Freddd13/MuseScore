@@ -110,13 +110,15 @@ bool SFont::read(const QString& s)
       return true;
       }
 
-// Used before publishing large SF2s. Only referenced samples are resident;
-// sample objects shared by zones/presets are read once. No audio-thread I/O.
-bool SFont::preloadSamples()
+// Load one selected preset, or all referenced samples for a large SF2.
+// Shared sample objects are read once, on the font-loading thread.
+bool SFont::preloadSamples(Preset* selected)
       {
       _error.clear();
       QSet<Sample*> referenced;
       for (Preset* p : qAsConst(presets)) {
+            if (selected && p != selected)
+                  continue;
             auto addInstrument = [&referenced](Instrument* i) {
                   if (!i)
                         return;

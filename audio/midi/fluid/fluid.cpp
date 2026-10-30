@@ -30,6 +30,7 @@
 #include "mscore/preferences.h"
 #include "mscore/extension.h"
 #include <memory>
+#include <QScopeGuard>
 #include <new>
 
 namespace FluidS {
@@ -144,6 +145,11 @@ void Fluid::freeVoice(Voice* v)
 
 void Fluid::play(const PlayEvent& event)
       {
+      // Font loading and replacement own this lock. The audio thread keeps
+      // running while the loader prepares complete sample buffers.
+      if (!mutex.tryLock())
+            return;
+      const auto unlock = qScopeGuard([this] { mutex.unlock(); });
       bool err = false;
       int ch   = event.channel();
 
@@ -696,12 +702,28 @@ std::vector<SoundFontInfo> Fluid::soundFontsInfo() const
 //    return false on error
 //---------------------------------------------------------
 
+bool Fluid::prepareDefaultPreset()
+      {
+      // Existing channels are prepared by updatePatchList(). A new channel
+      // starts on bank 0/program 0 before its queued initialization arrives.
+      if (!channel.isEmpty())
+            return true;
+      Preset* preset = find_preset(0, 0);
+      if (!preset || preset->sfont->version().major != 3)
+            return true;
+      if (preset->sfont->preloadSamples(preset))
+            return true;
+      _error = preset->sfont->error();
+      return false;
+      }
+
 bool Fluid::loadSoundFonts(const QStringList& sl)
       {
       QStringList ol = soundFonts();
       if (ol == sl) {
             qDebug("Fluid:loadSoundFonts: already loaded");
-            return true;
+            QMutexLocker locker(&mutex);
+            return prepareDefaultPreset();
             }
       QMutexLocker locker(&mutex);
       for(Voice* v : qAsConst(activeVoices))
@@ -740,6 +762,12 @@ bool Fluid::loadSoundFonts(const QStringList& sl)
                   locker.unlock();
                   }
             }
+      locker.relock();
+      if (!prepareDefaultPreset()) {
+            while (!sfonts.isEmpty())
+                  sfunload(sfonts.front()->id());
+            return false;
+            }
       return ok;
       }
 
@@ -751,8 +779,13 @@ bool Fluid::loadSoundFonts(const QStringList& sl)
 bool Fluid::addSoundFont(const QString& s)
       {
       QMutexLocker locker(&mutex);
-      bool rv = (sfload(s) == -1) ? false : true;
-      return rv;
+      const int id = sfload(s);
+      if (id == -1)
+            return false;
+      if (prepareDefaultPreset())
+            return true;
+      sfunload(id);
+      return false;
       }
 
 //---------------------------------------------------------
@@ -770,7 +803,7 @@ bool Fluid::removeSoundFont(const QString& s)
             return false;
       
       sfunload(sf->id());
-      return true;
+      return prepareDefaultPreset();
       }
 
 //---------------------------------------------------------
@@ -807,6 +840,12 @@ int Fluid::sfload(const QString& filename)
             catch (...) {
                   sfonts.removeAll(sf.get());
                   throw;
+                  }
+            if (loadWasCanceled() || globalTerminate()) {
+                  sfonts.removeAll(sf.get());
+                  updatePatchList();
+                  _error = QStringLiteral("Canceled");
+                  return -1;
                   }
             return sf.release()->id();
             }

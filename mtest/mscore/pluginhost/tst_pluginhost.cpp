@@ -286,6 +286,10 @@ class TestPluginHost : public QObject {
       void continuousComposition();
       void regionalSidebarLifecycle();
       void continuousWorkflowSessions();
+      void fluidColdSamples153();
+      void fluidColdSamples153_data();
+      void fluidCancelPreparation153();
+      void fluidCancelPreparation153_data();
       void continuousWorkflowScoreSwitching_data();
       void continuousWorkflowScoreSwitching();
       void velocityBackupKeepsOnlyScoreNotes149();
@@ -1571,6 +1575,7 @@ class TestPluginHost : public QObject {
 #include "sharing_145_tests.inc"
 #include "composition_flow_tests.inc"
 #include "workflow_sessions_tests.inc"
+#include "fluid_153_tests.inc"
 #include "workflow_score_switching_tests.inc"
 #include "workflow_recording_switch_tests.inc"
 #include "workflow_expression_refresh_tests.inc"

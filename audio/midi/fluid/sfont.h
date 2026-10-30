@@ -118,7 +118,7 @@ class SFont {
       void setSamplesize(qint64 v)              { samplesize = v; }
       qint64 getSamplesize() const              { return samplesize; }
       QString error() const                     { return _error; }
-      bool preloadSamples();
+      bool preloadSamples(Preset* selected = nullptr);
       const QList<Preset*> getPresets() const   { return presets; }
       SFVersion version() const                 { return _version; }
       int bankOffset() const                    { return _bankOffset; }
