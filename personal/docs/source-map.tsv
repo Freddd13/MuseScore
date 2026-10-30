@@ -708,3 +708,7 @@ D1输入与线条操作	mtest/mscore/performanceeditor/notation_135_tests.inc	ri
 SF3初次钢琴准备	audio/midi/fluid/fluid.cpp	bool Fluid::prepareDefaultPreset()	705	随加载准备默认钢琴，复用样本	personal/docs/SF3_START_153_CHECKS.md
 加载期间的输入	audio/midi/fluid/fluid.cpp	const auto unlock = qScopeGuard	152	事件及时返回，加载共享数据有序访问	personal/docs/SF3_START_153_CHECKS.md
 冷启动与取消重试	mtest/mscore/pluginhost/fluid_153_tests.inc	void TestPluginHost::fluidColdSamples153()	22	先读取实际驻留数再测首个声音块	personal/docs/SF3_START_153_CHECKS.md
+可见谱面跟随开关	mscore/workflow/workspaceviews.cpp	void addVisibleScoreFollow(QToolBar *toolbar)	365	顶部复用原生pan动作，保持个人跟随设置	personal/docs/FOLLOW_VARIANTS_142_CHECKS.md
+可见谱面边界	mscore/workflow/workspaceviews.cpp	QRect playbackScoreViewport(const ScoreView *view)	393	父窗口裁切与实际可见谱面	personal/docs/FOLLOW_VARIANTS_142_CHECKS.md
+写法共用演奏标记	libmscore/regionalvariants.cpp	SelectionFilter writingFilter()	42	捕获与替换共用筛选，保留踏板及力度	personal/docs/FOLLOW_VARIANTS_142_CHECKS.md
+写法踏板连续检查	mtest/mscore/pluginhost/regional_142_tests.inc	void TestPluginHost::regionalSharedControls142()	68	真实按钮、修改删除、分谱、保存与CC64	personal/docs/FOLLOW_VARIANTS_142_CHECKS.md
