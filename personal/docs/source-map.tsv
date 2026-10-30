@@ -715,3 +715,4 @@ SF3初次钢琴准备	audio/midi/fluid/fluid.cpp	bool Fluid::prepareDefaultPrese
 连接版本显示	mscore/workflow/aiconnectionpanel.inc	void updateSessions(const QJsonArray &values)	73	版本独立列，保持连接列表选择	personal/docs/AI_CONNECTION_154_CHECKS.md
 双版本实际连接	mtest/mscore/pluginhost/ai_154_tests.inc	void TestPluginHost::aiConnectionRuntimeVersions154()	2	实际刷新、检查与两个stdio进程	personal/docs/AI_CONNECTION_154_CHECKS.md
 运行MCP版本	../../mcp-musescore/src/sessions.py	def connection_report(values, codex):	108	运行与配置分别记录，提示旧版本	personal/docs/AI_CONNECTION_154_CHECKS.md
+谱旁提示首帧	mtest/mscore/pluginhost/arrangement_083_tests.inc	QSignalSpy hintFrames(nearby,&QQuickWindow::frameSwapped);	102	实际显示后核对完整操作和窗口图像	personal/docs/QML_WINDOW_154_CHECKS.md

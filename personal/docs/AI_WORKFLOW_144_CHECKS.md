@@ -19,8 +19,12 @@
 
 ## 需要继续核对的窗口情况
 
-锁屏时，默认绘制下的编配检查插件在测试调用QQuickWindow::grabWindow截图时崩溃，栈指向QSGThreadedRenderLoop::grab。相同流程在软件绘制下3项通过。原始失败记录保留于P2/out/e2w144-final-console.txt，成功记录为e2w144-qml-software-pluginhost.txt。
+此前默认绘制下的编配检查插件在测试调用QQuickWindow::grabWindow截图时崩溃，栈指向QSGThreadedRenderLoop::grab。当时将它与锁屏关联，当前复查已确认具体原因如下。相同流程在软件绘制下3项通过。原始失败记录保留于P2/out/e2w144-final-console.txt，成功记录为e2w144-qml-software-pluginhost.txt。
 
 本批原生建议面板的默认绘制检查通过。QML默认绘制截图与真实桌面操作继续F-W144，待桌面可操作时复查；实际声音听感继续F。
 
 操作见[AI编配的完整操作](AI_WORKFLOW_144_GUIDE.md)。
+
+## 0.154的默认绘制复查
+
+当前桌面正常显示时也复现了同样崩溃，原因是提示窗刚执行show，测试就立刻截图；visible为true时绘制线程尚未建立。等待实际显示和首帧后，默认绘制的完整操作及连续三次重开均通过，F-W144完成。实际状态和截图见[本次检查](QML_WINDOW_154_CHECKS.md)。
