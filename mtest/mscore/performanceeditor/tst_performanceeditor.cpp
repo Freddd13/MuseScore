@@ -971,6 +971,7 @@ class TestPerformanceEditor : public QObject, public MTest {
       void expressionRecordingAcrossLongRest();
       void expressionFirstClickAfterScoreSwitch152();
       void referenceSpectrumAcrossScores152();
+      void referenceEightTrackSessions153();
       void referenceOneTransportFromEveryEntry();
       void referenceSourcePositionAndLoop();
       void referenceIndependentPlaybackPolicy();
@@ -1264,6 +1265,7 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "reference_099_tests.inc"
 #include "reference_100_tests.inc"
 #include "media_152_tests.inc"
+#include "media_153_tests.inc"
 #include "interaction_139_tests.inc"
 QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"

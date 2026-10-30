@@ -110,6 +110,8 @@ void TestPluginHost::continuousWorkflowSessions()
     QVERIFY(QMetaObject::invokeMethod(reference,"saveScoreProject"));
     QFileInfo saved(_settings.filePath("workflow-sessions.mscz"));QVERIFY(score->saveCompressedFile(saved,false,false));
     const QDir out(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path()));
+    QFile currentMidi(out.filePath("workflow-sessions-current.mid"));QVERIFY(currentMidi.open(QIODevice::WriteOnly));
+    ExportMidi currentExport(score);QVERIFY(currentExport.write(&currentMidi,true,true,main->synthesizerState(),MidiExportOptions()));currentMidi.close();
     QVERIFY(main->grab().save(out.filePath("workflow-sessions.png")));
     QFile source(saved.filePath());QVERIFY(source.open(QIODevice::ReadOnly));QSaveFile archive(out.filePath("workflow-sessions.mscz"));
     QVERIFY(archive.open(QIODevice::WriteOnly));QVERIFY(archive.write(source.readAll())>0);QVERIFY(archive.commit());source.close();
