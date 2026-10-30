@@ -32,3 +32,5 @@
 录制时切谱和关闭后的找回见[录制后继续处理](EXPRESSION_RECORDING_150_GUIDE.md)。
 
 采用后撤销、重做与继续改谱，见[演奏比较自动更新](EXPRESSION_REFRESH_151_GUIDE.md)。
+
+切回乐谱后继续录制及查看各自的原曲，见[换谱后继续使用工具](WORKFLOW_SWITCH_152_GUIDE.md)。

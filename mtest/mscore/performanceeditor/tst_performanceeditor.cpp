@@ -969,6 +969,8 @@ class TestPerformanceEditor : public QObject, public MTest {
       void expressionTempoWithRestsAndCurves();
       void expressionTempoSelectedRanges();
       void expressionRecordingAcrossLongRest();
+      void expressionFirstClickAfterScoreSwitch152();
+      void referenceSpectrumAcrossScores152();
       void referenceOneTransportFromEveryEntry();
       void referenceSourcePositionAndLoop();
       void referenceIndependentPlaybackPolicy();
@@ -1257,9 +1259,11 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "expression_095_tests.inc"
 #include "expression_096_tests.inc"
 #include "expression_097_tests.inc"
+#include "expression_152_tests.inc"
 #include "reference_098_tests.inc"
 #include "reference_099_tests.inc"
 #include "reference_100_tests.inc"
+#include "media_152_tests.inc"
 #include "interaction_139_tests.inc"
 QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"

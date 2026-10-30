@@ -36,7 +36,7 @@ MuseScore {
 
  menuPath:"Plugins.Performance Expression"
  description:"演奏表达：把 MIDI 演奏的力度和速度用于选中的乐谱。"
- version:"1.6.6";requiresScore:true;pluginType:"dock";dockArea:"right"
+ version:"1.6.7";requiresScore:true;pluginType:"dock";dockArea:"right"
  implicitWidth:embeddedWorkflow?700:440;implicitHeight:embeddedWorkflow?180:720
  property var observer:null
  property bool comparisonVisible:observer!==null&&(visible||observer.auxiliarySurfaceVisible)&&observer.surfaceVisible
@@ -77,11 +77,12 @@ MuseScore {
  property var scopeOwner:null
  property var sessionOwner:null
  property bool switchingScore:false
+ property int sessionActionSerial:0
  property string requestedMidiPath:""
  property var displayedScope:retainedScope||liveSelection.scope||scope
  property string targetDescription:displayedScope&&displayedScope.firstMeasure ? "第 "+displayedScope.firstMeasure+"–"+displayedScope.lastMeasure+" 小节"+(displayedScope.partial&&displayedScope.firstBeat!==undefined?" · 第 "+Number(displayedScope.firstBeat.toFixed(3))+" 拍起，至第 "+displayedScope.endMeasure+" 小节"+(displayedScope.endAtBar?"末尾":"第 "+Number(displayedScope.endBeat.toFixed(3))+" 拍前"):"")+" · "+(displayedScope.part||"乐谱")+" · 谱表 "+(Math.floor(displayedScope.firstTrack/4)+1)+"–"+Math.ceil(displayedScope.endTrack/4) : "选中要演奏的一段，再点“当前选区”"
  function sameScore(a,b){return a&&b&&(a===b||a.is(b))}
- function prepareEditing(){pendingAudition=null;auditionRetry.stop();return !previewing||returnOriginal()}
+ function prepareEditing(){resultRevealTimer.stop();pendingAudition=null;auditionRetry.stop();return !previewing||returnOriginal()}
  function readTarget(useWhole){
   var selection=observer.expressionSelection(),range=Project.copy(useWhole?observer.analysisScope(true):selection.scope)
   if(!useWhole&&!range.exact&&(selection.rangeSelected||(selection.notes||[]).length>1)&&typeof observer.arrangementState==="function"){
@@ -263,7 +264,7 @@ MuseScore {
  function choosePassage(index){if(!prepareEditing())return;pushPreviewUndo();passageChoice=index;passageFrom=result.passage.candidates[index].from;dirtyProject=true;runAlignment()}
  function freshMaterialSettings(){var next=Project.copy(config);next.velocityStrength=100;next.velocityWriteMode="fixed";next.previewVelocity={};next.previewTempo={};config=next}
  function velocityWriteText(item){var mode=item.writeMode||"preserve";return mode==="fixed"||mode==="preserve"&&item.oldType===1?"固定力度 "+item.target:"跟随力度记号 "+Math.round((item.target-item.oldBase)*100/item.oldBase)+"%"}
- function cancel(includeCapture){scoreRefreshTimer.stop();scoreRefreshPending=false;refreshingScore=false;var wasBusy=busy||captureState.recording||captureState.stopping||captureState.saving;if(includeCapture!==false&&recordingImport&&requestedMidiPath)recordedPath=requestedMidiPath;recordingImport=false;readForCapture=false;refreshingApplication=false;newImportPending=false;pendingProjectRestore=null;requestedMidiPath="";midiToken="";if(includeCapture!==false&&captureSession)captureSession.cancel();pendingAudition=null;auditionRetry.stop();paging.stop();if(observer){observer.cancelReadOnlyJob();if(typeof observer.cancelPerformanceMidi==="function")observer.cancelPerformanceMidi()}busy=false;if(wasBusy)status="已取消，可以继续导入或录制。"}
+ function cancel(includeCapture){sessionActionSerial++;resultRevealTimer.stop();scoreRefreshTimer.stop();scoreRefreshPending=false;refreshingScore=false;var wasBusy=busy||captureState.recording||captureState.stopping||captureState.saving;if(includeCapture!==false&&recordingImport&&requestedMidiPath)recordedPath=requestedMidiPath;recordingImport=false;readForCapture=false;refreshingApplication=false;newImportPending=false;pendingProjectRestore=null;requestedMidiPath="";midiToken="";if(includeCapture!==false&&captureSession)captureSession.cancel();pendingAudition=null;auditionRetry.stop();paging.stop();if(observer){observer.cancelReadOnlyJob();if(typeof observer.cancelPerformanceMidi==="function")observer.cancelPerformanceMidi()}busy=false;if(wasBusy)status="已取消，可以继续导入或录制。"}
  function runAlignment(){
   if(!midi||!notes.length){status="需要谱面起音与 MIDI";return}
   if(stale || observer.analysisRevision()!==revision){status="谱面已变化，请重新读取";return}
@@ -513,7 +514,7 @@ MuseScore {
   if(sessionOwner&&captureSession&&typeof captureSession.finishBeforeLeaving==="function")captureSession.finishBeforeLeaving();
   rememberSession();cancel(false);candidateTimer.stop();
   if(embeddedActiveDialog)embeddedActiveDialog.close();
-  previewing=false;legacyAudition=false;selected=-1;stale=false;publishedComparisonKey="";
+  previewing=false;legacyAudition=false;selected=-1;stale=false;publishedComparisonKey="";revealResultsPending=false;
   sessionOwner=curScore;observer.score=curScore;captureSession=curScore?captureForScore():null;
   var saved=sessionOwner&&editorContext&&typeof editorContext.expressionSession==="function"?editorContext.expressionSession(sessionOwner):({});
   Session.restore(root,saved,ExpressionSettings.defaults());scopeOwner=retainedScope?curScore:null;
@@ -528,10 +529,13 @@ MuseScore {
   if(valid&&candidate&&!saved.incomplete&&!sameRanges)candidateTimer.restart();
   if(editorContext)editorContext.feedback=status;
   if(candidate)publishComparison();else observer.setEditorComparison({});
-  var owner=sessionOwner,request=requestedMidiPath,project=pendingProjectRestore;
+  if(root.embeddedWorkflow&&embeddedScroll.contentItem){
+   var flick=embeddedScroll.contentItem;if(typeof flick.cancelFlick==="function")flick.cancelFlick();
+   flick.contentY=Math.max(0,Number(saved.scroll)||0);
+  }
+  var owner=sessionOwner,request=requestedMidiPath,project=pendingProjectRestore,serial=sessionActionSerial;
   Qt.callLater(function(){
-   if(!root.sameScore(owner,root.curScore))return;
-   if(root.embeddedWorkflow&&embeddedScroll.contentItem)embeddedScroll.contentItem.contentY=Math.max(0,Number(saved.scroll)||0);
+   if(serial!==root.sessionActionSerial||!root.sameScore(owner,root.curScore))return;
    if(root.resumeRecording())return;
    if(project)root.load(project.url);
    else if(request)root.importMidi(request);
