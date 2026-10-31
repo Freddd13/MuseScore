@@ -26,7 +26,7 @@
 
 ## 后续实机项
 
-实体MIDI键盘、真实声卡连续听感，以及Synthesia较长音乐的暂停重播仍按[完整进度](REWORK_PROGRESS.md)安排。上述厂商操作核对按钮、画面、参数和文件；声音输出与声卡听感另行记录。
+Synthesia长片段的暂停重播已补查。Mi Monitor上的SF3、CFX实际输出、停止与曲尾见[声音检查](AUDIO_OUTPUT_157_CHECKS.md)。实体MIDI录制和真实音乐的连续听感继续按[完整进度](REWORK_PROGRESS.md)安排。
 
 ## 完整包与原目录安装
 
