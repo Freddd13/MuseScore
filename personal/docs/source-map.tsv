@@ -329,7 +329,7 @@ MIDI录音目录	mscore/workflow/midicapture.cpp	"const QString folder=QSettings
 卷帘草稿保存	mscore/performanceeditor/rollwritingmodel.cpp	void RollWritingBar::saveDraft(	472	草稿、试听、采用与撤销	mtest/mscore/pluginhost/tst_pluginhost.cpp
 谱行锁定	mscore/workflow/systemlocks.cpp	QVariantMap changeSystemLocks(	121	分行范围、原生撤销、相邻行边界与解锁	mtest/mscore/pluginhost/system_lock_tests.inc
 谱行锁定保存	libmscore/layoutbreak.cpp	"xml.tag(""kumoSystemLock"""	105	常规分行符附带分组，插入小节后继续对应	mtest/mscore/pluginhost/system_lock_tests.inc
-VST 音源与效果	mscore/workflow/vstpanel.cpp	void addVstPanelAction(	1467	原生面板、扫描、预设、撤销和独立实例	mtest/mscore/pluginhost/vst_tests.inc
+VST 音源与效果	mscore/workflow/vstpanel.cpp	void addVstPanelAction(	1475	原生面板、扫描、预设、撤销和独立实例	mtest/mscore/pluginhost/vst_tests.inc
 VST 音频图	audio/vst/rack.cpp	struct Rack::Impl	148	有界 MIDI 队列、串联效果、SF2 混合和延迟补偿	../../muse3_plugins/P2/tests/vst/checks.cpp
 VST3 适配	audio/vst/vst3plugin.cpp	class Vst3Plugin	57	音频、MIDI、参数、状态和插件界面	mtest/mscore/pluginhost/vst_tests.inc
 VST2 适配	audio/vst/vst2plugin.cpp	class Vst2Plugin	21	x64 ABI、CC、预设、CFX 和插件界面	mtest/mscore/pluginhost/vst_tests.inc
@@ -344,10 +344,10 @@ SF2 单乐器效果	audio/vst/fluidsource.cpp	class FluidSource	12	按需创建�
 紧凑控件换行	mscore/workflow/controlflowlayout.h	class ControlFlowLayout	13	实际控件宽度、换行及工具栏占高	mtest/mscore/pluginhost/usability_072_tests.inc
 工作视图恢复顺序	mscore/workflow/editorareas.cpp	void settleEditorAreaLayout	603	在主窗口恢复停靠后恢复内部高度	mtest/mscore/pluginhost/usability_072_tests.inc
 工作流面板位置保存	mscore/workflow/paneldock.cpp	class PanelPosition	11	独立开关和全屏入口、临时全屏期间保留原位置	mtest/mscore/pluginhost/usability_072_tests.inc
-VST 当前参数保存	mscore/workflow/vstpanel.cpp	void saveVstEdits(	1409	保存当前参数时保留已载入音源及其窗口，撤销恢复保存状态	mtest/mscore/pluginhost/usability_072_tests.inc
+VST 当前参数保存	mscore/workflow/vstpanel.cpp	void saveVstEdits(	1417	保存当前参数时保留已载入音源及其窗口，撤销恢复保存状态	mtest/mscore/pluginhost/usability_072_tests.inc
 CFX 状态比较	audio/vst/plugin.cpp	bool sameConfiguration(	116	保留完整音源状态，识别 ARIA 读取计数和真正参数变化	../../muse3_plugins/P2/tests/vst/checks.cpp;mtest/mscore/pluginhost/usability_072_tests.inc
 旧工作区 AI 入口	mscore/workflow/aiconnection.cpp	void addAIConnectionAction(	272	主窗口持有动作，旧工作区重建后复用菜单入口	mtest/mscore/pluginhost/usability_072_tests.inc
-VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	285	空列表显示添加步骤，区分音源与效果	mtest/mscore/pluginhost/usability_072_tests.inc
+VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	290	空列表显示添加步骤，区分音源与效果	mtest/mscore/pluginhost/usability_072_tests.inc
 演奏结果逐音列表	share/workflow/panels/PerformanceExpression/ExpressionResults.qml	ColumnLayout {	7	音名、拍位、前后力度、分类与定位；预览拖动保留列表位置	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/PerformanceExpression/tests/test-results.cjs
 演奏结果文字整理	share/workflow/panels/PerformanceExpression/ExpressionRows.js	function build(	25	同音不同声部、已采用、需核对、漏弹多弹与拼写	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/PerformanceExpression/tests/test-results.cjs
 内置音源释放	audio/midi/fluid/fluid.cpp	Fluid::~Fluid()	120	停止后释放声音资源，再解锁互斥量	mtest/mscore/pluginhost/tst_pluginhost.cpp
@@ -396,7 +396,7 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	285	空列�
 音源与效果的范围	mscore/workflow/vstpanel.cpp	class Panel final	120	分别选择当前乐器与主输出效果，逐乐器恢复原音源及预设	mtest/mscore/pluginhost/vst_088_tests.inc
 浮动插件参数	mscore/workflow/vstparameters.cpp	class ParameterWindow final	40	按实际插件身份跟随排序，输入、拖动与原生撤销同步	mtest/mscore/pluginhost/vst_088_tests.inc
 音源和效果预设	mscore/workflow/vstpresets.cpp	QByteArray readVstPreset(	17	读写带插件身份的预设，继续读取已有格式	mtest/mscore/pluginhost/vst_088_tests.inc
-换谱恢复音源	mscore/workflow/vstpanel.cpp	void restoreVstForScore(	1274	按当前谱读取音源配置并恢复路由；共用与保留设计见SOUND_PEDAL_PLAN.md	-
+换谱恢复音源	mscore/workflow/vstpanel.cpp	void restoreVstForScore(	1282	按当前谱读取音源配置并恢复路由；共用与保留设计见SOUND_PEDAL_PLAN.md	-
 音源实例复用	audio/vst/rack.cpp	bool Rack::load(	392	复用当前配置中相同实例，换谱保留的实现位置	-
 踏板编辑取点	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::beginGesture(	985	参数区与谱行带的踏板端点取点	-
 组合面板空间	mscore/mixer/mixer.cpp	if (personalFeaturesEnabled())	89	混音器按需滚动，移除新增整行按钮后保留原控制内容	mtest/mscore/pluginhost/layout_089_tests.inc
@@ -412,7 +412,7 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	285	空列�
 写法范围说明	mscore/workflow/regionalpanel.cpp	QString scopeSummary(	72	相同声部按谱表范围合并，保留当前写法	mtest/mscore/p1native/regional_091_tests.inc
 组件动作图标	mscore/workflow/toolicons.cpp	QIcon componentToolIcon(	63	按真实动作复用原图形与独立图形，支持面板主题	mtest/mscore/pluginhost/components_092_tests.inc
 QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this);	38	在实际插件引擎注册共用图标，颜色由页面给出	mtest/mscore/pluginhost/components_092_tests.inc
-音源操作分组	mscore/workflow/vstpanel.cpp	auto sourceGroup = new QGroupBox	698	当前音源、插件选择、效果链分别操作，SF2返回直接可见	mtest/mscore/pluginhost/components_092_tests.inc
+音源操作分组	mscore/workflow/vstpanel.cpp	auto sourceGroup = new QGroupBox	705	当前音源、插件选择、效果链分别操作，SF2返回直接可见	mtest/mscore/pluginhost/components_092_tests.inc
 工作视图侧栏宽度	mscore/workflow/workspaceviews.cpp	void restoreSideWidths(	116	先恢复中央乐谱，保存并恢复侧栏与标签组宽度	mtest/mscore/pluginhost/workspace_093_tests.inc
 停播编辑状态	mscore/seq.cpp	void MuseScore::seqStopped()	581	主窗口补齐当前谱窗的编辑状态，恢复符号面板	mtest/mscore/pluginhost/workspace_093_tests.inc
 编辑器鼠标归还	mscore/performanceeditor/performanceeditor.cpp	bool PerformanceEditor::eventFilter(	1201	播放及手势中断后归还鼠标，保持其它原生与QML面板可用	mtest/mscore/pluginhost/workspace_093_tests.inc
@@ -466,14 +466,14 @@ AI读谱与取图安排	personal/docs/AI_WORKFLOW_REVIEW_20261024.md	# AI怎样�
 效果尾音清理	audio/vst/rack.cpp	quiet	362	保留预设、清理处理历史与短延迟	mtest/mscore/pluginhost/source_sessions_107_tests.inc
 独立音源重置	audio/vst/hostmain.cpp	resetAudio	167	取消旧块、松键与踏板、保留参数	mtest/mscore/pluginhost/source_sessions_107_tests.inc
 音源保留入口	mscore/workflow/vstpanel.cpp	selectSourceSession	45	本谱所属、默认保留设置与闲置数量	mtest/mscore/pluginhost/source_sessions_107_tests.inc
-音源保留入口	mscore/workflow/vstpanel.cpp	refreshRetained	653	本谱所属、默认保留设置与闲置数量	mtest/mscore/pluginhost/source_sessions_107_tests.inc
+音源保留入口	mscore/workflow/vstpanel.cpp	refreshRetained	573	本谱所属、默认保留设置与闲置数量	mtest/mscore/pluginhost/source_sessions_107_tests.inc
 共用钢琴管理	mscore/workflow/sharedpiano.cpp	prepareCommonPianos	172	所有谱子自动共用、每谱自用与预设	mtest/mscore/pluginhost/common_piano_108_tests.inc
 共用钢琴管理	mscore/workflow/sharedpiano.cpp	captureCommonPianoEdits	152	所有谱子自动共用、每谱自用与预设	mtest/mscore/pluginhost/common_piano_108_tests.inc
 共用实例保留	audio/vst/rack.cpp	Rack::load	392	多架钢琴分开处理、换谱复用和闲置释放	mtest/mscore/pluginhost/common_piano_108_tests.inc
 共用实例保留	audio/vst/rack.cpp	commonPianos	538	多架钢琴分开处理、换谱复用和闲置释放	mtest/mscore/pluginhost/common_piano_108_tests.inc
 演奏通道音源	audio/midi/msynthesizer.cpp	setPlaybackRouting	107	当前钢琴使用共用声音，原音色保存	mtest/mscore/pluginhost/common_piano_108_tests.inc
 演奏通道音源	audio/midi/msynthesizer.cpp	play	95	当前钢琴使用共用声音，原音色保存	mtest/mscore/pluginhost/common_piano_108_tests.inc
-共用声音随谱保存	mscore/workflow/vstpanel.cpp	saveVstEdits	1409	最近声音快照与原音色一起保存	mtest/mscore/pluginhost/common_piano_108_tests.inc
+共用声音随谱保存	mscore/workflow/vstpanel.cpp	saveVstEdits	369	最近声音快照与原音色一起保存	mtest/mscore/pluginhost/common_piano_108_tests.inc
 共用音源混音器	mscore/mixer/mixerdetails.cpp	updatePatchCombo	286	原音色框显示实际声音、切回及一次撤销	mtest/mscore/pluginhost/common_piano_108_tests.inc
 共用音源混音器	mscore/mixer/mixerdetails.cpp	patchChanged	531	原音色框显示实际声音、切回及一次撤销	mtest/mscore/pluginhost/common_piano_108_tests.inc
 CFX状态比较	audio/vst/plugin.cpp	AriaNode	18	具名附件顺序与效果链顺序分别核对	mtest/mscore/pluginhost/common_piano_108_tests.inc
@@ -554,7 +554,7 @@ CFX状态比较	audio/vst/plugin.cpp	comparableUnit	65	具名附件顺序与效�
 扒谱区域显隐	mscore/workflow/editorareas.cpp	void applyPage()	107	保存扒谱页公共区域的显式选择	mtest/mscore/pluginhost/combined_gui_126_tests.inc
 软件绘图修复接线	personal/qtquick-runtime.cmake	kumo_select_qtquick_runtime	5	构建与安装共用经校验的Qt Quick	../../muse3_plugins/P2/tests/test_qtquick_runtime.py
 Qt Quick重建	personal/tools/build_qtquick_fix.py	main	59	固定来源、官方补丁、导出与架构核对	personal/docs/DRAWING_127_CHECKS.md
-首次音源入口	mscore/workflow/vstpanel.cpp	addVstPanelAction	1467	从菜单所属主窗口注册动作	mtest/mscore/pluginhost/input_121_tests.inc;mtest/mscore/pluginhost/tst_pluginhost.cpp
+首次音源入口	mscore/workflow/vstpanel.cpp	addVstPanelAction	1475	从菜单所属主窗口注册动作	mtest/mscore/pluginhost/input_121_tests.inc;mtest/mscore/pluginhost/tst_pluginhost.cpp
 共用钢琴载入设置	audio/vst/rack.cpp	loadedConfig	111	当前控制值快照与载入设置分别比较，切谱复用音源	mtest/mscore/pluginhost/source_sessions_107_tests.inc;mtest/mscore/pluginhost/common_piano_108_tests.inc
 共用钢琴载入设置	audio/vst/rack.cpp	Rack::load	392	当前控制值快照与载入设置分别比较，切谱复用音源	mtest/mscore/pluginhost/source_sessions_107_tests.inc;mtest/mscore/pluginhost/common_piano_108_tests.inc
 真实音源连续组合	mtest/mscore/pluginhost/combined_gui_126_tests.inc	TestPluginHost::combinedPlaybackGui126	17	四谱八轨、CFX与Pianoteq、厂商窗口、编辑缩放与实际声音	personal/docs/PIANO_PLAYBACK_128_CHECKS.md
@@ -619,7 +619,7 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	59	固定来源、官方
 导出备选指法	audio/exports/exportmidi.cpp	PianoFingering::choices	275	保留数字与允许手指，来源传入实际导出结果	mtest/mscore/p0native/tst_p0native.cpp
 嵌套分手分配	libmscore/handbracketanalysis.cpp	addMarks	17	读取符号内的分手，沿用音头与和弦范围	mtest/mscore/p0native/tst_p0native.cpp
 局部指法疑问	audio/exports/midigate.h	process	151	保持有疑问的按键，其余明确音继续处理	mtest/mscore/p0native/tst_p0native.cpp
-已载入音源运行方式	mscore/workflow/vstpanel.cpp	void changeSourceMode(	486	直接与独立运行切换、保留音色效果和撤销	mtest/mscore/pluginhost/source_mode_129_tests.inc
+已载入音源运行方式	mscore/workflow/vstpanel.cpp	void changeSourceMode(	491	直接与独立运行切换、保留音色效果和撤销	mtest/mscore/pluginhost/source_mode_129_tests.inc
 独立音源声音块记录	audio/vst/proxy.cpp	QVariantMap processingDiagnostics()	269	记录声音块返回、遗漏、占用及处理失败	mtest/mscore/pluginhost/combined_gui_126_tests.inc
 延音后段与每次导出	audio/exports/exportmidi.cpp	ExportMidi::write	258	按延音链、反复与暂停读取分手指法	mtest/mscore/p0native/tst_p0native.cpp
 延音后段与每次导出	audio/exports/exportmidi.cpp	writtenInstructions	292	按延音链、反复与暂停读取分手指法	mtest/mscore/p0native/tst_p0native.cpp
@@ -731,3 +731,5 @@ GP6多声部延长	mtest/mscore/pluginhost/upstream_155_tests.inc	void TestPlugi
 当前Codex完整操作	personal/docs/AI_CONNECTION_156_GUIDE.md	# 用Codex读谱、看原图和采用建议	1	身份、谱图、比较、采用与撤销	personal/docs/AI_CONNECTION_156_CHECKS.md
 完整稳定程序包	../../muse3_plugins/P2/package_stable_release.py	def stage_program(	51	当前MCP、完整资源与新程序；保留原安装	../../muse3_plugins/P2/test_stable_release.py
 稳定包完整校验	../../muse3_plugins/P2/package_stable_release.py	def archive_program(	115	逐文件SHA-256与ZIP重新读取	../../muse3_plugins/P2/test_stable_release.py
+音源面板跟随实际通道	mscore/workflow/vstpanel.cpp	QString patchKey() const	194	原生音色与实例改变后更新文字和按钮；保持厂商窗口	mtest/mscore/pluginhost/source_panel_157_tests.inc
+启动时的谱行菜单归属	mscore/workflow/systemlocks.cpp	void addSystemLockActions(	169	主窗口构造和工作区菜单恢复共用同一入口	mtest/mscore/pluginhost/source_panel_157_tests.inc

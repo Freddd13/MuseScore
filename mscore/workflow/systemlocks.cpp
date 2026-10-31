@@ -167,7 +167,11 @@ QVariantMap changeSystemLocks(Score* score, bool lock, bool selected, bool whole
                               : QObject::tr("已解除 %1 行锁定；原来的换行和分页继续保留。").arg(count)}};
 }
 void addSystemLockActions(QMenu* menu) {
-    auto owner = qobject_cast<MuseScore*>(menu->parentWidget());
+    // Menus are built inside the main-window constructor, before mscore is set.
+    // The menu bar sits between a menu and its owning main window.
+    MuseScore* owner = nullptr;
+    for (auto parent = menu->parentWidget(); parent && !owner; parent = parent->parentWidget())
+        owner = qobject_cast<MuseScore*>(parent);
     if (!owner) owner = mscore;
     if (owner)
         if (auto existing = owner->findChild<QMenu*>("kumo-system-lock-menu")) {

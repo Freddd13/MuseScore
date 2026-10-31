@@ -316,6 +316,8 @@ class TestPluginHost : public QObject {
       void aiSuggestionState144();
       void systemLockIndependentParts138();
       void systemLockMenuRange138();
+      void systemLockMenuOwner157();
+      void cfxRestoredPanelFollowsSource157();
       void metronomeFontCompatibility() {
             QVERIFY(QFontDatabase().families().contains("Metronome Text 3"));
             auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);
@@ -1577,6 +1579,7 @@ class TestPluginHost : public QObject {
 #include "arrangement_suggestion_playback_tests.inc"
 #include "arrangement_candidate_quality_tests.inc"
 #include "engraving_138_tests.inc"
+#include "source_panel_157_tests.inc"
 #include "identity_140_tests.inc"
 #include "ai_154_tests.inc"
 #include "ai_156_tests.inc"

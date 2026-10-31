@@ -142,7 +142,7 @@ class Panel final : public QDockWidget {
   quint64 lastRevision = 0;
   quint64 lastCommonRevision = 0;
   QVariantMap removedCommon;
-  QString lastProblems;
+  QString lastProblems, lastPatch;
   bool syncChannels() {
     QList<Channel *> next;
     QStringList labels;
@@ -190,6 +190,11 @@ class Panel final : public QDockWidget {
     auto c = selected();
     if (c && backend() && backend()->pianoSlot(c->channel())) return backend()->pianoSlot(c->channel());
     return c && c->synti() == "KumoVST" ? c->bank() : 0;
+  }
+  QString patchKey() const {
+    const auto c = selected();
+    return c ? QString("%1:%2:%3:%4").arg(c->synti()).arg(c->bank())
+                   .arg(c->program()).arg(selectedSlot()) : QString();
   }
   bool commonSlot(int id) const {
     auto c=selected();return id && c && backend() && backend()->pianoSlot(c->channel())==id;
@@ -561,6 +566,7 @@ class Panel final : public QDockWidget {
     if (updating)
       return;
     updating = true;
+    const auto displayedPatch = patchKey();
     auto c = selected();
     const int id = selectedSlot();
     auto engine = backend();
@@ -647,6 +653,7 @@ class Panel final : public QDockWidget {
                      chain->currentRow() < chain->count() - 1);
     if (engine && !engine->problems().isEmpty())
       state->setText(engine->problems().join('\n'));
+    lastPatch = displayedPatch;
     updating = false;
     refreshVstParameterWindows();
   }
@@ -1087,6 +1094,7 @@ public:
       if (seq)
         seq->initInstruments();
       routeVstChannels(synti, score);
+      state->setText(tr("已恢复刚才的音源；Ctrl+Z 可撤销，保存乐谱后保留。"));
       refresh();
     });
     connect(import, &QPushButton::clicked, this, [this] { preset(false, selectedSlot(), -1); });
@@ -1193,7 +1201,7 @@ public:
         closeVstParameterWindows(this);
         syncChannels();
         refresh();
-      } else if (syncChannels())
+      } else if (syncChannels() || patchKey() != lastPatch)
         refresh();
       persistEdits();
       refreshRetained();
