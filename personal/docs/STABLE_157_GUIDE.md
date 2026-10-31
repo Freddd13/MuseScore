@@ -6,7 +6,7 @@
 
 ## 打开
 
-本机继续使用原位置：`E:\programming\funcodes\muse3_dev\MuseScore\msvc.install_repair_current_x64\bin\MuseScore3Evo.exe`。
+本机原目录已更新到0.157，继续使用原位置：`E:\programming\funcodes\muse3_dev\MuseScore\msvc.install_repair_current_x64\bin\MuseScore3Evo.exe`。
 
 独立包：完整解压`MuseScore-Kumo-0.157.0-Windows-x64.zip`，双击其中的`bin/MuseScore3Evo.exe`。在“帮助 → 关于”查看0.157.0，完整说明从“帮助 → 个人功能说明”打开。
 
