@@ -2,6 +2,8 @@
 
 **0.156.0 · Kumo branch / Freddd13 · Windows x64**
 
+2026-10-31已更新本机原安装目录，可继续打开原位置的`bin/MuseScore3Evo.exe`。现有布局、配置和Codex路径继续使用。下方解压步骤用于独立程序包。
+
 ## 打开程序
 
 1. 把`MuseScore-Kumo-0.156.0-Windows-x64.zip`完整解压到E盘等有足够空间的位置。
@@ -36,4 +38,4 @@
 - 真实声卡下，表达、踏板、多轨、循环和停止的连续听感。
 - Synthesia及常用DAW中，左右手颜色、松手长度与播放结果。
 
-程序包还会从独立路径检查启动、MCP、原生谱图、MIDI和PDF导出，并核对压缩包每个文件。实际结果见[稳定版检查](STABLE_156_CHECKS.md)；完整后续顺序见[当前进度](REWORK_PROGRESS.md)。
+程序包已从独立路径检查启动、MCP、原生谱图、MIDI和PDF导出，2700个文件逐项校验通过。实际结果见[稳定版检查](STABLE_156_CHECKS.md)；完整后续顺序见[当前进度](REWORK_PROGRESS.md)。
