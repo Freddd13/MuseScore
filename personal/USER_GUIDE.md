@@ -1,6 +1,6 @@
 # MuseScore Evolution 个人功能说明
 
-当前版本：**0.155.0 · Kumo branch / Freddd13**。
+当前版本：**0.156.0 · Kumo branch / Freddd13**。
 
 先按下面的任务找到入口。每章有完整操作例子、按钮说明、保存和撤销方法。“帮助 → 个人功能说明”可以在软件里直接阅读。
 
@@ -10,6 +10,7 @@
 
 | 想完成的事 | 从哪里开始 |
 |---|---|
+| 让当前Codex读原生谱图、比较并采用建议 | [读谱、看原图和采用建议](docs/AI_CONNECTION_156_GUIDE.md) |
 | 循环播放、反复中改速、最近文件和新旧谱读取 | [本次播放与兼容更新](docs/UPSTREAM_155_GUIDE.md) |
 | 更新Codex连接，确认实际运行的MCP版本 | [更新连接与读取谱图](docs/AI_CONNECTION_154_GUIDE.md) |
 | SF3钢琴初次起播、音源加载与取消 | [首次钢琴播放](docs/SF3_START_153_GUIDE.md) |
@@ -789,3 +790,7 @@ AI按分析、演奏和净谱读取需要的资料，保留真实乐器／谱表
 0.155合入八项已选上游修复，并补齐旧HTML换行。操作见[循环、反复改速与旧谱读取](docs/UPSTREAM_155_GUIDE.md)，实际结果见[本次检查](docs/UPSTREAM_155_CHECKS.md)，提交定位personal-v0.155.0。
 
 0.154在“AI连接”分别列出每个MCP进程的版本；仍运行旧连接时，刷新和检查会显示更新方法。随包MCP2.7.2，操作见[更新连接与读取谱图](docs/AI_CONNECTION_154_GUIDE.md)，实际结果见[检查记录](docs/AI_CONNECTION_154_CHECKS.md)，提交定位personal-v0.154.0。
+
+### 2026-10-31：当前Codex读谱与采用
+
+0.156核对当前对话的44项工具、原生谱图、采用、保存与撤销，并修正空音源读取后多出的保存撤销。连接列表按实际版本和活动状态分别说明，完整步骤见[读谱、看原图和采用建议](docs/AI_CONNECTION_156_GUIDE.md)，结果见[本批检查](docs/AI_CONNECTION_156_CHECKS.md)。提交定位personal-v0.156.0。

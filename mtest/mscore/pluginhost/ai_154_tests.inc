@@ -33,7 +33,7 @@ void TestPluginHost::aiConnectionRuntimeVersions154()
     bool oldFound=false,newFound=false;
     for(int i=0;i<tree->topLevelItemCount();++i){auto row=tree->topLevelItem(i);const auto token=row->data(0,Qt::UserRole).toString();
         if(token.startsWith(QString::number(oldClient.processId())+":")){oldFound=true;QCOMPARE(row->text(1),QString("2.3.0"));}
-        if(token.startsWith(QString::number(newClient.processId())+":")){newFound=true;QCOMPARE(row->text(1),QString("2.7.2"));}
+        if(token.startsWith(QString::number(newClient.processId())+":")){newFound=true;QCOMPARE(row->text(1),QString("2.7.2"));QVERIFY(!row->text(4).contains(QString::fromUtf8("旧连接")));QVERIFY(row->text(3)!=QString::fromUtf8("未记录"));}
     }
     QVERIFY(oldFound&&newFound);
     auto check=box->findChild<QPushButton*>("aiCheckConnection");QVERIFY(check&&check->isEnabled());

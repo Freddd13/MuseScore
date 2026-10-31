@@ -214,6 +214,7 @@ class TestPluginHost : public QObject {
       void contentWidthControlsWrapWithoutOverlap();
       void restoredWorkspaceKeepsPersonalTools();
       void aiConnectionRuntimeVersions154();
+      void emptyVstReadAndSave156();
       void aiConnectionServiceControls133();
       void aiConnectionCodexProcessControls133();
       void vstFirstUseControls();
@@ -1578,6 +1579,7 @@ class TestPluginHost : public QObject {
 #include "engraving_138_tests.inc"
 #include "identity_140_tests.inc"
 #include "ai_154_tests.inc"
+#include "ai_156_tests.inc"
 #include "images_141_tests.inc"
 #include "regional_142_tests.inc"
 #include "follow_142_tests.inc"

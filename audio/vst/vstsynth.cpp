@@ -172,7 +172,7 @@ bool VstSynth::setConfiguration(const QVariantMap &value) {
 QVariantMap VstSynth::configuration(bool snapshot) {
   if (enabled && snapshot) {
     const auto actual = runtimeConfiguration(true);
-    auto rows = config["slots"].toList();
+    auto rows = config.value("slots").toList();
     for (auto &row : rows) {
       const int id=row.toMap()["id"].toInt();
       if (suppressedSlots.contains(id)) continue;

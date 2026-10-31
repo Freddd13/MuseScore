@@ -27,6 +27,7 @@
 #include <QMenu>
 #include <QPointer>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QPushButton>
 #include <QQmlComponent>
 #include <QQmlContext>

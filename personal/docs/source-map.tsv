@@ -311,7 +311,7 @@ MCP关闭处理	mscore/workflow/arrangementreader.cpp	void ScoreObserver::prepar
 节奏音序与时值	share/plugins/PerformanceExpression/Rhythm.js	function build(	98	给定音高、漏敲多敲、休止与连音组	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/PerformanceExpression/tests/test-rhythm.cjs
 MIDI录音目录	mscore/workflow/midicapture.cpp	"const QString folder=QSettings().value(""workflow/recordingDirectory"""	270	沿用录制，默认写入E盘	mtest/mscore/pluginhost/tst_pluginhost.cpp
 个人扩展开关	mscore/workflow/featuregate.cpp	bool personalFeaturesEnabled()	57	程序旁配置、入口和后台能力统一控制	mtest/mscore/pluginhost/tst_pluginhost.cpp
-原生AI连接	mscore/workflow/aiconnection.cpp	void initializeBuiltinAI()	250	私有桥接、窗口选择、Codex配置和帮助	mtest/mscore/pluginhost/tst_pluginhost.cpp
+原生AI连接	mscore/workflow/aiconnection.cpp	void initializeBuiltinAI()	251	私有桥接、窗口选择、Codex配置和帮助	mtest/mscore/pluginhost/tst_pluginhost.cpp
 工作视图	mscore/workflow/workspaceviews.cpp	class WorkspaceViews	31	四种布局、DAW谱面对照、共用动作工具栏及返回乐谱	mtest/mscore/pluginhost/tst_pluginhost.cpp
 独立编辑区域	mscore/workflow/editorareas.cpp	class EditorAreas	24	悬浮、右侧停靠、放回与各视图的区域保存	mtest/mscore/pluginhost/tst_pluginhost.cpp
 原曲滑块输入	share/workflow/panels/WorkflowCommon/SliderNumber.qml	RowLayout {	6	原生滑块与数值输入	mtest/mscore/pluginhost/tst_pluginhost.cpp
@@ -346,7 +346,7 @@ SF2 单乐器效果	audio/vst/fluidsource.cpp	class FluidSource	12	按需创建�
 工作流面板位置保存	mscore/workflow/paneldock.cpp	class PanelPosition	11	独立开关和全屏入口、临时全屏期间保留原位置	mtest/mscore/pluginhost/usability_072_tests.inc
 VST 当前参数保存	mscore/workflow/vstpanel.cpp	void saveVstEdits(	1409	保存当前参数时保留已载入音源及其窗口，撤销恢复保存状态	mtest/mscore/pluginhost/usability_072_tests.inc
 CFX 状态比较	audio/vst/plugin.cpp	bool sameConfiguration(	116	保留完整音源状态，识别 ARIA 读取计数和真正参数变化	../../muse3_plugins/P2/tests/vst/checks.cpp;mtest/mscore/pluginhost/usability_072_tests.inc
-旧工作区 AI 入口	mscore/workflow/aiconnection.cpp	void addAIConnectionAction(	271	主窗口持有动作，旧工作区重建后复用菜单入口	mtest/mscore/pluginhost/usability_072_tests.inc
+旧工作区 AI 入口	mscore/workflow/aiconnection.cpp	void addAIConnectionAction(	272	主窗口持有动作，旧工作区重建后复用菜单入口	mtest/mscore/pluginhost/usability_072_tests.inc
 VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	285	空列表显示添加步骤，区分音源与效果	mtest/mscore/pluginhost/usability_072_tests.inc
 演奏结果逐音列表	share/workflow/panels/PerformanceExpression/ExpressionResults.qml	ColumnLayout {	7	音名、拍位、前后力度、分类与定位；预览拖动保留列表位置	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/PerformanceExpression/tests/test-results.cjs
 演奏结果文字整理	share/workflow/panels/PerformanceExpression/ExpressionRows.js	function build(	25	同音不同声部、已采用、需核对、漏弹多弹与拼写	mtest/mscore/pluginhost/tst_pluginhost.cpp;../../muse3_plugins/PerformanceExpression/tests/test-results.cjs
@@ -634,7 +634,7 @@ Qt Quick重建	personal/tools/build_qtquick_fix.py	main	59	固定来源、官方
 相接同音与自然开关	audio/exports/midigate.h	QVector<MidiGateNote> process(	151	明确音继续计算、成组自然变化、必要松手单独使用	mtest/mscore/p0native/tst_p0native.cpp
 踏板对比与设置	mscore/midicrop/midicroppanel.cpp	MidiCropPanel::settings	178	设置显隐、取消保存与选定踏板	mtest/mscore/p0native/tst_p0native.cpp
 踏板对比与设置	mscore/midicrop/midicroppanel.cpp	compare	237	设置显隐、取消保存与选定踏板	mtest/mscore/p0native/tst_p0native.cpp
-AI连接独立控制	mscore/workflow/aiconnectionpanel.inc	ConnectionDialog	147	读谱启停、自动开启、Codex及会话列表	mtest/mscore/pluginhost/ai_133_tests.inc
+AI连接独立控制	mscore/workflow/aiconnectionpanel.inc	ConnectionDialog	150	读谱启停、自动开启、Codex及会话列表	mtest/mscore/pluginhost/ai_133_tests.inc
 MCP会话控制	../../mcp-musescore/src/sessions.py	sessions	74	进程身份、活动记录及所选连接退出	../../mcp-musescore/tests/test_sessions.py
 MCP会话控制	../../mcp-musescore/src/sessions.py	end_session	167	进程身份、活动记录及所选连接退出	../../mcp-musescore/tests/test_sessions.py
 MCP会话控制	../../mcp-musescore/src/sessions.py	ClientSession	207	进程身份、活动记录及所选连接退出	../../mcp-musescore/tests/test_sessions.py
@@ -727,3 +727,5 @@ GPIF完整小节	importexport/guitarpro/importgtp-gp6.cpp	int GuitarPro6::findNu
 最近文件实际菜单	mtest/mscore/pluginhost/upstream_155_tests.inc	void TestPluginHost::upstreamRecentFiles155()	118	多谱关闭重开与中文提示	mtest/mscore/pluginhost/upstream_155_tests.inc
 文字与分节保存	mtest/mscore/pluginhost/upstream_155_tests.inc	void TestPluginHost::upstreamTextAndSections155()	144	旧谱真实读取、分节保存重开	mtest/mscore/pluginhost/upstream_155_tests.inc
 GP6多声部延长	mtest/mscore/pluginhost/upstream_155_tests.inc	void TestPluginHost::upstreamGp6Files155()	181	三份真实文件与空前声部	mtest/mscore/pluginhost/upstream_155_tests.inc
+空音源查询	audio/vst/vstsynth.cpp	QVariantMap VstSynth::configuration(bool snapshot)	172	保留空配置，保存不多加撤销	mtest/mscore/pluginhost/ai_156_tests.inc
+当前Codex完整操作	personal/docs/AI_CONNECTION_156_GUIDE.md	# 用Codex读谱、看原图和采用建议	1	身份、谱图、比较、采用与撤销	personal/docs/AI_CONNECTION_156_CHECKS.md

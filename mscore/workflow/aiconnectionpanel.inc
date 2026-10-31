@@ -79,7 +79,7 @@ class ConnectionDialog : public QDialog {
       const auto value = item.toObject();
       const bool active = value.value("active").toInt() > 0;
       const QString version = value.value("version").toString().isEmpty() ? tr("待核对") : value.value("version").toString();
-      const QString phase = !value.value("known").toBool() ? tr("旧连接 · 活动状态待核对")
+      const QString phase = !value.value("known").toBool() ? tr("活动记录待核对")
         : active ? tr("正在处理任务")
         : value.value("requests").toInt() > 0 ? tr("等待下一次请求") : tr("等待首次请求");
       const auto stamp = [](double seconds) { return QDateTime::fromMSecsSinceEpoch(qRound64(seconds * 1000)).toString("MM-dd HH:mm:ss"); };
@@ -105,6 +105,9 @@ class ConnectionDialog : public QDialog {
       : mode == "--register-codex" || mode == "--enable-codex" || mode == "--disable-codex" ? tr("正在保存 Codex 连接设置…")
       : mode == "--end-session" ? tr("正在结束所选连接…") : tr("正在检查程序与乐谱连接…"));
     auto process = new QProcess(this);
+    auto environment = QProcessEnvironment::systemEnvironment();
+    environment.insert("MCP_MUSESCORE_STATE_DIR", stateDirectory());
+    process->setProcessEnvironment(environment);
 #ifdef Q_OS_WIN
     process->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments *args) { args->flags |= 0x08000000; });
 #endif
