@@ -1,13 +1,13 @@
 # 当前进度与后续完整计划
 
-更新：2026-10-31。0.157已更新原安装目录并整理完整稳定包。原布局、配置和Codex路径保留；235份说明已同步。0.157已完成CFX厂商按钮、窗口拖动、焦点、Compact预设和SF2切回的实际检查，并修复音源恢复后的面板显示及启动菜单重复。5个软件场景通过；随包MCP继续为2.7.2。下一步为实体MIDI键盘、真实声卡连续听感，以及Synthesia长片段的暂停重播。
+更新：2026-10-31。0.157已更新原安装目录并整理完整稳定包。原布局、配置和Codex路径保留；235份说明已同步。0.157已完成CFX厂商按钮、窗口拖动、焦点、Compact预设和SF2切回的实际检查，并修复音源恢复后的面板显示及启动菜单重复。5个软件场景通过；随包MCP继续为2.7.2。Synthesia长片段已补查暂停、继续、重播与自然结束。下一步为实体MIDI录制和真实声卡连续听感。
 
 A共同界面、B的软件操作、C1和弦与C2和声／对位已有各批记录，结果见下方。实体键盘、声卡听感和真实音乐的连续使用按用户安排留在B5／F。
 
 
 ### F-CFX：实际厂商操作与面板更新
 
-0.157已完成CFX厂商按钮、窗口拖动、焦点、Compact预设和SF2切回的实际检查，并修复音源恢复后的面板显示及启动菜单重复。5个软件场景通过；随包MCP继续为2.7.2。下一步为实体MIDI键盘、真实声卡连续听感，以及Synthesia长片段的暂停重播。 实际步骤与截图见[CFX操作](CFX_PANEL_157_GUIDE.md)，复现及结果见[检查记录](CFX_PANEL_157_CHECKS.md)。
+0.157已完成CFX厂商按钮、窗口拖动、焦点、Compact预设和SF2切回的实际检查，并修复音源恢复后的面板显示及启动菜单重复。5个软件场景通过；随包MCP继续为2.7.2。Synthesia长片段已补查暂停、继续、重播与自然结束。下一步为实体MIDI录制和真实声卡连续听感。 实际步骤与截图见[CFX操作](CFX_PANEL_157_GUIDE.md)，复现及结果见[检查记录](CFX_PANEL_157_CHECKS.md)。
 
 ### E2-W2：当前对话已完成实际读谱与采用
 
@@ -21,7 +21,7 @@ A共同界面、B的软件操作、C1和弦与C2和声／对位已有各批记�
 2. **F-CFX已补查**：实际厂商按钮、拖动、焦点、预设及切回SF2／恢复通过；0.157修正面板状态和启动菜单，[操作与结果](CFX_PANEL_157_CHECKS.md)。声卡连续听感继续F-AUDIO。
 3. **B5／F-MIDI**：连接键盘后录制，核对收到的音、匹配位置、力度采用、断开及延迟。
 4. **F-AUDIO**：当前钢琴与声卡连续听表达、踏板、多轨对齐、循环和停止。
-5. **F-EXPORT**：REAPER四份MIDI事件一致；Synthesia已实际打开、设置两手颜色并完成短片段播放，[步骤与结果](MIDI_PLAYER_156_CHECKS.md)。较长音乐、暂停重播及音长动态显示继续与F-AUDIO检查。
+5. **F-EXPORT软件与显示已补查**：REAPER四份MIDI事件一致；Synthesia完成64秒片段的两手音条、空格暂停、继续、定位、自然结束及再次播放，[步骤与结果](MIDI_PLAYER_156_CHECKS.md)。真实声音继续F-AUDIO。
 
 淡化非旋律、自动音符候选及第4节的新构想仍按原安排讨论。各历史记录保留，当前结论以本节和本批检查为准。
 
@@ -630,11 +630,11 @@ R1已完成真实标签、Ctrl滚轮、4份600小节及12轮连续编辑。R1-B�
 | 17 编配检查 | [实际音长、踏板、声部与音响](ARRANGEMENT_122_CHECKS.md)；[默认绘制的筛选、更新、定位、谱旁说明及关闭](QML_WINDOW_154_CHECKS.md) | 新音乐判断继续按具体误判补例 |
 | 18 指法、分手与编配建议 | [按键、持续与换手](SUGGESTIONS_PHYSICAL_CHECKS.md)，[候选质量、差异、采用、撤销及重开](SUGGESTIONS_CANDIDATES_CHECKS.md) | 实体演奏核对建议的实际手感 |
 | 19 分段写法 | [另存、组合、删除恢复](VARIANTS_091_CHECKS.md)，[踏板增改删、切换与重开](FOLLOW_VARIANTS_142_CHECKS.md)，[真实编辑及普通版](COMPOSITION_147_CHECKS.md)，[当前组合与主方案导出](WORKFLOW_EXPORT_153_CHECKS.md) | 本项列出的软件操作已检查 |
-| 20 MIDI松手导出 | [反复、RPN、提前起音、试听与文件](MIDI_REPEAT_134_CHECKS.md)，[左右手分轨](MIDI_HAND_EXPORT_CHECKS.md)，[最终MIDI与PDF](WORKFLOW_EXPORT_153_CHECKS.md) | Synthesia实际显示、常用DAW与声卡听感 |
+| 20 MIDI松手导出 | [反复、RPN、提前起音、试听与文件](MIDI_REPEAT_134_CHECKS.md)，[左右手分轨](MIDI_HAND_EXPORT_CHECKS.md)，[最终MIDI与PDF](WORKFLOW_EXPORT_153_CHECKS.md) | REAPER事件和Synthesia长片段显示、暂停及重播见[实际结果](MIDI_PLAYER_156_CHECKS.md)；剩真实声卡听感 |
 | 21 给定音高写节奏 | [原休止、延音、三连音、连续采用与按音名校正](WRITING_104_CHECKS.md)；[录制资料找回](EXPRESSION_RECORDING_150_CHECKS.md) | 实体键盘及不同驱动连续录入 |
 | 22 卷帘写作与草稿 | [交叠分声部、独立音长、三连音、跨小节量化](WRITING_104_CHECKS.md)，[连续改谱与保存](COMPOSITION_147_CHECKS.md) | 本项列出的软件操作已检查 |
-| 23 VST与SF2音源 | [首次扫描、选择、恢复、保存](VST_088_CHECKS.md)，[每谱保留](SOURCE_SESSIONS_107_CHECKS.md)，[钢琴共用](COMMON_PIANO_108_CHECKS.md)，[SF3首次样本准备](SF3_START_153_CHECKS.md) | CFX厂商真实按钮、焦点及实体键盘／声卡；CFX实际鼠标操作按用户安排继续 |
-| 24 VST效果与预设 | [效果范围、参数、旁通、换序、预设和撤销](VST_088_CHECKS.md)；[两种运行方式与声音](PIANO_WINDOW_129_WORK.md) | CFX厂商窗口操作与声卡听感随23检查 |
+| 23 VST与SF2音源 | [首次扫描、选择、恢复、保存](VST_088_CHECKS.md)，[每谱保留](SOURCE_SESSIONS_107_CHECKS.md)，[钢琴共用](COMMON_PIANO_108_CHECKS.md)，[SF3首次样本准备](SF3_START_153_CHECKS.md) | CFX厂商按钮、拖动、焦点、预设及SF2恢复已在[0.157检查](CFX_PANEL_157_CHECKS.md)核对；剩实体键盘／声卡 |
+| 24 VST效果与预设 | [效果范围、参数、旁通、换序、预设和撤销](VST_088_CHECKS.md)；[两种运行方式与声音](PIANO_WINDOW_129_WORK.md) | CFX窗口操作见[0.157检查](CFX_PANEL_157_CHECKS.md)；声卡听感随23检查 |
 | 25 自动规范时值 | [两个4/4例子、拆分、符杠、符干及手动设置](NOTATION_135_CHECKS.md)，[连续写谱保存](COMPOSITION_147_CHECKS.md) | 本项列出的软件操作已检查 |
 | 26 Tap、rit.、a tempo | [旧工作区、跨行末端、拍单位、格式及实际MIDI](NOTATION_135_CHECKS.md)，[连续速度编辑与播放](WORKFLOW_SESSIONS_148_CHECKS.md) | 本项列出的软件操作已检查 |
 | 27 自由圆滑线 | [密集两行、途中换表、节点与切线、保存重开](NOTATION_137_CHECKS.md)，[最终打印与导出](WORKFLOW_EXPORT_153_CHECKS.md) | 本项列出的谱例和软件操作已检查 |
@@ -643,7 +643,7 @@ R1已完成真实标签、Ctrl滚轮、4份600小节及12轮连续编辑。R1-B�
 | 30 字体与行锁定 | [指定原谱8页PDF、锁行、分谱及普通版往返](ENGRAVING_138_CHECKS.md)，[最终两页PDF和普通版事件](WORKFLOW_EXPORT_153_CHECKS.md) | 本项列出的软件操作已检查 |
 | 31 AI与Codex | [任务资料与原生演奏](AI_TASK_143_CHECKS.md)，[实际Codex候选、采用与撤销](AI_WORKFLOW_144_CHECKS.md)，[MCP2.7.2版本和随包完整流程](AI_CONNECTION_154_CHECKS.md) | 0.156当前对话44项工具、原生图、继续任务及采用已核对 |
 | 32 实验开关与插件管理 | [真实谱开关往返、用户插件、重载、分享包与导出](SHARING_145_CHECKS.md) | 本项列出的软件操作已检查 |
-| 33 说明与发布 | [帮助导航、返回、查找及图片](HELP_146_CHECKS.md)，[安装链接](GUIDE_PACKAGE_20261030.md)；0.156随稳定包整理完整说明；源文档、链接和源码位置按本批重新检查 | 最后实机项结束后补对应操作结果 |
+| 33 说明与发布 | [帮助导航、返回、查找及图片](HELP_146_CHECKS.md)，[安装链接](GUIDE_PACKAGE_20261030.md)；0.157随包及安装目录整理235份说明；源文档、链接和源码位置按本批重新检查 | 最后实机项结束后补对应操作结果 |
 
 ## 3. 后续固定执行顺序
 

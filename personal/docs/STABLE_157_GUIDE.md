@@ -22,6 +22,6 @@ MCP所需运行环境已包含。具体使用见[原生谱图与采用](AI_CONNE
 
 CFX使用步骤与本次结果见[音源操作](CFX_PANEL_157_GUIDE.md)、[检查记录](CFX_PANEL_157_CHECKS.md)。REAPER的MIDI事件及Synthesia两手颜色见[导出说明](MIDI_HAND_EXPORT_GUIDE.md)。
 
-剩余实机检查为实体MIDI键盘、真实声卡连续听感，以及Synthesia长片段暂停重播；按[完整进度](REWORK_PROGRESS.md)继续。0.156完整包和校验值仍保留。
+Synthesia长片段暂停、继续和重播已补查。剩余实机检查为实体MIDI键盘与真实声卡连续听感；按[完整进度](REWORK_PROGRESS.md)继续。0.156完整包和校验值仍保留。
 
 提交定位：personal-v0.157.0；打包定位：personal-stable-v0.157.0。
