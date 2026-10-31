@@ -27,3 +27,21 @@
 本机记录：P2/out/hands-fourth-pluginhost.txt、hands-expanded-pluginhost.txt，图片images/midi-hand-export.png；MIDI文件P1/out/final-regression/midi-hand-original.mid、midi-hand-split.mid。Synthesia界面及真实声卡听感仍按F逐项检查。
 
 正式程序已安装到现有目录，PDF导出7446字节；kumo.ini和Qt5Quick.dll校验值保持。安装记录P2/out/hands131-install.json。
+
+
+## F-EXPORT：REAPER实际导入（2026-10-31）
+
+在已安装的REAPER 7.35/x64中，用独立设置目录导入四份原生测试输出，勾选展开MIDI轨道与导入速度。通过REAPER自身的逐音与控制事件接口读取导入结果，另用独立SMF读取器比较。
+
+| 文件 | 实际导入结果 |
+|---|---|
+| midi-hand-split.mid | 5音；该测试包含r.h.和跨谱表设置，全部指定右手 |
+| midi-hand-preview.mid | 手动调整后，右手C2、C6两音；左手C4、E4、G4三音 |
+| midi-original-086.mid | 5音、12个控制事件；长低音原松手点为1919 tick |
+| midi-proposed-086.mid | 长低音改在423 tick松手；和弦各音为882、882、883 tick，旋律为822 tick |
+
+四份文件的全部起音、松手、力度及CC与原SMF一致，四分音符单位的比较误差小于1e-9。人性化前后踏板均在2 tick踩下、1920 tick抬起；原起音和力度保持。手别名称在REAPER中完整显示。此前摘要中的“右手2音、左手3音”指preview文件，split文件用于另一项全右手检查，两者已分别核对。
+
+测试使用P2/out/export156/reaper.ini，四个工程与实际读回表格均在同一目录；结果为comparison.json。初次设备提示选择跳过，检查结束已正常关闭私有工程。用户日常REAPER设置和工程保持原样。
+
+本项完成DAW导入、手别轨名及事件核对。Synthesia颜色和实际音乐播放、声卡听感继续按F进行。

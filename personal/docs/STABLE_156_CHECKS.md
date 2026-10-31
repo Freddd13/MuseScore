@@ -32,3 +32,8 @@
 2026-10-31，用户保存退出后，已将0.156更新到`msvc.install_repair_current_x64/bin/MuseScore3Evo.exe`。主程序SHA-256与上方验证值一致；原程序已在E盘备份。
 
 `kumo.ini`、Qt5Qml、Qt5Quick、MCP当前版本指针及2.7.2运行程序的校验值均保持。231份说明已更新，本地章节链接检查通过。可从原位置直接打开；Codex配置继续使用原路径。安装结果保存在`P2/out/ai156/install.json`，已交付的稳定ZIP及其校验值保持。
+
+
+## 交付后补查DAW导入
+
+REAPER 7.35实际读取四份原生测试MIDI，右手2音／左手3音、原新松手点、力度和全部CC均与文件一致。具体文件、步骤及结果见[左右手导出检查](MIDI_HAND_EXPORT_CHECKS.md#f-exportreaper实际导入2026-10-31)。Synthesia颜色及连续音乐听感继续保留；程序与稳定ZIP保持0.156。
