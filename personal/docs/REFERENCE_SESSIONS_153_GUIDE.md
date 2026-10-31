@@ -33,3 +33,5 @@
 分段写法的主组合用于普通MuseScore打开；本分支继续恢复当前组合。分享或导出时的选择见[分段试写](VARIANTS_070_GUIDE.md)。
 
 实际检查结果见[多轨、排版与导出检查](WORKFLOW_EXPORT_153_CHECKS.md)。
+
+0.157在Mi Monitor上补查八轨实际输出、静音独听、自动循环、停止和片段末尾，详见[声卡播放结果](AUDIO_OUTPUT_157_CHECKS.md)。

@@ -2,6 +2,8 @@
 
 ## 0.157.0 — 2026-10-31
 
+- 补齐Mi Monitor真实时钟下八轨联合输出、静音独听、谱位、循环和再次播放，以及Pianoteq的停止与曲尾检查；保留8MiB有界音频缓冲和现有设置，数值见AUDIO_OUTPUT_157_CHECKS.md。检查定位personal-audio-checks-v0.157.0。
+
 - 按用户使用的Mi Monitor检查真实MME输出：SF3、CFX的停止、重播和自然结束通过，无输出欠载或处理超时；补充设备数值、试听说明和当前进度。测试与记录见AUDIO_OUTPUT_157_CHECKS.md，程序及完整ZIP保持。
 
 - 补查Synthesia的64秒原生MIDI：两手音条、空格暂停、继续、定位、自然结束后重播；更新操作说明与33项进度中的CFX、外部播放器状态。程序和ZIP保持。

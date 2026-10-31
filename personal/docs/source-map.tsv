@@ -733,5 +733,6 @@ GP6多声部延长	mtest/mscore/pluginhost/upstream_155_tests.inc	void TestPlugi
 稳定包完整校验	../../muse3_plugins/P2/package_stable_release.py	def archive_program(	115	逐文件SHA-256与ZIP重新读取	../../muse3_plugins/P2/test_stable_release.py
 音源面板跟随实际通道	mscore/workflow/vstpanel.cpp	QString patchKey() const	194	原生音色与实例改变后更新文字和按钮；保持厂商窗口	mtest/mscore/pluginhost/source_panel_157_tests.inc
 启动时的谱行菜单归属	mscore/workflow/systemlocks.cpp	void addSystemLockActions(	169	主窗口构造和工作区菜单恢复共用同一入口	mtest/mscore/pluginhost/source_panel_157_tests.inc
-真实声卡回调	mtest/mscore/pluginhost/actual_audio_157_tests.inc	static int callback(	15	Mi Monitor真实帧数、处理耗时、峰值及欠载	mtest/mscore/pluginhost/actual_audio_157_tests.inc
-SF3与CFX声卡播放	mtest/mscore/pluginhost/actual_audio_157_tests.inc	void TestPluginHost::actualAudioOutput157() {	86	手动停止、重播及自然结束	mtest/mscore/pluginhost/actual_audio_157_tests.inc
+真实声卡回调	mtest/mscore/pluginhost/actual_audio_157_tests.inc	static int callback(	19	Mi Monitor真实帧数、处理耗时、峰值及欠载	mtest/mscore/pluginhost/actual_audio_157_tests.inc
+三种钢琴音源声卡播放	mtest/mscore/pluginhost/actual_audio_157_tests.inc	void TestPluginHost::actualAudioOutput157() {	115	手动停止、重播及自然结束	mtest/mscore/pluginhost/actual_audio_157_tests.inc
+声卡八轨联合播放	mtest/mscore/pluginhost/actual_joint_157_tests.inc	void TestPluginHost::actualJointOutput157()	3	静音独听、谱位、循环、停止与片段结束	mtest/mscore/pluginhost/actual_joint_157_tests.inc

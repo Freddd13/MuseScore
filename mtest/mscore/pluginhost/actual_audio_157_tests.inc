@@ -12,6 +12,10 @@ class ActualOutput157 final : public Driver {
     std::atomic<qulonglong> blocks{0}, frames{0}, underflows{0}, late{0};
     std::atomic<unsigned long> largestBlock{0};
     std::atomic<double> peak{0}, maximumMs{0};
+    std::unique_ptr<float[]> capture;
+    unsigned captureCapacity = 0;
+    std::atomic<unsigned> capturePosition{0};
+    std::atomic_bool capturing{false};
     static int callback(const void*, void* output, unsigned long count,
                         const PaStreamCallbackTimeInfo*, PaStreamCallbackFlags flags, void* owner) {
         auto driver = static_cast<ActualOutput157*>(owner);
@@ -31,6 +35,15 @@ class ActualOutput157 final : public Driver {
             for (unsigned long i=0; i<count*2; ++i)
                 maximum = !std::isfinite(samples[i]) ? INFINITY : qMax(maximum, qAbs(double(samples[i])));
             driver->peak.store(maximum);
+            if (driver->capturing.load(std::memory_order_acquire)) {
+                const auto offset = driver->capturePosition.load(std::memory_order_relaxed);
+                const auto amount = qMin(count, static_cast<unsigned long>(driver->captureCapacity-offset));
+                for (unsigned i=0; i<amount; ++i)
+                    driver->capture[offset+i] = samples[i*2];
+                driver->capturePosition.store(offset+unsigned(amount), std::memory_order_release);
+                if (offset+amount == driver->captureCapacity)
+                    driver->capturing.store(false, std::memory_order_release);
+            }
         }
         return paContinue;
     }
@@ -55,6 +68,8 @@ public:
         code=Pa_OpenStream(&stream,nullptr,&output,rate,0,0,callback,this);
         if(code!=paNoError) {error=QString::fromUtf8(Pa_GetErrorText(code));return false;}
         const auto actual=Pa_GetStreamInfo(stream);rate=int(actual->sampleRate);latency=actual->outputLatency;
+        captureCapacity = unsigned(rate/2);
+        capture.reset(new float[captureCapacity]);
         return true;
     }
     bool start(bool=false) override {
@@ -66,6 +81,19 @@ public:
     void stopTransport() override {transport=Transport::STOP;}
     Transport getState() override {return transport.load();}
     int sampleRate() const override {return rate;}
+    bool beginCapture() {
+        if (capturing.load(std::memory_order_acquire)) return false;
+        capturePosition.store(0, std::memory_order_relaxed);
+        capturing.store(true, std::memory_order_release);
+        return true;
+    }
+    bool captureReady() const {
+        return !capturing.load(std::memory_order_acquire)
+            && capturePosition.load(std::memory_order_acquire) == captureCapacity;
+    }
+    QVector<float> capturedAudio() const {
+        return captureReady() ? QVector<float>(capture.get(), capture.get()+captureCapacity) : QVector<float>();
+    }
     void resetMetrics() {blocks=0;frames=0;underflows=0;late=0;largestBlock=0;peak=0;maximumMs=0;}
     QVariantMap metrics() const {
         return {{"device",device},{"api",api},{"sampleRate",rate},{"outputLatencyMilliseconds",latency*1000.},
@@ -82,6 +110,7 @@ void TestPluginHost::actualAudioOutput157_data() {
     QTest::addColumn<QString>("kind");
     QTest::newRow("SF3") << QString("SF3");
     QTest::newRow("CFX") << QString("CFX");
+    QTest::newRow("Pianoteq") << QString("Pianoteq");
 }
 void TestPluginHost::actualAudioOutput157() {
 #if defined(USE_PORTAUDIO) && defined(KUMO_VST_HOST)
@@ -105,12 +134,16 @@ void TestPluginHost::actualAudioOutput157() {
     QVERIFY2(driver->init(),qPrintable(driver->error));
     synth->setSampleRate(driver->sampleRate());synth->init();synth->setGain(.15f);
     QVERIFY(synth->synthesizer("Fluid")->loadSoundFonts({qEnvironmentVariable("P0_TEST_SOUNDFONT")}));
-    if(kind=="CFX") {
-        QString error;auto found=VstHost::scanVst2("E:/music_fonts/CFX Concert Grand/VST/CFX Concert Grand VST_x64.dll",&error);
+    if(kind!="SF3") {
+        QString error;
+        const auto found = kind=="CFX"
+            ? VstHost::scanVst2("E:/music_fonts/CFX Concert Grand/VST/CFX Concert Grand VST_x64.dll",&error)
+            : VstHost::scanVst3("C:/Program Files/Common Files/VST3/Pianoteq 9/Pianoteq 9.vst3",&error);
         QVERIFY2(!found.isEmpty(),qPrintable(error));auto channel=const_cast<Channel*>(score->midiMapping().front().articulation());
         QVERIFY(!assignVstInstrument(score,channel,found.front().toMap()).contains("error"));
         auto engine=static_cast<VstSynth*>(synth->synthesizer("KumoVST"));auto plugin=engine->rack().plugin(channel->bank());QVERIFY(plugin);
-        QVERIFY2(plugin->importPreset("E:/music_fonts/CFX Concert Grand/Presets/com.Plogue.Aria/02- Compact/Player/00_Default.ariax",&error),qPrintable(error));
+        if(kind=="CFX")
+            QVERIFY2(plugin->importPreset("E:/music_fonts/CFX Concert Grand/Presets/com.Plogue.Aria/02- Compact/Player/00_Default.ariax",&error),qPrintable(error));
         saveVstEdits(score);
     }
     Ms::seq=sequence;QScopedValueRollback<Sequencer*> events(MScore::seq,sequence);

@@ -320,6 +320,7 @@ class TestPluginHost : public QObject {
       void cfxRestoredPanelFollowsSource157();
       void actualAudioOutput157_data();
       void actualAudioOutput157();
+      void actualJointOutput157();
       void metronomeFontCompatibility() {
             QVERIFY(QFontDatabase().families().contains("Metronome Text 3"));
             auto main=Ms::mscore;auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);
@@ -1600,5 +1601,6 @@ class TestPluginHost : public QObject {
 #include "ai_workflow_144_tests.inc"
 #include "upstream_155_tests.inc"
 #include "actual_audio_157_tests.inc"
+#include "actual_joint_157_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"
