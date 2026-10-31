@@ -36,6 +36,6 @@
 - 实体MIDI键盘的录制、断开和延迟。
 - CFX厂商窗口中实际点击按钮、拖动及切换焦点。
 - 真实声卡下，表达、踏板、多轨、循环和停止的连续听感。
-- Synthesia及常用DAW中，左右手颜色、松手长度与播放结果。
+- 外部播放器中较长音乐的音长动态显示、暂停与重播。REAPER事件及Synthesia两手设置和颜色已核对，见[实际操作](MIDI_HAND_EXPORT_GUIDE.md#在synthesia中设置两手颜色)。
 
 程序包已从独立路径检查启动、MCP、原生谱图、MIDI和PDF导出，2700个文件逐项校验通过。实际结果见[稳定版检查](STABLE_156_CHECKS.md)；完整后续顺序见[当前进度](REWORK_PROGRESS.md)。

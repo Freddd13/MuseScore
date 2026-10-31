@@ -31,6 +31,7 @@
 | 添加和调整左右手分手记号 | [分手折线、文字、默认形状与保存](docs/HANDS_136_GUIDE.md) |
 | 输入跨拍时值、整理符干、Tap与渐慢 | [两个4/4输入例子与速度操作](docs/NOTATION_135_GUIDE.md) |
 | 开关AI连接、管理多个MCP进程 | [AI连接的开启、停止与连接列表](docs/AI_CONNECTION_133_GUIDE.md) |
+| 在Synthesia里确认左右手、按两手着色 | [每组试听、手别和颜色](docs/MIDI_HAND_EXPORT_GUIDE.md#在synthesia中设置两手颜色) |
 | 导出反复、从第二遍试听或调整左右手 | [MIDI导出与试听](docs/MIDI_REPEAT_134_GUIDE.md)、[左右手分轨](docs/MIDI_HAND_EXPORT_GUIDE.md) |
 | 面板单独全屏、回到原位置、处理窗口跑到屏幕外 | [面板窗口与工具栏](docs/WINDOWS_072_GUIDE.md) |
 | 调整编辑器尺寸、切换工作视图和工具页 | [窗口操作与区域高度](docs/LAYOUT_079_GUIDE.md) |
