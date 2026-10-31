@@ -729,3 +729,5 @@ GPIF完整小节	importexport/guitarpro/importgtp-gp6.cpp	int GuitarPro6::findNu
 GP6多声部延长	mtest/mscore/pluginhost/upstream_155_tests.inc	void TestPluginHost::upstreamGp6Files155()	181	三份真实文件与空前声部	mtest/mscore/pluginhost/upstream_155_tests.inc
 空音源查询	audio/vst/vstsynth.cpp	QVariantMap VstSynth::configuration(bool snapshot)	172	保留空配置，保存不多加撤销	mtest/mscore/pluginhost/ai_156_tests.inc
 当前Codex完整操作	personal/docs/AI_CONNECTION_156_GUIDE.md	# 用Codex读谱、看原图和采用建议	1	身份、谱图、比较、采用与撤销	personal/docs/AI_CONNECTION_156_CHECKS.md
+完整稳定程序包	../../muse3_plugins/P2/package_stable_release.py	def stage_program(	51	当前MCP、完整资源与新程序；保留原安装	../../muse3_plugins/P2/test_stable_release.py
+稳定包完整校验	../../muse3_plugins/P2/package_stable_release.py	def archive_program(	115	逐文件SHA-256与ZIP重新读取	../../muse3_plugins/P2/test_stable_release.py
