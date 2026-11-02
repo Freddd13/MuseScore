@@ -107,10 +107,10 @@ music-text-fallback	libmscore/sym.cpp	const char* ScoreFont::fallbackTextFont()	
 harmony-regions	share/workflow/panels/HarmonyAssistant/Timeline.js	function createBuilder	92	Numeric interval builder and manual overlays	mtest/mscore/scoreobserver
 harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName:""harmonyRangeEditor"""	8	Range handles, ticks and independent history	mtest/mscore/pluginhost
 演奏界面	mscore/performanceeditor/performanceeditor.cpp	PerformanceEditor::PerformanceEditor	81	独立停靠参数面板	mtest/mscore/performanceeditor
-演奏快照	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::refresh()	438	内容快照/独立布局修复/原生选择同步	mtest/mscore/performanceeditor
+演奏快照	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::refresh()	438	读取音符、力度和选择，按需更新布局	mtest/mscore/performanceeditor
 谱面演奏编辑	mscore/performanceeditor/performanceoverlay.cpp	void PerformanceEditor::paintOverlay	260	谱面浮动带/双向音符提示/播放和鼠标线	mtest/mscore/performanceeditor
 演奏手势	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::beginGesture	1004	预览/一次 undo	mtest/mscore/performanceeditor
-播放预览提交	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::applyPending	813	渲染空闲提交与外部改谱保护	mtest/mscore/performanceeditor
+播放预览提交	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::applyPending	813	渲染结束后保存，逐音核对其它修改	mtest/mscore/performanceeditor
 力度事务	mscore/performanceeditor/parameteredit.cpp	bool velocities(	181	原生 Note 属性事务	mtest/mscore/performanceeditor
 速度事务	mscore/performanceeditor/parameteredit.cpp	bool tempos(	182	TempoText 批编辑与可见标记保护	mtest/mscore/performanceeditor
 踏板事务	mscore/performanceeditor/parameteredit.cpp	bool pedal(	301	原生区间与同 Part 重叠校验	mtest/mscore/performanceeditor
@@ -453,7 +453,7 @@ AI读谱与取图安排	personal/docs/AI_WORKFLOW_REVIEW_20261024.md	# AI怎样�
 踏板播放时序	libmscore/pedalplayback.h	inline QVector<Span> schedule	43	相接间隙、实际起音、短段与明确空隙	mtest/mscore/performanceeditor/pedal_106_tests.inc
 踏板演奏事件	libmscore/pedalplaybackrender.h	inline QSet<const Spanner*> render	101	分块、反复、连续控制与原有路径	mtest/mscore/performanceeditor/pedal_106_tests.inc
 踏板设置保存	mscore/performanceeditor/parameteredit.cpp	bool pedalPlayback	77	整架乐器、单段、分谱与撤销	mtest/mscore/performanceeditor/pedal_106_tests.inc
-踏板播放窗口	mscore/performanceeditor/performancecontrols.cpp	void PerformanceEditor::showPedalPlayback	260	自然宽度、主题及保存反馈	mtest/mscore/performanceeditor/pedal_106_tests.inc
+踏板播放窗口	mscore/performanceeditor/performancecontrols.cpp	void PerformanceEditor::showPedalPlayback	260	窗口归属、置前、主题及保存反馈	mtest/mscore/performanceeditor/pedal_106_tests.inc
 导出原谱踏板	audio/exports/exportmidi.cpp	if (options.writtenPedal)	322	原谱／当前演奏踏板与导出副本	mtest/mscore/performanceeditor/pedal_106_tests.inc
 踏板实际区间	mscore/performanceeditor/performancecontrols.cpp	void PerformanceEditor::stepPedalPreview	362	按批读取、播放材料切换与链接谱表坐标	mtest/mscore/performanceeditor/pedal_106_graph_tests.inc
 踏板播放索引	mscore/seq.cpp	void Seq::appendPreparedPedalPoints	1608	读取当前实际材料，GUI非等待式读取	mtest/mscore/performanceeditor/pedal_106_graph_tests.inc
@@ -540,7 +540,7 @@ CFX状态比较	audio/vst/plugin.cpp	comparableUnit	65	具名附件顺序与效�
 实际低音共同持续	share/plugins/ArrangementAssistant/Rules.js	function playedLowVoicing	65	实际音对、时间、力度及来源	mtest/mscore/pluginhost/arrangement_122_tests.inc;mtest/mscore/pluginhost/arrangement_119_tests.inc
 和弦关闭	mscore/workflow/builtinpanels.cpp	void showHarmonyPanel	73	整体停止与恢复显示	mtest/mscore/pluginhost/performance_123_tests.inc
 力度与和弦索引	mscore/plugin/api/scoreobserver.cpp	bool ScoreObserver::reuseHarmonyAfterVelocityEdit	178	核对实际改动并复用音乐资料	mtest/mscore/pluginhost/performance_123_tests.inc
-原曲谱面入口	mscore/workflow/referencefactory.cpp	class ReferenceScoreControls	70	关联播放与位置	mtest/mscore/pluginhost/reference_123_tests.inc
+原曲谱面入口	mscore/workflow/referencefactory.cpp	class ReferenceScoreControls	70	关联选择、直接停止及页面重建时停止	mtest/mscore/pluginhost/reference_123_tests.inc
 停播后的所属谱状态	mscore/seq.cpp	void Seq::stopWait	530	停止立即清除所属谱播放标志	mtest/mscore/pluginhost/source_performance_tests.inc
 停播后的所属谱状态	mscore/seq.cpp	guiStop	654	停止立即清除所属谱播放标志	mtest/mscore/pluginhost/source_performance_tests.inc
 多谱音源与实际负载	mtest/mscore/pluginhost/source_performance_tests.inc	sourcePerformance	126	实际三种钢琴、四谱与连续编辑播放	personal/docs/MULTISCORE_AUDIO_CHECKS.md

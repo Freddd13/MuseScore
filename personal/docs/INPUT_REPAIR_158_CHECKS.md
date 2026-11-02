@@ -8,10 +8,18 @@
 |---|---|---|
 | 参数画布开始拖动，松键事件丢失，随后收到无按键的滚轮 | 画布仍占用鼠标；新的面板操作受影响 | `PerformanceEditor::eventFilter`、手势结束与输入监听 |
 | 一次滚轮尚在300毫秒合并等待，另一个音被修改 | 乐谱版本变化导致整批力度预览丢弃 | `refresh`、`applyPending` |
-| 待保存力度遇到窗口隐藏 | 刷新仅检查可见区域，提交一直等窗口重开 | `refresh` |
+| 0.158收尾：待保存力度遇到窗口隐藏 | 刷新仅检查可见区域，提交一直等窗口重开 | `refresh` |
 | 同一谱位有多个原曲关联，播放后点击“停止” | 再次打开片段选择菜单，音频继续播放 | `ReferenceScoreControls` |
 
 旧程序对应日志保存在 `P2/out/t0-158-interrupted-before-performanceeditor-run.txt`、`t0-158-lost-before-performanceeditor-run.txt` 和 `t0-158-stop-before-pluginhost.txt`。
+
+## 安装与程序包
+
+0.158.1已更新原目录。主程序与完整目录中的exe校验一致；配置、Qt运行文件和MCP2.7.2保持原值，0.157原程序备份保留。
+
+完整目录使用独立设置导出MIDI和PDF：599字节MIDI与0.157逐字节相同；PDF为一页，曲名与内容读取正常。完整包为`MuseScore-Kumo-0.158.1-Windows-x64.zip`，附逐文件校验清单；压缩后逐个文件重新读取核对。
+
+发布代码定位`personal-v0.158.1`，完整包记录定位`personal-stable-v0.158.1`。
 
 ## 本轮检查
 
