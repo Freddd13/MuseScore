@@ -28,7 +28,7 @@ void PerformanceEditor::finishWheel(bool commit)
       if (_wheelIndex >= 0) { repaintWheelTarget(_wheelIndex); if (_wheelSurface) _wheelSurface->update(wheelBadge(_wheelSurface).adjusted(-2, -2, 2, 2).toAlignedRect()); }
       if(_wheelIndex>=0){rememberWheelFeedback();_wheelFeedbackTicks=0;_wheelFeedbackTimer.start(660);}
       _wheelTimer.stop(); _wheelSurface = nullptr; _wheelIndex = -1; _wheelRemainder = 0; _wheelBefore.clear();
-      if (!_dragging && !_marquee && !_seeking && !_rangePanning) qApp->removeEventFilter(this);
+      syncInputTracking();
       if (commit) applyPending();
       }
 void PerformanceEditor::cancelWheel()
@@ -86,7 +86,7 @@ bool PerformanceEditor::wheelVelocity(QWheelEvent* wheel, bool notes, bool onSco
             if (_dirty || target >= _notes.size() || !noteEditable(_notes[target])) return true;
             _wheelPoint = point; _wheelSurface = surface;
             _wheelIndex = target; _wheelValue = noteValue(target); _wheelBefore = _pending;
-            pauseFollow(); qApp->installEventFilter(this); QToolTip::hideText();
+            pauseFollow(); syncInputTracking(); QToolTip::hideText();
             status(tr("滚轮仅调整指向音：细调 1／Shift 粗调 8 · Esc 取消 · 停转后提交。"));
             }
       if (_wheelPoint != point) { surface->update(wheelBadge(surface).adjusted(-2, -2, 2, 2).toAlignedRect()); _wheelPoint = point; }

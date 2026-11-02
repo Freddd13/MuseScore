@@ -58,7 +58,7 @@ void PerformanceEditor::endBandResize(bool cancel)
             _bandResizing = false;
             if (cancel) _bandHeight = _bandResizeHeight;
             else QSettings().setValue("performanceEditor/bandHeight", _bandHeight);
-            qApp->removeEventFilter(this);
+            syncInputTracking();
             if (_view && QWidget::mouseGrabber() == _view) _view->releaseMouse();
             }
       _bandResizeHover = false;
@@ -84,7 +84,7 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
                   _scoreViewport.panRange(rangeKind(), (mouse->y() - _last.y()) * (r.maximum - r.minimum) / _scoreLane.height());
                   _last = mouse->pos(); invalidateOverlay(); return true;
                   }
-            if (event->type() == QEvent::MouseButtonRelease) { _scoreRangePanning = false; qApp->removeEventFilter(this); _view->releaseMouse(); _view->unsetCursor(); return true; }
+            if (event->type() == QEvent::MouseButtonRelease) { _scoreRangePanning = false; syncInputTracking(); _view->releaseMouse(); _view->unsetCursor(); return true; }
             }
       if (event->type() == QEvent::MouseButtonPress && _band->isChecked() && !_dirty && !_geometryDirty && !_scoreLane.isEmpty()) {
             auto mouse = static_cast<QMouseEvent*>(event);
@@ -92,7 +92,7 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
                   if(resizeEdge.contains(mouse->pos())){
                         finishWheel();cancelGesture();_bandResizing=true;_bandResizeDown=growDown;
                         _bandResizeAnchor=growDown?_scoreLane.top():_scoreLane.bottom();
-                        _bandResizeHeight=_bandHeight;_press=mouse->pos();qApp->installEventFilter(this);
+                        _bandResizeHeight=_bandHeight;_press=mouse->pos();syncInputTracking();
                         _view->setCursor(Qt::SizeVerCursor);_view->grabMouse();return true;
                         }
                   for (int i = 0; i < 6; ++i) if (_scoreControls[i].contains(mouse->pos())) {
@@ -110,7 +110,7 @@ bool PerformanceEditor::overlayEvent(QEvent* event)
                         else scoreRangeControl(i);
                         return true;
                         }
-                  if (_scoreAxis.contains(mouse->pos()) && rangeKind() != 3) { finishWheel(); cancelGesture(); _scoreRangePanning = true; _last = mouse->pos(); qApp->installEventFilter(this); _view->setCursor(Qt::ClosedHandCursor); _view->grabMouse(); return true; }
+                  if (_scoreAxis.contains(mouse->pos()) && rangeKind() != 3) { finishWheel(); cancelGesture(); _scoreRangePanning = true; _last = mouse->pos(); syncInputTracking(); _view->setCursor(Qt::ClosedHandCursor); _view->grabMouse(); return true; }
                   }
             }
       if (event->type() == QEvent::Wheel && _band->isChecked() && !_dirty) {

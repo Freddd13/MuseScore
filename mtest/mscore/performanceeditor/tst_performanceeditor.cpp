@@ -194,6 +194,10 @@ class TestPerformanceEditor : public QObject, public MTest {
       Note* noteAt(Score* score, int tick = 480, int track = 0)
             { return toChord(score->tick2segment(Fraction::fromTicks(tick), false, SegmentType::ChordRest)->element(track))->notes().front(); }
    private slots:
+      void wheelSelectionCommit158();
+      void interruptedGestureWheel158();
+      void wheelOtherNoteEdit158();
+      void playBoundaryKeepsGesture158();
       void canvasKeys139();
       void liveWheelHomeAndSpectrum139();
       void waveTonePalette139();
@@ -1269,3 +1273,5 @@ class TestPerformanceEditor : public QObject, public MTest {
 #include "interaction_139_tests.inc"
 QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"
+
+#include "interaction_158_tests.inc"

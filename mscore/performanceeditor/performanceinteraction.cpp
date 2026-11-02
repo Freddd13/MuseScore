@@ -191,7 +191,7 @@ void PerformanceEditor::togglePlayback(bool startOnly)
       {
       if (!_view || !_score || !seq || !seq->isRunning()) { status(tr("播放不可用，请检查音频设备。")); return; }
       if (startOnly && seq->isPlaying()) return;
-      if (!seq->isPlaying()) { cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); }
+      completePointerGesture(); finishWheel();
       _view->cmd("play"); syncTransport();
       }
 void PerformanceEditor::revealTick(int tick)
@@ -321,8 +321,8 @@ void PerformanceEditor::syncTransport()
             for (auto connection : _sequencerConnections) disconnect(connection);
             _sequencerConnections.clear(); _sequencer = seq;
             if (seq) {
-                  _sequencerConnections.append(connect(seq, &Seq::stopped, this, [this] { cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); if (_snapshotDegraded) { _dirty = true; scheduleRefresh(); } startPedalPreview(); _commitTimer.start(0); syncTransport(); }));
-                  _sequencerConnections.append(connect(seq, &Seq::started, this, [this] { cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); _following = true; _followButton->setChecked(true); syncTransport(); startPedalPreview(); status(); }));
+                  _sequencerConnections.append(connect(seq, &Seq::stopped, this, [this] { completePointerGesture(); if (_snapshotDegraded) { _dirty = true; scheduleRefresh(); } startPedalPreview(); _commitTimer.start(0); syncTransport(); }));
+                  _sequencerConnections.append(connect(seq, &Seq::started, this, [this] { completePointerGesture(); _following = true; _followButton->setChecked(true); syncTransport(); startPedalPreview(); status(); }));
                   _sequencerConnections.append(connect(seq, &Seq::heartBeat, this, [this](int, int, int) { syncTransport(); playbackNotes(); }));
                   }
             }
@@ -408,7 +408,7 @@ void PerformanceEditor::cancelSurfaceGesture()
       {
       if (!_marquee && !_seeking && !_rangePanning) return;
       _marquee = _seeking = _rangePanning = false; _selectionBefore.clear(); if (_canvas) _canvas->unsetCursor();
-      qApp->removeEventFilter(this); if (_noteCanvas) _noteCanvas->releaseMouse(); if (_ruler) _ruler->releaseMouse(); if(_seekingSurface)_seekingSurface->releaseMouse();_seekingSurface=nullptr; if (_canvas) _canvas->releaseMouse(); updateSurfaces();
+      syncInputTracking(); if (_noteCanvas) _noteCanvas->releaseMouse(); if (_ruler) _ruler->releaseMouse(); if(_seekingSurface)_seekingSurface->releaseMouse();_seekingSurface=nullptr; if (_canvas) _canvas->releaseMouse(); updateSurfaces();
       }
 void PerformanceEditor::queueGesture(QPointF point)
       { _queuedPoint = point; _moveQueued = true; if (!_moveTimer.isActive()) _moveTimer.start(); }
@@ -516,10 +516,10 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
                   beginGesture(mouse->pos(),laneRect(),false);if(_dragging)queueGesture(mouse->pos());return _dragging;
                   }
             if (parameter && mouse->button() == Qt::LeftButton && mouse->x() < PerformanceViewport::gutter && rangeKind() != 3) {
-                  pauseFollow(); _rangePanning = true; _last = mouse->pos(); _canvas->setCursor(Qt::ClosedHandCursor); _canvas->grabMouse(); qApp->installEventFilter(this); return true;
+                  pauseFollow(); _rangePanning = true; _last = mouse->pos(); _canvas->setCursor(Qt::ClosedHandCursor); _canvas->grabMouse(); syncInputTracking(); return true;
                   }
             if (ruler && mouse->button() == Qt::LeftButton && mouse->x() >= PerformanceViewport::gutter) {
-                  pauseFollow(); _seeking = true; _seekTick = tickForX(mouse->x(), false); _seekingSurface=static_cast<QWidget*>(object); _seekingSurface->grabMouse(); qApp->installEventFilter(this); updateSurfaces(); return true;
+                  pauseFollow(); _seeking = true; _seekTick = tickForX(mouse->x(), false); _seekingSurface=static_cast<QWidget*>(object); _seekingSurface->grabMouse(); syncInputTracking(); updateSurfaces(); return true;
                   }
             if (notes || (parameter && _parameter->currentIndex() == 0)) {
                   buildGeometry(); const auto candidates = hits(mouse->pos(), parameter);
@@ -541,7 +541,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
                               else if (candidates.size() > 1 && _notes[candidates.front()].selected && _selectedIndices.size() == 1 && mouse->modifiers() == Qt::NoModifier) cycleHit(candidates);
                               else { selectIndices({candidates.front()}, mouse->modifiers()); updateHover(candidates.front()); audition(candidates.front()); }
                               }
-                        else if (mouse->x() >= PerformanceViewport::gutter) { _marquee = true; _marqueeStart = _marqueeEnd = mouse->pos(); _selectionModifiers = mouse->modifiers(); _selectionBefore.clear(); for (auto note : _score->selection().noteList()) _selectionBefore.append(note); _noteCanvas->grabMouse(); qApp->installEventFilter(this); }
+                        else if (mouse->x() >= PerformanceViewport::gutter) { _marquee = true; _marqueeStart = _marqueeEnd = mouse->pos(); _selectionModifiers = mouse->modifiers(); _selectionBefore.clear(); for (auto note : _score->selection().noteList()) _selectionBefore.append(note); _noteCanvas->grabMouse(); syncInputTracking(); }
                         return true;
                         }
                   if (!candidates.isEmpty()) {
@@ -551,7 +551,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
                         if (mouse->modifiers() & Qt::ControlModifier) return true;
                         beginGesture(mouse->pos(), laneRect(), false, target); _cycleOnClick = cycle; _pressedCandidates = candidates; return _dragging;
                         }
-                  if (parameter && _tool->currentIndex() == 0 && laneRect().contains(mouse->pos())) { pauseFollow(); _seeking = true; _seekTick = tickForX(mouse->x(), false); _seekingSurface = _canvas; _canvas->grabMouse(); qApp->installEventFilter(this); return true; }
+                  if (parameter && _tool->currentIndex() == 0 && laneRect().contains(mouse->pos())) { pauseFollow(); _seeking = true; _seekTick = tickForX(mouse->x(), false); _seekingSurface = _canvas; _canvas->grabMouse(); syncInputTracking(); return true; }
                   }
             }
       if (event->type() == QEvent::MouseButtonDblClick) {

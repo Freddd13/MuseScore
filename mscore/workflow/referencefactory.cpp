@@ -9,6 +9,7 @@
 #include "toolicons.h"
 #include "../scoreview.h"
 #include "../plugin/qmlpluginengine.h"
+#include "../plugin/api/scoreobserver.h"
 #include "libmscore/measure.h"
 #include "libmscore/segment.h"
 #include "libmscore/system.h"
@@ -97,7 +98,15 @@ public slots:
     auto system=measure->system();const QPointF anchor(segment?segment->canvasPos().x():measure->canvasPos().x(),system->staffYpage(staff)+system->page()->pos().y());
     auto where=view->toPhysical(anchor).toPoint();if(!view->rect().adjusted(-80,-60,80,60).contains(where))continue;
     auto button=buttons.value(it.key());if(!button){button=new QToolButton(view);button->setObjectName("referenceScoreClip/"+it.key());button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);button->setAutoRaise(false);buttons[it.key()]=button;
-     connect(button,&QToolButton::clicked,this,[this,button]{auto rows=button->property("referenceClips").toList();if(rows.size()==1){trigger(rows.front().toMap());return;}QMenu menu(button);for(auto value:rows){auto clip=value.toMap();auto action=menu.addAction(clip.value("trackName").toString()+" · "+clip.value("name").toString());connect(action,&QAction::triggered,this,[this,clip]{trigger(clip);});}menu.exec(button->mapToGlobal(QPoint(0,button->height())));});
+     connect(button,&QToolButton::clicked,this,[this,button]{auto rows=button->property("referenceClips").toList();
+      // Stop the playing clip directly, including a shared start with several
+      // associations. The list is only needed when choosing what to start.
+      if(project&&project->property("playing").toBool())for(auto value:rows){const auto clip=value.toMap();if(clip.value("id").toString()==project->property("activeAssociation").toString()){
+       trigger(clip);
+       // Stopping must remain available when the panel is being recreated.
+       if(project->property("playing").toBool()){if(project->property("joint").toBool()){PluginAPI::ScoreObserver observer;observer.stopReferencePlayback();}else QMetaObject::invokeMethod(project,"stop");}
+       project->setProperty("activeAssociation",QString());return;}}
+      if(rows.size()==1){trigger(rows.front().toMap());return;}QMenu menu(button);for(auto value:rows){auto clip=value.toMap();auto action=menu.addAction(clip.value("trackName").toString()+" · "+clip.value("name").toString());connect(action,&QAction::triggered,this,[this,clip]{trigger(clip);});}menu.exec(button->mapToGlobal(QPoint(0,button->height())));});
     }
     button->setProperty("referenceClips",*it);bool playing=false;for(auto value:*it)playing|=value.toMap().value("id").toString()==project->property("activeAssociation").toString();
     button->setText(playing?tr("停止"):tr("原曲"));setComponentToolIcon(button,playing?"stop":"play");button->setToolTip(row.value("trackName").toString()+" · "+row.value("name").toString());button->adjustSize();

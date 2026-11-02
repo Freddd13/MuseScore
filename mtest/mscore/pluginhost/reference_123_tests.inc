@@ -19,6 +19,26 @@ void TestPluginHost::referenceSelectionPlayback123()
  score->select(toChord(score->firstSegment(SegmentType::ChordRest)->element(0))->upNote());main->endCmd();QVERIFY(invoke("associate"));QVERIFY(!panel->property("associations").value<QJSValue>().toVariant().toList().isEmpty());
  QVERIFY(click("referenceScoreControls"));QVERIFY(project->property("scoreControls").toBool());QToolButton* control=nullptr;QTRY_VERIFY_WITH_TIMEOUT(([&]{for(auto button:main->currentScoreView()->findChildren<QToolButton*>())if(button->objectName().startsWith("referenceScoreClip/")&&button->isVisible()){control=button;return true;}return false;})(),5000);
  QTest::mouseClick(control,Qt::LeftButton);QTRY_VERIFY(project->property("playing").toBool());QTRY_VERIFY(!project->property("activeAssociation").toString().isEmpty());QTRY_COMPARE(control->text(),QString::fromUtf8("停止"));QTest::mouseClick(control,Qt::LeftButton);QTRY_VERIFY(!project->property("playing").toBool());QTRY_COMPARE(control->text(),QString::fromUtf8("原曲"));
+ // A score button shared by several clips must stop the current clip
+ // immediately, without reopening the clip-choice menu.
+ const auto originalAssociations=panel->property("associations").value<QJSValue>().toVariant().toList();
+ auto grouped=originalAssociations;auto alternative=grouped.front().toMap();alternative["id"]="stop-group-158";alternative["name"]=QString::fromUtf8("同位置的另一段");grouped.append(alternative);
+ panel->setProperty("associations",grouped);QVERIFY(invoke("storeTrack"));
+ QTRY_COMPARE(control->property("referenceClips").toList().size(),2);
+ for(int round=0;round<3;++round){
+  QVERIFY(invoke("playAssociation"));QTRY_VERIFY(project->property("playing").toBool());QTRY_COMPARE(control->text(),QString::fromUtf8("停止"));
+  bool openedMenu=false;
+  QTimer::singleShot(180,main,[&]{if(auto popup=qobject_cast<QMenu*>(QApplication::activePopupWidget())){openedMenu=true;popup->close();}});
+  QTest::mouseClick(control,Qt::LeftButton);QTest::qWait(220);
+  QVERIFY2(!openedMenu,"正在播放时，谱面的停止按钮直接停止，无需再次选择片段");
+  QVERIFY(!project->property("playing").toBool());QVERIFY(project->property("activeAssociation").toString().isEmpty());QVERIFY(!QWidget::mouseGrabber());
+ }
+ panel->setProperty("associations",originalAssociations);QVERIFY(invoke("storeTrack"));
+ // Native stop also works while the page's request connection is unavailable.
+ QVERIFY(invoke("playAssociation"));QTRY_VERIFY(project->property("playing").toBool());
+ QObject::disconnect(project,SIGNAL(associationRequested(QString,QString)),nullptr,nullptr);
+ QTest::mouseClick(control,Qt::LeftButton);QTRY_VERIFY(!project->property("playing").toBool());
+ QVERIFY(project->property("activeAssociation").toString().isEmpty());
  QVERIFY(panel->window()->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("reference-controls-123.png")));QVERIFY(main->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("reference-score-control-123.png")));
  QVERIFY(click("referenceScoreControls"));QTRY_VERIFY(!control->isVisible());QVERIFY(!panel->property("onlyRange").toBool());
  QVERIFY(click("referenceOnlyRange"));QVERIFY(panel->property("onlyRange").toBool());QVERIFY(invoke("storeTrack"));QVERIFY(invoke("saveScoreProject"));QVERIFY(main->saveFile());

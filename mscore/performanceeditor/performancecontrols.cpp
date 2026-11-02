@@ -260,11 +260,12 @@ QString PerformanceEditor::parameterTooltip(QPointF point, bool onScore) const
 void PerformanceEditor::showPedalPlayback()
 {
     if (!_score || _score->nstaves() == 0) return;
-    if (auto existing = findChild<QDialog*>("performancePedalPlaybackDialog")) { existing->show(); existing->raise(); return; }
+    completePointerGesture(); finishWheel();
+    if (auto existing = findChild<QDialog*>("performancePedalPlaybackDialog")) { existing->show(); existing->raise(); existing->activateWindow(); return; }
     auto originalScore = _score;
     auto part = _selectedPedal ? _selectedPedal->part() : _score->staff(qBound(0, _contextTrack / VOICES, _score->nstaves()-1))->part();
     auto target = _selectedPedal;
-    auto dialog = new QDialog(this, Qt::Window); dialog->setObjectName("performancePedalPlaybackDialog");
+    auto dialog = new QDialog(this, Qt::Dialog); dialog->setObjectName("performancePedalPlaybackDialog");
     dialog->setAttribute(Qt::WA_DeleteOnClose); dialog->setWindowTitle(tr("踏板播放 · %1").arg(part->partName()));
     dialog->setMinimumWidth(420);
     const auto theme = mscore ? mscore->palette() : QApplication::palette();
@@ -320,7 +321,7 @@ void PerformanceEditor::showPedalPlayback()
         if (changed) { _dirty = true; scheduleRefresh(); if (mscore) mscore->endCmd(); }
         message->setText(!error.isEmpty() ? error : tr("设置已保存 · Ctrl+Z撤销"));
     });
-    load(); dialog->show();
+    load(); dialog->show(); dialog->raise(); dialog->activateWindow(); mode->setFocus(Qt::OtherFocusReason);
 }
 
 bool PerformanceEditor::pedalPreviewVisible() const

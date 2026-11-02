@@ -369,6 +369,8 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       void moveGesture(QPointF);
       void finishGesture();
       void cancelGesture();
+      void completePointerGesture();
+      void syncInputTracking();
       void applyPending();
       void paintLane(QPainter&, const QRectF&, bool onScore);
 

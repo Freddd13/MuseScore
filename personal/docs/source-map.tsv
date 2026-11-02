@@ -109,8 +109,8 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 演奏界面	mscore/performanceeditor/performanceeditor.cpp	PerformanceEditor::PerformanceEditor	81	独立停靠参数面板	mtest/mscore/performanceeditor
 演奏快照	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::refresh()	438	内容快照/独立布局修复/原生选择同步	mtest/mscore/performanceeditor
 谱面演奏编辑	mscore/performanceeditor/performanceoverlay.cpp	void PerformanceEditor::paintOverlay	260	谱面浮动带/双向音符提示/播放和鼠标线	mtest/mscore/performanceeditor
-演奏手势	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::beginGesture	985	预览/一次 undo	mtest/mscore/performanceeditor
-播放预览提交	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::applyPending	795	渲染空闲提交与外部改谱保护	mtest/mscore/performanceeditor
+演奏手势	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::beginGesture	1004	预览/一次 undo	mtest/mscore/performanceeditor
+播放预览提交	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::applyPending	813	渲染空闲提交与外部改谱保护	mtest/mscore/performanceeditor
 力度事务	mscore/performanceeditor/parameteredit.cpp	bool velocities(	181	原生 Note 属性事务	mtest/mscore/performanceeditor
 速度事务	mscore/performanceeditor/parameteredit.cpp	bool tempos(	182	TempoText 批编辑与可见标记保护	mtest/mscore/performanceeditor
 踏板事务	mscore/performanceeditor/parameteredit.cpp	bool pedal(	301	原生区间与同 Part 重叠校验	mtest/mscore/performanceeditor
@@ -135,12 +135,12 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 个人帮助标识	mscore/musescoredialogs.cpp	AboutBoxDialog::AboutBoxDialog()	144	关于/复制版本/个人标签链接	mtest/mscore/performanceeditor
 个人版本生成	personal/branding.cmake	file(STRINGS	3	单一VERSION源/独立生成头/自动重配置	mtest/mscore/performanceeditor
 滚轮浮标	mscore/performanceeditor/performancewheel.cpp	void PerformanceEditor::paintWheelBadge	109	画布内数值/局部损伤重绘	mtest/mscore/performanceeditor
-排版几何刷新	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::refreshLayout	602	播放中只更新GUI几何/不重建音频事件	mtest/mscore/performanceeditor
-谱行缓存切换	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::setOverlaySystem	616	本行tick区间二分索引／原生墨迹空位缓存	mtest/mscore/performanceeditor
-播放谱行定位	mscore/performanceeditor/performanceeditor.cpp	System* PerformanceEditor::systemAtTick	611	记谱tick二分定位/休止与反复	mtest/mscore/performanceeditor
+排版几何刷新	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::refreshLayout	620	播放中只更新GUI几何/不重建音频事件	mtest/mscore/performanceeditor
+谱行缓存切换	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::setOverlaySystem	634	本行tick区间二分索引／原生墨迹空位缓存	mtest/mscore/performanceeditor
+播放谱行定位	mscore/performanceeditor/performanceeditor.cpp	System* PerformanceEditor::systemAtTick	629	记谱tick二分定位/休止与反复	mtest/mscore/performanceeditor
 琶音时序	libmscore/playbacktiming.cpp	Arpeggio* arpeggio(	18	跨谱表参与音和提前窗口	mtest/libmscore/midi/tst_midi.cpp
 琶音检视器	mscore/inspector/inspectorArpeggio.cpp	void InspectorArpeggio::postInit()	68	实际间隔与旧比率提示	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
-参数暂存	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::queueProperty(	859	播放中暂存/停播和保存提交	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
+参数暂存	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::queueProperty(	878	播放中暂存/停播和保存提交	mtest/mscore/performanceeditor/tst_performanceeditor.cpp
 琶音延音回归	mtest/libmscore/midi/tst_midi.cpp	void TestMidi::timedArpeggioTies()	858	防止续接时长丢失/不重触发	mtest/libmscore/midi/tst_midi.cpp
 小音符时序	libmscore/playbacktiming.cpp	double graceSpanMs(	83	速度图与整组上限	mtest/libmscore/midi/tst_midi.cpp
 倚音播放解释	libmscore/rendermidi.cpp	void Score::createGraceNotesPlayEvents(	2295	旧融合与新位置解释	mtest/libmscore/midi/tst_midi.cpp
@@ -159,7 +159,7 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 速度表达检视器	mscore/inspector/inspectorTextLine.cpp	void InspectorTextLine::postInit	71	类型/播放、数字/拖动	mtest/mscore/performanceeditor/rit_editor_tests.inc
 演奏键形	mscore/performanceeditor/performanceview.cpp	QPolygonF PerformanceKeyboard::shape	32	黑键左／自然音中心与半音网格对应／白键前端自然分界	mtest/mscore/performanceeditor
 演奏键盘命中	mscore/performanceeditor/performanceview.cpp	int PerformanceKeyboard::pitchAt	50	键形共享规则的悬浮识音和原生试听命中	mtest/mscore/performanceeditor
-参数可用区域	mscore/performanceeditor/performanceeditor.cpp	QRectF PerformanceEditor::laneRect()	910	参数绘制/拖拽统一有效范围和端点留白	mtest/mscore/performanceeditor
+参数可用区域	mscore/performanceeditor/performanceeditor.cpp	QRectF PerformanceEditor::laneRect()	929	参数绘制/拖拽统一有效范围和端点留白	mtest/mscore/performanceeditor
 力度包络	libmscore/playbackenvelope.cpp	double PlaybackEnvelope::factor	43	共用参数、旧值和逐次倍率	mtest/libmscore/midi/envelope_playback_tests.inc
 生成震音包络	libmscore/rendermidi.cpp	static void applyGeneratedEnvelope	1372	全范围生成事件、双音来源	mtest/libmscore/midi/envelope_playback_tests.inc
 包络检视器	mscore/inspector/envelopeinspector.h	inline std::vector<InspectorItem> envelopeInspectorControls	17	数字／名称拖拽、单事务预设	mtest/mscore/performanceeditor/envelope_editor_tests.inc
@@ -171,7 +171,7 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 谱带鼠标隔离	mscore/performanceeditor/performanceoverlay.cpp	bool PerformanceEditor::overlayEvent	67	完整frame阻断／原生双向选音	mtest/mscore/performanceeditor
 谱带重叠回归	mtest/mscore/performanceeditor/performance_controls_tests.inc	void reaperStemsAndStripSelection	62	双谱行和弦／真实选择拖拽／一次Undo	mtest/mscore/performanceeditor
 独立谱带入口	mscore/musescore.cpp	auto bandAction = new QAction	2046	共享菜单／工具栏Action与面板同步	mtest/mscore/performanceeditor
-独立谱带生命周期	mscore/performanceeditor/performanceeditor.cpp	bool PerformanceEditor::surfacesActive() const	903	面板或谱带激活／关闭停刷	mtest/mscore/performanceeditor
+独立谱带生命周期	mscore/performanceeditor/performanceeditor.cpp	bool PerformanceEditor::surfacesActive() const	922	面板或谱带激活／关闭停刷	mtest/mscore/performanceeditor
 hand-bracket-geometry	libmscore/symbol.cpp	QPainterPath Symbol::handPath	111	Optional SMuFL hand geometry in spatium	mtest/mscore/performanceeditor/handsymbol_tests.inc
 hand-bracket-grips	libmscore/symbol.cpp	void Symbol::startEditDrag	166	Native Undo and cancellable endpoint preview	mtest/mscore/performanceeditor/handsymbol_tests.inc
 hand-bracket-inspector	mscore/inspector/inspector.cpp	InspectorHandSymbol::InspectorHandSymbol	1445	Numeric scrubbing and safe property submission	mtest/mscore/performanceeditor/handsymbol_tests.inc
@@ -189,11 +189,11 @@ MIDI 对比	mscore/midicrop/midicroppanel.cpp	void MidiCropPanel::compare	237	�
 编配插件	share/plugins/ArrangementAssistant/Rules.js	function defaults()	108	音乐规则与可校正角色	mtest/mscore/p0native
 Tap 工作区迁移	mscore/workspace.cpp	if (uiVersion < 4)	1113	一次性添加共享入口，保留后续用户自定义	mtest/mscore/p0native
 谱带自动位置	mscore/performanceeditor/performanceoverlay.cpp	QRectF PerformanceEditor::scoreBandLane	224	最低可见谱表墨迹／下一行空位／越界回退	mtest/mscore/performanceeditor
-谱面力度横坐标	mscore/performanceeditor/performanceeditor.cpp	double PerformanceEditor::xForNote	912	原生音头中心／镜像倚音offset／共享绘制命中	mtest/mscore/performanceeditor
-隐藏选择同步	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::selectionChanged	657	隐藏待同步／重开恢复上下文／相同上下文不重滤	mtest/mscore/performanceeditor
+谱面力度横坐标	mscore/performanceeditor/performanceeditor.cpp	double PerformanceEditor::xForNote	931	原生音头中心／镜像倚音offset／共享绘制命中	mtest/mscore/performanceeditor
+隐藏选择同步	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::selectionChanged	675	隐藏待同步／重开恢复上下文／相同上下文不重滤	mtest/mscore/performanceeditor
 谱带位置与点选回归	mtest/mscore/performanceeditor/performance_controls_tests.inc	void scoreStripPlacementAndNativeAnchors	292	真实镜像倚音偏移／近邻柱／垂直铅笔／不改导航	mtest/mscore/performanceeditor
 谱带局部刷新回归	mtest/mscore/performanceeditor/performance_controls_tests.inc	void scoreStripHiddenSelectionAndCursorDamage	376	隐藏不扫描重绘／当前谱表恢复／窄列损伤	mtest/mscore/performanceeditor
-原曲参考	mscore/workflow/referencefactory.cpp	createReferenceMedia	117	按需媒体装配	../../muse3_plugins/P1/tests/tst_media.cpp
+原曲参考	mscore/workflow/referencefactory.cpp	createReferenceMedia	126	按需媒体装配	../../muse3_plugins/P1/tests/tst_media.cpp
 原曲参考	mscore/referenceaudio/mediasession.cpp	ReferenceMediaSession::play	76	独立音频会话	../../muse3_plugins/P1/tests/tst_media.cpp
 原曲参考	mscore/referenceaudio/audioreader.cpp	bool stream	74	可取消解码及保调	../../muse3_plugins/P1/tests/tst_media.cpp
 工作流	mscore/workflow/midiinput.cpp	QVariantMap readPerformanceMidi	23	只读范围与值数据	mtest/mscore/p1native
@@ -398,7 +398,7 @@ VST 首次选择	mscore/workflow/vstpanel.cpp	void populateCatalog()	290	空列�
 音源和效果预设	mscore/workflow/vstpresets.cpp	QByteArray readVstPreset(	17	读写带插件身份的预设，继续读取已有格式	mtest/mscore/pluginhost/vst_088_tests.inc
 换谱恢复音源	mscore/workflow/vstpanel.cpp	void restoreVstForScore(	1282	按当前谱读取音源配置并恢复路由；共用与保留设计见SOUND_PEDAL_PLAN.md	-
 音源实例复用	audio/vst/rack.cpp	bool Rack::load(	392	复用当前配置中相同实例，换谱保留的实现位置	-
-踏板编辑取点	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::beginGesture(	985	参数区与谱行带的踏板端点取点	-
+踏板编辑取点	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::beginGesture(	1004	参数区与谱行带的踏板端点取点	-
 组合面板空间	mscore/mixer/mixer.cpp	if (personalFeaturesEnabled())	89	混音器按需滚动，移除新增整行按钮后保留原控制内容	mtest/mscore/pluginhost/layout_089_tests.inc
 编辑器标签组尺寸	mscore/workflow/workspaceviews.cpp	void restoreEditorExtent(	80	保存可见标签组，恢复工作视图时计入标签栏尺寸，保留内部比例	mtest/mscore/pluginhost/layout_089_tests.inc
 个人工具图标	mscore/workflow/workspaceviews.cpp	QIcon personalToolIcon(	433	按工具用途绘制图标，菜单、工具栏与工具页共用	mtest/mscore/pluginhost/layout_089_tests.inc
@@ -415,7 +415,7 @@ QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this
 音源操作分组	mscore/workflow/vstpanel.cpp	auto sourceGroup = new QGroupBox	705	当前音源、插件选择、效果链分别操作，SF2返回直接可见	mtest/mscore/pluginhost/components_092_tests.inc
 工作视图侧栏宽度	mscore/workflow/workspaceviews.cpp	void restoreSideWidths(	116	先恢复中央乐谱，保存并恢复侧栏与标签组宽度	mtest/mscore/pluginhost/workspace_093_tests.inc
 停播编辑状态	mscore/seq.cpp	void MuseScore::seqStopped()	581	主窗口补齐当前谱窗的编辑状态，恢复符号面板	mtest/mscore/pluginhost/workspace_093_tests.inc
-编辑器鼠标归还	mscore/performanceeditor/performanceeditor.cpp	bool PerformanceEditor::eventFilter(	1201	播放及手势中断后归还鼠标，保持其它原生与QML面板可用	mtest/mscore/pluginhost/workspace_093_tests.inc
+编辑器鼠标归还	mscore/performanceeditor/performanceeditor.cpp	bool PerformanceEditor::eventFilter(	1243	播放及手势中断后归还鼠标，保持其它原生与QML面板可用	mtest/mscore/pluginhost/workspace_093_tests.inc
 密集力度数字	mscore/performanceeditor/performancelabels.h	class PerformanceValueLayout	54	按可见内容避让数字，保留选择优先与稳定重绘	mtest/mscore/pluginhost/values_094_tests.inc
 谱面可见符号轮廓	mscore/performanceeditor/performanceux.cpp	void PerformanceEditor::rebuildVisibleScoreNotes()	159	按需缓存符干、符杠和变音记号，随布局及视口更新	mtest/mscore/pluginhost/values_094_tests.inc
 常显力度准备	mscore/performanceeditor/performanceeditor.cpp	connect(values, &QAction::toggled	224	开启常显时补齐当前谱的数据读取	mtest/mscore/pluginhost/values_094_tests.inc
@@ -430,7 +430,7 @@ QML图标来源	mscore/plugin/qmlpluginengine.cpp	installComponentToolIcons(this
 演奏速度采用	mscore/workflow/workflowexpression.cpp	QVariantMap ScoreObserver::applyExpression(	96	实际时长模拟、必要恢复点及一次撤销	mtest/mscore/performanceeditor/expression_097_tests.inc
 原曲共同播放	share/workflow/panels/ReferencePlayer/ReferencePlayer.view.qml	 function playOriginal(	119	原曲按钮、快捷键、源位置与暂停继续	mtest/mscore/performanceeditor/reference_098_tests.inc
 音频源位置	mscore/referenceaudio/mediaproject.cpp	double ReferenceMediaProject::sourcePosition	170	共享输出位置、循环第一遍偏移与直接读取目标片段	mtest/mscore/performanceeditor/reference_098_tests.inc
-原曲播放配合	mscore/workflow/referencefactory.cpp	class ReferencePlaybackPolicy	44	按个人开关处理普通乐谱与原曲相互停止	mtest/mscore/performanceeditor/reference_098_tests.inc
+原曲播放配合	mscore/workflow/referencefactory.cpp	class ReferencePlaybackPolicy	45	按个人开关处理普通乐谱与原曲相互停止	mtest/mscore/performanceeditor/reference_098_tests.inc
 原曲默认快捷键	mscore/shortcut.cpp	void Shortcut::load()	4749	旧配置缺少新动作时补齐空闲键，保留自选和取消	mtest/mscore/performanceeditor/reference_098_tests.inc
 面板空白处按键	mscore/plugin/qmlplugin.cpp	bool QmlPlugin::eventFilter	142	窗口有焦点时处理播放键，保留文字输入	mtest/mscore/performanceeditor/reference_098_tests.inc
 原曲实时混音	mscore/referenceaudio/mediaproject.cpp	ReferenceMediaProject::setTrackMix	194	输出时逐轨应用音量与静音，循环保留设置	mtest/mscore/performanceeditor/reference_099_tests.inc
@@ -455,7 +455,7 @@ AI读谱与取图安排	personal/docs/AI_WORKFLOW_REVIEW_20261024.md	# AI怎样�
 踏板设置保存	mscore/performanceeditor/parameteredit.cpp	bool pedalPlayback	77	整架乐器、单段、分谱与撤销	mtest/mscore/performanceeditor/pedal_106_tests.inc
 踏板播放窗口	mscore/performanceeditor/performancecontrols.cpp	void PerformanceEditor::showPedalPlayback	260	自然宽度、主题及保存反馈	mtest/mscore/performanceeditor/pedal_106_tests.inc
 导出原谱踏板	audio/exports/exportmidi.cpp	if (options.writtenPedal)	322	原谱／当前演奏踏板与导出副本	mtest/mscore/performanceeditor/pedal_106_tests.inc
-踏板实际区间	mscore/performanceeditor/performancecontrols.cpp	void PerformanceEditor::stepPedalPreview	361	按批读取、播放材料切换与链接谱表坐标	mtest/mscore/performanceeditor/pedal_106_graph_tests.inc
+踏板实际区间	mscore/performanceeditor/performancecontrols.cpp	void PerformanceEditor::stepPedalPreview	362	按批读取、播放材料切换与链接谱表坐标	mtest/mscore/performanceeditor/pedal_106_graph_tests.inc
 踏板播放索引	mscore/seq.cpp	void Seq::appendPreparedPedalPoints	1608	读取当前实际材料，GUI非等待式读取	mtest/mscore/performanceeditor/pedal_106_graph_tests.inc
 手动踏板保护	libmscore/pedalplaybackrender.h	inline QSet<const Part*> retainedParts	31	整谱手动来源用于分块与完整导出	mtest/mscore/performanceeditor/pedal_106_graph_tests.inc
 导出踏板试听	mscore/midicrop/gateaudition.cpp	GateAudition prepareGateAudition	12	原新长度均读取本次选择的踏板	mtest/mscore/performanceeditor/pedal_106_tests.inc
@@ -526,9 +526,9 @@ CFX状态比较	audio/vst/plugin.cpp	comparableUnit	65	具名附件顺序与效�
 分析时间边界	mscore/plugin/api/arrangementsnapshot.cpp	auto appendTempo	188	范围起止与有效BPM	mtest/mscore/pluginhost/arrangement_119_tests.inc
 反复显示行	share/plugins/ArrangementAssistant/Presentation.js	function rows	30	保留每处资料并合并列表	../../muse3_plugins/ArrangementAssistant/tests/test-low-119.cjs
 逐处定位	share/plugins/ArrangementAssistant/ArrangementAssistant_MS3.qml	function occurrenceStep	57	同一排列的下一处与单独忽略	mtest/mscore/pluginhost/arrangement_119_tests.inc
-窗口切换结束演奏手势	mscore/performanceeditor/performanceeditor.cpp	const bool leavingGestureWindow	1224	归还时间尺、框选、平移及参数鼠标	mtest/mscore/pluginhost/reference_input_120_tests.inc
+窗口切换结束演奏手势	mscore/performanceeditor/performanceeditor.cpp	const bool leavingGestureWindow	1267	归还时间尺、框选、平移及参数鼠标	mtest/mscore/pluginhost/reference_input_120_tests.inc
 空白定位画布身份	mscore/performanceeditor/performanceinteraction.cpp	_seekingSurface = _canvas	554	参数区空白定位与鼠标转交	mtest/mscore/pluginhost/reference_input_120_tests.inc
-尺寸手势及时结束	mscore/performanceeditor/performanceeditor.cpp	const bool releasedBeforeMove	1214	无按键移动、新点击归还鼠标	mtest/mscore/pluginhost/input_121_tests.inc
+尺寸手势及时结束	mscore/performanceeditor/performanceeditor.cpp	const bool releasedBeforeMove	1256	无按键移动、新点击归还鼠标	mtest/mscore/pluginhost/input_121_tests.inc
 谱行带尺寸与光标	mscore/performanceeditor/performanceoverlay.cpp	void PerformanceEditor::endBandResize	54	正常完成、取消与边缘光标	mtest/mscore/pluginhost/input_121_tests.inc
 工具图标统一中心	mscore/workflow/workspaceviews.cpp	QIcon personalToolIcon	433	共用图形、中心与视觉尺寸	mtest/mscore/pluginhost/input_121_tests.inc
 工具按钮跟随尺寸	mscore/musescore.cpp	button->setIconSize(tools->iconSize())	777	原生按钮图标尺寸与菜单动作	mtest/mscore/pluginhost/input_121_tests.inc
@@ -540,7 +540,7 @@ CFX状态比较	audio/vst/plugin.cpp	comparableUnit	65	具名附件顺序与效�
 实际低音共同持续	share/plugins/ArrangementAssistant/Rules.js	function playedLowVoicing	65	实际音对、时间、力度及来源	mtest/mscore/pluginhost/arrangement_122_tests.inc;mtest/mscore/pluginhost/arrangement_119_tests.inc
 和弦关闭	mscore/workflow/builtinpanels.cpp	void showHarmonyPanel	73	整体停止与恢复显示	mtest/mscore/pluginhost/performance_123_tests.inc
 力度与和弦索引	mscore/plugin/api/scoreobserver.cpp	bool ScoreObserver::reuseHarmonyAfterVelocityEdit	178	核对实际改动并复用音乐资料	mtest/mscore/pluginhost/performance_123_tests.inc
-原曲谱面入口	mscore/workflow/referencefactory.cpp	class ReferenceScoreControls	69	关联播放与位置	mtest/mscore/pluginhost/reference_123_tests.inc
+原曲谱面入口	mscore/workflow/referencefactory.cpp	class ReferenceScoreControls	70	关联播放与位置	mtest/mscore/pluginhost/reference_123_tests.inc
 停播后的所属谱状态	mscore/seq.cpp	void Seq::stopWait	530	停止立即清除所属谱播放标志	mtest/mscore/pluginhost/source_performance_tests.inc
 停播后的所属谱状态	mscore/seq.cpp	guiStop	654	停止立即清除所属谱播放标志	mtest/mscore/pluginhost/source_performance_tests.inc
 多谱音源与实际负载	mtest/mscore/pluginhost/source_performance_tests.inc	sourcePerformance	126	实际三种钢琴、四谱与连续编辑播放	personal/docs/MULTISCORE_AUDIO_CHECKS.md
@@ -736,3 +736,5 @@ GP6多声部延长	mtest/mscore/pluginhost/upstream_155_tests.inc	void TestPlugi
 真实声卡回调	mtest/mscore/pluginhost/actual_audio_157_tests.inc	static int callback(	19	Mi Monitor真实帧数、处理耗时、峰值及欠载	mtest/mscore/pluginhost/actual_audio_157_tests.inc
 三种钢琴音源声卡播放	mtest/mscore/pluginhost/actual_audio_157_tests.inc	void TestPluginHost::actualAudioOutput157() {	115	手动停止、重播及自然结束	mtest/mscore/pluginhost/actual_audio_157_tests.inc
 声卡八轨联合播放	mtest/mscore/pluginhost/actual_joint_157_tests.inc	void TestPluginHost::actualJointOutput157()	3	静音独听、谱位、循环、停止与片段结束	mtest/mscore/pluginhost/actual_joint_157_tests.inc
+鼠标操作结束	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::completePointerGesture()	1228	松键丢失、停播及切换工具时保存拖动并归还鼠标	mtest/mscore/performanceeditor/interaction_158_tests.inc
+输入监听归属	mscore/performanceeditor/performanceeditor.cpp	void PerformanceEditor::syncInputTracking()	1220	按全部活动手势统一安装和移除输入监听	mtest/mscore/performanceeditor/interaction_158_tests.inc

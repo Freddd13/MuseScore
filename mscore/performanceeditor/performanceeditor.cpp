@@ -342,7 +342,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       for (auto box : {_handles, _band}) connect(box, &QCheckBox::toggled, this, [this] { cancelGesture(); syncOverlayTracking(); if (_view) _view->update(); });
       connect(_band, &QCheckBox::toggled, this, [this](bool enabled) { emit scoreBandChanged(enabled); scheduleRefresh(); startPedalPreview(); syncTransport(); });
       if (mscore) connect(mscore, &MuseScore::scoreStateChanged, this, [this](ScoreState state) {
-            if (state == STATE_PLAY) { cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); } syncPedalSelection();
+            if (state == STATE_PLAY) completePointerGesture(); syncPedalSelection();
             });
       _playTimer.setParent(this); _playTimer.setObjectName("performancePlaybackTimer");
       _playTimer.setInterval(16); _playTimer.setTimerType(Qt::PreciseTimer);
@@ -458,7 +458,20 @@ void PerformanceEditor::refresh()
             }
       if (!live && seq && !seq->backgroundRenderingIdle()) { _refreshTimer.start(20); return; }
       const auto state = _score->masterScore()->state();
-      if (hasPending() && _state != state) { finishWheel(false); _pending.clear(); _propertyPending.clear(); status(tr("乐谱已被其他操作修改，待提交预览已取消。")); }
+      if (hasPending() && _state != state) {
+            finishWheel(false);
+            // An edit elsewhere in the score must not discard this wheel burst.
+            // Keep drafts whose actual note properties still match their source;
+            // a direct change or undo of the same note takes precedence.
+            for (auto it = _pending.begin(); it != _pending.end();) {
+                  const auto index = _noteIndex.constFind(it.key());
+                  if (index == _noteIndex.cend() || it.key()->veloType() != _notes[*index].type
+                        || it.key()->veloOffset() != _notes[*index].raw) it = _pending.erase(it);
+                  else ++it;
+                  }
+            _propertyPending.clear();
+            _dirty = true;
+            }
       if (_score->nstaves() == 0) return;
       if (!_dirty && _state == state) {
             if (_geometryDirty) {
@@ -551,7 +564,12 @@ void PerformanceEditor::refresh()
             }
       refreshTempoCurves();
       _hover = -1;
+      // Removed notes can remain alive in the undo stack. Only commit drafts
+      // that still belong to the current score snapshot.
+      for (auto it = _pending.begin(); it != _pending.end();)
+            if (!_noteIndex.contains(it.key())) it = _pending.erase(it); else ++it;
       _state = state; _dirty = false; _geometryDirty = false;
+      if (hasPending() && _wheelIndex < 0 && !_dragging) _commitTimer.start(0);
       startPedalPreview(true);
       rebuildScoreNoteRows(); rebuildFilter(); invalidateVisual();
       if (_fitOnRefresh) { fit(); centerPitch(!_selectedIndices.isEmpty()); _fitOnRefresh = false; _following = true; _followButton->setChecked(true); _followButton->setText(tr("跟随播放")); }
@@ -800,8 +818,9 @@ void PerformanceEditor::applyPending()
       if (_score->isPlaying() || (seq && seq->isPlaying())) { _commitTimer.stop(); status(); return; }
       if (seq && !seq->backgroundRenderingIdle()) { _commitTimer.start(20); return; }
       if (_score->masterScore()->state() != _state) {
-            _pending.clear(); _propertyPending.clear(); _dirty = true; scheduleRefresh();
-            status(tr("乐谱已被其他操作修改，待提交预览已取消。")); return;
+            refresh();
+            if (!hasPending()) { status(); return; }
+            if (_dirty || _score->masterScore()->state() != _state) { _commitTimer.start(20); return; }
             }
       const auto edits = _pending;
       if (!_propertyPending.isEmpty()) {
@@ -1041,7 +1060,7 @@ void PerformanceEditor::beginGesture(QPointF point, QRectF rect, bool onScore, i
             }
       // The host's application filter dispatches Escape directly to QWidget::event.
       // Observe the application only for our active gesture, ahead of that filter.
-      qApp->installEventFilter(this);
+      syncInputTracking();
       if (onScore) { _view->setFocus(Qt::MouseFocusReason); _view->grabMouse(); }
       else { _canvas->setFocus(Qt::MouseFocusReason); _canvas->grabMouse(); }
       }
@@ -1153,7 +1172,7 @@ void PerformanceEditor::finishGesture()
             for(int i:candidates){double distance=QLineF(_press,QPointF(xForNote(i,_scoreGesture),velocityY(i,_gestureLane,_scoreGesture))).length();if(distance<nearest){nearest=distance;target=i;}}
             cancelGesture();if(cycle)cycleHit(candidates);else{selectIndices({target},Qt::NoModifier);updateHover(target);}return;
             }
-      _dragging = false; qApp->removeEventFilter(this);
+      _dragging = false; syncInputTracking();
       if (_view) _view->releaseMouse(); _canvas->releaseMouse(); _noteCanvas->releaseMouse();
       if (_parameter->currentIndex() == 0) applyPending();
       else {
@@ -1186,7 +1205,7 @@ void PerformanceEditor::finishGesture()
 void PerformanceEditor::cancelGesture()
       {
       endBandResize(true);
-      if (_scoreRangePanning) { _scoreRangePanning = false; qApp->removeEventFilter(this); if (_view) { _view->releaseMouse(); _view->unsetCursor(); } }
+      if (_scoreRangePanning) { _scoreRangePanning = false; syncInputTracking(); if (_view) { _view->releaseMouse(); _view->unsetCursor(); } }
       _moveTimer.stop(); _moveQueued = false;
       if (!_dragging) return;
       if (_curveIndex >= 0 && _curveIndex < _tempoCurves.size()) {
@@ -1194,8 +1213,31 @@ void PerformanceEditor::cancelGesture()
             _number->setValue(_curveGrip == 2 ? original.shape : _curveGrip ? original.target : original.start);
             }
       _curveIndex = -1;
-      _pending = _gestureBefore; _gestureBefore.clear(); _tempoDraft.clear(); _dragging = false; qApp->removeEventFilter(this);
+      _pending = _gestureBefore; _gestureBefore.clear(); _tempoDraft.clear(); _dragging = false; syncInputTracking();
       if (_view) _view->releaseMouse(); if (_canvas) _canvas->releaseMouse(); if (_noteCanvas) _noteCanvas->releaseMouse();
+      }
+
+void PerformanceEditor::syncInputTracking()
+      {
+      const bool active = !property("kumoEditorClosing").toBool() && (_wheelIndex >= 0 || _dragging
+            || _marquee || _seeking || _rangePanning || _bandResizing || _scoreRangePanning || _comparisonDragging);
+      if (active) qApp->installEventFilter(this);
+      else qApp->removeEventFilter(this);
+      }
+
+void PerformanceEditor::completePointerGesture()
+      {
+      endBandResize();
+      // Use the last point received by the owning canvas. A press on another
+      // window has coordinates belonging to that other window.
+      if (_dragging) finishGesture();
+      if (_comparisonDragging) commitComparisonDrag();
+      cancelSurfaceGesture();
+      if (_scoreRangePanning) {
+            _scoreRangePanning = false;
+            if (_view) { _view->releaseMouse(); _view->unsetCursor(); }
+            }
+      syncInputTracking();
       }
 
 bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
@@ -1215,9 +1257,10 @@ bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
             && !(static_cast<QMouseEvent*>(event)->buttons() & Qt::LeftButton);
       const bool nextPress = gestureOwner && event->type() == QEvent::MouseButtonPress
             && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton;
-      if (releasedBeforeMove || nextPress) {
-            if (_bandResizing) endBandResize();
-            cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); updateSurfaces();
+      const bool releasedBeforeWheel = gestureOwner && event->type() == QEvent::Wheel
+            && !(static_cast<QWheelEvent*>(event)->buttons() & Qt::LeftButton);
+      if (releasedBeforeMove || releasedBeforeWheel || nextPress) {
+            completePointerGesture(); updateSurfaces();
             }
       if (_bandResizing && object != _view && event->type() == QEvent::MouseButtonRelease
             && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) endBandResize();
@@ -1240,6 +1283,10 @@ bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       if (_wheelIndex >= 0 && (event->type() == QEvent::KeyPress || event->type() == QEvent::ShortcutOverride)
             && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
             event->accept(); if (event->type() == QEvent::KeyPress) cancelWheel(); return true;
+            }
+      if (_wheelIndex >= 0 && event->type() == QEvent::ShortcutOverride) {
+            const auto key = static_cast<QKeyEvent*>(event);
+            if (key->matches(QKeySequence::Undo) || key->matches(QKeySequence::Redo)) finishWheel();
             }
       if (_wheelIndex >= 0 && event->type() == QEvent::MouseButtonPress) { if (object->objectName() == "performanceCancelPreview") cancelWheel(); else { finishWheel(); refresh(); } }
       if (surfaceEvent(object, event)) return true;

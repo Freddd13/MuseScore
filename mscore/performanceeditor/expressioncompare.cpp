@@ -150,13 +150,13 @@ void PerformanceEditor::paintExpressionComparison(QPainter& painter,const QRectF
       }
 void PerformanceEditor::cancelComparisonDrag()
       {
-      if(_comparisonDragging){_comparisonDragging=false;qApp->removeEventFilter(this);_canvas->releaseMouse();_canvas->unsetCursor();}
+      if(_comparisonDragging){_comparisonDragging=false;syncInputTracking();_canvas->releaseMouse();_canvas->unsetCursor();}
       _comparisonDraft.clear();_comparisonStarts.clear();_comparisonAnchor=-1;_comparisonTempoTick=-1;
       }
 void PerformanceEditor::commitComparisonDrag()
       {
       const auto values=_comparisonDraft;const bool tempo=_parameter->currentIndex()==1;
-      _comparisonDragging=false;qApp->removeEventFilter(this);_canvas->releaseMouse();_canvas->unsetCursor();
+      _comparisonDragging=false;syncInputTracking();_canvas->releaseMouse();_canvas->unsetCursor();
       QVariantList edits;for(auto it=values.cbegin();it!=values.cend();++it)edits.append(tempo?QVariantMap{{"tick",it.key().toInt()},{"bpm",it.value()}}:QVariantMap{{"id",it.key()},{"target",qRound(it.value())}});
       if(!edits.isEmpty())workflowContext()->expressionAction(tempo?"tempoTargets":"velocityTargets",QString(),QString::fromUtf8(QJsonDocument::fromVariant(edits).toJson(QJsonDocument::Compact)));
       _comparisonDraft.clear();_comparisonStarts.clear();_comparisonAnchor=-1;_comparisonTempoTick=-1;updateSurfaces();
@@ -199,7 +199,7 @@ bool PerformanceEditor::comparisonEvent(QObject* object,QEvent* event)
                   const auto selected=selectedNotes();for(int index:selected)if(_comparisonValues.contains(index))_comparisonStarts.insert(index,comparisonValue(index));
                   }
             else {double nearest=10.;for(auto v:_comparisonTempos){auto t=v.toMap();double d=qAbs(xForTick(t.value("tick").toInt(),false)-point.x());if(d<nearest){nearest=d;_comparisonTempoTick=t.value("tick").toInt();_comparisonTempoStart=t.value("bpm").toDouble();}}if(_comparisonTempoTick<0)return true;}
-            _comparisonDragging=true;_canvas->grabMouse();qApp->installEventFilter(this);_canvas->setCursor(Qt::SizeVerCursor);status(tr("正在调整拟采用效果；使用力度或速度后写入乐谱。"));return true;
+            _comparisonDragging=true;_canvas->grabMouse();syncInputTracking();_canvas->setCursor(Qt::SizeVerCursor);status(tr("正在调整拟采用效果；使用力度或速度后写入乐谱。"));return true;
             }
       if(_comparisonDragging&&(event->type()==QEvent::MouseMove||event->type()==QEvent::MouseButtonRelease)){
             if(_comparisonDrawing){

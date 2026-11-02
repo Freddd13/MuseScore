@@ -1,6 +1,6 @@
 # MuseScore Evolution 个人功能说明
 
-当前版本：**0.157.0 · Kumo branch / Freddd13**。
+当前版本：**0.158.0 · Kumo branch / Freddd13**。
 
 先按下面的任务找到入口。每章有完整操作例子、按钮说明、保存和撤销方法。“帮助 → 个人功能说明”可以在软件里直接阅读。
 
@@ -10,6 +10,7 @@
 
 | 想完成的事 | 从哪里开始 |
 |---|---|
+| 滚轮改力度后继续编辑、停止谱面关联原曲 | [滚轮、面板点击与原曲停止](docs/INPUT_REPAIR_158_GUIDE.md) |
 | 载入CFX、切回内置音源和恢复当前声音 | [CFX与音源面板](docs/CFX_PANEL_157_GUIDE.md) |
 | 使用0.157个人稳定包、查看本轮剩余检查 | [打开、更新和连接Codex](docs/STABLE_157_GUIDE.md) |
 | 让当前Codex读原生谱图、比较并采用建议 | [读谱、看原图和采用建议](docs/AI_CONNECTION_156_GUIDE.md) |
@@ -807,6 +808,8 @@ AI按分析、演奏和净谱读取需要的资料，保留真实乐器／谱表
 ### 2026-10-31：CFX操作与面板更新
 
 0.157补齐音源变化后的面板更新及启动时的谱行菜单归属。实际厂商按钮、窗口拖动、焦点和预设操作见[使用步骤](docs/CFX_PANEL_157_GUIDE.md)，复现与结果见[检查记录](docs/CFX_PANEL_157_CHECKS.md)。提交定位personal-v0.157.0。
+
+0.158修复谱面原曲停止、松键后的鼠标占用和滚轮力度回弹。操作见[滚轮与停止](docs/INPUT_REPAIR_158_GUIDE.md)，结果见[本轮检查](docs/INPUT_REPAIR_158_CHECKS.md)。提交定位personal-v0.158.0。
 
 ### 2026-10-31：导出后在Synthesia中比较
 
