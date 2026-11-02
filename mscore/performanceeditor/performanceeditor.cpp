@@ -438,7 +438,7 @@ void PerformanceEditor::scheduleRefresh()
 void PerformanceEditor::refresh()
       {
       if (!_score) { status(); updateSurfaces(); return; }
-      if (!surfacesActive()) return;
+      if (!surfacesActive() && (!hasPending() || _score->isPlaying() || (seq && seq->isPlaying()))) return;
       // The sound engine can be created after an already visible editor.
       // A native playback update must attach that new transport as well.
       if (_sequencer != seq) syncTransport();

@@ -104,6 +104,15 @@ void TestPerformanceEditor::wheelOtherNoteEdit158()
     score->undoRedo(true,&ed);main->endCmd();QTest::qWait(60);
     auto restored=score->findCR(Fraction::fromTicks(0),0);QVERIFY(restored&&restored->isChord());
     QCOMPARE(toChord(restored)->notes().front()->veloOffset(),76);
+    auto current=toChord(restored)->notes().front();
+    const auto currentHead=view->matrix().mapRect(current->canvasBoundingRect()).center();
+    QWheelEvent beforeHide(currentHead,view->mapToGlobal(currentHead.toPoint()),QPoint(),QPoint(0,120),Qt::NoButton,Qt::NoModifier,Qt::NoScrollPhase,false);
+    QApplication::sendEvent(view,&beforeHide);QVERIFY(editor->hasPending());
+    QVERIFY(ParameterEdit::velocities(score,{{b,{Note::ValueType::USER_VAL,58}}}));
+    main->hide();QTest::qWait(800);
+    const bool committedWhileHidden=!editor->hasPending();main->show();QTest::qWait(50);
+    QVERIFY2(committedWhileHidden,"收起窗口后结束尚未提交的滚轮调整");
+    QCOMPARE(current->veloOffset(),77);QCOMPARE(b->veloOffset(),58);
 }
 
 void TestPerformanceEditor::playBoundaryKeepsGesture158()
