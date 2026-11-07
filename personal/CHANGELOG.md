@@ -5,7 +5,7 @@
 - N7：谱面原曲控件使用原生分体按钮，直接播放／停止和选择片段分别操作，保留共用播放会话。
 - 关联范围按实际谱行、谱表及音符拍位显示，提供悬停、播放时、始终显示；按钮移位与真实范围分别处理。
 - 按钮位置和隐藏进入原生撤销，独立谱内资料随MSCZ保存；原曲面板提供恢复入口。分段写法移位与撤销一同回查。
-- 操作及检查见REFERENCE_CONTROLS_163_GUIDE.md、REFERENCE_CONTROLS_163_CHECKS.md，发布定位personal-v0.163.0。
+- 操作及检查见REFERENCE_CONTROLS_163_GUIDE.md、REFERENCE_CONTROLS_163_CHECKS.md，发布定位personal-v0.163.0；实施提交58f77665d766558a43523d5c00e2945605f3be0f，已安装并更新250份说明。
 
 ## 0.162.0 — 2026-11-07
 
