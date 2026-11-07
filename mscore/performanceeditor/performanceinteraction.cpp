@@ -114,6 +114,7 @@ QVector<int> PerformanceEditor::hits(QPointF point, bool parameter, bool onScore
       QVector<int> result;
       if (!onScore && point.x() < PerformanceViewport::gutter) return result;
 #ifdef SCRIPT_INTERFACE
+      if(!parameter && !onScore && _spectrum && !_spectrum->showRollNotes())return result;
       if(!parameter && !onScore && _timingEditor && _timingEditor->active()) {
             const int index=_timingEditor->noteAt(point);if(index>=0)result.append(index);return result;
             }
@@ -433,8 +434,12 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
       const bool notes = object == _noteCanvas, ruler = object == _ruler || object->property("performanceExtraRuler").toBool(), parameter = object == _canvas;
       if (!notes && !ruler && !parameter) return false;
 #ifdef SCRIPT_INTERFACE
-      if(_midiTracks&&_midiTracks->handle(event,parameter,ruler))return true;
-      if(notes&&_timingEditor&&_timingEditor->handle(event))return true;
+      if((notes||ruler||event->type()==QEvent::KeyPress||event->type()==QEvent::ShortcutOverride)&&_spectrum&&_spectrum->rollEvent(event,ruler)){
+            if(event->type()==QEvent::MouseButtonPress)if(auto widget=qobject_cast<QWidget*>(object))widget->setFocus();
+            return true;
+            }
+      if(_midiTracks&&(!notes||!_spectrum||_spectrum->showMidiNotes())&&_midiTracks->handle(event,parameter,ruler))return true;
+      if(notes&&_timingEditor&&(!_spectrum||_spectrum->showRollNotes())&&_timingEditor->handle(event))return true;
       if(notes&&_rollWriting&&(!_midiTracks||!_midiTracks->active())&&_rollWriting->handle(event))return true;
 #endif
       if (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) {
@@ -463,8 +468,8 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
                   return true;
                   }
             }
-      if ((event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Space) {
-            event->accept(); if (event->type() == QEvent::KeyPress) togglePlayback(); return true;
+      if ((event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Space && static_cast<QKeyEvent*>(event)->modifiers()==Qt::NoModifier) {
+            event->accept(); if (event->type() == QEvent::KeyPress && !static_cast<QKeyEvent*>(event)->isAutoRepeat()) togglePlayback(); return true;
             }
       if(event->type()==QEvent::MouseButtonPress && parameter && static_cast<QMouseEvent*>(event)->button()==Qt::LeftButton && velocityHeaderClick(static_cast<QMouseEvent*>(event)->pos()))return true;
       if (event->type() == QEvent::Show) { scheduleRefresh(); startPedalPreview(); syncTransport(); syncOverlayTracking(); }

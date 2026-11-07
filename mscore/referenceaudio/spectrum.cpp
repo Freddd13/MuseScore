@@ -19,7 +19,7 @@ QString spectrumKey(const SpectrumRequest &r) {
     QByteArray values;
     QDataStream stream(&values, QIODevice::WriteOnly);
     stream.setVersion(QDataStream::Qt_5_9);
-    stream << quint32(3) << file.absoluteFilePath() << file.size() << file.lastModified().toMSecsSinceEpoch()
+    stream << quint32(4) << file.absoluteFilePath() << file.size() << file.lastModified().toMSecsSinceEpoch()
            << r.fromMs << r.untilMs << r.columns << r.rows << r.fftSize << r.lowPitch << r.highPitch
            << r.tuning;
     return QString::fromLatin1(QCryptographicHash::hash(values, QCryptographicHash::Sha256).toHex());
@@ -27,7 +27,7 @@ QString spectrumKey(const SpectrumRequest &r) {
 
 QString validateSpectrumRequest(const SpectrumRequest &r) {
     if (!std::isfinite(r.fromMs) || !std::isfinite(r.untilMs) || r.fromMs < 0 || r.untilMs > 1e12 || r.untilMs <= r.fromMs ||
-        r.untilMs - r.fromMs > 120000 || r.columns < 1 || r.columns > 1024 || r.rows < 1 || r.rows > 1024 ||
+        r.untilMs - r.fromMs > 86400000 || r.columns < 1 || r.columns > 1024 || r.rows < 1 || r.rows > 1024 ||
         (r.fftSize != 4096 && r.fftSize != 16384 && r.fftSize != 32768) || !std::isfinite(r.lowPitch) ||
         !std::isfinite(r.highPitch) || r.lowPitch < 0 || r.highPitch > 128 || r.highPitch <= r.lowPitch ||
         !std::isfinite(r.tuning) || r.tuning < 400 || r.tuning > 480) {

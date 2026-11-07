@@ -178,6 +178,9 @@ class TestPluginHost : public QObject {
       void expressionOpeningKeepsDockHeight();
       void rapidToolChangesKeepWindowSize();
       void engravingFirstUseLeavesScoreSpace();
+      void spectrumInteraction162();
+      void spectrumSharedTimeline162();
+      void spectrumMidiOverlay162();
       void spectrumInitialSourceAndChoice();
       void spectrumLinkedZoomAndScroll();
       void spectrumLongBrowseAndMark();
@@ -1564,6 +1567,7 @@ class TestPluginHost : public QObject {
 #include "spectrum_078_tests.inc"
 #include "spectrum_101_tests.inc"
 #include "spectrum_102_tests.inc"
+#include "spectrum_162_tests.inc"
 #include "layout_079_tests.inc"
 #include "arrangement_083_tests.inc"
 #include "arrangement_115_tests.inc"

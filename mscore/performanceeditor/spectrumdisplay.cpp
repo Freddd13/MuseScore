@@ -11,6 +11,10 @@
 #include <QSignalBlocker>
 #include <QSlider>
 #include <QToolButton>
+#include <QMenu>
+#include <QWidgetAction>
+#include <QFormLayout>
+#include <QSpinBox>
 #include <cmath>
 #include <cstring>
 
@@ -23,6 +27,10 @@ SpectrumDisplayControls::SpectrumDisplayControls(QWidget *parent) : QWidget(pare
                                {"fundamental", 0.},
                                {"opacity", .55},
                                {"showNotes", true},
+                               {"showMidi",true},
+                               {"harmonicCount",10},
+                               {"harmonicOpacity",.85},
+                               {"harmonicColor",QString("#ffdd88")},
                                {"middle", QString("#20a5b6")},
                                {"high", QString("#f5db87")}};
     QSettings settings;
@@ -92,12 +100,29 @@ SpectrumDisplayControls::SpectrumDisplayControls(QWidget *parent) : QWidget(pare
     auto notes = new QCheckBox(tr("叠加时显示谱中音符块"));
     notes->setObjectName("spectrumShowNotes");
     notes->setChecked(_values["showNotes"].toBool());
-    grid->addWidget(notes, 5, 0, 1, 3);
+    auto noteOptions=new QWidget;auto noteRow=new QHBoxLayout(noteOptions);noteRow->setContentsMargins(0,0,0,0);
+    noteRow->addWidget(notes);
+    auto midi=new QCheckBox(tr("显示MIDI轨道"));midi->setObjectName("spectrumShowMidi");midi->setChecked(_values["showMidi"].toBool());
+    midi->setToolTip(tr("在频谱上对照MIDI轨道列表中开启显示的音符。静音轨也可作参考。"));
+    noteRow->addWidget(midi);noteRow->addStretch(1);grid->addWidget(noteOptions,5,0,1,3);
+    connect(midi,&QCheckBox::clicked,this,[this](bool on){save("showMidi",on);});
     connect(notes, &QCheckBox::clicked, this, [this](bool on) { save("showNotes", on); });
     auto help =
         new QLabel(tr("WaveTone 强弱色：黑、蓝、青、绿、黄、橙、红依次增强。灵敏度和对比度调整亮线；“突出基音”淡化倍频线，归零查看原始频谱。"));
     help->setWordWrap(true);
-    grid->addWidget(help, 6, 0, 1, 3);
+    auto reference=new QToolButton;reference->setObjectName("spectrumReferenceSettings");reference->setText(tr("参考线…"));reference->setPopupMode(QToolButton::InstantPopup);
+    auto menu=new QMenu(reference);reference->setMenu(menu);auto body=new QWidget;auto form=new QFormLayout(body);
+    auto count=new QSpinBox;count->setObjectName("spectrumHarmonicCount");count->setRange(1,16);count->setValue(qBound(1,_values["harmonicCount"].toInt(),16));
+    form->addRow(tr("显示几倍"),count);connect(count,QOverload<int>::of(&QSpinBox::valueChanged),this,[this](int n){save("harmonicCount",n);});
+    auto strength=new QWidget;auto strengthRow=new QHBoxLayout(strength);strengthRow->setContentsMargins(0,0,0,0);
+    auto alpha=new QSlider(Qt::Horizontal);alpha->setObjectName("spectrumHarmonicOpacity");alpha->setRange(0,100);alpha->setMinimumWidth(140);alpha->setValue(qRound(_values["harmonicOpacity"].toDouble()*100));
+    auto number=new QSpinBox;number->setRange(0,100);number->setSuffix("%");number->setValue(alpha->value());strengthRow->addWidget(alpha);strengthRow->addWidget(number);form->addRow(tr("强度"),strength);
+    connect(alpha,&QSlider::valueChanged,this,[this,number](int n){QSignalBlocker block(number);number->setValue(n);save("harmonicOpacity",n/100.);});
+    connect(number,QOverload<int>::of(&QSpinBox::valueChanged),this,[this,alpha](int n){QSignalBlocker block(alpha);alpha->setValue(n);save("harmonicOpacity",n/100.);});
+    auto lineColor=new QToolButton;lineColor->setText(tr("选择颜色…"));form->addRow(tr("颜色"),lineColor);
+    connect(lineColor,&QToolButton::clicked,this,[this]{const auto color=QColorDialog::getColor(QColor(_values["harmonicColor"].toString()),this,tr("基音与倍频参考线"));if(color.isValid())save("harmonicColor",color.name());});
+    auto action=new QWidgetAction(menu);action->setDefaultWidget(body);menu->addAction(action);grid->addWidget(reference,6,0,1,3,Qt::AlignLeft);
+    grid->addWidget(help, 7, 0, 1, 3);
     grid->setColumnStretch(1, 1);
 }
 void SpectrumDisplayControls::save(const QString &key, const QVariant &value) {

@@ -48,9 +48,15 @@ class SpectrumPane : public QWidget {
     int _drawEdge = 1;
     QString _editingMark;
     QListWidget *_marks = nullptr;
-    QSplitter *_marksSplitter = nullptr;
+    QSplitter *_marksSplitter = nullptr, *_workspaceSplitter = nullptr;
+    int _hoverKey = -1;
+    bool _hoverOnRoll = false;
+    bool _sourceWasPlaying = false;
+    QVariantMap _coloredStyle;
+    qint64 _coloredRaw = 0;
+    bool _coloredOverlay = false;
     QToolButton *_marksToggle = nullptr;
-    SpectrumCanvas *_canvas = nullptr;
+    QWidget *_canvas = nullptr;
     ControlFlowLayout *_tools = nullptr;
     QVector<QWidget *> _controls;
     QTimer _requestTimer;
@@ -85,6 +91,11 @@ class SpectrumPane : public QWidget {
     void estimateTempo();
     void tapGrid();
     void paintGrid(QPainter &, const QRectF &);
+    void hoverChanged(QPointF,bool);
+    void clearHover();
+    void paintReferences(QPainter&,const QRectF&,bool);
+    void paintMidi(QPainter&,const QRectF&,bool);
+    bool usesScoreTimeline() const;
     void recolor();
     void syncScrollBars();
     void setStatus(const QString &);
@@ -123,14 +134,20 @@ class SpectrumPane : public QWidget {
   public:
     explicit SpectrumPane(PerformanceEditor *);
     Q_SLOT void viewChanged();
+    Q_INVOKABLE QVariantMap viewInfo() const;
     void editorTimelineZoomed(double previousScale, double anchorX);
     void scoreChanged();
     void updateInputTarget();
     void applyAppearance();
     void paintOverlay(QPainter &, const QRectF &);
     bool showRollNotes() const;
+    bool showMidiNotes() const;
+    void paintKeyboardHover(QPainter&,QWidget*) const;
+    int timelineEndTick() const;
+    bool paintRollPlayhead(QPainter&,QWidget*) const;
     int linkedTimelineWidth() const;
     bool overlayEvent(QEvent *);
+    bool rollEvent(QEvent*,bool ruler);
 };
 void installSpectrumPane(PerformanceEditor *, QSplitter *);
 } // namespace Ms

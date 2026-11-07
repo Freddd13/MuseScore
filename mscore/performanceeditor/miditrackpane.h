@@ -30,6 +30,11 @@ namespace Ms
 {
 class MidiCaptureSession;
 class PerformanceEditor;
+struct MidiSpectrumNote {
+    double from=0,until=0;
+    int pitch=60,velocity=80;
+    bool current=false,selected=false,muted=false;
+};
 QAction* midiTracksAction();
 class MidiTrackPane final : public QWidget
 {
@@ -165,6 +170,7 @@ class MidiTrackPane final : public QWidget
     QSet<int> visiblePitches() const { return _enabled ? _pitches : QSet<int>(); }
     void contextChanged();
     void paintNotes(QPainter&, const QRectF&);
+    QVector<MidiSpectrumNote> spectrumNotes(const QString&,double,double,int,int) const;
     bool paintValues(QPainter&, const QRectF&);
     bool paintPlayhead(QPainter&, QWidget*);
     bool handle(QEvent*, bool parameter, bool ruler);

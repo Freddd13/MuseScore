@@ -376,6 +376,7 @@ int PerformanceEditor::timelineEndTick() const
 #ifdef SCRIPT_INTERFACE
       if(_midiTracks)end=qMax(end,_midiTracks->endTick());
       if(_timingEditor)end=qMax(end,_timingEditor->endTick());
+      if(_spectrum)end=qMax(end,_spectrum->timelineEndTick());
 #endif
       return end;
       }

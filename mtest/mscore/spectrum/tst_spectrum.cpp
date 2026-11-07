@@ -16,12 +16,12 @@ class TestSpectrum : public QObject {
     QPluginLoader _loader;
     QObject *_session = nullptr;
     QString tone(const QString &name, int rate = 44100, int channels = 1, bool silent = false,
-                 double frequency = 440, bool harmonics = false, double startAt = 0, bool pulse = false) {
+                 double frequency = 440, bool harmonics = false, double startAt = 0, bool pulse = false, int seconds = 0) {
         const auto path = _dir.filePath(name + ".wav");
         QFile file(path);
         if (!file.open(QIODevice::WriteOnly))
             return {};
-        const int frames = rate * (pulse?8:2);
+        const int frames = rate * (seconds>0?seconds:(pulse?8:2));
         QDataStream s(&file);
         s.setByteOrder(QDataStream::LittleEndian);
         s.writeRawData("RIFF", 4);
@@ -107,6 +107,38 @@ class TestSpectrum : public QObject {
         info=_session->property("info").toMap();QCOMPARE(info["computedBlocks"].toInt(),2);QCOMPARE(info["cachedBlocks"].toInt(),0);
         qInfo()<<"Fixed block memory KiB"<<_session->property("cacheOptions").toMap()["usedMemoryKiB"]<<"worker ms"<<info["workerMilliseconds"];
     }
+
+    void canonicalTuningAndPitchReuse162() {
+        auto value=options(tone("canonical-162"));request(value);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(),10000);
+        QCOMPARE(_session->property("info").toMap()["computedBlocks"].toInt(),1);
+        value["tuning"]=444.;value["rows"]=720;value["columns"]=768;
+        value["lowPitch"]=48.;value["highPitch"]=84.;value["from"]=450.;value["until"]=1700.;
+        request(value);QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(),10000);
+        auto info=_session->property("info").toMap();QCOMPARE(info["computedBlocks"].toInt(),0);QCOMPARE(info["cachedBlocks"].toInt(),1);QCOMPARE(info["canonicalRows"].toInt(),1024);
+        const auto result=image();QCOMPARE(result.size(),QSize(768,720));int row=-1,maximum=-1;
+        for(int y=0;y<result.height();++y)if(result.constScanLine(y)[300]>maximum){maximum=result.constScanLine(y)[300];row=y;}
+        const double pitch=84.-(row+.5)/720.*36.;
+        QVERIFY(qAbs(pitch-(69.-12.*std::log2(444./440.)))<.5);QVERIFY(maximum>200);
+        qInfo()<<"162 tuning/range reuse"<<info["workerMilliseconds"]<<"ms"<<pitch;
+    }
+    void wholeTrackPreparationAndCancel162() {
+        auto value=options(tone("whole-162",22050,1,false,440,false,0,false,40));value["preload"]=true;
+        request(value);QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(),10000);
+        const auto first=image();QVERIFY(!first.isNull());
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("backgroundBusy").toBool(),30000);
+        auto info=_session->property("info").toMap();QCOMPARE(info["totalBlocks"].toInt(),10);QCOMPARE(info["preparedBlocks"].toInt(),10);QCOMPARE(first.cacheKey(),image().cacheKey());
+        value["from"]=33100.;value["until"]=34300.;value["preload"]=false;request(value);
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(),10000);
+        info=_session->property("info").toMap();QCOMPARE(info["computedBlocks"].toInt(),0);QCOMPARE(info["cachedBlocks"].toInt(),1);
+        QVERIFY(_session->property("cacheOptions").toMap()["usedMemoryKiB"].toInt()<=8192);
+        const auto retained=image();
+        value["path"]=tone("cancel-162",22050,1,false,220,false,0,false,40);value["fftSize"]=32768;value["preload"]=true;request(value);
+        QVERIFY(QMetaObject::invokeMethod(_session,"cancel"));
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(),10000);
+        QVERIFY(!_session->property("backgroundBusy").toBool());QCOMPARE(image().cacheKey(),retained.cacheKey());
+    }
+
     void oppositeStereoAndResampled() {
         auto value = options(tone("stereo", 48000, 2));
         request(value);
@@ -235,7 +267,7 @@ class TestSpectrum : public QObject {
         request(value);
         QVERIFY(QMetaObject::invokeMethod(_session, "cancel"));
         QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
-        value["until"] = 200000.;
+        value["until"] = 86401000.;
         request(value);
         QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
         QVERIFY(image().isNull());
@@ -291,6 +323,14 @@ class TestSpectrum : public QObject {
         QCOMPARE(qvariant_cast<QImage>(reopened->property("image")), expected);
         QCOMPARE(reopened->property("info").toMap()["computedBlocks"].toInt(), 0);
         QCOMPARE(reopened->property("info").toMap()["cachedBlocks"].toInt(), 30);
+        if(format=="wav"){
+            value["from"]=0.;value["until"]=180000.;timer.restart();request(value);
+            QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(),30000);
+            QCOMPARE(_session->property("info").toMap()["requestedBlocks"].toInt(),45);
+            QCOMPARE(_session->property("info").toMap()["until"].toDouble(),180000.);
+            QVERIFY(!image().isNull());QVERIFY(_session->property("cacheOptions").toMap()["usedMemoryKiB"].toInt()<=8192);
+            qInfo()<<"Whole three-minute view ms"<<timer.elapsed();
+        }
     }
     void cancelAndChangeLongSource() {
         const auto folder = qEnvironmentVariable("P2_REFERENCE_LONG_AUDIO");

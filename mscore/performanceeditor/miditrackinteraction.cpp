@@ -126,6 +126,25 @@ int MidiTrackPane::tickForSeconds(const QVariantMap& track, double seconds) cons
     }
     return _editor->_score->tempomap()->time2tick(time);
 }
+QVector<MidiSpectrumNote> MidiTrackPane::spectrumNotes(const QString& audioId,double from,double until,int low,int high) const
+{
+    QVector<MidiSpectrumNote> result;
+    if(!_enabled || !_editor->_score)return result;
+    for(const auto& value:_document.tracks()) {
+        const auto track=value.toMap();const auto bound=track.value("audioId").toString();
+        if(!track.value("visible",true).toBool() || (!bound.isEmpty()&&bound!=audioId))continue;
+        const auto id=track.value("id").toString();
+        const auto first=tickForSeconds(track,midiTrackTime(track,from/1000.,true));
+        const auto last=tickForSeconds(track,midiTrackTime(track,until/1000.,true));
+        for(int i:_intervals.query(qMin(first,last)-2,qMax(first,last)+2,low,high)) {
+            const auto& row=_rows[i];if(row.track!=id)continue;
+            const double begin=midiTrackTime(track,row.start)*1000.,end=midiTrackTime(track,row.end)*1000.;
+            if(end<=from || begin>=until)continue;
+            result.append({begin,end,row.pitch,row.velocity,row.active,row.active&&_selected.contains(row.id),track.value("mute",true).toBool()});
+        }
+    }
+    return result;
+}
 double MidiTrackPane::secondsForTick(const QVariantMap& track, int tick) const
 {
     if (!_editor->_score)

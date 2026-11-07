@@ -47,6 +47,7 @@
 #include <QSplitter>
 #include <QTabBar>
 #include <QTabWidget>
+#include <QTabBar>
 #include <QToolButton>
 #include <QUrl>
 #include <QUuid>
@@ -244,6 +245,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
         _editor->updateSurfaces();
     });
     _harmonics->setCheckable(true);
+    _harmonics->setObjectName("spectrumHarmonics");
     _harmonics->setChecked(true);
     auto inputButton = button(tr("输入乐谱"), 1, 6, [this] { insertPitches(); });
     inputButton->setObjectName("transcriptionInput");
@@ -296,6 +298,11 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _durationFromMark->setObjectName("spectrumInputMarkedDuration");
     _durationFromMark->setChecked(QSettings().value("spectrum/inputMarkedDuration", false).toBool());
     analysisBox->addWidget(_durationFromMark);
+    auto preload=new QCheckBox(tr("后台准备整条音轨"));preload->setObjectName("spectrumPreloadTrack");
+    preload->setChecked(QSettings().value("spectrum/preloadTrack",true).toBool());
+    preload->setToolTip(tr("先准备可见部分，再准备相邻位置和整条录音。关闭面板时暂停，重新打开继续复用。"));
+    analysisBox->addWidget(preload);
+    connect(preload,&QCheckBox::clicked,this,[this](bool on){QSettings().setValue("spectrum/preloadTrack",on);_request.clear();viewChanged();});
     connect(_durationFromMark, &QCheckBox::clicked, this,
             [](bool checked) { QSettings().setValue("spectrum/inputMarkedDuration", checked); });
     auto analysisButtons = new QHBoxLayout;
@@ -305,6 +312,13 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     analysisBox->addLayout(analysisButtons);
     analysisBox->addStretch();
     options->addTab(analysis, tr("分析"));
+    for(auto page:QList<QWidget*>{_displayControls,_listenControls,_beatControls,analysis}) {
+        page->setMaximumWidth(560);
+        const int index=options->indexOf(page);const auto title=options->tabText(index);options->removeTab(index);
+        auto wrapper=new QWidget;auto row=new QHBoxLayout(wrapper);row->setContentsMargins(0,0,0,0);
+        row->addWidget(page,0,Qt::AlignLeft|Qt::AlignTop);row->addStretch(1);options->insertTab(index,wrapper,title);page->show();
+    }
+    options->setCurrentIndex(0);
     const auto primary = _controls;
     for (auto control : primary)
         tools->removeWidget(control);
@@ -334,9 +348,17 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _displayPanel->setWidgetResizable(true);
     _displayPanel->setFrameShape(QFrame::NoFrame);
     _displayPanel->setMinimumHeight(50);
-    _displayPanel->setMaximumHeight(180);
+    _displayPanel->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Ignored);
     _displayPanel->setVisible(QSettings().value("spectrum/displayControls", false).toBool());
-    layout->addWidget(_displayPanel);
+    _workspaceSplitter=new QSplitter(Qt::Vertical);_workspaceSplitter->setObjectName("spectrumWorkspaceSplitter");
+    _workspaceSplitter->setChildrenCollapsible(false);_workspaceSplitter->addWidget(_displayPanel);
+    layout->addWidget(_workspaceSplitter,1);
+    connect(_workspaceSplitter,&QSplitter::splitterMoved,this,[this]{const auto sizes=_workspaceSplitter->sizes();if(_displayPanel->isVisible() && !sizes.isEmpty() && sizes[0]>0)QSettings().setValue("spectrum/settingsHeight",sizes[0]);});
+    connect(displayButton,&QToolButton::clicked,this,[this]{
+        _workspaceSplitter->setVisible(!_displayPanel->isHidden()||!_marksSplitter->isHidden());
+        if(!_displayPanel->isHidden()){const int h=QSettings().value("spectrum/settingsHeight",160).toInt();_workspaceSplitter->setSizes({h,qMax(80,_workspaceSplitter->height()-h)});}
+        setMinimumHeight(_display->currentIndex()==0?180:72);
+    });
     connect(_beatControls, &SpectrumBeatControls::changed, this, [this] {
         if (!_track.value("id").toString().isEmpty())
             _grids[_track.value("id").toString()] = _beatControls->values();
@@ -388,9 +410,10 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _marksSplitter->setObjectName("spectrumMarksSplitter");
     _marksSplitter->setChildrenCollapsible(false);
     _marksSplitter->addWidget(canvasHost);
-    layout->addWidget(_marksSplitter, 1);
+    _workspaceSplitter->addWidget(_marksSplitter);
+    _workspaceSplitter->setSizes({QSettings().value("spectrum/settingsHeight",160).toInt(),400});
     connect(_timeScroll, &QScrollBar::valueChanged, this, [this](int value) {
-        if (_clip.isEmpty())
+        if (!usesScoreTimeline())
             _from = value;
         else
             _editor->_scroll->setValue(value);
@@ -636,12 +659,14 @@ void SpectrumPane::fitTimeRange() {
         _editor->_scroll->setValue(from);
         _editor->invalidateVisual();
     } else if (_audio && _audio->property("duration").toDouble() > 0) {
-        const double span = qBound(250., _audio->property("duration").toDouble(), 120000.);
-        if (_display->currentIndex() == 1)
-            _editor->zoomTimeline(_span / span, gutter);
-        else
-            _span = span;
-        _from = qMax(0., _cursorMs - _span / 2);
+        const double span = qBound(250., _audio->property("duration").toDouble(), 86400000.);
+        if (_display->currentIndex() == 1 && _editor->score()) {
+            auto tempo=_editor->score()->tempomap();
+            const double begin=qMax(0.,_cursorMs-span/2),end=qMin(_audio->property("duration").toDouble(),begin+span);
+            const int first=tempo->time2tick(begin/1000.),last=tempo->time2tick(end/1000.);
+            const double units=_editor->comparisonTimeActive()?2.*(end-begin)/1000.:double(last-first)/DIVISION;
+            if(units>0){_editor->_viewport.pixelsPerQuarter=qBound(.01,plotWidth()/units,1000.);_editor->surfaceResized(PerformanceSurface::Notes);_editor->_scroll->setValue(first);_editor->invalidateVisual();}
+        }else {_span=span;_from=qMax(0.,_cursorMs-_span/2);}
     }
     viewChanged();
 }
@@ -650,13 +675,18 @@ bool SpectrumPane::showRollNotes() const {
            _displayControls->values().value("showNotes", true).toBool();
 }
 void SpectrumPane::recolor() {
-    _image = colorSpectrum(_rawImage, _displayControls->values(), _display->currentIndex() == 1);
+    const auto values=_displayControls->values();QVariantMap colors;
+    for(const auto& key:QStringList{"palette","gain","contrast","opacity","middle","high"})colors.insert(key,values.value(key));
+    const bool overlay=_display->currentIndex()==1;
+    if(_coloredRaw!=_rawImage.cacheKey() || _coloredStyle!=colors || _coloredOverlay!=overlay) {
+        _image=colorSpectrum(_rawImage,values,overlay);_coloredRaw=_rawImage.cacheKey();_coloredStyle=colors;_coloredOverlay=overlay;
+    }
     _canvas->update();
     _editor->_noteCanvas->update();
 }
 void SpectrumPane::syncScrollBars() {
     QSignalBlocker horizontal(_timeScroll), vertical(_pitchScroll);
-    if (_clip.isEmpty()) {
+    if (!usesScoreTimeline()) {
         const int duration = qBound(0., _audio ? _audio->property("duration").toDouble() : 0., 2147480000.);
         _timeScroll->setRange(0, qMax(0, duration - qRound(_span)));
         _timeScroll->setPageStep(qRound(_span));
@@ -675,6 +705,7 @@ void SpectrumPane::syncScrollBars() {
     _pitchScroll->setValue(qRound((128 - _high) * 100));
 }
 bool SpectrumPane::eventFilter(QObject *object, QEvent *event) {
+    if(object==_canvas && event->type()==QEvent::Leave)clearHover();
     if (object == this && _displayControls &&
         (event->type() == QEvent::ParentChange ||
          (event->type() == QEvent::DynamicPropertyChange &&
@@ -1003,7 +1034,7 @@ bool SpectrumPane::sourceInPlayback() const {
     }
     return false;
 }
-int SpectrumPane::linkedTimelineWidth() const { return isVisible() && !_clip.isEmpty() ? sourceWidth() : -1; }
+int SpectrumPane::linkedTimelineWidth() const { return isVisible() && usesScoreTimeline() ? sourceWidth() : -1; }
 double SpectrumPane::sourcePosition() const {
     double at = -1;
     if (_media && _media->property("available").toBool() &&
@@ -1074,17 +1105,27 @@ void SpectrumPane::seekSource(double ms) {
         playSource();
 }
 void SpectrumPane::projectChanged() {
+    const double previous=_lastAudioMs;
+    const bool wasPlaying=_sourceWasPlaying;
     const bool playing = _media->property("playing").toBool();
     _play->setText(playing ? tr("暂停原曲") : tr("播放原曲"));
     setComponentToolIcon(_play, playing ? "pause" : "play");
     _lastAudioMs = sourcePosition();
+    _sourceWasPlaying=sourceInPlayback();
     if (!playing) {
         _cursorMs = _lastAudioMs;
         setStatus(_media->property("status").toString());
     }
     if (isVisible()) {
-        _canvas->update();
-        _editor->_noteCanvas->update();
+        if(wasPlaying && _sourceWasPlaying) {
+            for(double at:{previous,_lastAudioMs}) {
+                _canvas->update(QRect(qRound(xAtTime(at))-4,0,9,_canvas->height()));
+                if(_editor->_score) {
+                    const double x=_clip.isEmpty()?_editor->xForTick(_editor->_score->tempomap()->time2tick(at/1000.),false):xAtTime(at);
+                    for(QWidget* surface:QList<QWidget*>{_editor->_noteCanvas,_editor->_canvas,_editor->_ruler})surface->update(QRect(qRound(x)-4,0,9,surface->height()));
+                }
+            }
+        }else {_canvas->update();_editor->_noteCanvas->update();_editor->_canvas->update();_editor->_ruler->update();}
     }
 }
 void SpectrumPane::showEvent(QShowEvent *) {
@@ -1098,6 +1139,7 @@ void SpectrumPane::showEvent(QShowEvent *) {
     viewChanged();
 }
 void SpectrumPane::hideEvent(QHideEvent *) {
+    clearHover();
     for (auto owner = static_cast<QWidget*>(this); owner; owner = owner->parentWidget())
         if (owner->property("kumoAreaMoving").toBool() || owner->property("kumoWindowTransition").toBool())
             return;
@@ -1153,7 +1195,9 @@ void SpectrumPane::viewChanged() {
     if (!isVisible())
         return;
     const int width = linkedTimelineWidth();
-    if (property("linkedTimelineWidth").toInt() != width) {
+    const int end=timelineEndTick();
+    if (property("linkedTimelineWidth").toInt() != width || property("spectrumTimelineEnd").toInt()!=end) {
+        setProperty("spectrumTimelineEnd",end);
         setProperty("linkedTimelineWidth", width);
         _editor->surfaceResized(PerformanceSurface::Parameter);
     }
@@ -1176,23 +1220,18 @@ void SpectrumPane::viewChanged() {
     syncScrollBars();
     _canvas->update();
 }
-void SpectrumPane::editorTimelineZoomed(double previousScale, double anchorX) {
-    if (!isVisible() || !_clip.isEmpty() || _display->currentIndex() != 1 || previousScale <= 0)
-        return;
-    // Source-time overlays keep their own time origin, but share the editor's
-    // horizontal magnification. All editor zoom controls use this path.
-    const double anchor = timeAtX(anchorX);
-    const double ratio = (anchorX - gutter) / plotWidth();
-    _span = qBound(250., _span * previousScale / _editor->_viewport.pixelsPerQuarter, 120000.);
-    _from = qMax(0., anchor - ratio * _span);
+void SpectrumPane::editorTimelineZoomed(double,double) {
+    if(isVisible() && _display->currentIndex()==1)viewChanged();
 }
 double SpectrumPane::timeAtX(double x) const {
-    return _clip.isEmpty() ? _from + (x - gutter) / plotWidth() * _span
-                           : audioAt(_clip, _editor->tickForX(x, false));
+    if(!_clip.isEmpty())return audioAt(_clip,_editor->tickForX(x,false));
+    if(_display->currentIndex()==1 && _editor->score())return _editor->score()->tempomap()->tick2time(_editor->tickForX(x,false))*1000.;
+    return _from+(x-gutter)/plotWidth()*_span;
 }
 double SpectrumPane::xAtTime(double ms) const {
-    return _clip.isEmpty() ? gutter + (ms - _from) / _span * plotWidth()
-                           : _editor->xForTick(qRound(tickAt(_clip, ms)), false);
+    if(!_clip.isEmpty())return _editor->xForTick(qRound(tickAt(_clip,ms)),false);
+    if(_display->currentIndex()==1 && _editor->score())return _editor->xForTick(_editor->score()->tempomap()->time2tick(ms/1000.),false);
+    return gutter+(ms-_from)/_span*plotWidth();
 }
 double SpectrumPane::pitchAtY(double y, bool overlay) const {
     return overlay
@@ -1217,7 +1256,7 @@ void SpectrumPane::requestVisible() {
         return;
     // One bounded viewport; horizontal requests are quantized to avoid repaint-sized recomputation.
     from = qMax(0., std::floor(from / 20.) * 20.);
-    until = qMin(from + 120000., std::ceil(until / 20.) * 20.);
+    until = qMin(from + 86400000., std::ceil(until / 20.) * 20.);
     QVariantMap request{{"path", _path},
                         {"from", from},
                         {"until", until},
@@ -1226,6 +1265,7 @@ void SpectrumPane::requestVisible() {
                         {"lowPitch", 0.},
                         {"highPitch", 128.},
                         {"fundamentalMix", _displayControls->values().value("fundamental", 0.)},
+                        {"preload",QSettings().value("spectrum/preloadTrack",true)},
                         {"fftSize", _preset->currentIndex() == 1   ? 32768
                                     : _preset->currentIndex() == 2 ? 4096
                                                                    : 16384},
@@ -1278,7 +1318,7 @@ void SpectrumPane::paint(QPainter &p, const QRectF &bounds, bool overlay) {
                 if (shown < 0 || shown > 127 || PerformanceKeyboard::isBlack(shown) != black)
                     continue;
                 const auto shape = PerformanceKeyboard::shape(shown, top + _transpose->value(), row, gutter);
-                p.setBrush(QColor(black ? "#161616" : "#f1f1f1"));
+                p.setBrush(shown==_hoverKey?palette().highlight().color():QColor(black ? "#161616" : "#f1f1f1"));
                 if (row < 3)
                     p.setPen(Qt::NoPen);
                 else
@@ -1334,6 +1374,13 @@ void SpectrumPane::paint(QPainter &p, const QRectF &bounds, bool overlay) {
                 if (ms > cuts.front() && ms < _info.value("until").toDouble())
                     cuts.append(ms);
             }
+        if(_clip.isEmpty() && overlay && _editor->score()) {
+            auto tempo=_editor->score()->tempomap();
+            for(const auto& entry:*tempo) {
+                const double ms=tempo->tick2time(entry.first)*1000.;
+                if(ms>cuts.front() && ms<_info.value("until").toDouble())cuts.append(ms);
+            }
+        }
         cuts.append(_info.value("until").toDouble());
         std::sort(cuts.begin(), cuts.end());
         const double high = _info.value("highPitch").toDouble(), low = _info.value("lowPitch").toDouble();
@@ -1374,14 +1421,8 @@ void SpectrumPane::paint(QPainter &p, const QRectF &bounds, bool overlay) {
         c.setAlpha(35);
         p.fillRect(QRectF(xAtTime(_a), 0, xAtTime(_b) - xAtTime(_a), bounds.height()), c);
     }
-    if (_harmonics->isChecked() && _hasPick)
-        for (int harmonic = 1; harmonic <= 10; ++harmonic) {
-            double pitch = _cursorPitch + 12. * std::log2(harmonic);
-            double y = yAtPitch(pitch, overlay);
-            p.setPen(QPen(QColor(180, 192, 205, harmonic == 1 ? 180 : 90), 1,
-                          harmonic == 1 ? Qt::SolidLine : Qt::DashLine));
-            p.drawLine(QPointF(gutter, y), QPointF(bounds.right(), y));
-        }
+    paintMidi(p,bounds,overlay);
+    paintReferences(p,bounds,overlay);
     p.setPen(accent);
     for (auto value : _annotations) {
         auto m = value.toMap();
@@ -1419,7 +1460,7 @@ void SpectrumPane::paint(QPainter &p, const QRectF &bounds, bool overlay) {
         p.drawEllipse(QPointF(cursor, yAtPitch(_cursorPitch, overlay)), 4, 4);
     }
     if (sourceInPlayback()) {
-        const double play = xAtTime(sourcePosition());
+        const double play = xAtTime(_lastAudioMs);
         p.setPen(QPen(palette().highlight().color(), 2));
         p.drawLine(QPointF(play, 0), QPointF(play, bounds.height()));
     }
@@ -1444,6 +1485,7 @@ void SpectrumPane::paintOverlay(QPainter &p, const QRectF &rect) {
         paint(p, rect, true);
 }
 void SpectrumPane::pointer(QMouseEvent *e, bool release) {
+    hoverChanged(e->localPos(),_display->currentIndex()==1);
     // Right-click only auditions pitch; it leaves the audio position, loop,
     // annotations and the selected writing tool where the user put them.
     if (e->button() == Qt::RightButton || (e->buttons() & Qt::RightButton)) {
@@ -1584,7 +1626,7 @@ void SpectrumPane::pointer(QMouseEvent *e, bool release) {
     }
     if (_panning && _dragging) {
         const double delta = (e->x() - _press.x()) / plotWidth() * _span;
-        if (_clip.isEmpty())
+        if (!usesScoreTimeline())
             _from = qMax(0., _pressFrom - delta);
         else
             _editor->_scroll->setValue(
@@ -1628,6 +1670,7 @@ void SpectrumPane::pointer(QMouseEvent *e, bool release) {
 bool SpectrumPane::overlayEvent(QEvent *event) {
     if (!isVisible() || _display->currentIndex() != 1)
         return false;
+    if(auto tabs=_editor->findChild<QTabBar*>("workflowExpressionTabs"))if(tabs->currentIndex()!=2)return false;
     if (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) {
         auto key = static_cast<QKeyEvent *>(event);
         if (key->key() == Qt::Key_Space &&
@@ -1669,7 +1712,7 @@ void SpectrumPane::wheel(QWheelEvent *e) {
     } else if (e->modifiers() & Qt::ControlModifier) {
         if (_clip.isEmpty() && _display->currentIndex() != 1) {
             double anchor = timeAtX(e->posF().x()), ratio = (anchor - _from) / _span;
-            _span = qBound(250., _span / factor, 120000.);
+            _span = qBound(250., _span / factor, 86400000.);
             _from = qMax(0., anchor - ratio * _span);
         } else {
             _editor->zoomTimeline(factor, e->posF().x());
@@ -1740,6 +1783,8 @@ void SpectrumPane::updateMarksVisibility() {
     _marks->setVisible(showMarks);
     _canvas->parentWidget()->setVisible(showCanvas);
     _marksSplitter->setVisible(showCanvas || showMarks);
+    _workspaceSplitter->setVisible(showCanvas || showMarks || !_displayPanel->isHidden());
+    setMinimumHeight(showCanvas?180:72);
 }
 void SpectrumPane::saveMarks() {
     auto score = _editor->score();

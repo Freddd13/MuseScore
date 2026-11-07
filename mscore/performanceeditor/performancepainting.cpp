@@ -388,6 +388,9 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
       {
       const auto& c = _appearance.colors;
       const QRectF area(PerformanceViewport::gutter, 0, widget->width() - PerformanceViewport::gutter - PerformanceViewport::rightMargin, widget->height());
+#ifdef SCRIPT_INTERFACE
+      if(surface==PerformanceSurface::Notes && _spectrum)_spectrum->paintKeyboardHover(painter,widget);
+#endif
       painter.save(); painter.setClipRect(area, Qt::IntersectClip);
       const QRectF clip = painter.clipBoundingRect();
       if (surface == PerformanceSurface::Notes) {
@@ -462,8 +465,8 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
                   }
 #ifdef SCRIPT_INTERFACE
             if(_rollWriting&&(!_midiTracks||!_midiTracks->active()))_rollWriting->paint(painter,area);
-            if(_midiTracks)_midiTracks->paintNotes(painter,area);
-            if(_timingEditor)_timingEditor->paint(painter,area);
+            if(_midiTracks&&(!_spectrum||_spectrum->showMidiNotes()))_midiTracks->paintNotes(painter,area);
+            if(_timingEditor&&showNotes)_timingEditor->paint(painter,area);
 #endif
             if (_marquee) {
                   painter.setBrush(QColor(130, 190, 230, 35)); painter.setPen(QPen(c[PerformanceAppearance::Selection], 1, Qt::DashLine)); painter.drawRect(QRectF(_marqueeStart, _marqueeEnd).normalized());
@@ -503,7 +506,8 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
             }
 #ifdef SCRIPT_INTERFACE
       const bool midiCursor=_midiTracks&&_midiTracks->paintPlayhead(painter,widget);
-      const int tick=midiCursor?-1:(_seeking?_seekTick:_playTick);
+      const bool sourceCursor=_spectrum&&_spectrum->paintRollPlayhead(painter,widget);
+      const int tick=(midiCursor||sourceCursor)?-1:(_seeking?_seekTick:_playTick);
 #else
       const int tick = _seeking ? _seekTick : _playTick;
 #endif

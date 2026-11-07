@@ -13,6 +13,7 @@ class ReferenceSpectrumSession : public QObject {
     Q_PROPERTY(bool available READ available CONSTANT)
     Q_PROPERTY(QString status READ status NOTIFY changed)
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
+    Q_PROPERTY(bool backgroundBusy READ backgroundBusy NOTIFY changed)
     Q_PROPERTY(bool tempoBusy READ tempoBusy NOTIFY tempoStateChanged)
     Q_PROPERTY(QImage image READ image NOTIFY changed)
     Q_PROPERTY(QVariantMap info READ info NOTIFY changed)
@@ -30,7 +31,8 @@ class ReferenceSpectrumSession : public QObject {
     quint64 _generation = 0;
     int _diskMiB = 1024;
     qint64 _elapsedMs = 0;
-    bool _busy = false;
+    bool _busy = false, _backgroundBusy = false;
+    int _preparedBlocks=0, _totalBlocks=0, _backgroundComputed=0;
     KumoAudio::SpectrumTile _tile;
     QVariantMap _pending;
     void begin(const QVariantMap &);
@@ -40,6 +42,7 @@ class ReferenceSpectrumSession : public QObject {
     ~ReferenceSpectrumSession() override;
     bool available() const { return true; }
     bool busy() const { return _busy; }
+    bool backgroundBusy() const { return _backgroundBusy; }
     bool tempoBusy() const {return _tempoBusy;}
     QString status() const { return _status; }
     QImage image() const { return _tile.image; }
