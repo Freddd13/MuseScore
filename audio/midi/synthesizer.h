@@ -64,7 +64,7 @@ class Synthesizer {
 
       virtual void process(unsigned, float*, float*, float*) = 0;
       virtual void play(const PlayEvent&) = 0;
-      virtual void mixMaster(unsigned, float*) {}
+      virtual void mixMaster(unsigned, float*, float* = nullptr) {}
       virtual void processMaster(unsigned, float*) {}
       virtual void setPlaybackContext(qint64, double, double, bool, int, int) {}
       virtual int processingLatency() const { return 0; }

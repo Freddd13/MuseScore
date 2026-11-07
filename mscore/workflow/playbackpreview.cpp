@@ -48,6 +48,7 @@ struct Session {
       std::function<void()> restart;
       int position=-1, begin=-1, end=-1;
       bool hasPosition=false;
+      QVariantMap range;
       QPointer<QObject> connections;
 };
 Session& session(){static Session value;return value;}
@@ -223,7 +224,7 @@ QVariantMap startPlaybackPreview(Score* score,bool proposed,const QVariantMap& r
       s.activeEvents=resumePlaybackPreview(material.events,resume);
       if(begin==0&&resume<=0)s.activeEvents.erase(s.activeEvents.begin(),s.activeEvents.lower_bound(resume));
       NPlayEvent endpoint;endpoint.setType(ME_INVALID);s.activeEvents.insert({until,endpoint});
-      s.begin=begin;s.end=until;s.position=resume;s.hasPosition=true;s.candidate=proposed;s.repeatPolicy=std::move(repeatPolicy);s.active=true;s.loopTouched=false;s.countTouched=false;s.joint=range.value("deferStart").toBool();s.repeating=range.value("loop",false).toBool();++s.generation;
+      s.range=range;s.begin=begin;s.end=until;s.position=resume;s.hasPosition=true;s.candidate=proposed;s.repeatPolicy=std::move(repeatPolicy);s.active=true;s.loopTouched=false;s.countTouched=false;s.joint=range.value("deferStart").toBool();s.repeating=range.value("loop",false).toBool();++s.generation;
       if(auto action=getAction("loop")){s.oldLoop=action->isChecked();s.restoringLoop=true;action->setChecked(false);s.restoringLoop=false;}
       if(auto action=getAction("countin")){s.oldCount=action->isChecked();s.restoringCount=true;action->setChecked(false);s.restoringCount=false;}
       setReferenceClock(proposed?s.proposed.clock:QVector<QPair<double,double>>());setReferenceEndTick(until);
@@ -233,6 +234,13 @@ QVariantMap startPlaybackPreview(Score* score,bool proposed,const QVariantMap& r
       return {{"ok",true},{"mode",proposed?"candidate":"score"},{"fromUtick",resume},{"untilUtick",until}};
 }
 void stopPlaybackPreview(bool finish){auto& s=session();++s.generation;s.stopping=true;if(s.active&&seq){if(seq->isPlaying())seq->stopWait();if(!seq->isPlaying())seq->synchronizeStoppedGui();}if(s.active)release();if(finish){s.position=-1;s.hasPosition=false;}s.stopping=false;}
+bool rewindPlaybackPreview(Score* score,bool deferStart){
+      auto& s=session();if(!current(score)||s.range.isEmpty()||(!s.active&&!deferStart))return false;
+      auto range=s.range;const bool candidate=s.candidate;
+      stopPlaybackPreview(true);range["exactStart"]=true;range["deferStart"]=deferStart;
+      range.remove("fromEventTick");range.remove("loopRestart");
+      return startPlaybackPreview(score,candidate,range).value("ok").toBool();
+}
 void setPlaybackPreviewLoop(Score* score,bool enabled){if(current(score))session().repeating=enabled;}
 bool playbackPreviewLoop(){return session().repeating;}
 void setPlaybackPreviewRepeat(QObject* owner,std::function<void()> callback){auto& s=session();s.restartOwner=owner;s.restart=std::move(callback);}

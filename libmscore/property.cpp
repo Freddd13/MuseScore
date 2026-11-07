@@ -392,6 +392,8 @@ static constexpr PropertyMetaData propertyList[] = {
       { Pid::HAND_TEXT_AUTO, P_TYPE::BOOL, true, "handTextAuto", "hand text automatic placement" },
       { Pid::FREE_SLUR_ENDPOINTS, P_TYPE::STRING, true, "freeSlurEndpoints", "free slur endpoint adjustments" },
       { Pid::PEDAL_PLAYBACK, P_TYPE::STRING, true, "pedalPlayback", "pedal playback timing" },
+      { Pid::GRACE_SPACING, P_TYPE::REAL, true, "graceSpacing", "extra inter-grace spacing" },
+      { Pid::GRACE_MAIN_SPACING, P_TYPE::REAL, true, "graceMainSpacing", "extra grace-to-main spacing" },
       { Pid::END,                       P_TYPE::INT,            false, "++end++",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "<invalid property>")                            }
       };
 

@@ -34,6 +34,9 @@
 #include "mscore/workflow/sharedpiano.h"
 #include "mscore/workflow/featuregate.h"
 #include "preferences.h"
+#include "mscore/shortcut.h"
+#include <QMenu>
+#include <QToolTip>
 
 namespace Ms {
 
@@ -59,6 +62,14 @@ MixerDetails::MixerDetails(QWidget *parent) :
       connect(chorusSpinBox,       SIGNAL(valueChanged(double)),           SLOT(chorusChanged(double)));
       connect(reverbSlider,        &QSlider::valueChanged,       this,     &MixerDetails::reverbChanged);
       connect(reverbSpinBox,       SIGNAL(valueChanged(double)),           SLOT(reverbChanged(double)));
+      for (QWidget* control : {static_cast<QWidget*>(reverbSlider),static_cast<QWidget*>(reverbSpinBox)}) {
+            control->setToolTip(tr("此乐器送入混响的量。合成器（F11）中选择Zita1并调整空间与混合比例。右键可打开设置。"));
+            control->setContextMenuPolicy(Qt::CustomContextMenu);
+            connect(control,&QWidget::customContextMenuRequested,this,[this,control](const QPoint& point){
+                  QMenu menu(this);menu.addAction(tr("打开合成器混响设置"),[]{if(auto action=getAction("synth-control"))action->trigger();});
+                  menu.exec(control->mapToGlobal(point));
+                  });
+            }
       connect(portSpinBox,         SIGNAL(valueChanged(int)),              SLOT(midiChannelChanged(int)));
       connect(channelSpinBox,      SIGNAL(valueChanged(int)),              SLOT(midiChannelChanged(int)));
       connect(drumkitCheck,        SIGNAL(toggled(bool)),                  SLOT(drumkitToggled(bool)));
@@ -510,6 +521,12 @@ void MixerDetails::reverbChanged(double v)
             return;
 
       _mti->setReverb(v);
+      bool enabled=false;
+      if(synti)for(int slot=0;slot<MasterSynthesizer::MAX_EFFECTS;++slot)
+            if(auto effect=synti->effect(slot))enabled=enabled||effect->usesReverbSend();
+      if(v>0&&!enabled)
+            QToolTip::showText(reverbSlider->mapToGlobal(QPoint(0,reverbSlider->height())),
+                  tr("当前混响效果未开启。按F11，在效果A或B中选择Zita1；也可右键打开设置。"),this);
       }
 
 //---------------------------------------------------------

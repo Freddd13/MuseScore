@@ -4,6 +4,7 @@
 #include <QPointer>
 #include <QVariantMap>
 #include <QHash>
+#include <functional>
 #include "libmscore/score.h"
 namespace Ms {
 class MidiCaptureSession;
@@ -19,6 +20,7 @@ class WorkflowContext : public QObject {
       QPointer<Score> _captureScore;
       QVariantMap _audition;
       QPointer<QObject> _playbackSession;
+      std::function<void()> _playbackRewind;
       QPointer<Score> _score, _activeScore;
       ScoreContentState _state;
       QVariantMap _expression;
@@ -44,8 +46,10 @@ public:
       bool captureCurrent(Score* score)const{return score&&_captureScore==score;}
       void setCapture(QObject* owner,Score* score,const QVariantMap& value){_captureOwner=owner;_captureScore=score;if(_capture==value)return;_capture=value;emit captureChanged();}
       void clearCapture(QObject* owner){if(_captureOwner!=owner)return;_captureOwner.clear();_captureScore.clear();_capture.clear();emit captureChanged();}
-      void finishPlaybackSession(){auto old=_playbackSession.data();_playbackSession.clear();delete old;}
+      void finishPlaybackSession(){auto old=_playbackSession.data();_playbackSession.clear();_playbackRewind={};delete old;}
       void setPlaybackSession(QObject* session){if(_playbackSession!=session){finishPlaybackSession();_playbackSession=session;}}
+      void setPlaybackRewind(QObject* owner,std::function<void()> callback){if(_playbackSession==owner)_playbackRewind=std::move(callback);}
+      bool rewindPlaybackSession(){if(!_playbackSession||!_playbackRewind)return false;auto callback=_playbackRewind;callback();return true;}
       void setAudition(const QVariantMap& value){_audition=value;emit auditionChanged();}
       bool current(Score* score)const{return score&&_score&&_state==_score->masterScore()->state()&&(_score==score||(_previewOrigin==_score&&_previewScore==score&&_previewState==score->masterScore()->state()));}
       bool referenceCurrent(Score* score)const{return score&&(_referenceScore==score||(_previewOrigin==_referenceScore&&_previewScore==score));}

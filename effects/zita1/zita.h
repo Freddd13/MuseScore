@@ -262,6 +262,8 @@ class ZitaReverb : public Effect
       void fini();
 
       virtual void process(int n, float* inp, float* out);
+      bool usesReverbSend() const override { return true; }
+      void processWithSend(int n, float* inp, const float* send, float* out) override;
 
       void set_delay(float v) { _ipdel = v; _cntA1++; }
       float delay() const     { return _ipdel; }

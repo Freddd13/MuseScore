@@ -439,7 +439,8 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
                         }
                   else {
                         cancelSurfaceGesture(); cancelGesture(); cancelComparisonDrag(); finishWheel();
-                        seek(0);
+                        if (seq && seq->score() == _score->masterScore()) seq->rewindStart();
+                        else seek(0);
                         if (seq && seq->isPlaying() && _score && seq->score() == _score->masterScore()) _following = true;
                         _followButton->setChecked(_following);
                         _followButton->setText(_following ? tr("跟随播放") : tr("跟随：暂停"));

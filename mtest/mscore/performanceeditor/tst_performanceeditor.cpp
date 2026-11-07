@@ -200,6 +200,7 @@ class TestPerformanceEditor : public QObject, public MTest {
       void playBoundaryKeepsGesture158();
       void canvasKeys139();
       void liveWheelHomeAndSpectrum139();
+      void homePreview159();
       void waveTonePalette139();
       void pedalGraphMatchesPlayback106();
       void pedalGraphBatchAndReuse106();
@@ -1275,3 +1276,4 @@ QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"
 
 #include "interaction_158_tests.inc"
+#include "interaction_159_tests.inc"

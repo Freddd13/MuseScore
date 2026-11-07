@@ -171,6 +171,8 @@ InspectorNote::InspectorNote(QWidget* parent)
       iiList.push_back({Pid::GRACE_PLAY_MODE, 1, position, nullptr});
       iiList.push_back({Pid::GRACE_DURATION_MODE, 1, unit, nullptr});
       iiList.push_back(scrubProperty(_gracePanel, tr("小音符持续时间"), Pid::GRACE_DURATION, 1, 1000, 1, " ms", 1));
+      iiList.push_back(scrubProperty(_gracePanel, tr("倚音间额外间距"), Pid::GRACE_SPACING, -2, 8, .1, tr(" 谱间"), 1));
+      iiList.push_back(scrubProperty(_gracePanel, tr("与主音额外间距"), Pid::GRACE_MAIN_SPACING, -2, 8, .1, tr(" 谱间"), 1));
       auto preset = new QPushButton(tr("应用快速拍前预设"), _gracePanel);
       preset->setObjectName("graceApplyPreset");
       graceLayout->addWidget(preset, graceLayout->rowCount(), 0, 1, 3);

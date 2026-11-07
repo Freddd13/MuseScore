@@ -53,6 +53,9 @@ class Effect : public QObject {
       Effect() : QObject() { }
       virtual ~Effect() {}
       virtual void process(int frames, float*, float*) = 0;
+      // Reverbs receive the per-instrument send independently of the dry mix.
+      virtual bool usesReverbSend() const { return false; }
+      virtual void processWithSend(int frames, float* dry, const float*, float* out) { process(frames, dry, out); }
       virtual const char* name() const = 0;
       virtual void init(float /*sampleRate*/) {}
       virtual const std::vector<ParDescr>& parDescr() const = 0;

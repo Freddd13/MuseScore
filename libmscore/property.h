@@ -400,6 +400,8 @@ enum class Pid : short {
       HAND_TEXT_AUTO,
       FREE_SLUR_ENDPOINTS,
       PEDAL_PLAYBACK,
+      GRACE_SPACING,
+      GRACE_MAIN_SPACING,
       END
       };
 

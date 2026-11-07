@@ -107,6 +107,11 @@ public:
   virtual void setParameter(quint32, double) = 0;
   virtual QVariantList parameters() const = 0;
   virtual bool takeChanges() = 0;
+  // Native SF2 uses its CC91 envelope; VST keeps the existing master send.
+  virtual void addReverbSend(int n, const float* l, const float* r,
+                            float* out, float leftGain, float rightGain) const {
+    for (int i = 0; i < n; ++i) { out[i * 2] += l[i] * leftGain; out[i * 2 + 1] += r[i] * rightGain; }
+  }
   virtual QString status() const { return {}; }
   virtual QVariantMap processingDiagnostics() const { return {}; }
   std::function<void()> stateChanged;

@@ -186,6 +186,17 @@ QVariantMap ScoreObserver::startReferencePlayback(const QVariantMap& plan){
  connect(seq,&Seq::heartBeat,session,[guarded,end,natural](int,int tick,int){if(guarded&&seq->score()==guarded->masterScore()&&tick>=end){*natural=true;seq->stop();seq->stopNotes();}});
  connect(seq,&Seq::stopped,session,[session,natural,finished,end,position]{if(*finished)return;if(position()>=end-1)*natural=true;if(!*natural)session->deleteLater();});
  connect(this,&ScoreObserver::scoreChanged,session,[session,project]{QMetaObject::invokeMethod(project,"stop");if(seq&&seq->isPlaying())seq->stop();setReferenceClock({});session->deleteLater();});
+ workflowContext()->setPlaybackRewind(session,[owner=QPointer<ScoreObserver>(this),guarded,plan,usesPreview]{
+  if(!owner||!guarded||!mscore||mscore->currentScore()!=guarded)return;
+  owner->stopReferencePlayback();if(seq)seq->synchronizeStoppedGui();
+  auto restart=plan;
+  if(usesPreview){
+   if(!rewindPlaybackPreview(guarded,true))return;
+   const auto audition=workflowContext()->audition();
+   restart=playbackPreviewReferencePlan(guarded,audition.value("mode").toString()=="candidate",audition.value("fromUtick").toInt());
+  }
+  owner->startReferencePlayback(restart);
+ });
  return {{"ok",true},{"preparing",true}};
 }
 QVariantMap ScoreObserver::stopReferencePlayback(){delete _workflowRepeat.data();_workflowRepeat.clear();workflowContext()->finishPlaybackSession();auto p=referenceProject();QMetaObject::invokeMethod(p,"stop");if(seq&&seq->isPlaying())seq->stopWait();setReferenceClock({});setReferenceEndTick(-1);return {{"ok",true}};}

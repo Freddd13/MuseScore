@@ -29,6 +29,7 @@
 #include "seq.h"
 #include <QScopedValueRollback>
 #include "workflow/playbackpreview.h"
+#include "workflow/workflowcontext.h"
 #include <QCoreApplication>
 #include "workflow/referencebus.h"
 #ifdef SCRIPT_INTERFACE
@@ -394,7 +395,10 @@ void Seq::exit()
 
 void Seq::rewindStart()
       {
-      seek(0);
+      if (!cs) return;
+      if (workflowContext()->rewindPlaybackSession()) return;
+      if (rewindPlaybackPreview(cs)) return;
+      seek(mscore->loop() ? cs->repeatList().tick2utick(cs->loopInTick().ticks()) : 0);
       }
 
 //---------------------------------------------------------
@@ -743,7 +747,6 @@ void Seq::seqMessage(int msg, int arg)
 void Seq::playEvent(const NPlayEvent& event, unsigned framePos)
       {
       int type = event.type();
-      PianoTools* piano = mscore->pianoTools();
       if (type == ME_NOTEON) {
             if (!event.isMuted()) {
                   if (event.discard()) { // ignore noteoff but restrike noteon
@@ -753,16 +756,28 @@ void Seq::playEvent(const NPlayEvent& event, unsigned framePos)
                               return;
                         }
                   putEvent(event, framePos);
-                  if (piano && piano->isVisible()) {
-                        if (event.velo() > 0)
-                              piano->pressPlaybackPitch(event.pitch());
-                        else // Note-offs are synthesized as ME_NOTEON with 0 velocity
-                              piano->releasePlaybackPitch(event.pitch());
+                  if (event.pitch() >= 0 && event.pitch() < 128 && event.channel() >= 0 && event.channel() < 256) {
+                        auto& bits = _keyboardPitches[event.pitch() * 4 + event.channel() / 64];
+                        const quint64 mask = quint64(1) << (event.channel() % 64);
+                        if (event.velo() > 0) bits.fetch_or(mask, std::memory_order_relaxed);
+                        else bits.fetch_and(~mask, std::memory_order_relaxed);
                         }
                   }
             }
       else if (type == ME_CONTROLLER || type == ME_PITCHBEND || type == ME_AFTERTOUCH || type == ME_POLYAFTER)
             putEvent(event, framePos);
+      }
+
+void Seq::clearKeyboardPitches(int channel)
+      {
+      if (channel < 0) {
+            for (auto& bits : _keyboardPitches) bits.store(0, std::memory_order_relaxed);
+            }
+      else if (channel < 256) {
+            const quint64 mask = ~(quint64(1) << (channel % 64));
+            for (int pitch = 0; pitch < 128; ++pitch)
+                  _keyboardPitches[pitch * 4 + channel / 64].fetch_and(mask, std::memory_order_relaxed);
+            }
       }
 
 //---------------------------------------------------------
@@ -826,12 +841,7 @@ void Seq::processMessages()
                   case SeqMsgId::ALL_NOTE_OFF:
                         {
                         _synti->allNotesOff(msg.intVal);
-                        PianoTools* piano = mscore->pianoTools();
-                        // PianoTools here returns the playback pitches by-value
-                        // to ensure no discrepancy while erasing items from
-                        // the _pressedPlaybackPitches container
-                        if (piano) for (int pressedPitch : piano->pressedPlaybackPitches())
-                              piano->releasePlaybackPitch(pressedPitch);
+                        clearKeyboardPitches(msg.intVal);
                         }
                         break;
                   case SeqMsgId::INDEPENDENT_METRONOME_ENABLED:
@@ -2470,6 +2480,7 @@ void Seq::stopNoteTimer()
 
 void Seq::stopNotes(int channel, bool realTime)
       {
+      clearKeyboardPitches(channel);
       auto send = [this, realTime](const NPlayEvent& event) {
             if (realTime)
                   putEvent(event);
@@ -2861,8 +2872,13 @@ void Seq::heartBeatTimeout()
             pre->heartBeat(this);
 
       PianoTools* piano = mscore->pianoTools();
-      if (piano && piano->isVisible())
-            piano->updateAllKeys();
+      if (piano && piano->isVisible()) {
+            QSet<int> pitches;
+            for (int pitch = 0; pitch < 128; ++pitch)
+                  for (int word = 0; word < 4; ++word)
+                        if (_keyboardPitches[pitch * 4 + word].load(std::memory_order_relaxed)) { pitches.insert(pitch); break; }
+            piano->setPlaybackPitches(pitches);
+            }
 
       cv->update(cv->toPhysical(r));
       }

@@ -67,6 +67,7 @@ class Chord final : public ChordRest {
       int _gracePlayMode = 0; // missing fields retain historical grace interpretation
       int _graceDurationMode = 0;
       double _graceDuration = 65.0;
+      double _graceSpacing = 0.0, _graceMainSpacing = 0.0;
       int                 _graceIndex;   ///< if this is a grace note, index in parent list
 
       Direction          _stemDirection;

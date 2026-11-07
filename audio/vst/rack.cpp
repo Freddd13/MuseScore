@@ -111,7 +111,7 @@ struct Slot {
   QVariantMap loadedConfig;
   Unit source;
   std::vector<std::unique_ptr<Unit>> effects;
-  Delay compensation;
+  Delay compensation, sendCompensation;
   float volume = 1, pan = 0;
   std::array<Midi, 2048> events{};
   int count = 0;
@@ -169,11 +169,12 @@ struct Rack::Impl {
   std::array<int, MaxChannels> banks{}, hi{}, lo{};
   std::array<float, MaxChannels> volumes{}, pans{};
   Queue<Message, 8192> queue;
-  Delay existingDelay;
+  Delay existingDelay, existingSendDelay;
   int maxLatency = 0;
   int changedCommonPiano = 0;
   std::atomic<int> totalLatency{0};
-  std::array<float, Block> l{}, r{};
+  std::array<float, Block> l{}, r{}, sendL{}, sendR{};
+  std::array<float, Block * 2> sends{};
   explicit Impl(bool value, Rack::InternalFactory internal)
       : offline(value), factory(std::move(internal)) {
     volumes.fill(1);
@@ -218,11 +219,13 @@ struct Rack::Impl {
         maxLatency = std::max(maxLatency, s->latency());
     for (auto &s : slots) {
       s->compensation.setup(s->enabled ? maxLatency - s->latency() : 0);
+      s->sendCompensation.setup(s->enabled ? maxLatency - s->latency() : 0);
       delay(s->source);
       for (auto &e : s->effects)
         delay(*e);
     }
     existingDelay.setup(maxLatency);
+    existingSendDelay.setup(maxLatency);
     totalLatency = maxLatency;
     for (auto &e : master) {
       totalLatency += e->latency();
@@ -357,7 +360,7 @@ struct Rack::Impl {
       if (unit->processor) unit->processor->closeEditor();
       reset=unit->resetAudio(clock) && reset;
     }
-    slot.compensation.clear();return reset;
+    slot.compensation.clear();slot.sendCompensation.clear();return reset;
   }
   bool quiet(bool closeEditors, int samples = 0) {
     // Drain messages before closing this material; no queued key press may
@@ -371,6 +374,7 @@ struct Rack::Impl {
       for (auto &unit : master)
         reset = unit->resetAudio(clock) && reset;
       existingDelay.clear();
+      existingSendDelay.clear();
     }
     return reset;
   }
@@ -683,7 +687,7 @@ void Rack::bindChannels(const QVector<int> &banks) {
   d->recalculate();
   resume();
 }
-void Rack::mix(int count, float *interleaved, const Clock &original) {
+void Rack::mix(int count, float *interleaved, const Clock &original, float *reverbSend) {
   if (!d->enter())
     return;
   d->messages();
@@ -697,6 +701,11 @@ void Rack::mix(int count, float *interleaved, const Clock &original) {
       d->r[i] = interleaved[(i + offset) * 2 + 1];
     }
     d->existingDelay.run(n, d->l.data(), d->r.data());
+    if (reverbSend) {
+      for (int i = 0; i < n; ++i) { d->sendL[i] = reverbSend[(i + offset) * 2]; d->sendR[i] = reverbSend[(i + offset) * 2 + 1]; }
+      d->existingSendDelay.run(n, d->sendL.data(), d->sendR.data());
+      for (int i = 0; i < n; ++i) { reverbSend[(i + offset) * 2] = d->sendL[i]; reverbSend[(i + offset) * 2 + 1] = d->sendR[i]; }
+    }
     for (int i = 0; i < n; ++i) {
       interleaved[(i + offset) * 2] = d->l[i];
       interleaved[(i + offset) * 2 + 1] = d->r[i];
@@ -710,12 +719,19 @@ void Rack::mix(int count, float *interleaved, const Clock &original) {
                         offset ? 0 : s->count, clock);
       for (auto &e : s->effects)
         e->process(n, d->l.data(), d->r.data(), nullptr, 0, clock);
+      if (reverbSend) {
+        std::fill_n(d->sends.data(), n * 2, 0);
+        s->source.processor->addReverbSend(n, d->l.data(), d->r.data(), d->sends.data(), 1, 1);
+        for (int i = 0; i < n; ++i) { d->sendL[i] = d->sends[i * 2]; d->sendR[i] = d->sends[i * 2 + 1]; }
+        s->sendCompensation.run(n, d->sendL.data(), d->sendR.data());
+      }
       s->compensation.run(n, d->l.data(), d->r.data());
       const float l = s->volume * std::min(1.f, 1 - s->pan),
                   r = s->volume * std::min(1.f, 1 + s->pan);
       for (int i = 0; i < n; ++i) {
         interleaved[(i + offset) * 2] += d->l[i] * l;
         interleaved[(i + offset) * 2 + 1] += d->r[i] * r;
+        if (reverbSend) { reverbSend[(i + offset) * 2] += d->sendL[i] * l; reverbSend[(i + offset) * 2 + 1] += d->sendR[i] * r; }
       }
     }
   }

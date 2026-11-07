@@ -51,6 +51,13 @@ void showPerformanceSettings(Score* score, QWidget* parent, std::function<void()
     keys->addWidget(new QLabel(QObject::tr("临时查看音旁力度"), input));
     auto key=new QKeySequenceEdit(QKeySequence(QSettings().value("performanceEditor/peekKey", "Ctrl+Alt+V").toString()), input);
     key->setObjectName("performancePeekKey"); keys->addWidget(key);
+    auto releaseRow=new QHBoxLayout;
+    releaseRow->addWidget(new QLabel(QObject::tr("松开后继续显示"),input));
+    auto releaseMs=new QSpinBox(input);releaseMs->setObjectName("performancePeekReleaseMs");
+    releaseMs->setRange(0,10000);releaseMs->setSingleStep(100);releaseMs->setSuffix(QObject::tr(" 毫秒"));
+    releaseMs->setSpecialValueText(QObject::tr("立即恢复"));
+    releaseMs->setValue(qBound(0,QSettings().value("performanceEditor/peekReleaseMs",0).toInt(),10000));
+    releaseRow->addWidget(releaseMs);releaseRow->addStretch();keys->addLayout(releaseRow);
     keys->addWidget(new QLabel(QObject::tr("谱面最近音滚轮快捷键"), input));
     auto wheel=new QComboBox(input); wheel->setObjectName("performanceNearestWheelKey");
     wheel->addItem("Alt+Shift", int(Qt::AltModifier|Qt::ShiftModifier));
@@ -144,6 +151,7 @@ void showPerformanceSettings(Score* score, QWidget* parent, std::function<void()
         }
         QSettings settings; settings.setValue("performanceEditor/updateExistingDynamics",includeExisting->isChecked());settings.setValue("performanceEditor/nearestWheelModifiers",wheel->currentData());
         settings.setValue("performanceEditor/peekKey",key->keySequence().toString());
+        settings.setValue("performanceEditor/peekReleaseMs",releaseMs->value());
         if(saved && editor)saved(); dialog->accept();
     });
     if(score)QObject::connect(score,&QObject::destroyed,dialog,&QDialog::reject);

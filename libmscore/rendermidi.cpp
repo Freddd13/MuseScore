@@ -1198,7 +1198,7 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events, const Ev
                               channelPedalEvents.at(channel).pop_back();
                               channelPedalEvents.at(channel).push_back({st + tickOffset + (2 - MScore::pedalEventsMinTicks), false, staff, lastEvent.nominal});
                               }
-                        int a = st + tickOffset + (3 - MScore::pedalEventsMinTicks);
+                        int a = qMax(st + tickOffset + (3 - MScore::pedalEventsMinTicks), 0);
                         channelPedalEvents.at(channel).push_back({a, true, staff, st + tickOffset});
                         }
                   if (s->tick2().ticks() >= tick1 && s->tick2().ticks() <= tick2) {

@@ -59,6 +59,11 @@ void PerformanceEditor::setupUsabilityControls()
       if(!std::isfinite(_dragSensitivity)||_dragSensitivity<.25||_dragSensitivity>4)_dragSensitivity=1;
       _keyboardMode=qBound(0,settings.value("performanceEditor/keyboardMode",1).toInt(),2);
       _peekKey=QKeySequence(settings.value("performanceEditor/peekKey","Ctrl+Alt+V").toString())[0];
+      _peekReleaseMs=qBound(0,settings.value("performanceEditor/peekReleaseMs",0).toInt(),10000);
+      _peekReleaseTimer.setSingleShot(true);
+      connect(&_peekReleaseTimer,&QTimer::timeout,this,[this]{
+            _peekHeld=false;invalidateOverlay();updateSurfaces();syncOverlayTracking();if(_view)_view->update();
+            });
       new PerformancePeekKeys(this);
       connect(&_wheelFeedbackTimer,&QTimer::timeout,this,[this]{
             // Hold the unchanged badge without repainting, then fade it out.
@@ -109,6 +114,7 @@ void PerformanceEditor::setupUsabilityControls()
       connect(operations,&QToolButton::clicked,this,[this]{showPerformanceSettings(_score,this,[this]{
             const auto key=QKeySequence(QSettings().value("performanceEditor/peekKey").toString());
             _peekKey=key.isEmpty()?0:key[0];
+            _peekReleaseMs=qBound(0,QSettings().value("performanceEditor/peekReleaseMs",0).toInt(),10000);
             });});add(operations);
       _wheelButton->setToolTip(tr("开启后指向音符滚轮调力度。Alt+Shift+滚轮临时选择视口内最近的音并细调 1；本次滚动中固定目标。普通 Shift 粗调 8，Ctrl 仍缩放。停转 300 ms 后写入，Esc 取消。"));
       _axis->setToolTip(tr("MIDI 力度：显示最终力度；相对 %：在力度记号和渐强渐弱给出的力度上增减百分比。切换显示不会转换音符的保存方式。"));
@@ -183,13 +189,24 @@ void PerformanceEditor::rebuildVisibleScoreNotes()
       }
 bool PerformanceEditor::peekKeyEvent(QObject* object,QEvent* event)
       {
-      if(event->type()==QEvent::ApplicationDeactivate){if(_peekHeld){_peekHeld=false;invalidateOverlay();updateSurfaces();syncOverlayTracking();}return false;}
+      if(event->type()==QEvent::ApplicationDeactivate){_peekReleaseTimer.stop();if(_peekHeld){_peekHeld=false;invalidateOverlay();updateSurfaces();syncOverlayTracking();}return false;}
       if(event->type()!=QEvent::KeyPress&&event->type()!=QEvent::KeyRelease&&event->type()!=QEvent::ShortcutOverride)return false;
       auto key=static_cast<QKeyEvent*>(event);if(!_peekKey)return false;
       const int mainKey=_peekKey&~int(Qt::KeyboardModifierMask);
+      const int required=_peekKey&int(Qt::KeyboardModifierMask);
+      const bool bindingKey=key->key()==mainKey
+            ||(key->key()==Qt::Key_Control&&(required&Qt::ControlModifier))
+            ||(key->key()==Qt::Key_Alt&&(required&Qt::AltModifier))
+            ||(key->key()==Qt::Key_Meta&&(required&Qt::MetaModifier))
+            ||(key->key()==Qt::Key_Shift&&(required&Qt::ShiftModifier));
+      // Windows/Qt can send a synthetic release between repeated presses.
+      // Only the physical release ends the held display.
+      if(_peekHeld&&key->isAutoRepeat()&&(bindingKey||key->key()==Qt::Key_Shift)){event->accept();return true;}
+      if(_peekHeld&&event->type()==QEvent::KeyRelease&&bindingKey){
+            if(_peekReleaseMs)_peekReleaseTimer.start(_peekReleaseMs);
+            else {_peekHeld=false;invalidateOverlay();updateSurfaces();syncOverlayTracking();if(_view)_view->update();}
+            event->accept();return true;}
       if(_peekHeld&&key->key()==Qt::Key_Shift&&event->type()!=QEvent::ShortcutOverride){_peekAll=event->type()==QEvent::KeyPress;invalidateOverlay();updateSurfaces();if(_view)_view->update();event->accept();return true;}
-      if(_peekHeld&&event->type()==QEvent::KeyRelease&&(key->key()==mainKey||key->key()==Qt::Key_Control||key->key()==Qt::Key_Alt)){
-            _peekHeld=false;invalidateOverlay();updateSurfaces();syncOverlayTracking();event->accept();return true;}
       auto widget=qobject_cast<QWidget*>(object);
       const auto ownsArea = [widget](QWidget* canvas) {
             auto area = canvas ? canvas->parentWidget() : nullptr;
@@ -197,10 +214,10 @@ bool PerformanceEditor::peekKeyEvent(QObject* object,QEvent* event)
             };
       if(!widget||(!(widget==_view)&&!isAncestorOf(widget)&&!ownsArea(_noteCanvas)&&!ownsArea(_canvas))||!_score||!_view||_view->noteEntryMode()||_view->editMode()||_view->fotoMode())return false;
       if(qobject_cast<QLineEdit*>(widget)||qobject_cast<QAbstractSpinBox*>(widget)||qobject_cast<QTextEdit*>(widget)||qobject_cast<QPlainTextEdit*>(widget))return false;
-      const int required=_peekKey&int(Qt::KeyboardModifierMask);
       if(key->key()!=mainKey||(int(key->modifiers())&required)!=required||(int(key->modifiers())&~int(Qt::ShiftModifier))!=(required&~int(Qt::ShiftModifier)))return false;
       if(event->type()==QEvent::KeyRelease)return false;
       event->accept();if(event->type()==QEvent::KeyPress&&!key->isAutoRepeat()){
+            _peekReleaseTimer.stop();
             _peekHeld=true;_peekAll=bool(key->modifiers()&Qt::ShiftModifier);_overlayPointer=_view->mapFromGlobal(QCursor::pos());
             if(_dirty)refresh();syncOverlayTracking();updateSurfaces();_view->update();}return true;
       }

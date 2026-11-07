@@ -29,6 +29,7 @@
 #include "audiodrivers/driver.h"
 
 #include <atomic>
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -198,6 +199,8 @@ class Seq : public QObject, public Sequencer {
       QList<const Note*> markedNotes;     // notes marked as sounding
 
       QHash<int, ActivePitchInfo> _activePitches;
+      std::array<std::atomic<quint64>, 128 * 4> _keyboardPitches{};
+      void clearKeyboardPitches(int channel = -1);
       QList<ActiveNoteEventInfo> _activeNoteEvents;
 
       struct MetronomeCustomSample {

@@ -391,7 +391,7 @@ void PerformanceEditor::setView(ScoreView* view)
       for (auto& boundaries : _pedalBoundaries) boundaries.clear();
       _selectedTempoTick = _tempoPointTick = _unlockedTempo = -1;
       _tempoCurves.clear(); _tempoPlot.clear(); _selectedCurve = nullptr; _curveIndex = -1;
-      _peekHeld=false;_disabledTracks.clear();_visibleScoreNotes.clear();_visibleScoreRect=QRect();_usedPitches.clear();_excludedStaves.clear(); rebuildStaffMenu();
+      _peekReleaseTimer.stop();_peekHeld=false;_disabledTracks.clear();_visibleScoreNotes.clear();_visibleScoreRect=QRect();_usedPitches.clear();_excludedStaves.clear(); rebuildStaffMenu();
       cancelPedalPreview(true);
       _notes.clear(); _segments.clear(); _tempos.clear(); _pedals.clear(); _noteIndex.clear(); _layoutIndex.clear(); _selectedIndices.clear(); _systemIndices.clear();
       _system = nullptr; _hover = -1; _snapshotDegraded = false; _intervals.clear(); _measures.clear(); invalidateVisual();

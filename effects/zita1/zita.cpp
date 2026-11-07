@@ -415,6 +415,11 @@ void ZitaReverb::prepare (int nfram)
 
 void ZitaReverb::process (int nfram, float* inp, float* out)
       {
+      processWithSend(nfram, inp, nullptr, out);
+      }
+
+void ZitaReverb::processWithSend(int nfram, float* inp, const float* send, float* out)
+      {
       float t = 0.f, g = 0.f, x0 = 0.f, x1 = 0.f, x2 = 0.f, x3 = 0.f, x4 = 0.f, x5 = 0.f, x6 = 0.f, x7 = 0.f;
       g = sqrtf (0.125f);
 
@@ -433,8 +438,8 @@ void ZitaReverb::process (int nfram, float* inp, float* out)
             float* q1 = out + 1;
 
             for (int i = 0; i < k * 2; i += 2) {
-                  _vdelay0.write (p0 [i]);
-                  _vdelay1.write (p1 [i]);
+                  _vdelay0.write (send ? send[i] : p0[i]);
+                  _vdelay1.write (send ? send[i + 1] : p1[i]);
 
                   t = 0.3f * _vdelay0.read ();
                   x0 = _diff1 [0].process (_delay [0].read () + t);
@@ -484,6 +489,7 @@ void ZitaReverb::process (int nfram, float* inp, float* out)
                   }
             nfram  -= k;
             _nsamp -= k;
+            if (send) send += k * 2;
             }
       }
 

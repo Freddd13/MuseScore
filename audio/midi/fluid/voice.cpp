@@ -996,7 +996,9 @@ void Voice::update_param(int _gen)
                   // reverb_send = GEN(GEN_REVERBSEND) / 1000.0f;
                   reverb_send = float(channel->cc[EFFECTS_DEPTH1]) / 128.0;
                   // fluid_clip(reverb_send, 0.0, 1.0);
-                  amp_reverb = reverb_send * gain;
+                  // effects() has already applied the PCM-to-float gain and
+                  // stereo pan to vv. Send a fraction of that audible signal.
+                  amp_reverb = reverb_send;
                   break;
 
             case GEN_CHORUSSEND:

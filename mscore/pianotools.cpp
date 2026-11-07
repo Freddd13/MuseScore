@@ -161,6 +161,7 @@ QSize HPiano::sizeHint() const
 
 void HPiano::setPressedPlaybackPitches(QSet<int> pitches)
       {
+      if (_pressedPlaybackPitches == pitches) return;
       _pressedPlaybackPitches = pitches;
       updateAllKeys();
       }
@@ -261,6 +262,7 @@ void HPiano::updateAllKeys()
       {
       for (PianoKeyItem* key : qAsConst(keys)) {
             key->setPressed(_pressedPitches.contains(key->pitch())
+                            || _mousePitches.contains(key->pitch())
                             || _pressedPlaybackPitches.contains(key->pitch()));
             key->update();
             }
@@ -405,6 +407,7 @@ void PianoKeyItem::setType(int val)
 
 void PianoKeyItem::mousePressEvent(QGraphicsSceneMouseEvent*)
       {
+      piano->_mousePitches.insert(_pitch);
       _pressed = true;
       update();
       bool chord = qApp->keyboardModifiers() & Qt::ShiftModifier;
@@ -417,6 +420,7 @@ void PianoKeyItem::mousePressEvent(QGraphicsSceneMouseEvent*)
 
 void PianoKeyItem::mouseReleaseEvent(QGraphicsSceneMouseEvent*)
       {
+      piano->_mousePitches.remove(_pitch);
       _pressed = false;
       update();
       emit piano->keyReleased(_pitch, false, 0);
@@ -544,6 +548,12 @@ void HPiano::wheelEvent(QWheelEvent* event)
 
 bool HPiano::event(QEvent* event)
       {
+      if ((event->type() == QEvent::WindowDeactivate || event->type() == QEvent::Hide) && !_mousePitches.isEmpty()) {
+            const auto pressed = _mousePitches; _mousePitches.clear();
+            if (auto grabbed = scene()->mouseGrabberItem()) grabbed->ungrabMouse();
+            for (int pitch : pressed) emit keyReleased(pitch, false, 0);
+            updateAllKeys();
+            }
       if (event->type() == QEvent::Gesture) {
             return gestureEvent(static_cast<QGestureEvent*>(event));
             }

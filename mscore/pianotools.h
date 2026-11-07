@@ -64,6 +64,7 @@ class HPiano : public QGraphicsView {
       QSet<int> _pressedPlaybackPitches;
       //Pitches pressed due to user interaction
       QSet<int> _pressedPitches;
+      QSet<int> _mousePitches;
       QList<PianoKeyItem*> keys;
       qreal scaleVal;
 
@@ -130,6 +131,7 @@ class PianoTools : public QDockWidget {
       void releasePlaybackPitch(int pitch) { _piano->releasePlaybackPitch(pitch); }
       QSet<int> pressedPlaybackPitches()   { return _piano->pressedPlaybackPitches(); }
       void setPlaybackNotes(QList<const Note*> notes);
+      void setPlaybackPitches(const QSet<int>& pitches) { _piano->setPressedPlaybackPitches(pitches); }
       void clearSelection();
       void changeSelection(const Selection& selection);
       void updateAllKeys() { _piano->updateAllKeys(); }

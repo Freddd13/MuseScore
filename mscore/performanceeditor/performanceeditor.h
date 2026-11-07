@@ -160,6 +160,8 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QSet<int> _disabledTracks, _usedPitches;
       bool _peekHeld=false, _peekAll=false, _closestWheelActive=false;
       int _peekKey=0;
+      int _peekReleaseMs=0;
+      QTimer _peekReleaseTimer;
       struct ScoreNoteRow { QRectF bounds; QVector<int> indices; QVector<QRectF> ink; bool inkReady=false; };
       QVector<ScoreNoteRow> _scoreNoteRows;
       void rebuildScoreNoteRows();
@@ -380,6 +382,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
    signals:
       void scoreBandChanged(bool);
    public:
+      bool temporaryVelocityVisible() const { return _peekHeld; }
       QSize minimumSizeHint() const override;
       explicit PerformanceEditor(QWidget* parent = nullptr);
       ~PerformanceEditor() override;

@@ -38,7 +38,7 @@ public:
   bool loadSoundFonts(const QStringList &) override { return true; }
   std::vector<SoundFontInfo> soundFontsInfo() const override;
   void process(unsigned, float *, float *, float *) override {}
-  void mixMaster(unsigned, float *) override;
+  void mixMaster(unsigned, float *, float * = nullptr) override;
   void processMaster(unsigned, float *) override;
   void setPlaybackContext(qint64, double, double, bool, int, int) override;
   int processingLatency() const override { return _rack.latency(); }

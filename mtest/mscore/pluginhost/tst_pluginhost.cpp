@@ -125,6 +125,13 @@ class TestPluginHost : public QObject {
       Q_OBJECT
       QTemporaryDir _settings;
    private slots:
+      void velocityPeekHold159();
+      void keyboardPointer159();
+      void graceSpacing159();
+      void nativeReverbSend159_data();
+      void nativeReverbSend159();
+      void kawaiReverbSend159();
+      void privateSf2Reverb159();
       void upstreamLoopRequests155_data();
       void upstreamLoopRequests155();
       void upstreamRepeatTempo155_data();
@@ -1602,5 +1609,6 @@ class TestPluginHost : public QObject {
 #include "upstream_155_tests.inc"
 #include "actual_audio_157_tests.inc"
 #include "actual_joint_157_tests.inc"
+#include "playback_159_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

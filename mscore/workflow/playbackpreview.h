@@ -25,6 +25,7 @@ bool playbackPreviewActive(Score*,bool proposed);
 void preparePlaybackPreview(Score*, const QString& key, PlaybackPreviewMaterial original, PlaybackPreviewMaterial proposed);
 QVariantMap startPlaybackPreview(Score*, bool proposed, const QVariantMap& range);
 void stopPlaybackPreview(bool finish = false);
+bool rewindPlaybackPreview(Score*,bool deferStart=false);
 void setPlaybackPreviewRepeat(QObject*,std::function<void()>);
 std::function<void()> playbackPreviewRepeat();
 void setPlaybackPreviewLoop(Score*,bool);

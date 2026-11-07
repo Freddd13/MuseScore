@@ -263,6 +263,7 @@ Chord::Chord(const Chord& c, bool link)
       _gracePlayMode = c._gracePlayMode;
       _graceDurationMode = c._graceDurationMode;
       _graceDuration = c._graceDuration;
+      _graceSpacing = c._graceSpacing; _graceMainSpacing = c._graceMainSpacing;
       _graceIndex     = c._graceIndex;
       _noStem         = c._noStem;
       _playEventType  = c._playEventType;
@@ -1010,6 +1011,8 @@ void Chord::write(XmlWriter& xml) const
             writeProperty(xml, Pid::GRACE_PLAY_MODE);
             writeProperty(xml, Pid::GRACE_DURATION_MODE);
             writeProperty(xml, Pid::GRACE_DURATION);
+            writeProperty(xml, Pid::GRACE_SPACING);
+            writeProperty(xml, Pid::GRACE_MAIN_SPACING);
             }
       for (const Articulation* a : _articulations)
             a->write(xml);
@@ -1097,6 +1100,8 @@ bool Chord::readProperties(XmlReader& e)
       else if (tag == "gracePlayMode") readProperty(tag, e, Pid::GRACE_PLAY_MODE);
       else if (tag == "graceDurationMode") readProperty(tag, e, Pid::GRACE_DURATION_MODE);
       else if (tag == "graceDuration") readProperty(tag, e, Pid::GRACE_DURATION);
+      else if (tag == "graceSpacing") readProperty(tag, e, Pid::GRACE_SPACING);
+      else if (tag == "graceMainSpacing") readProperty(tag, e, Pid::GRACE_MAIN_SPACING);
       else if (ChordRest::readProperties(e))
             ;
       else if (tag == "Stem") {
@@ -1730,7 +1735,7 @@ void Chord::layout2()
                   Chord* g = gna.value(i);
                   xOff -= g->_spaceRw;                  // move to left by grace note left space (incl. grace own width)
                   g->rxpos() = xOff;
-                  xOff -= minNoteDist + g->_spaceLw;    // move to left by grace note right space and inter-grace distance
+                  xOff -= qMax(0.0, minNoteDist + _graceSpacing * spatium()) + g->_spaceLw;    // move to left by grace note right space and inter-grace distance
                   }
             }
       if (_tabDur)
@@ -2129,22 +2134,22 @@ void Chord::layoutPitched()
       _spaceRw = rrr;
 
       if (gnb) {
-              qreal xl = -(_spaceLw + minNoteDistance) - chordX;
+              qreal xl = -(_spaceLw + qMax(0.0, minNoteDistance + _graceMainSpacing * spatium())) - chordX;
               for (int i = gnb-1; i >= 0; --i) {
                     Chord* g = graceNotesBefore.value(i);
                     xl -= g->_spaceRw/* * 1.2*/;
                     g->setPos(xl, 0);
-                    xl -= g->_spaceLw + minNoteDistance * graceMag;
+                    xl -= g->_spaceLw + qMax(0.0, minNoteDistance * graceMag + _graceSpacing * spatium());
                     }
               if (-xl > _spaceLw)
                     _spaceLw = -xl;
               }
        if (!gna.empty()) {
-            qreal xr = _spaceRw;
+            qreal xr = _spaceRw + _graceMainSpacing * spatium();
             int n = gna.size();
             for (int i = 0; i <= n - 1; i++) {
                   Chord* g = gna.value(i);
-                  xr += g->_spaceLw + g->_spaceRw + minNoteDistance * graceMag;
+                  xr += g->_spaceLw + g->_spaceRw + qMax(0.0, minNoteDistance * graceMag + _graceSpacing * spatium());
                   }
            if (xr > _spaceRw)
                  _spaceRw = xr;
@@ -2500,12 +2505,12 @@ void Chord::layoutTablature()
       QVector<Chord*> graceNotesBefore = Chord::graceNotesBefore();
       int nb = graceNotesBefore.size();
       if (nb) {
-              qreal xl = -(_spaceLw + minNoteDistance);
+              qreal xl = -(_spaceLw + qMax(0.0, minNoteDistance + _graceMainSpacing * spatium()));
               for (int i = nb-1; i >= 0; --i) {
                     Chord* c = graceNotesBefore.value(i);
                     xl -= c->_spaceRw/* * 1.2*/;
                     c->setPos(xl, 0);
-                    xl -= c->_spaceLw + minNoteDistance * graceMag;
+                    xl -= c->_spaceLw + qMax(0.0, minNoteDistance * graceMag + _graceSpacing * spatium());
                     }
               if (-xl > _spaceLw)
                     _spaceLw = -xl;
@@ -2525,12 +2530,12 @@ void Chord::layoutTablature()
                  case TDuration::DurationType::V_16TH:    fc = 1.2; break;
                  default: fc = 1;
                  }
-           qreal xr = fc * (_spaceRw + minNoteDistance);
+           qreal xr = fc * (_spaceRw + minNoteDistance) + _graceMainSpacing * spatium();
            for (int i = 0; i <= na - 1; i++) {
                  Chord* c = gna.value(i);
                  xr += c->_spaceLw * (i == 0 ? 1.3 : 1);
                  c->setPos(xr, 0);
-                 xr += c->_spaceRw + minNoteDistance * graceMag;
+                 xr += c->_spaceRw + qMax(0.0, minNoteDistance * graceMag + _graceSpacing * spatium());
                  }
            if (xr > _spaceRw)
                  _spaceRw = xr;
@@ -2844,7 +2849,7 @@ void Chord::localSpatiumChanged(qreal oldValue, qreal newValue)
 Element* Chord::propertyDelegate(Pid pid)
       {
       if (isGrace() && parent() && parent()->isChord()
-          && (pid == Pid::GRACE_PLAY_MODE || pid == Pid::GRACE_DURATION_MODE || pid == Pid::GRACE_DURATION)) return parent();
+          && (pid == Pid::GRACE_PLAY_MODE || pid == Pid::GRACE_DURATION_MODE || pid == Pid::GRACE_DURATION || pid == Pid::GRACE_SPACING || pid == Pid::GRACE_MAIN_SPACING)) return parent();
       return ChordRest::propertyDelegate(pid);
       }
 
@@ -2858,11 +2863,13 @@ int Chord::graceAppearanceValue(NoteType type, const TDuration& duration)
 QVariant Chord::getProperty(Pid propertyId) const
       {
       if (isGrace() && parent() && parent()->isChord()
-          && (propertyId == Pid::GRACE_PLAY_MODE || propertyId == Pid::GRACE_DURATION_MODE || propertyId == Pid::GRACE_DURATION)) return parent()->getProperty(propertyId);
+          && (propertyId == Pid::GRACE_PLAY_MODE || propertyId == Pid::GRACE_DURATION_MODE || propertyId == Pid::GRACE_DURATION || propertyId == Pid::GRACE_SPACING || propertyId == Pid::GRACE_MAIN_SPACING)) return parent()->getProperty(propertyId);
       switch (propertyId) {
             case Pid::GRACE_PLAY_MODE: return _gracePlayMode;
             case Pid::GRACE_DURATION_MODE: return _graceDurationMode;
             case Pid::GRACE_DURATION: return _graceDuration;
+            case Pid::GRACE_SPACING: return _graceSpacing;
+            case Pid::GRACE_MAIN_SPACING: return _graceMainSpacing;
             case Pid::GRACE_APPEARANCE: return isGrace() ? graceAppearanceValue(noteType(), durationType()) : 0;
             case Pid::NO_STEM:        return noStem();
             case Pid::STEM_DIRECTION: return QVariant::fromValue<Direction>(stemDirection());
@@ -2881,6 +2888,8 @@ QVariant Chord::propertyDefault(Pid propertyId) const
             case Pid::GRACE_PLAY_MODE: return 0;
             case Pid::GRACE_DURATION_MODE: return 0;
             case Pid::GRACE_DURATION: return 65.0;
+            case Pid::GRACE_SPACING:
+            case Pid::GRACE_MAIN_SPACING: return 0.0;
             case Pid::GRACE_APPEARANCE: return isGrace() ? graceAppearanceValue(NoteType::APPOGGIATURA, TDuration(TDuration::DurationType::V_EIGHTH)) : 0;
             case Pid::NO_STEM:        return false;
             case Pid::STEM_DIRECTION: return QVariant::fromValue<Direction>(Direction::AUTO);
@@ -2902,6 +2911,10 @@ bool Chord::setProperty(Pid propertyId, const QVariant& v)
             case Pid::GRACE_DURATION:
                   if (!std::isfinite(v.toDouble())) return false;
                   _graceDuration = qBound(1.0, v.toDouble(), 1000.0); break;
+            case Pid::GRACE_SPACING:
+            case Pid::GRACE_MAIN_SPACING:
+                  if (!std::isfinite(v.toDouble())) return false;
+                  (propertyId == Pid::GRACE_SPACING ? _graceSpacing : _graceMainSpacing) = qBound(-2.0, v.toDouble(), 8.0); break;
             case Pid::GRACE_APPEARANCE: {
                   if (!isGrace()) return false;
                   int value = v.toInt();

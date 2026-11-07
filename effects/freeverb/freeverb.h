@@ -92,6 +92,8 @@ class Freeverb : public Effect {
    public:
       Freeverb();
       virtual void process(int n, float* in, float* out);
+      bool usesReverbSend() const override { return true; }
+      void processWithSend(int n, float* in, const float* send, float* out) override;
 
       virtual void setNValue(int idx, double value);
       virtual double nvalue(int idx) const;

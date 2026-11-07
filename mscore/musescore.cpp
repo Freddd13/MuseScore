@@ -7263,8 +7263,8 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
             editInstrumentList();
       else if (cmd == "rewind") {
             if (cs) {
-                  Fraction tick = loop() ? cs->loopInTick() : Fraction(0,1);
-                  seq->seek(tick.ticks());
+                  seq->rewindStart();
+                  Fraction tick = cs->playPos();
                   if (cv) {
                         Measure* m = cs->tick2measureMM(tick);
                         if (m)

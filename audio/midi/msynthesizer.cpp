@@ -299,24 +299,21 @@ void MasterSynthesizer::process(unsigned n, float* p)
             }
       // avoid overflow
       if (n > MAX_BUFFERSIZE / 2) { lock1 = false; return; }
+      memset(effect1Buffer, 0, n * sizeof(float) * 2);
+      memset(effect2Buffer, 0, n * sizeof(float) * 2);
       for (Synthesizer* s : _synthesizer) {
             if (s->active())
                   s->process(n, p, effect1Buffer, effect2Buffer);
             }
 
-      for (Synthesizer* s : _synthesizer) s->mixMaster(n, p);
+      for (Synthesizer* s : _synthesizer) s->mixMaster(n, p, effect1Buffer);
 
-      if (_effect[0] && _effect[1]) {
-            memset(effect1Buffer, 0, n * sizeof(float) * 2);
-            _effect[0]->process(n, p, effect1Buffer);
-            _effect[1]->process(n, effect1Buffer, p);
-            }
-      else if (_effect[0] || _effect[1]) {
-            memcpy(effect1Buffer, p, n * sizeof(float) * 2);
-            if (_effect[0])
-                  _effect[0]->process(n, effect1Buffer, p);
-            else
-                  _effect[1]->process(n, effect1Buffer, p);
+      bool sendUsed = false;
+      for (Effect* effect : _effect) if (effect) {
+            const bool useSend = effect->usesReverbSend() && !sendUsed;
+            effect->processWithSend(n, p, useSend ? effect1Buffer : nullptr, effectScratch);
+            memcpy(p, effectScratch, n * sizeof(float) * 2);
+            sendUsed = sendUsed || useSend;
             }
       for (Synthesizer* s : _synthesizer) s->processMaster(n, p);
       float g = _gain * _boost;

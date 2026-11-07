@@ -32,7 +32,7 @@ public:
   void midi(int channel, int type, int first, int second, float tuning = 0);
   void silence(int channel = -1, bool immediate = false);
   void bindChannels(const QVector<int> &banks);
-  void mix(int count, float *interleaved, const Clock &);
+  void mix(int count, float *interleaved, const Clock &, float *reverbSend = nullptr);
   void master(int count, float *interleaved, const Clock &);
   // A control-thread lease prevents audio access during state/editor
   // operations.

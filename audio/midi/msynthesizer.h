@@ -63,6 +63,7 @@ class MasterSynthesizer : public QObject {
 
       float effect1Buffer[MAX_BUFFERSIZE];
       float effect2Buffer[MAX_BUFFERSIZE];
+      float effectScratch[MAX_BUFFERSIZE];
       int indexOfEffect(int ab, const QString& name);
       float convertGainToDecibels(float gain) const;
 

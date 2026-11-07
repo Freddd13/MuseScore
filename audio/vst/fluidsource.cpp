@@ -12,7 +12,8 @@ namespace {
 class FluidSource final : public Plugin {
   Descriptor identity;
   std::unique_ptr<FluidS::Fluid> synth;
-  std::vector<float> audio, fx1, fx2;
+  std::vector<float> audio, fx1, fx2, sendLevels;
+  float reverbSend = 0;
   int maximum = 0, bank = 0, program = 0;
 
 public:
@@ -33,6 +34,7 @@ public:
     audio.resize(block * 2);
     fx1.resize(block * 2);
     fx2.resize(block * 2);
+    sendLevels.resize(block);
     synth->play(PlayEvent(ME_CONTROLLER, 0, CTRL_HBANK, (bank >> 7) & 127));
     synth->play(PlayEvent(ME_CONTROLLER, 0, CTRL_LBANK, bank & 127));
     synth->play(PlayEvent(ME_CONTROLLER, 0, CTRL_PROGRAM, program));
@@ -54,6 +56,7 @@ public:
       for (int i = from; i < to; ++i) {
         l[i] = audio[(i - from) * 2];
         r[i] = audio[(i - from) * 2 + 1];
+        sendLevels[i] = reverbSend;
       }
     };
     for (int i = 0; i < used; ++i) {
@@ -63,6 +66,10 @@ public:
       PlayEvent event(events[i].status & 0xf0, 0, events[i].first,
                       events[i].second);
       event.setTuning(events[i].tuning);
+      if (event.type() == ME_CONTROLLER && event.controller() == CTRL_REVERB_SEND)
+        reverbSend = qBound(0, event.value(), 127) / 128.f;
+      if (event.type() == ME_CONTROLLER && event.controller() == 121)
+        reverbSend = 0;
       synth->play(event);
     }
     render(at, count);
@@ -87,6 +94,13 @@ public:
   void setParameter(quint32, double) override {}
   QVariantList parameters() const override { return {}; }
   bool takeChanges() override { return false; }
+  void addReverbSend(int n, const float* l, const float* r, float* out,
+                     float leftGain, float rightGain) const override {
+    for (int i = 0; i < n; ++i) {
+      out[i * 2] += l[i] * leftGain * sendLevels[i];
+      out[i * 2 + 1] += r[i] * rightGain * sendLevels[i];
+    }
+  }
 };
 } // namespace
 std::unique_ptr<Plugin> createFluidSource(const Descriptor &descriptor,

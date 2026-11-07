@@ -32,9 +32,9 @@ std::vector<SoundFontInfo> VstSynth::soundFontsInfo() const {
   }
   return result;
 }
-void VstSynth::mixMaster(unsigned count, float *p) {
+void VstSynth::mixMaster(unsigned count, float *p, float *reverbSend) {
   if (enabled && hasGraph.load(std::memory_order_acquire))
-    _rack.mix(int(count), p, _clock);
+    _rack.mix(int(count), p, _clock, reverbSend);
 }
 void VstSynth::processMaster(unsigned count, float *p) {
   if (enabled && hasGraph.load(std::memory_order_acquire))

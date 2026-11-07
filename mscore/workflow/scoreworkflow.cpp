@@ -176,6 +176,7 @@ QVariantMap ScoreObserver::navigateWorkflow(const QVariantMap& range,bool auditi
   if(utick<0||endUtick<0)return {{"error","requested repeat occurrence/range unavailable"}};
   int fromUtick=qMax(0,utick-(tick-context));int actualContext=repeats.utick2tick(fromUtick);
   workflowContext()->finishPlaybackSession();seq->synchronizeStoppedGui();auto session=new QObject(this);workflowContext()->setPlaybackSession(session);
+  workflowContext()->setPlaybackRewind(session,[owner=QPointer<ScoreObserver>(this),range]{if(owner)owner->navigateWorkflow(range,true);});
   auto loop=getAction("loop");bool oldLoop=loop&&loop->isChecked();
   if(loop)loop->setChecked(false);
   auto touched=std::make_shared<bool>(false);
@@ -193,8 +194,8 @@ QVariantMap ScoreObserver::navigateWorkflow(const QVariantMap& range,bool auditi
   connect(seq,&Seq::stopped,session,[session]{session->deleteLater();});
   seq->setScoreView(view);
   if(auto play=getAction("play")){QSignalBlocker block(play);play->setChecked(true);}
-  seq->startAtUTick(fromUtick);
-  return {{"ok",true},{"start",actualContext},{"end",end},{"occurrence",occurrence},{"fromUtick",fromUtick},{"untilUtick",endUtick},{"stopPrecision","GUI heartbeat"}};
+  seq->startAtUTick(utick,fromUtick);
+  return {{"ok",true},{"start",tick},{"contextStart",actualContext},{"end",end},{"occurrence",occurrence},{"fromUtick",utick},{"untilUtick",endUtick},{"stopPrecision","GUI heartbeat"}};
  }
  return {{"ok",true},{"start",tick}};
 }

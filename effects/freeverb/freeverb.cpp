@@ -143,6 +143,11 @@ Freeverb::Freeverb()
 
 void Freeverb::process(int n, float* in, float* out)
       {
+      processWithSend(n, in, nullptr, out);
+      }
+
+void Freeverb::processWithSend(int n, float* in, const float* send, float* out)
+      {
       if (parameterChanged) {
             roomsize  = newRoomsize;
             damp      = newDamp;
@@ -163,7 +168,7 @@ void Freeverb::process(int n, float* in, float* out)
             float outL = 0.0;
             float outR = 0.0;
 
-            float input = ((*lp + *rp) * sendLevel) + DC_OFFSET;
+            float input = ((send ? send[k * 2] + send[k * 2 + 1] : *lp + *rp) * sendLevel) + DC_OFFSET;
 
             for (int i = 0; i < numcombs; i++) {      // Accumulate comb filters in parallel
                   outL += combL[i].process(input);
