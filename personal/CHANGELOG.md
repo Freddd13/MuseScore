@@ -5,7 +5,7 @@
 - N5：谱面轨增加默认关闭的“演奏调整”，拖主体移动实际起音与松键，拖两端改按键时间；细轮廓保留记谱位置。
 - 逐次发声偏移接入原生播放、查询与MIDI导出；保留自动NoteEvent、延音链和发音符号。音符数据支持链接、复制、保存重开、恢复和原生撤销。
 - 显示分批读取真实演奏事件，建立音高区间索引，平移缩放复用；播放和跨窗口结束手势归还鼠标。
-- 修正从分谱选择外部MIDI音源时的总谱谱表对应。操作及检查见PERFORMANCE_TIMING_161_GUIDE.md、PERFORMANCE_TIMING_161_CHECKS.md，发布定位personal-v0.161.0。
+- 修正从分谱选择外部MIDI音源时的总谱谱表对应。操作及检查见PERFORMANCE_TIMING_161_GUIDE.md、PERFORMANCE_TIMING_161_CHECKS.md，发布定位personal-v0.161.0；实施提交f52909cc70bb913d0dd6cdf4f35988db9d0e6174，已安装并更新246份说明。
 
 ## 0.160.0 — 2026-11-07
 
