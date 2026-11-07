@@ -43,6 +43,8 @@ class RollWritingBar final : public QWidget {
   std::shared_ptr<std::atomic_bool> _cancel;
   std::shared_ptr<MasterScore> _preview;
   QVariantMap _state, _data, _built;
+  QVariantList _importRows;
+  int _importTrack=-1;
   QVariantList _rows, _before, _moveBase, _originalRows, _pendingLocations,
       _measures, _tuplets;
   QSet<QString> _selected, _beforeSelected;
@@ -104,6 +106,7 @@ public:
   RollWritingBar(PerformanceEditor *, QToolButton *, QWidget *parent);
   ~RollWritingBar() override;
   void shutdown();
+  void openMidiDraft(const QVariantList&,int track,bool selectedScope);
   bool handle(QEvent *);
   void paint(QPainter &, const QRectF &);
   bool dimsOriginal(int tick, int track) const;

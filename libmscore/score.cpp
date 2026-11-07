@@ -728,7 +728,7 @@ bool Score::dirty() const
 
 ScoreContentState Score::state() const
       {
-      return ScoreContentState(this, undoStack()->state());
+      return ScoreContentState(this, undoStack()->contentState());
       }
 
 //---------------------------------------------------------

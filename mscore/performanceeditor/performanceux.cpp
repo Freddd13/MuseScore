@@ -1,5 +1,8 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performanceeditor.h"
+#ifdef SCRIPT_INTERFACE
+#include "miditrackpane.h"
+#endif
 #include "mscore/workflow/toolicons.h"
 #include "editorsettings.h"
 #include "mscore/scoreview.h"
@@ -153,6 +156,9 @@ void PerformanceEditor::showTrackFilter()
 void PerformanceEditor::rebuildPitchRows()
       {
       _usedPitches.clear();for(const auto& n:_notes)if(n.enabled)_usedPitches.insert(n.pitch);
+#ifdef SCRIPT_INTERFACE
+      if(_midiTracks)_usedPitches.unite(_midiTracks->visiblePitches());
+#endif
       const auto old=_viewport.pitchRows;_viewport.pitchRows.clear();if(_keyboardMode==2){for(int p:_usedPitches)_viewport.pitchRows.append(p);std::sort(_viewport.pitchRows.begin(),_viewport.pitchRows.end());}
       if(old!=_viewport.pitchRows)invalidateVisual();
       }

@@ -5,6 +5,7 @@
 #ifdef SCRIPT_INTERFACE
 #include "spectrumpane.h"
 #include "rollwriting.h"
+#include "miditrackpane.h"
 #include "rhythmpane.h"
 #endif
 #include "libmscore/select.h"
@@ -30,7 +31,8 @@ void PerformanceEditor::updateSurfaces()
       { if(property("kumoEditorClosing").toBool())return;
 #ifdef SCRIPT_INTERFACE
       if(_spectrum)_spectrum->viewChanged();
-      if(_rollWriting)_rollWriting->contextChanged();
+      if(_midiTracks)_midiTracks->contextChanged();
+      if(_rollWriting&&(!_midiTracks||!_midiTracks->active()))_rollWriting->contextChanged();
       if(auto rhythm=findChild<RhythmPane*>())rhythm->contextChanged();
 #endif
       updateDetachedRulers(this);
@@ -58,7 +60,7 @@ void PerformanceEditor::surfaceResized(PerformanceSurface surface)
 #endif
       const double units=qMax(10,width-PerformanceViewport::gutter-PerformanceViewport::rightMargin)/_viewport.pixelsPerQuarter;
       const int span=qMax(1,comparisonTimeActive()?_score->tempomap()->time2tick(_score->tempomap()->tick2time(_scroll->value())+units*.5)-_scroll->value():qRound(units*DIVISION));
-      _scroll->setPageStep(span); _scroll->setRange(0, qMax(0, (comparisonTimeActive()?qMax(_endTick,_comparisonEnd):_endTick) - span));
+      _scroll->setPageStep(span); _scroll->setRange(0, qMax(0, timelineEndTick() - span));
       invalidateVisual();
       }
 void PerformanceEditor::buildGeometry()
@@ -404,6 +406,9 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
                         const QSizeF size(valueWidth,painter.fontMetrics().height()+2);
                         values.append({i,QPointF(geometry.rect.right(),geometry.rect.center().y()),QRectF(geometry.rect.right()+3,geometry.rect.center().y()-size.height()/2,size.width(),size.height()),value});
                         }
+#ifdef SCRIPT_INTERFACE
+                  if(_midiTracks&&!_midiTracks->scoreVisible())continue;
+#endif
                   if (!geometry.rect.adjusted(-3, -3, 3, 3).intersects(clip)) continue;
                   if (_viewport.pixelsPerQuarter < 8 && !note.selected && i != _hover && !_playingNotes.contains(i) && !_pending.contains(note.note)) {
                         const quint64 cell = (quint64(qMax(0, int(qMax(area.left(), geometry.rect.left())) / 2)) << 8) | note.pitch;
@@ -439,7 +444,8 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
                   painter.fillRect(box,c[PerformanceAppearance::Background]);painter.setPen(c[PerformanceAppearance::Text]);painter.drawText(box,Qt::AlignCenter,value.text);
                   }
 #ifdef SCRIPT_INTERFACE
-            if(_rollWriting)_rollWriting->paint(painter,area);
+            if(_rollWriting&&(!_midiTracks||!_midiTracks->active()))_rollWriting->paint(painter,area);
+            if(_midiTracks)_midiTracks->paintNotes(painter,area);
 #endif
             if (_marquee) {
                   painter.setBrush(QColor(130, 190, 230, 35)); painter.setPen(QPen(c[PerformanceAppearance::Selection], 1, Qt::DashLine)); painter.drawRect(QRectF(_marqueeStart, _marqueeEnd).normalized());
@@ -451,8 +457,15 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
                   }
             }
       else if (surface == PerformanceSurface::Parameter) {
-            _lane = laneRect(); paintLane(painter, _lane, false);
-            if (_parameter->currentIndex() == 0) {
+            _lane = laneRect();
+#ifdef SCRIPT_INTERFACE
+            const bool midiValues=_midiTracks&&_midiTracks->paintValues(painter,_lane);
+            if(!midiValues)
+#else
+            const bool midiValues=false;
+#endif
+            paintLane(painter, _lane, false);
+            if (_parameter->currentIndex() == 0&&!midiValues) {
                   const int from = tickForX(clip.left() - 8, false), until = tickForX(clip.right() + 8, false);
                   auto first = std::lower_bound(_notes.cbegin(), _notes.cend(), from, [](const NoteInfo& n, int t) { return n.tick < t; });
                   QSet<QPair<QPair<int, int>, int>> outlines;
@@ -470,7 +483,12 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
                         }
                   }
             }
+#ifdef SCRIPT_INTERFACE
+      const bool midiCursor=_midiTracks&&_midiTracks->paintPlayhead(painter,widget);
+      const int tick=midiCursor?-1:(_seeking?_seekTick:_playTick);
+#else
       const int tick = _seeking ? _seekTick : _playTick;
+#endif
       if (tick >= 0) { painter.setPen(QPen(c[_seeking ? PerformanceAppearance::Preview : PerformanceAppearance::Playhead], 1.5)); const double x = xForTick(comparisonPlayTick(tick), false); painter.drawLine(QPointF(x, surface == PerformanceSurface::Parameter ? laneRect().top() : 0), QPointF(x, surface == PerformanceSurface::Parameter ? laneRect().bottom() : widget->height())); }
       painter.restore();
       if (_dragging && _parameter->currentIndex() != 2 && ((surface == PerformanceSurface::Parameter && !_noteGesture) || (surface == PerformanceSurface::Notes && _noteGesture))) {

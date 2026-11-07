@@ -7,6 +7,7 @@
 #include <QVector>
 #include <QSet>
 #include <QMap>
+#include <functional>
 #include "libmscore/score.h"
 #include "realtimematcher.h"
 
@@ -41,6 +42,8 @@ class MidiCaptureSession : public QObject {
       qint64 _onsetWindow=80000000;
       int _cursorTick=-1;
       bool _restoreInputCursor=false;
+      std::function<void(const NPlayEvent&)> _monitorSink;
+      void sendMonitor(const NPlayEvent&);
       int _count=0, _groups=0, _lastPitch=-1, _lastVelocity=0, _monitorChannel=0;
       int _generation=0;
       double _duration=0;
@@ -62,6 +65,7 @@ public:
       QVariantMap completed() const {return _completed;}
       Q_INVOKABLE QVariantMap inputState() const;
       Q_INVOKABLE void setInputEnabled(bool enabled);
+      void setMonitorSink(std::function<void(const NPlayEvent&)> sink){_monitorSink=std::move(sink);}
       Q_INVOKABLE QVariantMap start(const QVariantMap& options);
       // C++ test harnesses may supply a synthetic MIDI source without a sound device.
       QVariantMap begin(const QVariantMap& options, bool requireDevice);

@@ -132,6 +132,15 @@ class TestPluginHost : public QObject {
       void nativeReverbSend159();
       void kawaiReverbSend159();
       void privateSf2Reverb159();
+      void midiTracksPersistence160();
+      void midiTracksClock160();
+      void midiTracksLongData160();
+      void midiTracksEditor160();
+      void midiTracksAlignment160();
+      void midiTracksPlayback160();
+      void midiTracksUndoState160();
+      void midiTracksIndependentSounds160_data();
+      void midiTracksIndependentSounds160();
       void upstreamLoopRequests155_data();
       void upstreamLoopRequests155();
       void upstreamRepeatTempo155_data();
@@ -1610,5 +1619,6 @@ class TestPluginHost : public QObject {
 #include "actual_audio_157_tests.inc"
 #include "actual_joint_157_tests.inc"
 #include "playback_159_tests.inc"
+#include "miditracks_160_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

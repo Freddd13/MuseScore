@@ -2,5 +2,10 @@
 #pragma once
 #include <QVariantMap>
 #include <QString>
+#include <QByteArray>
 #include <atomic>
-namespace Ms { QVariantMap readPerformanceMidi(const QString&,const std::atomic_bool&); }
+namespace Ms
+{
+QVariantMap readPerformanceMidi(const QString&, const std::atomic_bool&);
+QVariantMap readPerformanceMidiData(const QByteArray&, const std::atomic_bool&);
+} // namespace Ms

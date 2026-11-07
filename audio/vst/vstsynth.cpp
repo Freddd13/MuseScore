@@ -134,7 +134,7 @@ bool VstSynth::setConfiguration(const QVariantMap &value) {
     _rack.load(playbackConfiguration(value), _sampleRate, &_problems);
   auto oldPatches = patches;
   patches.clear();
-  const auto instruments = enabled ? _rack.instruments() : value["slots"].toList();
+  const auto instruments = enabled ? _rack.instruments(true) : value["slots"].toList();
   for (const auto &v : instruments) {
     const auto c = v.toMap();
     const int id = c["id"].toInt();
@@ -144,7 +144,7 @@ bool VstSynth::setConfiguration(const QVariantMap &value) {
     originalBank[id] = original["bank"].toInt();
     originalProgram[id] = qBound(0, original["program"].toInt(), 127);
     available[id] = enabled && c["available"].toBool();
-    if (!c["commonPiano"].toString().isEmpty())
+    if (!c["commonPiano"].toString().isEmpty() || c.contains("referenceMidi"))
       continue;
     MidiPatch *patch = nullptr;
     for (int i = 0; i < oldPatches.size(); ++i)
@@ -169,6 +169,12 @@ bool VstSynth::setConfiguration(const QVariantMap &value) {
                  std::memory_order_release);
   return true;
 }
+bool VstSynth::setReferenceSources(const QVariantList& sources) {
+  if(VstHost::sameConfiguration({{"slots",referenceSources}},{{"slots",sources}}))return true;
+  const auto current=configuration(true);
+  referenceSources=sources;
+  return setConfiguration(current);
+}
 QVariantMap VstSynth::configuration(bool snapshot) {
   if (enabled && snapshot) {
     const auto actual = runtimeConfiguration(true);
@@ -186,11 +192,11 @@ QVariantMap VstSynth::configuration(bool snapshot) {
   return config;
 }
 QVariantMap VstSynth::playbackConfiguration(const QVariantMap& value) const {
-  if (pianoInstances.isEmpty() && suppressedSlots.isEmpty()) return value;
+  if (pianoInstances.isEmpty() && suppressedSlots.isEmpty() && referenceSources.isEmpty()) return value;
   auto result=value; QVariantList rows;
   for (const auto &row : value["slots"].toList())
     if (!suppressedSlots.contains(row.toMap()["id"].toInt())) rows.append(row);
-  rows.append(pianoInstances); result["slots"]=rows;
+  rows.append(pianoInstances); rows.append(referenceSources); result["slots"]=rows;
   return result;
 }
 QVariantMap VstSynth::runtimeConfiguration(bool snapshot) {

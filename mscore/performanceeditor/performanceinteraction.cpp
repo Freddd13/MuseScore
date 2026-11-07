@@ -3,6 +3,7 @@
 #include "mscore/workflow/toolicons.h"
 #ifdef SCRIPT_INTERFACE
 #include "rollwriting.h"
+#include "miditrackpane.h"
 #endif
 #include "../workflow/editorareas.h"
 #include "../workflow/workflowcontext.h"
@@ -342,7 +343,11 @@ void PerformanceEditor::updatePlayhead()
       const bool recording=workflowContext()->captureCurrent(_score)&&workflowContext()->capture().value("recording").toBool();
       const int tick = recording ? workflowContext()->capture().value("matchedTick",-1).toInt() : playing ? _score->repeatList().utick2tick(seq->getCurTick()) : _score->playPos().ticks();
       const int previous = _playTick; _playTick = tick;
-      if (_following && (playing||recording) && tick>=0 && !_dragging && !_marquee && !_seeking) {
+      bool midiCursor=false;
+#ifdef SCRIPT_INTERFACE
+      midiCursor=_midiTracks&&_midiTracks->ownsPlaybackCursor();
+#endif
+      if (!midiCursor && _following && (playing||recording) && tick>=0 && !_dragging && !_marquee && !_seeking) {
             _followButton->setText(tr("跟随播放"));
             const int span = _scroll->pageStep();
             const int shown=comparisonPlayTick(tick);
@@ -422,7 +427,8 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
       const bool notes = object == _noteCanvas, ruler = object == _ruler || object->property("performanceExtraRuler").toBool(), parameter = object == _canvas;
       if (!notes && !ruler && !parameter) return false;
 #ifdef SCRIPT_INTERFACE
-      if(notes&&_rollWriting&&_rollWriting->handle(event))return true;
+      if(_midiTracks&&_midiTracks->handle(event,parameter,ruler))return true;
+      if(notes&&_rollWriting&&(!_midiTracks||!_midiTracks->active())&&_rollWriting->handle(event))return true;
 #endif
       if (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) {
             auto key = static_cast<QKeyEvent*>(event);
@@ -461,7 +467,11 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
       if (event->type() == QEvent::Leave && !_dragging && !_marquee) updateHover(-1);
       if (event->type() == QEvent::Wheel) {
             auto wheel = static_cast<QWheelEvent*>(event);
-            if (!ruler && !(parameter&&comparisonActive()) && wheelVelocity(wheel, notes)) return true;
+            bool midiActive=false;
+#ifdef SCRIPT_INTERFACE
+            midiActive=_midiTracks&&_midiTracks->active();
+#endif
+            if (!midiActive && !ruler && !(parameter&&comparisonActive()) && wheelVelocity(wheel, notes)) return true;
             finishWheel(); pauseFollow(); cancelSurfaceGesture(); cancelGesture();
             const double factor = wheel->angleDelta().y() > 0 ? 1.2 : 1 / 1.2;
             if (wheel->modifiers() & Qt::ControlModifier) {

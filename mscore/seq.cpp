@@ -34,6 +34,8 @@
 #include "workflow/referencebus.h"
 #ifdef SCRIPT_INTERFACE
 #include "workflow/midicapture.h"
+#include "workflow/miditransport.h"
+#include "workflow/midisources.h"
 #endif
 #include "synthcontrol.h"
 
@@ -79,6 +81,15 @@
 namespace Ms {
 
 Seq* seq;
+
+static void processWorkflowSynth(MasterSynthesizer* synth,unsigned frames,float* output,qint64 position,bool playing)
+      {
+#ifdef SCRIPT_INTERFACE
+      processMidiTrackPlayback(synth,frames,output,position,playing);
+#else
+      Q_UNUSED(position);Q_UNUSED(playing);synth->process(frames,output);
+#endif
+      }
 
 static const int guiRefresh   = 10;       // Hz
 static const int peakHoldTime = 1400;     // msec
@@ -272,6 +283,9 @@ Seq::~Seq()
 
 void Seq::setScoreView(ScoreView* v)
       {
+#ifdef SCRIPT_INTERFACE
+      if(cv!=v)stopMidiTrackPlayback();
+#endif
       if (oggInit) {
             ov_clear(&vf);
             oggInit = false;
@@ -280,6 +294,9 @@ void Seq::setScoreView(ScoreView* v)
             unmarkNotes();
             stopWait();
             }
+#ifdef SCRIPT_INTERFACE
+        if(cv!=v)clearMidiTrackSounds(_synti);
+#endif
       cv = v;
       if (cs)
             disconnect(cs, SIGNAL(playlistChanged()), this, SLOT(setPlaylistChanged()));
@@ -440,6 +457,9 @@ void Seq::startAtUTick(int utick, int context, int anticipatedStart) {
 
 void Seq::start()
       {
+#ifdef SCRIPT_INTERFACE
+      if(workflowContext()->midiTrackSession())workflowContext()->finishPlaybackSession();
+#endif
       if (!_driver) {
             qDebug("No driver!");
             return;
@@ -503,6 +523,10 @@ void Seq::start()
 
 void Seq::stop()
       {
+#ifdef SCRIPT_INTERFACE
+      if(workflowContext()->midiTrackSession())workflowContext()->finishPlaybackSession();
+      stopMidiTrackPlayback();
+#endif
       const bool seqStopped = (state == Transport::STOP);
       const bool driverStopped = !_driver || _driver->getState() == Transport::STOP;
       if (seqStopped && driverStopped)
@@ -1368,7 +1392,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                   if (n) {
                         if (cs->playMode() == PlayMode::SYNTHESIZER) {
                               metronome(n, p, inCountIn);
-                              _synti->process(n, p);
+                              processWorkflowSynth(_synti,n,p,*pPlayFrame,!inCountIn);
 
                               // Mix after synthesizer processing so the
                               // independent click bypasses Master Volume
@@ -1440,9 +1464,9 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
             if (framesRemain) {
                   if (cs->playMode() == PlayMode::SYNTHESIZER) {
                         const unsigned before=referenceStopFrame<0?framesRemain:unsigned(qBound(0,referenceStopFrame-*pPlayFrame,int(framesRemain)));
-                        if(before){metronome(before,p,inCountIn);_synti->process(before,p);}
+                        if(before){metronome(before,p,inCountIn);processWorkflowSynth(_synti,before,p,*pPlayFrame,!inCountIn);}
                         if(referenceStopFrame>=0&&*pPlayFrame+int(before)>=referenceStopFrame){markReferenceEndReached(referenceStopTick);stopNotes(-1,true);stopTransport();}
-                        if(before<framesRemain)_synti->process(framesRemain-before,p+before*2);
+                        if(before<framesRemain)processWorkflowSynth(_synti,framesRemain-before,p+before*2,*pPlayFrame+before,state==Transport::PLAY&&!inCountIn);
 
                         independentMetronome(framesRemain, p);
 
@@ -1505,7 +1529,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                   }
             if (framesRemain) {
                   metronome(framesRemain, p, true);
-                  _synti->process(framesRemain, p);
+                  processWorkflowSynth(_synti,framesRemain,p,playFrame,false);
 
                   independentMetronome(framesRemain, p);
                   }

@@ -48,6 +48,7 @@ public:
       void clearCapture(QObject* owner){if(_captureOwner!=owner)return;_captureOwner.clear();_captureScore.clear();_capture.clear();emit captureChanged();}
       void finishPlaybackSession(){auto old=_playbackSession.data();_playbackSession.clear();_playbackRewind={};delete old;}
       void setPlaybackSession(QObject* session){if(_playbackSession!=session){finishPlaybackSession();_playbackSession=session;}}
+      bool midiTrackSession()const{return _playbackSession&&_playbackSession->property("kumoMidiTrackSession").toBool();}
       void setPlaybackRewind(QObject* owner,std::function<void()> callback){if(_playbackSession==owner)_playbackRewind=std::move(callback);}
       bool rewindPlaybackSession(){if(!_playbackSession||!_playbackRewind)return false;auto callback=_playbackRewind;callback();return true;}
       void setAudition(const QVariantMap& value){_audition=value;emit auditionChanged();}
@@ -63,6 +64,7 @@ signals:
       void changed();
       void activeScoreChanged();
       void scoreFileChanged(Score* score);
+      void midiTracksChanged(Score* score);
       void feedbackChanged();
       void auditionChanged();
       void captureChanged();

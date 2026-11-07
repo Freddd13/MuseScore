@@ -20,6 +20,7 @@ class VstSynth final : public Synthesizer {
   std::array<int, 16384> originalBank{}, originalProgram{};
   std::array<bool, 16384> available{};
   QVariantList pianoInstances;
+  QVariantList referenceSources;
   QSet<int> suppressedSlots;
   std::array<std::atomic<int>,256> pianoBanks;
   QVector<int> configuredPianoBanks = QVector<int>(256,0);
@@ -52,6 +53,7 @@ public:
   SynthesizerGroup state() const override;
   bool setState(const SynthesizerGroup &) override;
   bool setConfiguration(const QVariantMap &);
+  bool setReferenceSources(const QVariantList&);
   QVariantMap configuration(bool snapshot = true);
   QVariantMap runtimeConfiguration(bool snapshot = true);
   void rememberPianoSnapshot(const QVariantMap& value) {

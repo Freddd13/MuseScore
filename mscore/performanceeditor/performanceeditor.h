@@ -38,6 +38,7 @@ class TextLine;
 class PerformanceCanvas;
 class SpectrumPane;
 class RollWritingBar;
+class MidiTrackPane;
 class PerformanceEditor : public QWidget, public MuseScoreView {
       Q_OBJECT
       friend class PerformanceCanvas;
@@ -45,6 +46,8 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       friend class SpectrumPane;
       friend class RollWritingBar;
       RollWritingBar* _rollWriting=nullptr;
+      friend class MidiTrackPane;
+      MidiTrackPane* _midiTracks=nullptr;
       friend void installSpectrumPane(PerformanceEditor*,QSplitter*);
       SpectrumPane* _spectrum=nullptr;
       QWidget* _workflowPanel=nullptr;
@@ -386,6 +389,8 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QSize minimumSizeHint() const override;
       explicit PerformanceEditor(QWidget* parent = nullptr);
       ~PerformanceEditor() override;
+      void showMidiTracks(bool);
+      int timelineEndTick() const;
       void setView(ScoreView*);
       void selectionChanged();
       static bool nearestWheelShortcut(const QWheelEvent*);

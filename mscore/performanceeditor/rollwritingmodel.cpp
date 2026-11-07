@@ -4,6 +4,9 @@
 #include "libmscore/note.h"
 #include "libmscore/pitchspelling.h"
 #include "libmscore/staff.h"
+#include "libmscore/instrument.h"
+#include "libmscore/part.h"
+#include "libmscore/utils.h"
 #include "libmscore/undo.h"
 #include "mscore/musescore.h"
 #include "mscore/plugin/api/score.h"
@@ -45,6 +48,16 @@ namespace Ms {
 namespace {
 QString freshId() { return QUuid::createUuid().toString(QUuid::WithoutBraces); }
 } // namespace
+void RollWritingBar::openMidiDraft(const QVariantList& rows,int track,bool selectedScope) {
+  if(rows.isEmpty()){setMessage(tr("这条轨道还没有可写入的音符。"));return;}
+  _mode->setCurrentIndex(1);_importRows=rows;_importTrack=track;
+  if(!rollWritingAction()->isChecked())rollWritingAction()->setChecked(true);
+  else setWritingEnabled(true);
+  if(!selectedScope) {
+    int from=INT_MAX,until=0;for(const auto& value:rows){const auto n=value.toMap();from=qMin(from,n.value("start").toInt());until=qMax(until,n.value("end").toInt());}
+    readScope({{"start",from},{"end",qMin(until,_editor->_endTick)},{"firstTrack",track},{"endTrack",track+1}});
+  }
+}
 void RollWritingBar::readScope(const QVariantMap &requested) {
   if (requested.isEmpty())
     _pendingLocations.clear();
@@ -298,6 +311,26 @@ void RollWritingBar::finishRead() {
     }
   }
   _pendingLocations.clear();
+  if(!_importRows.isEmpty()) {
+    const int target=_importTrack;
+    QVariantList incoming;const int total=_importRows.size();
+    for(const auto& value:_importRows){
+      auto n=value.toMap();const int start=n.value("start").toInt();
+      if(start<scope.value("start").toInt()||start>=scope.value("end").toInt())continue;
+      n["end"]=qMin(n.value("end").toInt(),scope.value("end").toInt());n["rawEnd"]=n["end"];n["track"]=target;n["id"]=freshId();n["edited"]=true;n["new"]=true;n["velocityEdited"]=true;n["followDynamics"]=false;
+      auto staff=_score->staff(target/4);auto transpose=staff->part()->instrument(Fraction::fromTicks(start))->transpose();auto key=staff->key(Fraction::fromTicks(start));
+      if(!_score->styleB(Sid::concertPitch)&&!transpose.isZero())key=transposeKey(key,transpose);
+      const int tpc=pitch2tpc(n.value("pitch").toInt(),key,Prefer::NEAREST);n["tpc1"]=tpc;transpose.flip();n["tpc2"]=transpose.isZero()?tpc:transposeTpc(tpc,transpose,true);
+      incoming.append(n);
+    }
+    _importRows.clear();
+    if(incoming.isEmpty())setMessage(tr("这段范围内没有MIDI音符。回到轨道，检查对齐或改用“MIDI覆盖的小节”。"));
+    else {
+      _rows.erase(std::remove_if(_rows.begin(),_rows.end(),[target](const QVariant& value){return value.toMap().value("track").toInt()==target;}),_rows.end());_rows.append(incoming);
+      _track->setCurrentIndex(qMax(0,_track->findData(target)));QSignalBlocker precision(_precision),follow(_followDynamics);_precision->setChecked(true);_followDynamics->setChecked(false);_hasChanges=true;_selected.clear();
+      setMessage(tr("%1个MIDI音符已放入草稿，%2个在范围之外。检查网格与声部，试听后点“使用草稿”。").arg(incoming.size()).arg(total-incoming.size()));
+    }
+  }
   selectSourceNotes();
   _indexDirty = true;
   _ready = true;

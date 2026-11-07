@@ -8,6 +8,7 @@
 #include "mscore/workflow/builtinpanels.h"
 #include "spectrumpane.h"
 #include "rollwriting.h"
+#include "miditrackpane.h"
 #endif
 #include <QJsonDocument>
 #include "markvelocity.h"
@@ -255,6 +256,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       connect(_pitchScroll, &QScrollBar::valueChanged, this, [this](int value) { pauseFollow(); _viewport.topPitch = _viewport.pitchAtIndex(_viewport.rowMaximum() - value / 100.0); invalidateVisual(); });
 #ifdef SCRIPT_INTERFACE
       _rollWriting=new RollWritingBar(this,writeToggle,noteArea);noteLayout->insertWidget(1,_rollWriting);
+      _midiTracks=new MidiTrackPane(this,noteArea,noteLayout);
 #endif
       _splitter->addWidget(noteArea);
       auto parameterArea = new QWidget(_splitter); parameterArea->setObjectName("performanceParametersArea"); auto areaLayout = new QVBoxLayout(parameterArea); areaLayout->setContentsMargins(0, 0, 0, 0); areaLayout->setSpacing(0);
@@ -267,6 +269,9 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
             if (rangeKind() == 3) return; pauseFollow(); const auto limit = PerformanceViewport::limits(rangeKind()); auto& range = _viewport.ranges[rangeKind()]; const double span = range.maximum - range.minimum;
             range.maximum = limit.maximum - (limit.maximum - limit.minimum - span) * position / 10000.0; range.minimum = range.maximum - span; invalidateVisual();
             });
+#ifdef SCRIPT_INTERFACE
+      _midiTracks->attachParameterArea(parameterArea);
+#endif
       _splitter->addWidget(parameterArea); _splitter->setStretchFactor(0, 1); _splitter->setStretchFactor(1, 1); layout->addWidget(_splitter, 1);
 
       connect(_splitter, &QSplitter::splitterMoved, this, [this] { QSettings().setValue("performanceEditor/splitter", _splitter->saveState()); });
@@ -353,6 +358,22 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       applyAppearance(); status();
       }
 
+void PerformanceEditor::showMidiTracks(bool on)
+      {
+      if(on&&!personalFeaturesEnabled())return;
+#ifdef SCRIPT_INTERFACE
+      if(on)openEditorArea(this,"performanceNotesArea");
+      if(_midiTracks)_midiTracks->setWorkspaceVisible(on);
+#endif
+      }
+int PerformanceEditor::timelineEndTick() const
+      {
+      int end=comparisonTimeActive()?qMax(_endTick,_comparisonEnd):_endTick;
+#ifdef SCRIPT_INTERFACE
+      if(_midiTracks)end=qMax(end,_midiTracks->endTick());
+#endif
+      return end;
+      }
 void PerformanceEditor::resizeEvent(QResizeEvent* event)
       {
       QWidget::resizeEvent(event);
@@ -364,6 +385,7 @@ PerformanceEditor::~PerformanceEditor()
       setProperty("kumoEditorClosing",true);
       cancelPedalPreview(true);
 #ifdef SCRIPT_INTERFACE
+      if(_midiTracks)_midiTracks->shutdown();
       if(_rollWriting)_rollWriting->shutdown();
 #endif
       releaseEditorAreas(this);
@@ -909,7 +931,7 @@ void PerformanceEditor::fit(bool selection)
 #else
       Q_UNUSED(previousScale);
 #endif
-      _scroll->setRange(0, qMax(0, (comparisonTimeActive()?qMax(_endTick,_comparisonEnd):_endTick) - (until - from))); _scroll->setPageStep(until - from); _scroll->setValue(from);
+      _scroll->setRange(0, qMax(0, timelineEndTick() - (until - from))); _scroll->setPageStep(until - from); _scroll->setValue(from);
       pauseFollow(); invalidateVisual();
       }
 
@@ -956,7 +978,7 @@ int PerformanceEditor::tickForX(double x, bool onScore) const
       if (!onScore) {
             const double units=(x-PerformanceViewport::gutter)/_viewport.pixelsPerQuarter;
             const int tick=comparisonTimeActive()?_score->tempomap()->time2tick(_score->tempomap()->tick2time(_scroll->value())+units*.5):qRound(units*DIVISION)+_scroll->value();
-            return qBound(0,tick,comparisonTimeActive()?qMax(_endTick,_comparisonEnd):_endTick);
+            return qBound(0,tick,timelineEndTick());
             }
       if (_systemSegments.isEmpty()) return 0;
       const double logical = _view->matrix().inverted().map(QPointF(x, 0)).x();

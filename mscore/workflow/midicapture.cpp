@@ -141,28 +141,34 @@ QVariantMap MidiCaptureSession::begin(const QVariantMap& options, bool requireDe
       _captureView=mscore?mscore->currentScoreView():nullptr;_restoreInputCursor=_captureView&&_captureView->noteEntryMode();
       _timer.start(); emit changed(); return {{"ok",true}};
       }
+void MidiCaptureSession::sendMonitor(const NPlayEvent& event) {
+      if(_monitorSink){_monitorSink(event);return;}
+      if(!seq)return;
+      if(event.type()==ME_NOTEON||event.type()==ME_NOTEOFF)seq->startNote(_monitorChannel,event.pitch(),event.type()==ME_NOTEOFF?0:event.velo(),0.);
+      else if(event.type()==ME_CONTROLLER)seq->setController(_monitorChannel,event.controller(),event.value());
+      }
 void MidiCaptureSession::monitor(const NPlayEvent& event) {
       if (!_monitor || !seq) return;
       if (event.type()==ME_NOTEON || event.type()==ME_NOTEOFF) {
             bool down=event.type()==ME_NOTEON && event.velo()>0;
             bool held=false; for(auto key=_keys.cbegin();key!=_keys.cend();++key) if(key.key()%128==event.pitch()&&key.value()>0){held=true;break;}
-            if (down || !held) seq->startNote(_monitorChannel,event.pitch(),down?event.velo():0,0.);
+            if (down || !held) sendMonitor(NPlayEvent(ME_NOTEON,_monitorChannel,event.pitch(),down?event.velo():0));
             if (mscore) if(auto piano=mscore->findChild<PianoTools*>()) { if(down)piano->pressPitch(event.pitch());else if(!held)piano->releasePitch(event.pitch()); }
             }
       else if(event.type()==ME_CONTROLLER && (event.controller()==CTRL_SUSTAIN || event.controller()==CTRL_RESET_ALL_CTRL)) {
             int value=0; for(auto pedal:_pedals)value=std::max(value,pedal);
-            seq->setController(_monitorChannel,CTRL_SUSTAIN,value);
+            sendMonitor(NPlayEvent(ME_CONTROLLER,_monitorChannel,CTRL_SUSTAIN,value));
             }
       else if(event.type()==ME_CONTROLLER && (event.controller()==CTRL_ALL_SOUNDS_OFF || event.controller()==CTRL_ALL_NOTES_OFF)) {
-            seq->stopNotes(_monitorChannel);
+            if(_monitorSink)sendMonitor(NPlayEvent(ME_CONTROLLER,_monitorChannel,CTRL_ALL_NOTES_OFF,0));else seq->stopNotes(_monitorChannel);
             if(mscore)if(auto piano=mscore->findChild<PianoTools*>())for(int pitch=0;pitch<128;++pitch)piano->releasePitch(pitch);
             }
       }
 void MidiCaptureSession::releaseMonitor() {
       if(_monitor && seq) {
             QSet<int> pitches;for(auto key=_keys.cbegin();key!=_keys.cend();++key)pitches.insert(key.key()%128);
-            for(int pitch:pitches) {seq->startNote(_monitorChannel,pitch,0,0.);if(mscore)if(auto piano=mscore->findChild<PianoTools*>())piano->releasePitch(pitch);}
-            seq->setController(_monitorChannel,CTRL_SUSTAIN,0);
+            for(int pitch:pitches) {sendMonitor(NPlayEvent(ME_NOTEON,_monitorChannel,pitch,0));if(mscore)if(auto piano=mscore->findChild<PianoTools*>())piano->releasePitch(pitch);}
+            sendMonitor(NPlayEvent(ME_CONTROLLER,_monitorChannel,CTRL_SUSTAIN,0));
             }
       _monitor=false;
       }

@@ -581,9 +581,10 @@ QVariantMap Rack::state() {
   resume();
   return value;
 }
-QVariantList Rack::instruments() const {
+QVariantList Rack::instruments(bool includeReference) const {
   QVariantList result;
   for (const auto &s : d->slots) {
+    if(!includeReference && s->config.contains("referenceMidi"))continue;
     auto v = s->config;
     v["available"] = bool(s->source.processor);
     v["latency"] = s->latency();

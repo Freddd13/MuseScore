@@ -20,7 +20,7 @@ public:
   void releaseCommonPianos();
   QVariantList retainedSessions() const;
   QVariantMap state();
-  QVariantList instruments() const;
+  QVariantList instruments(bool includeReference = false) const;
   QVariantList effects(int slot) const;
   Plugin *plugin(int slot, int effect = -1) const;
   bool takeChanges();

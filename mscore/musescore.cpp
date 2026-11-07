@@ -18,6 +18,7 @@
 #include "workflow/systemlocks.h"
 #ifdef SCRIPT_INTERFACE
 #include "performanceeditor/rollwriting.h"
+#include "performanceeditor/miditrackpane.h"
 #endif
 #include "workflow/aiconnection.h"
 
@@ -2906,6 +2907,7 @@ void MuseScore::updateMenus()
       addSystemLockActions(menuView);
 #ifdef SCRIPT_INTERFACE
       if (!menuView->actions().contains(rollWritingAction())) menuView->addAction(rollWritingAction());
+      if (!menuView->actions().contains(midiTracksAction())) menuView->addAction(midiTracksAction());
 #endif
       addVstPanelAction(menuView);
       addWorkspaceViews(menuView);

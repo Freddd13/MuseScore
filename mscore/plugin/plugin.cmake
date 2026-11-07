@@ -1,4 +1,9 @@
 
+if(MSVC)
+    set_property(SOURCE ${PROJECT_SOURCE_DIR}/mscore/workflow/miditracks.cpp APPEND
+        PROPERTY INCLUDE_DIRECTORIES ${PROJECT_SOURCE_DIR}/dependencies/include/zlib)
+endif()
+
 set (PLUGIN_API_SRC
     ${PROJECT_SOURCE_DIR}/mscore/workflow/paneldock.h
     ${PROJECT_SOURCE_DIR}/mscore/workflow/paneldock.cpp
@@ -15,6 +20,12 @@ set (PLUGIN_API_SRC
     ${PROJECT_SOURCE_DIR}/mscore/workflow/midicapture.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/midiinput.h
     ${PROJECT_SOURCE_DIR}/mscore/workflow/midiinput.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/miditracks.h
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/miditracks.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/miditransport.h
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/miditransport.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/midisources.h
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/midisources.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/scoreworkflow.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/workflowexpression.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/analysisidentity.cpp

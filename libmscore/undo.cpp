@@ -263,6 +263,7 @@ void UndoStack::clearAfterLoad()
       remove(0);
       stateList.clear();stateList.push_back(0);
       curIdx=0;cleanState=0;nextState=1;
+      _contentState.store(0,std::memory_order_release);
       }
 
 //---------------------------------------------------------
@@ -276,6 +277,7 @@ void UndoStack::beginMacro(Score* score)
             return;
             }
       curCmd = new UndoMacro(score);
+      curCmd->setContentStates(contentState(),contentState());
       }
 
 //---------------------------------------------------------
@@ -343,6 +345,7 @@ void UndoStack::remove(int idx)
             delete cmd;
             }
       curIdx = idx;
+      _contentState.store(curIdx?list[curIdx-1]->contentAfter():0,std::memory_order_release);
       }
 
 //---------------------------------------------------------
@@ -413,8 +416,10 @@ void UndoStack::endMacro(bool rollback)
                   delete cmd;
                   }
             list.append(curCmd);
+            curCmd->setContentStates(curCmd->contentBefore(),curCmd->affectsScoreContent()?nextState:curCmd->contentBefore());
             stateList.push_back(nextState++);
             ++curIdx;
+            _contentState.store(curCmd->contentAfter(),std::memory_order_release);
             }
       curCmd = 0;
       }
@@ -463,6 +468,7 @@ void UndoStack::undo(EditData* ed)
             --curIdx;
             Q_ASSERT(curIdx >= 0);
             list[curIdx]->undo(ed);
+            _contentState.store(list[curIdx]->contentBefore(),std::memory_order_release);
             }
       }
 
@@ -473,8 +479,10 @@ void UndoStack::undo(EditData* ed)
 void UndoStack::redo(EditData* ed)
       {
       qCDebug(undoRedo) << "===";
-      if (canRedo())
+      if (canRedo()) {
             list[curIdx++]->redo(ed);
+            _contentState.store(list[curIdx-1]->contentAfter(),std::memory_order_release);
+            }
       }
 
 //---------------------------------------------------------
@@ -562,6 +570,7 @@ void UndoMacro::redo(EditData* ed)
 void UndoMacro::append(UndoMacro&& other)
       {
       appendChildren(&other);
+      _contentAfter=other._contentAfter;
       if (score == other.score) {
             redoInputState = std::move(other.redoInputState);
             redoSelectionInfo = std::move(other.redoSelectionInfo);

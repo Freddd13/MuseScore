@@ -38,6 +38,7 @@
 #include "timesig.h"
 
 #include "audio/midi/midipatch.h"
+#include <atomic>
 
 Q_DECLARE_LOGGING_CATEGORY(undoRedo);
 
@@ -118,6 +119,7 @@ class UndoCommand {
       void unwind();
       const QList<UndoCommand*>& commands() const { return childList; }
       virtual void cleanup(bool undo);
+      virtual bool affectsScoreContent() const { return true; }
 // #ifndef QT_NO_DEBUG
       virtual const char* name() const { return "UndoCommand"; }
 // #endif
@@ -135,6 +137,7 @@ class UndoCommand {
 //---------------------------------------------------------
 
 class UndoMacro : public UndoCommand {
+      int _contentBefore=0,_contentAfter=0;
       struct SelectionInfo {
             std::vector<Element*> elements;
             Fraction tickStart;
@@ -161,6 +164,13 @@ class UndoMacro : public UndoCommand {
       virtual void redo(EditData*) override;
       bool empty() const { return childCount() == 0; }
       void append(UndoMacro&& other);
+      void setContentStates(int before,int after){_contentBefore=before;_contentAfter=after;}
+      int contentBefore()const{return _contentBefore;}
+      int contentAfter()const{return _contentAfter;}
+      bool affectsScoreContent() const override {
+            for(auto command:commands())if(command->affectsScoreContent())return true;
+            return false;
+            }
 
       static bool canRecordSelectedElement(const Element* e);
 
@@ -178,6 +188,7 @@ class UndoStack {
       int nextState;
       int cleanState;
       int curIdx;
+      std::atomic<int> _contentState{0};
 
       void remove(int idx);
 
@@ -196,6 +207,7 @@ class UndoStack {
       bool canUndo() const          { return curIdx > 0;           }
       bool canRedo() const          { return curIdx < list.size(); }
       int state() const             { return stateList[curIdx];    }
+      int contentState() const {return _contentState.load(std::memory_order_acquire);}
       bool isClean() const          { return cleanState == state();     }
       int getCurIdx() const         { return curIdx; }
       bool empty() const            { return !canUndo() && !canRedo();  }
