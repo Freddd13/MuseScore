@@ -6,7 +6,7 @@
 - 乐谱或原曲声音、已有片段与内部对齐点、反复和停顿共用冻结的时间资料；预览与导出共用逐帧绘图。
 - H.264 MP4和透明ProRes4444 MOV；离线声音、有界供帧、取消和目标文件替换，附带核对版本的FFmpeg及许可。
 - 视频设置与摆放通过原生撤销随MSCZ保存；窗口可关闭、悬浮、全屏，工作视图分别恢复显隐。
-- 说明与检查见SCORE_VIDEO_164_GUIDE.md、SCORE_VIDEO_164_CHECKS.md。发布定位personal-v0.164.0。
+- 说明与检查见SCORE_VIDEO_164_GUIDE.md、SCORE_VIDEO_164_CHECKS.md。发布定位personal-v0.164.0；实施提交9481afb8c4c9f83a306be541b3d2fc870ed86c03，已安装并更新252份说明。
 
 ## 0.163.0 — 2026-11-07
 
