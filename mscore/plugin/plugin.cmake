@@ -9,6 +9,8 @@ set (PLUGIN_API_SRC
     ${PROJECT_SOURCE_DIR}/mscore/workflow/paneldock.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/referencefactory.h
     ${PROJECT_SOURCE_DIR}/mscore/workflow/referencefactory.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/referencecontrols.cpp
+    ${PROJECT_SOURCE_DIR}/mscore/workflow/referencecontrols.h
     ${PROJECT_SOURCE_DIR}/mscore/workflow/referenceworkflow.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/regionalpanel.cpp
     ${PROJECT_SOURCE_DIR}/mscore/workflow/regionalpanel.h

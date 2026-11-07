@@ -25,6 +25,7 @@ class ReferenceMediaProject : public QObject {
       Q_PROPERTY(QVariantMap diagnostics READ diagnostics NOTIFY changed)
       Q_PROPERTY(QVariantMap playbackPlan READ playbackPlan NOTIFY changed)
       Q_PROPERTY(bool scoreControls READ scoreControls WRITE setScoreControls NOTIFY scoreControlsChanged)
+      Q_PROPERTY(QString scoreRangeDisplay READ scoreRangeDisplay WRITE setScoreRangeDisplay NOTIFY scoreControlsChanged)
       Q_PROPERTY(QString activeAssociation READ activeAssociation WRITE setActiveAssociation NOTIFY activeAssociationChanged)
       Q_PROPERTY(bool audioStopsScore READ audioStopsScore WRITE setAudioStopsScore NOTIFY changed)
       Q_PROPERTY(bool scoreStopsAudio READ scoreStopsAudio WRITE setScoreStopsAudio NOTIFY changed)
@@ -60,6 +61,8 @@ public:
       QVariantMap diagnostics()const;
       QVariantMap playbackPlan()const{return property("workflowPlaybackPlan").toMap();}
       Q_INVOKABLE double sourcePosition(const QString& path,const QString& trackId=QString())const;
+      QString scoreRangeDisplay()const;
+      void setScoreRangeDisplay(const QString&);
       bool scoreControls()const;
       void setScoreControls(bool);
       QString activeAssociation()const{return _activeAssociation;}

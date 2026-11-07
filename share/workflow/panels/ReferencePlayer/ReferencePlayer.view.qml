@@ -613,6 +613,8 @@ MuseScore {
         Desk.DeskButton {objectName:"referenceRangeTool";iconName:"range";text:"选段";checkable:true;checked:!root.handTool&&root.selectingRange;onClicked:{root.handTool=false;root.selectingRange=true}}
         Desk.DeskButton {iconName:"hand";text:"手形平移";checkable:true;checked:root.handTool;onClicked:root.handTool=true;ToolTip.visible:hovered;ToolTip.text:"拖动波形平移时间轴；鼠标中键也可以平移"}
         Desk.DeskSwitch {objectName:"referenceScoreControls";text:"谱面播放按钮";checked:root.audioProject&&root.audioProject.scoreControls;onClicked:if(root.audioProject)root.audioProject.scoreControls=checked}
+        Desk.DeskComboBox {objectName:"referenceScoreRangeDisplay";width:140;model:["范围：悬停时显示","范围：始终显示","范围：播放时显示"];currentIndex:root.audioProject?({hover:0,always:1,playing:2}[root.audioProject.scoreRangeDisplay]||0):0;onActivated:if(root.audioProject)root.audioProject.scoreRangeDisplay=["hover","always","playing"][currentIndex]}
+        Desk.DeskButton {objectName:"referenceRestoreScoreControls";iconName:"reset";text:"恢复谱面按钮";enabled:root.observer&&!root.observer.playing;onClicked:{var result=root.observer.setWorkflowData("referenceControls",{schema:1});root.status=result.error||"谱面按钮已恢复显示和自动位置；Ctrl+Z可撤销。"}}
         Desk.DeskSwitch {text:"联动编辑器定位";font.pixelSize:11;checked:root.linkEditor;onClicked:{root.linkEditor=checked;root.linkFromScore()}}
     }
     Flow {width:parent.width;spacing:5

@@ -161,6 +161,8 @@ ReferenceMediaProject::~ReferenceMediaProject(){stop();_output.reset();_pool.wai
 double ReferenceMediaProject::volume()const{return _session?_session->master.load(std::memory_order_relaxed):_volume;}
 void ReferenceMediaProject::setVolume(double value){if(!std::isfinite(value))return;value=qBound(0.,value,1.);_volume=value;if(_session)_session->master.store(float(value),std::memory_order_relaxed);emit volumeChanged();}
 double ReferenceMediaProject::position()const{if(!_session)return 0;auto s=_session;auto frame=s->outputFrames.load();if(s->loop&&s->total>0)frame%=s->total;return double(frame)*1000/s->rate;}
+QString ReferenceMediaProject::scoreRangeDisplay()const{return QSettings().value("workflow/reference/scoreRangeDisplay","hover").toString();}
+void ReferenceMediaProject::setScoreRangeDisplay(const QString& value){if(value!="always"&&value!="hover"&&value!="playing")return;if(value==scoreRangeDisplay())return;QSettings().setValue("workflow/reference/scoreRangeDisplay",value);emit scoreControlsChanged();}
 bool ReferenceMediaProject::scoreControls()const{return QSettings().value("workflow/reference/scoreControls",false).toBool();}
 void ReferenceMediaProject::setScoreControls(bool value){if(scoreControls()==value)return;QSettings().setValue("workflow/reference/scoreControls",value);emit scoreControlsChanged();}
 bool ReferenceMediaProject::audioStopsScore()const{return QSettings().value("workflow/reference/stopScoreOnAudio",false).toBool();}
