@@ -39,6 +39,7 @@ class PerformanceCanvas;
 class SpectrumPane;
 class RollWritingBar;
 class MidiTrackPane;
+class TimingEditor;
 class PerformanceEditor : public QWidget, public MuseScoreView {
       Q_OBJECT
       friend class PerformanceCanvas;
@@ -46,6 +47,8 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       friend class SpectrumPane;
       friend class RollWritingBar;
       RollWritingBar* _rollWriting=nullptr;
+      friend class TimingEditor;
+      TimingEditor* _timingEditor=nullptr;
       friend class MidiTrackPane;
       MidiTrackPane* _midiTracks=nullptr;
       friend void installSpectrumPane(PerformanceEditor*,QSplitter*);

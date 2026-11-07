@@ -1,5 +1,8 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2, see LICENCE.GPL.
 #include "performanceeditor.h"
+#ifdef SCRIPT_INTERFACE
+#include "timingeditor.h"
+#endif
 #include "mscore/scoreview.h"
 #include "mscore/workflow/featuregate.h"
 #include <QApplication>
@@ -121,6 +124,9 @@ void PerformanceEditor::repaintWheelTarget(int index)
       {
       if (index < 0 || index >= _notes.size()) return;
       if(_view)_view->update(_view->matrix().mapRect(_notes[index].bounds).adjusted(-6,-6,6,6).toAlignedRect());
+#ifdef SCRIPT_INTERFACE
+      if(_timingEditor)_timingEditor->repaintNote(index);
+#endif
       if(_noteCanvas->isVisible())buildGeometry();
       if(_noteCanvas->isVisible())for (const auto& geometry : _noteGeometry) if (geometry.index == index) _noteCanvas->update(geometry.rect.adjusted(-3, -24, 3, 3).toAlignedRect());
       const int x = qRound(xForTick(_notes[index].tick, false)); _canvas->update(QRect(x - 9, 0, 19, _canvas->height()));

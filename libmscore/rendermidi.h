@@ -66,6 +66,7 @@ class MidiRenderer {
       Score* score{nullptr};
       bool needUpdate = true;
       int minChunkSize = 0;
+      int _timingLookahead = 0;
       QSet<const Part*> _retainedPedalParts;
 
    public:
@@ -139,6 +140,7 @@ class MidiRenderer {
       void setMinChunkSize(int sizeMeasures) { minChunkSize = sizeMeasures; needUpdate = true; }
 
       Chunk getChunkAt(int utick);
+      int timingLookahead() { updateState(); return _timingLookahead; }
 
       static const int ARTICULATION_CONV_FACTOR { 100000 };
       };

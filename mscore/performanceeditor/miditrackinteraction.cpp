@@ -9,6 +9,7 @@
 #include "mscore/workflow/midicapture.h"
 #include "mscore/workflow/referencefactory.h"
 #include "libmscore/tempo.h"
+#include "libmscore/staff.h"
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -145,13 +146,16 @@ void MidiTrackPane::updateMode()
     _source->addItem(tr("SF2钢琴"), QVariantMap{{"kind", "sf2"}});
     if (_editor->_score)
         for (int staff = 0; staff < _editor->_score->nstaves(); ++staff)
-            _source->addItem(tr("谱表%1的音源").arg(staff + 1),
-                             QVariantMap{{"kind", "score-piano"}, {"staff", staff}});
+            {
+                auto origin=_editor->_score->staff(staff);
+                int masterStaff=staff;
+                for(auto linked:origin->staffList())if(linked->score()==_editor->_score->masterScore()){masterStaff=linked->idx();break;}
+                _source->addItem(tr("谱表%1的音源").arg(staff + 1),
+                                QVariantMap{{"kind", "score-piano"}, {"staff", masterStaff}});
+            }
     const auto source = track.value("source").toMap();
-    _source->setCurrentIndex(
-        source.value("kind").toString() == "score-piano"
-            ? qBound(1, source.value("staff").toInt() + 1, _source->count() - 1)
-            : 0);
+    const int sourceIndex=_source->findData(source);
+    _source->setCurrentIndex(sourceIndex<0?0:sourceIndex);
     _source->setToolTip(tr("SF2钢琴使用当前音色库；选择谱表音源时，VST与效果使用独立播放副本。"));
     {
         QSignalBlocker number(_volume), slider(_volumeSlider);

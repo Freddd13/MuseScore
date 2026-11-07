@@ -6,6 +6,7 @@
 #include "spectrumpane.h"
 #include "rollwriting.h"
 #include "miditrackpane.h"
+#include "timingeditor.h"
 #include "rhythmpane.h"
 #endif
 #include "libmscore/select.h"
@@ -32,6 +33,7 @@ void PerformanceEditor::updateSurfaces()
 #ifdef SCRIPT_INTERFACE
       if(_spectrum)_spectrum->viewChanged();
       if(_midiTracks)_midiTracks->contextChanged();
+      if(_timingEditor)_timingEditor->contextChanged();
       if(_rollWriting&&(!_midiTracks||!_midiTracks->active()))_rollWriting->contextChanged();
       if(auto rhythm=findChild<RhythmPane*>())rhythm->contextChanged();
 #endif
@@ -60,7 +62,11 @@ void PerformanceEditor::surfaceResized(PerformanceSurface surface)
 #endif
       const double units=qMax(10,width-PerformanceViewport::gutter-PerformanceViewport::rightMargin)/_viewport.pixelsPerQuarter;
       const int span=qMax(1,comparisonTimeActive()?_score->tempomap()->time2tick(_score->tempomap()->tick2time(_scroll->value())+units*.5)-_scroll->value():qRound(units*DIVISION));
-      _scroll->setPageStep(span); _scroll->setRange(0, qMax(0, timelineEndTick() - span));
+      int earliest=0;
+#ifdef SCRIPT_INTERFACE
+      if(_timingEditor)earliest=_timingEditor->startTick();
+#endif
+      _scroll->setPageStep(span); _scroll->setRange(earliest, qMax(earliest, timelineEndTick() - span));
       invalidateVisual();
       }
 void PerformanceEditor::buildGeometry()
@@ -418,11 +424,22 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
 #ifdef SCRIPT_INTERFACE
                   if(_rollWriting&&_rollWriting->dimsOriginal(note.tick,note.track))color.setAlpha(38);
 #endif
-                  painter.setBrush(color); painter.setPen(note.selected ? QPen(c[PerformanceAppearance::Selection], 1.5) : QPen(color.darker(120), 1)); painter.drawRect(geometry.rect);
+#ifdef SCRIPT_INTERFACE
+                  const bool timing=_timingEditor&&_timingEditor->active();
+                  if(timing)color.setAlpha(65);
+                  painter.setBrush(timing?QBrush(Qt::NoBrush):QBrush(color));
+#else
+                  painter.setBrush(color);
+#endif
+                  painter.setPen(note.selected ? QPen(c[PerformanceAppearance::Selection], 1.5) : QPen(color.darker(120), 1)); painter.drawRect(geometry.rect);
                   if (_playingNotes.contains(i)) { painter.setBrush(Qt::NoBrush); painter.setPen(QPen(c[PerformanceAppearance::Playhead], 2.5)); painter.drawRect(geometry.rect.adjusted(2, 2, -2, -2)); }
                   if (_pending.contains(note.note)) { painter.setBrush(Qt::NoBrush); painter.setPen(QPen(c[PerformanceAppearance::Preview], 1.5, Qt::DashLine)); painter.drawRect(geometry.rect.adjusted(-1, -1, 1, 1)); }
                   if (i == _hover) { painter.setBrush(Qt::NoBrush); painter.setPen(QPen(c[PerformanceAppearance::Text], 2)); painter.drawRect(geometry.rect.adjusted(-2, -2, 2, 2)); }
-                  if ((_viewport.rowHeight >= 16 && geometry.rect.width() >= 28) || valueInside) {
+                  if (
+#ifdef SCRIPT_INTERFACE
+                      !timing &&
+#endif
+                      ((_viewport.rowHeight >= 16 && geometry.rect.width() >= 28) || valueInside)) {
                         const QString full=valueInside?note.name+QString::fromUtf8(" · ")+value:note.name;
                         const QString text=valueInside&&painter.fontMetrics().horizontalAdvance(full)>geometry.rect.width()-5?value:painter.fontMetrics().elidedText(full,Qt::ElideRight,qMax(0,int(geometry.rect.width()-5)));
                         painter.setPen(color.lightness() > 145 ? Qt::black : Qt::white);
@@ -446,6 +463,7 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
 #ifdef SCRIPT_INTERFACE
             if(_rollWriting&&(!_midiTracks||!_midiTracks->active()))_rollWriting->paint(painter,area);
             if(_midiTracks)_midiTracks->paintNotes(painter,area);
+            if(_timingEditor)_timingEditor->paint(painter,area);
 #endif
             if (_marquee) {
                   painter.setBrush(QColor(130, 190, 230, 35)); painter.setPen(QPen(c[PerformanceAppearance::Selection], 1, Qt::DashLine)); painter.drawRect(QRectF(_marqueeStart, _marqueeEnd).normalized());

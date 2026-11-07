@@ -33,6 +33,7 @@
 #include "measure.h"
 #include "navigate.h"
 #include "note.h"
+#include "performancetiming.h"
 #include "noteevent.h"
 #include "notevelocity.h"
 #include "playbackenvelope.h"
@@ -281,6 +282,7 @@ static void playNote(EventMap* events,
             if (chord->isGrace()) chord = toChord(chord->parent());
             ev.setNominalTick(onTime - chord->actualTicks().ticks() * noteEventOwner->playEvents()[noteEventIndex].ontime() / 1000);
             }
+      PerformanceTiming::apply(noteEventOwner,noteEventIndex,onTime,offTime);
       if (offTime < onTime)
             offTime = onTime;
       events->insert(std::pair<int, NPlayEvent>(onTime, ev));
@@ -2780,6 +2782,7 @@ bool MidiRenderer::canBreakChunk(const Measure* last)
 void MidiRenderer::updateChunksPartition()
       {
       chunks.clear();
+      _timingLookahead = PerformanceTiming::lookahead(score);
 
       const RepeatList& repeatList = score->repeatList();
 

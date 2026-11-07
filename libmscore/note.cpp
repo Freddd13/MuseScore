@@ -40,6 +40,7 @@
 #include "measure.h"
 #include "note.h"
 #include "velocitybackup.h"
+#include "performancetiming.h"
 #include "notevelocity.h"
 #include "notedot.h"
 #include "page.h"
@@ -701,6 +702,7 @@ Note::Note(Score* s)
 Note::~Note()
       {
       VelocityBackup::forget(this);
+      PerformanceTiming::forget(this);
       delete _accidental;
       qDeleteAll(_el);
       delete _tieFor;
@@ -729,6 +731,7 @@ Note::Note(const Note& n, bool link)
       _veloType          = n._veloType;
       _veloOffset        = n._veloOffset;
       VelocityBackup::copy(&n,this);
+      PerformanceTiming::copy(&n,this);
       _headScheme        = n._headScheme;
       _headGroup         = n._headGroup;
       _headType          = n._headType;
@@ -1402,6 +1405,7 @@ void Note::write(XmlWriter& xml) const
       {
       xml.stag(this);
       VelocityBackup::write(this,xml);
+      PerformanceTiming::write(this,xml);
       Element::writeProperties(xml);
 
       if (_accidental)
@@ -1528,6 +1532,7 @@ void Note::read(XmlReader& e)
 bool Note::readProperties(XmlReader& e)
       {
       if(VelocityBackup::read(this,e))return true;
+      if(PerformanceTiming::read(this,e))return true;
       const QStringRef& tag(e.name());
 
       if (tag == "pitch")

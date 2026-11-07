@@ -9,6 +9,7 @@
 #include "spectrumpane.h"
 #include "rollwriting.h"
 #include "miditrackpane.h"
+#include "timingeditor.h"
 #endif
 #include <QJsonDocument>
 #include "markvelocity.h"
@@ -257,6 +258,9 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
 #ifdef SCRIPT_INTERFACE
       _rollWriting=new RollWritingBar(this,writeToggle,noteArea);noteLayout->insertWidget(1,_rollWriting);
       _midiTracks=new MidiTrackPane(this,noteArea,noteLayout);
+      _timingEditor=new TimingEditor(this,noteArea);
+      if(auto row=qobject_cast<QHBoxLayout*>(noteLayout->itemAt(0)->layout()))row->insertWidget(qMax(0,row->count()-1),_timingEditor);
+      connect(writeToggle->defaultAction(),&QAction::toggled,this,[this](bool on){if(on)if(auto button=_timingEditor->findChild<QToolButton*>("performanceTimingToggle"))button->setChecked(false);});
 #endif
       _splitter->addWidget(noteArea);
       auto parameterArea = new QWidget(_splitter); parameterArea->setObjectName("performanceParametersArea"); auto areaLayout = new QVBoxLayout(parameterArea); areaLayout->setContentsMargins(0, 0, 0, 0); areaLayout->setSpacing(0);
@@ -371,6 +375,7 @@ int PerformanceEditor::timelineEndTick() const
       int end=comparisonTimeActive()?qMax(_endTick,_comparisonEnd):_endTick;
 #ifdef SCRIPT_INTERFACE
       if(_midiTracks)end=qMax(end,_midiTracks->endTick());
+      if(_timingEditor)end=qMax(end,_timingEditor->endTick());
 #endif
       return end;
       }
@@ -1249,6 +1254,9 @@ void PerformanceEditor::syncInputTracking()
 
 void PerformanceEditor::completePointerGesture()
       {
+#ifdef SCRIPT_INTERFACE
+      if(_timingEditor)_timingEditor->completeGesture();
+#endif
       endBandResize();
       // Use the last point received by the owning canvas. A press on another
       // window has coordinates belonging to that other window.

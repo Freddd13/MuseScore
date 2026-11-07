@@ -1696,7 +1696,7 @@ void Seq::collectEvents(int utick)
             }
 
       int unrenderedUtick = renderEventsStatus.occupiedRangeEnd(utick);
-      while (!preview && unrenderedUtick - utick < minUtickBufferSize) {
+      while (!preview && unrenderedUtick - utick < minUtickBufferSize + midi.timingLookahead()) {
             const MidiRenderer::Chunk chunk = midi.getChunkAt(unrenderedUtick);
             if (!chunk)
                   break;
@@ -1738,7 +1738,7 @@ void Seq::ensureBufferAsync(int utick)
                   }
 
             const int unrenderedUtick = renderEventsStatus.occupiedRangeEnd(utick);
-            if (unrenderedUtick - utick < minUtickBufferSize) {
+            if (unrenderedUtick - utick < minUtickBufferSize + midi.timingLookahead()) {
                   const MidiRenderer::Chunk chunk = midi.getChunkAt(unrenderedUtick);
                   if (chunk) {
                         midiRenderFuture = QtConcurrent::run([this, chunk]() {

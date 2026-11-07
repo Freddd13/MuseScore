@@ -4,6 +4,7 @@
 #ifdef SCRIPT_INTERFACE
 #include "rollwriting.h"
 #include "miditrackpane.h"
+#include "timingeditor.h"
 #endif
 #include "../workflow/editorareas.h"
 #include "../workflow/workflowcontext.h"
@@ -112,6 +113,11 @@ QVector<int> PerformanceEditor::hits(QPointF point, bool parameter, bool onScore
       {
       QVector<int> result;
       if (!onScore && point.x() < PerformanceViewport::gutter) return result;
+#ifdef SCRIPT_INTERFACE
+      if(!parameter && !onScore && _timingEditor && _timingEditor->active()) {
+            const int index=_timingEditor->noteAt(point);if(index>=0)result.append(index);return result;
+            }
+#endif
       const QRectF lane = onScore ? _scoreLane : laneRect();
       if (!parameter) {
             for (const auto& g : _noteGeometry) if (_notes[g.index].enabled && g.rect.adjusted(g.rect.width() < 4 ? -2 : 0, 0, g.rect.width() < 4 ? 2 : 0, 0).contains(point)) result.append(g.index);
@@ -428,6 +434,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
       if (!notes && !ruler && !parameter) return false;
 #ifdef SCRIPT_INTERFACE
       if(_midiTracks&&_midiTracks->handle(event,parameter,ruler))return true;
+      if(notes&&_timingEditor&&_timingEditor->handle(event))return true;
       if(notes&&_rollWriting&&(!_midiTracks||!_midiTracks->active())&&_rollWriting->handle(event))return true;
 #endif
       if (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) {
