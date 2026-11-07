@@ -125,6 +125,14 @@ class TestPluginHost : public QObject {
       Q_OBJECT
       QTemporaryDir _settings;
    private slots:
+      void scoreVideoWorkspace164();
+      void scoreVideoLong164();
+      void scoreVideoMusic164();
+      void scoreVideoExport164();
+      void scoreVideoPanel164();
+      void scoreVideoPictures164_data();
+      void scoreVideoPictures164();
+      void scoreVideoTimeAndStorage164();
       void velocityPeekHold159();
       void keyboardPointer159();
       void graceSpacing159();
@@ -1573,6 +1581,7 @@ class TestPluginHost : public QObject {
 #include "spectrum_102_tests.inc"
 #include "spectrum_162_tests.inc"
 #include "reference_163_tests.inc"
+#include "scorevideo_164_tests.inc"
 #include "layout_079_tests.inc"
 #include "arrangement_083_tests.inc"
 #include "arrangement_115_tests.inc"

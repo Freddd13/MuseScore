@@ -1,3 +1,5 @@
+#include "workflow/toolicons.h"
+#include "scorevideo/scorevideopanel.h"
 //=============================================================================
 //  MuseScore
 //  Music Composition & Notation
@@ -766,13 +768,13 @@ void MuseScore::populateAlternativeOperations()
             }
       const auto oldTools=tools->actions();tools->clear();
       for(auto action:oldTools)if(action->parent()==tools)delete action;
-      for (const char* name : {"performance-editor", "performance-score-band", "harmony-assistant", "reference-player", "performance-expression", "kumo-spectrum", "arrangement-suggestions", "kumo-vst"}) {
+      for (const char* name : {"performance-editor", "performance-score-band", "harmony-assistant", "reference-player", "performance-expression", "kumo-spectrum", "arrangement-suggestions", "kumo-vst", "kumo-score-video"}) {
             auto action = findChild<QAction*>(name);
 #ifdef SCRIPT_INTERFACE
             if (!action && QStringList{"harmony-assistant", "reference-player", "performance-expression", "arrangement-suggestions"}.contains(name)) action = getAction(name);
 #endif
             if (!action) continue;
-            if (QString(name) != "performance-editor" && QString(name) != "performance-score-band") action->setIcon(personalToolIcon(name));
+            if (QString(name) != "performance-editor" && QString(name) != "performance-score-band") action->setIcon(QString(name)=="kumo-score-video"?componentToolIcon("video"):personalToolIcon(name));
             auto button = new AccessibleToolButton(tools, action);
             button->setObjectName(QString(name) + "-button");
             button->setIconSize(tools->iconSize());
@@ -2300,6 +2302,7 @@ MuseScore::MuseScore()
       markPersonalAction(getAction("tap-tempo"));
       menuTools->addAction(getAction("tap-tempo"));
       addReferenceActions(menuTools);
+      addScoreVideoAction(menuTools);
 #ifdef SCRIPT_INTERFACE
       addRegionalVariantAction(menuTools);
 #endif

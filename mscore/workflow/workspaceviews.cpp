@@ -61,6 +61,8 @@ class WorkspaceViews : public QObject {
     }
     settings.setValue(key(current + "/sideWidths"), sideWidths);
     settings.setValue(key(current + "/windowWidth"), window->width());
+    if (auto video = window->findChild<QDockWidget *>("kumoPanel/score-video"))
+      settings.setValue(key(current + "/videoVisible"), !video->isHidden());
     if (auto dock = window->findChild<QDockWidget *>("performanceEditorDock"))
       if (!dock->isHidden() && !dock->isFloating()) {
         // Tabbed docks can retain the size of their inactive page. Save the
@@ -301,6 +303,8 @@ public:
           dock->hide();
       }
     }
+    if (auto video = window->findChild<QDockWidget *>("kumoPanel/score-video"))
+      video->setVisible(QSettings().value(key(mode + "/videoVisible"), mode == "post").toBool());
     if (state.isEmpty() && mode == "engrave")
       if (auto dock = window->findChild<QDockWidget *>("performanceEditorDock"))
         dock->hide();

@@ -2,6 +2,7 @@
 #include "referencefactory.h"
 #include "referencecontrols.h"
 #include "../referenceaudio/mediafactory.h"
+#include "../referenceaudio/mediaexportfactory.h"
 #include "../referenceaudio/spectrumfactory.h"
 #include "../referenceaudio/projectfactory.h"
 #include "referencebus.h"
@@ -75,6 +76,11 @@ void installScoreControls(QObject* project){
 #endif
 }
 
+}
+QObject* createReferenceAudioExport(QObject* parent){
+ if(!personalFeaturesEnabled())return new MissingMedia(parent,QObject::tr("个人扩展功能已关闭。"));
+ auto loader=module();auto factory=qobject_cast<KumoMediaExportFactory*>(loader->instance());
+ return factory?factory->createAudioExport(parent):new MissingMedia(parent,QObject::tr("请更新随程序提供的原曲组件后导出视频声音。"));
 }
 QObject* createReferenceMedia(QObject* parent) {
  if(!personalFeaturesEnabled())return new MissingMedia(parent,QObject::tr("个人扩展功能已关闭。"));

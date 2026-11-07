@@ -6,6 +6,7 @@
 #include <QDataStream>
 #include <QElapsedTimer>
 #include "referenceaudio/spectrumfactory.h"
+#include "referenceaudio/mediaexportfactory.h"
 #include "referenceaudio/auditionfilter.h"
 #include <cmath>
 
@@ -382,6 +383,17 @@ class TestSpectrum : public QObject {
         value["from"]=40000.;value["until"]=44000.;value["refresh"]=true;QVERIFY(prepare());QTRY_VERIFY_WITH_TIMEOUT(!session->property("busy").toBool(),10000);QVERIFY(!qvariant_cast<QImage>(session->property("image")).isNull());
         qint64 bytes=0;for(const auto& file:QDir(cache).entryInfoList({"*.kspec"},QDir::Files))bytes+=file.size();QVERIFY(bytes<=1024*1024);QVERIFY(notes.open(QIODevice::ReadOnly));QCOMPARE(notes.readAll(),QByteArray("keep this file"));
         qInfo()<<"Spectrum disk cache bytes"<<bytes;
+    }
+    void videoAudioExport164(){
+        auto factory=qobject_cast<KumoMediaExportFactory*>(_loader.instance());QVERIFY(factory);QScopedPointer<QObject> render(factory->createAudioExport(this));QVERIFY(render);
+        const auto path=tone("video-source-164",22050,1,false,330,false,0,false,4),destination=_dir.filePath(QString::fromUtf8("视频 声音164.f32"));
+        const QVariantList pieces{QVariantMap{{"from",100.},{"until",600.},{"at",0.},{"duration",500.}},QVariantMap{{"from",800.},{"until",1200.},{"at",700.},{"duration",400.}}};
+        const QVariantMap request{{"path",path},{"destination",destination},{"sampleRate",48000},{"duration",1100.},{"pieces",pieces}};QSignalSpy finished(render.data(),SIGNAL(finished(QVariantMap)));
+        QVERIFY(QMetaObject::invokeMethod(render.data(),"render",Q_ARG(QVariantMap,request)));QTRY_COMPARE_WITH_TIMEOUT(finished.count(),1,10000);const auto result=finished[0][0].toMap();QVERIFY2(!result.contains("error"),qPrintable(result.value("error").toString()));QCOMPARE(result.value("frames").toLongLong(),52800LL);
+        QFile output(destination);QVERIFY(output.open(QIODevice::ReadOnly));const auto bytes=output.readAll();QCOMPARE(bytes.size(),52800*8);const auto samples=reinterpret_cast<const float*>(bytes.constData());double energy=0;for(int i=1000;i<20000;++i)energy+=double(samples[i*2])*samples[i*2];QVERIFY(std::sqrt(energy/19000)>.25);for(int i=24500;i<33300;++i)QCOMPARE(samples[i*2],0.f);QCOMPARE(samples[4000],samples[4001]);
+        qInfo()<<"Video reference audio frames"<<result.value("frames")<<"ms"<<result.value("milliseconds");
+        output.close();QFile previous(destination);QVERIFY(previous.open(QIODevice::WriteOnly|QIODevice::Truncate));previous.write("keep");previous.close();finished.clear();auto invalid=request;invalid["sampleRate"]=0;QVERIFY(QMetaObject::invokeMethod(render.data(),"render",Q_ARG(QVariantMap,invalid)));QTRY_COMPARE(finished.count(),1);QVERIFY(finished[0][0].toMap().contains("error"));QVERIFY(previous.open(QIODevice::ReadOnly));QCOMPARE(previous.readAll(),QByteArray("keep"));previous.close();
+        const auto folder=qEnvironmentVariable("P2_REFERENCE_LONG_AUDIO");QVERIFY(!folder.isEmpty());auto longRequest=request;longRequest["path"]=QDir(folder).filePath("long.mp3");longRequest["duration"]=180000.;longRequest["pieces"]=QVariantList{QVariantMap{{"from",0.},{"until",180000.},{"at",0.},{"duration",180000.}}};finished.clear();QVERIFY(QMetaObject::invokeMethod(render.data(),"render",Q_ARG(QVariantMap,longRequest)));QTest::qWait(20);QElapsedTimer cancel;cancel.start();QVERIFY(QMetaObject::invokeMethod(render.data(),"cancel"));QTRY_COMPARE_WITH_TIMEOUT(finished.count(),1,3000);QVERIFY(finished[0][0].toMap().value("cancelled").toBool());QVERIFY(previous.open(QIODevice::ReadOnly));QCOMPARE(previous.readAll(),QByteArray("keep"));qInfo()<<"Video audio cancel ms"<<cancel.elapsed();
     }
     void cleanupTestCase() {
         delete _session;

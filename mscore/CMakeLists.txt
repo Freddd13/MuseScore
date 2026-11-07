@@ -258,6 +258,8 @@ add_library(mscoreapp STATIC
       timeline.cpp
       parteditbase.cpp playpanel.cpp selectionwindow.cpp
       measureproperties.cpp
+      scorevideo/scorevideopanel.cpp scorevideo/scorevideopanel.h scorevideo/scorevideoexport.cpp scorevideo/scorevideoexport.h
+      scorevideo/scorevideo.cpp scorevideo/scorevideo.h scorevideo/scorevideoframe.cpp scorevideo/scorevideotimeline.cpp
       seq.cpp workflow/referencebus.cpp workflow/referencebus.h workflow/workflowcontext.cpp workflow/workflowcontext.h workflow/toolicons.cpp textpalette.cpp
       timedialog.cpp symboldialog.cpp shortcutcapturedialog.cpp
       radiobuttongroupbox.cpp simplebutton.cpp

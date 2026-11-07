@@ -84,7 +84,7 @@ QIcon componentToolIcon(const QString& key) {
       };
       const auto item = stock.constFind(key);
       if (item != stock.cend() && icons[int(item.value())]) return *icons[int(item.value())];
-      if (!QStringList{"add", "record", "stop", "pause", "mute", "solo", "fit", "link", "filter", "line", "panel", "settings", "select", "range", "hand"}.contains(key)) return {};
+      if (!QStringList{"add", "record", "stop", "pause", "mute", "solo", "fit", "link", "filter", "line", "panel", "settings", "select", "range", "hand", "video"}.contains(key)) return {};
       QPixmap image(64, 64); image.setDevicePixelRatio(4); image.fill(Qt::transparent);
       QPainter p(&image); p.setRenderHint(QPainter::Antialiasing);
       const auto ink = qApp->palette().color(QPalette::WindowText);
@@ -123,6 +123,11 @@ QIcon componentToolIcon(const QString& key) {
       } else if (key == "panel") {
             p.drawRoundedRect(QRectF(1.5,2.5,13,11),1,1); p.drawLine(2,6,14,6);
             p.drawLine(4,4.5,5,4.5); p.drawLine(8,10,12,10);
+      } else if (key == "video") {
+            p.drawRoundedRect(QRectF(1.5,2,13,12),1,1);
+            for(int x:{4,8,12}){p.drawLine(x,2,x,4);p.drawLine(x,12,x,14);}
+            p.drawLine(4,6,12,6);p.drawLine(4,8.5,9,8.5);
+            p.drawLine(10,8,10,11);p.drawLine(10,11,12,10);
       } else if (key == "settings") {
             for (int y : {4,8,12}) p.drawLine(2,y,14,y);
             p.setBrush(qApp->palette().color(QPalette::Window));

@@ -276,6 +276,12 @@ void TestPluginHost::referenceSettings163()
     });
     QVERIFY(QMetaObject::invokeMethod(panel, "setPanelFloating", Q_ARG(bool, true)));
     QVERIFY(QMetaObject::invokeMethod(panel, "resizePanel", Q_ARG(int, 1050), Q_ARG(int, 880)));
+    panel->focusPanel();
+    QVERIFY(QTest::qWaitForWindowExposed(panel->window()));
+    QTRY_VERIFY(panel->property("documentReady").toBool());
+    QTRY_VERIFY(!panel->property("restoringDocument").toBool());
+    QTRY_COMPARE(panel->property("readingAudioCount").toInt(), 0);
+    QTest::qWait(QApplication::doubleClickInterval() + 30);
     auto select = panel->findChild<QQuickItem*>("referenceScoreRangeDisplay");
     auto restore = panel->findChild<QQuickItem*>("referenceRestoreScoreControls");
     QVERIFY(select && restore);
@@ -292,13 +298,39 @@ void TestPluginHost::referenceSettings163()
                                               qMax(0., flick->property("contentHeight").toDouble() -
                                                            flick->height())));
         QTest::qWait(80);
+        panel->window()->grabWindow().save(
+            QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS", _settings.path()))
+                .filePath("reference-before-click-164.png"));
         QTest::mouseClick(panel->window(), Qt::LeftButton, Qt::NoModifier,
                           item->mapToScene(QPointF(15, item->height() / 2)).toPoint());
     };
     click(select);
     QTest::qWait(100);
-    QTest::mouseClick(panel->window(), Qt::LeftButton, Qt::NoModifier,
-                      select->mapToScene(QPointF(15, select->height() + 42)).toPoint());
+    auto asObject = [](const QVariant& value) {
+        return value.canConvert<QJSValue>() ? value.value<QJSValue>().toQObject()
+                                            : value.value<QObject*>();
+    };
+    auto popup = asObject(select->property("popup"));
+    QVERIFY(popup);
+    QTRY_VERIFY(popup->property("visible").toBool());
+    auto content = asObject(popup->property("contentItem"));
+    QVERIFY(content);
+    QQuickItem* target = nullptr;
+    std::function<QQuickItem*(QQuickItem*)> findChoice = [&](QQuickItem* item) -> QQuickItem* {
+        if (!item)
+            return nullptr;
+        if (item->property("text").toString() == QString::fromUtf8("范围：始终显示") &&
+            item->isVisible())
+            return item;
+        for (auto child : item->childItems())
+            if (auto found = findChoice(child))
+                return found;
+        return nullptr;
+    };
+    QTRY_VERIFY((target = findChoice(qobject_cast<QQuickItem*>(content))));
+    QTest::mouseClick(
+        target->window(), Qt::LeftButton, Qt::NoModifier,
+        target->mapToScene(QPointF(target->width() / 2, target->height() / 2)).toPoint());
     QTRY_COMPARE(project->property("scoreRangeDisplay").toString(), QString("always"));
     PluginAPI::Score wrapped(score);
     PluginAPI::ScoreObserver observer;
