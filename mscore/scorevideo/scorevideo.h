@@ -22,6 +22,8 @@ struct VideoNoteInk {
 struct VideoPicture {
     QString id, file, label;
     QSize pixels;
+    QRectF sourceRect;
+    double rasterScale = 1;
     double firstStaffX = 0, firstStaffY = 0;
     int firstTick = 0, endTick = 0;
 };

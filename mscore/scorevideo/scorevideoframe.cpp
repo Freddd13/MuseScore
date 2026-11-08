@@ -60,15 +60,16 @@ QRectF scoreVideoPictureRect(const VideoSnapshot& snapshot, int index, const QSi
     const double width = size.width() - 2 * margin, height = size.height() - 2 * margin;
     double before = 1, after = 1, above = 1, below = 1;
     for (const auto& group : snapshot.pictures) {
-        before = qMax(before, group.firstStaffX);
-        after = qMax(after, group.pixels.width() - group.firstStaffX);
-        above = qMax(above, group.firstStaffY);
-        below = qMax(below, group.pixels.height() - group.firstStaffY);
+        const double raster = group.rasterScale;
+        before = qMax(before, group.firstStaffX / raster);
+        after = qMax(after, (group.pixels.width() - group.firstStaffX) / raster);
+        above = qMax(above, group.firstStaffY / raster);
+        below = qMax(below, (group.pixels.height() - group.firstStaffY) / raster);
     }
     const bool upper = settings.value("alignment", "top").toString() == "top";
     const double common = qMin(width / (before + after), height / (above + below));
     const double anchor = margin + above * common;
-    double scale = common;
+    double scale = common / picture.rasterScale;
     if (!settings.value("uniformScale", true).toBool()) {
         scale = qMin(width / picture.pixels.width(), height / picture.pixels.height());
         if (upper) {

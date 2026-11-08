@@ -1,8 +1,8 @@
 # MuseScore Evolution 个人功能说明
 
-当前版本：**0.165.0 · Kumo branch / Freddd13**。
+当前版本：**0.166.0 · Kumo branch / Freddd13**。
 
-本次动态乐谱入口修复与整轮审视见[0.165更新](docs/ROUND_165_REVIEW.md)（`personal-v0.165.0`）。
+本次修正动态乐谱与AI谱图的文字比例，统一各行音符大小；完整进度见[0.166整轮审视](docs/ROUND_166_REVIEW.md)（`personal-v0.166.0`）。
 
 先按下面的任务找到入口。每章有完整操作例子、按钮说明、保存和撤销方法。“帮助 → 个人功能说明”可以在软件里直接阅读。
 

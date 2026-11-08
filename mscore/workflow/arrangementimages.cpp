@@ -99,6 +99,8 @@ QVariantMap ScoreObserver::arrangementImage(const QVariantMap& request) {
     const qreal scale=qMin(targetScale,qMin(2400/crop.width(),1800/crop.height()));
     const QSize size(qMax(1,int(std::ceil(crop.width()*scale))),qMax(1,int(std::ceil(crop.height()*scale))));
     QImage image(size,QImage::Format_ARGB32_Premultiplied);if(image.isNull())return {{"error",tr("图片未能建立，请缩小读取范围。")}};
+    const int dotsPerMeter=qRound(DPI*scale*1000/INCH);
+    image.setDotsPerMeterX(dotsPerMeter);image.setDotsPerMeterY(dotsPerMeter);
     image.fill(Qt::white);
     struct PrintScope {
         Ms::Score* score;bool before;

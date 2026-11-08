@@ -444,6 +444,8 @@ void ScoreVideoDocument::buildNext()
                                     .arg(last->no() + 1);
                 picture.pixels = QSize(qMax(1, int(std::ceil(group.crop.width() * group.scale))),
                                        qMax(1, int(std::ceil(group.crop.height() * group.scale))));
+                picture.sourceRect = group.crop;
+                picture.rasterScale = group.scale;
                 picture.firstStaffX = (group.staffOrigin.x() - group.crop.x()) * group.scale;
                 picture.firstStaffY = (group.staffOrigin.y() - group.crop.y()) * group.scale;
                 picture.file = build.snapshot.assets->filePath(
@@ -467,6 +469,11 @@ void ScoreVideoDocument::buildNext()
             const auto& picture = build.snapshot.pictures[build.pictureIndex];
             if (build.image.isNull()) {
                 build.image = QImage(picture.pixels, QImage::Format_ARGB32_Premultiplied);
+                // TextFragment uses the image device DPI as well as pixelRatio.
+                // Match native PNG / foto output so text and music share one scale.
+                const int dotsPerMeter = qRound(DPI * group.scale * 1000 / INCH);
+                build.image.setDotsPerMeterX(dotsPerMeter);
+                build.image.setDotsPerMeterY(dotsPerMeter);
                 build.image.fill(Qt::transparent);
                 build.elementIndex = 0;
                 if (build.image.isNull()) {

@@ -759,8 +759,11 @@ MIDI录制与播放	mscore/performanceeditor/miditrackplayback.cpp	void MidiTrac
 谱面原曲控件	mscore/workflow/referencecontrols.cpp	void installReferenceScoreControls(	589	分体播放、实际范围、摆放及撤销保存	mtest/mscore/pluginhost/reference_163_tests.inc
 动态乐谱资料	mscore/scorevideo/scorevideo.cpp	void ScoreVideoDocument::prepare(	206	原生谱行、副本与分批图像准备	mtest/mscore/pluginhost/scorevideo_164_tests.inc
 动态乐谱时间	mscore/scorevideo/scorevideotimeline.cpp	void ScoreVideoDocument::rebuildTimeline(	93	反复、原曲关联与手动换行	mtest/mscore/pluginhost/scorevideo_164_tests.inc
-动态乐谱画面	mscore/scorevideo/scorevideoframe.cpp	QImage scoreVideoFrame(	99	统一对齐、透明、反相与光标高亮	mtest/mscore/pluginhost/scorevideo_164_tests.inc
+动态乐谱画面	mscore/scorevideo/scorevideoframe.cpp	QImage scoreVideoFrame(	100	统一对齐、透明、反相与光标高亮	mtest/mscore/pluginhost/scorevideo_164_tests.inc
 动态乐谱视频	mscore/scorevideo/scorevideoexport.cpp	void ScoreVideoExport::encode(	145	后台编码、有限队列与取消	mtest/mscore/pluginhost/scorevideo_164_tests.inc
 动态乐谱面板	mscore/scorevideo/scorevideopanel.cpp	ScoreVideoPanel::ScoreVideoPanel(	274	预览、试听、时间与位置编辑	mtest/mscore/pluginhost/scorevideo_164_tests.inc
 视频原曲声音	mscore/referenceaudio/mediaexport.cpp	void ReferenceAudioExport::render(	30	有界离线解码、空隙与原子声音文件	mtest/mscore/spectrum/tst_spectrum.cpp
 动态乐谱入口	mscore/scorevideo/scorevideopanel.cpp	QAction* scoreVideoAction(	942	共用菜单与工具栏动作、旧工作区恢复及实验开关	mtest/mscore/pluginhost/scorevideo_164_tests.inc
+谱面输出尺寸	mscore/scorevideo/scorevideo.cpp	const int dotsPerMeter	474	原生文字与音乐符号共同缩放	mtest/mscore/pluginhost/scorevideo_166_review.inc
+视频统一比例	mscore/scorevideo/scorevideoframe.cpp	const double raster =	63	按原谱单位对齐各行	mtest/mscore/pluginhost/scorevideo_166_review.inc
+AI原图尺寸	mscore/workflow/arrangementimages.cpp	const int dotsPerMeter	102	原生谱图设备分辨率	mtest/mscore/pluginhost/scorevideo_166_review.inc
