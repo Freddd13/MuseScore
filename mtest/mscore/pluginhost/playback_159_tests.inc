@@ -8,7 +8,10 @@ void TestPluginHost::velocityPeekHold159()
     auto main=Ms::mscore;
     auto score=main->readScore(QString(TESTROOT)+"/mtest/mscore/scoreobserver/piano.mscx");QVERIFY(score);
     main->setCurrentScoreView(main->appendScore(score));main->resize(1280,900);main->show();main->showPerformanceEditor(true);
-    auto editor=main->performanceEditor();QVERIFY(editor);QTest::qWait(80);
+    auto editor=main->performanceEditor();QVERIFY(editor);
+    auto editingTabs=editor->findChild<QTabBar*>("workflowExpressionTabs");QVERIFY(editingTabs);
+    QTest::mouseClick(editingTabs,Qt::LeftButton,Qt::NoModifier,editingTabs->tabRect(0).center());
+    main->raise();main->activateWindow();QVERIFY(QTest::qWaitForWindowActive(main,2000));QTest::qWait(80);
     auto options=editor->findChild<QToolButton*>("performanceOperationSettings");QVERIFY(options);
     QTest::mouseClick(options,Qt::LeftButton);QTest::qWait(30);
     auto dialog=main->findChild<QDialog*>("performanceSettings");QVERIFY(dialog);
@@ -16,6 +19,10 @@ void TestPluginHost::velocityPeekHold159()
     auto delay=dialog->findChild<QSpinBox*>("performancePeekReleaseMs");QVERIFY(delay);delay->setValue(250);
     dialog->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("peek-settings-159.png"));
     auto buttons=dialog->findChild<QDialogButtonBox*>();QVERIFY(buttons);QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);
+    // Let Windows finish the modal-to-main-window activation before sending
+    // held-key events directly to the score widget.
+    QTest::qWait(80);
+    main->raise();main->activateWindow();QVERIFY(QTest::qWaitForWindowActive(main,2000));
     auto view=main->currentScoreView();view->setFocus();QTest::keyPress(view,Qt::Key_Q,Qt::AltModifier);QVERIFY(editor->temporaryVelocityVisible());
     for(int i=0;i<12;++i){
         QKeyEvent release(QEvent::KeyRelease,Qt::Key_Q,Qt::AltModifier,QString(),true);QApplication::sendEvent(view,&release);

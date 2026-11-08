@@ -60,7 +60,15 @@ void TestPluginHost::referencePanelsAfterPlayback120()
         if(round%2)QTRY_VERIFY_WITH_TIMEOUT(sequence->isPlaying(),10000);
         for(int pulse=0;pulse<8;++pulse){driver->pulse();QTest::qWait(10);}
         if(round==0||round==2||round==4||round==5){
-            auto editor=main->performanceEditor();QVERIFY(editor);auto target=editor->findChild<QWidget*>(round==0?"performanceRuler":round==4?"performanceNoteCanvas":"performanceCanvas");
+            auto editor=main->performanceEditor();QVERIFY(editor);
+            auto tabs=editor->findChild<QTabBar*>("workflowExpressionTabs");QVERIFY(tabs);
+            QTest::mouseClick(tabs,Qt::LeftButton,Qt::NoModifier,tabs->tabRect(0).center());
+            if(auto editorDock=main->findChild<QDockWidget*>("performanceEditorDock"))editorDock->raise();
+            auto target=editor->findChild<QWidget*>(round==0?"performanceRuler":round==4?"performanceNoteCanvas":"performanceCanvas");
+            if(!target&&round==0)target=editor->findChild<QWidget*>("performanceTimeRuler");
+            if(round==4){
+                QVERIFY(setEditorAreaVisible(editor,"performanceNotesArea",true));
+            }
             if(!target&&round!=0&&round!=4)target=editor->findChild<QWidget*>("performanceParameterCanvas");
             QVERIFY(target&&target->isVisible());
             if(round==0){target->window()->activateWindow();QVERIFY(QTest::qWaitForWindowActive(target->window(),2000));}

@@ -17,6 +17,10 @@ void TestPluginHost::editorAreaSizeRoundTrip()
     auto dock=main->findChild<QDockWidget*>("performanceEditorDock");QVERIFY(dock);
     dock->setFloating(false);main->resizeDocks({dock},{550},Qt::Vertical);
     auto tabs=editor->findChild<QTabBar*>("workflowExpressionTabs");QVERIFY(tabs);tabs->setCurrentIndex(0);
+    // This operation explicitly opens both regions before dragging their divider.
+    // A restored profile may intentionally keep the piano roll collapsed.
+    QVERIFY(setEditorAreaVisible(editor,"performanceNotesArea",true));
+    QVERIFY(setEditorAreaVisible(editor,"performanceParametersArea",true));
     auto split=editor->findChild<QSplitter*>("performanceMainSplitter");QVERIFY(split);
     auto notes=editor->findChild<QWidget*>("performanceNotesArea");QVERIFY(notes);
     auto parameters=editor->findChild<QWidget*>("performanceParametersArea");QVERIFY(parameters);

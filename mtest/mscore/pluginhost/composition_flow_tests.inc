@@ -37,8 +37,13 @@ void TestPluginHost::continuousComposition()
     main->resize(1280,900);main->show();main->activateWindow();
     auto arrange=main->findChild<QAction*>("kumo-workspace-arrange");QVERIFY(arrange);arrange->trigger();
     main->showPerformanceEditor(true);auto editor=main->performanceEditor();QVERIFY(editor);
+    // Enter the editing page explicitly; restored user profiles may reopen
+    // transcription or expression instead.
+    auto editingTabs=editor->findChild<QTabBar*>("workflowExpressionTabs");QVERIFY(editingTabs);
+    QTest::mouseClick(editingTabs,Qt::LeftButton,Qt::NoModifier,editingTabs->tabRect(0).center());
     auto editorDock=main->findChild<QDockWidget*>("performanceEditorDock");QVERIFY(editorDock);
     editorDock->setFloating(false);main->resizeDocks({editorDock},{480},Qt::Vertical);QTest::qWait(100);
+    QCOMPARE(main->property("kumoWorkspaceView").toString(),QString("arrange"));
     auto first=score->firstMeasure()->nextMeasure();QVERIFY(first&&first->nextMeasure()&&first->nextMeasure()->nextMeasure());
     const int start=first->tick().ticks(),end=first->nextMeasure()->nextMeasure()->tick().ticks();
     int tick=-1,track=-1;
@@ -70,7 +75,13 @@ void TestPluginHost::continuousComposition()
         QTest::mouseClick(fixed,Qt::LeftButton);number->setFocus();number->selectAll();
         QTest::keyClicks(number,QString::number(value));QTest::keyClick(number,Qt::Key_Tab);
         QTest::mouseClick(apply,Qt::LeftButton);main->endCmd();
-        return target->veloType()==Note::ValueType::USER_VAL&&target->veloOffset()==value;
+        const bool changed=target->veloType()==Note::ValueType::USER_VAL&&target->veloOffset()==value;
+        if(!changed){
+            qInfo()<<"Velocity operation"<<value<<int(target->veloType())<<target->veloOffset()
+                   <<number->value()<<fixed->isVisible()<<apply->isVisible()<<apply->isEnabled();
+            main->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS",_settings.path())).filePath("first-velocity-operation.png"));
+        }
+        return changed;
     };
     QVERIFY(setVelocity(74));
     auto pedal=new Pedal(score);pedal->setTrack(staffTrack);pedal->setTrack2(staffTrack);

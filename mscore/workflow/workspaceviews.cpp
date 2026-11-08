@@ -35,6 +35,7 @@ class WorkspaceViews : public QObject {
   QAction *scoreComparison;
   QString current = "arrange";
   bool changing = false;
+  bool initialRestorePending = true;
   QList<QPointer<QToolButton>> selectors;
   QString key(const QString &name) const {
     return "personalWorkspaceViews/" + name;
@@ -205,6 +206,9 @@ public:
             [this](bool shown) { showScore(shown, true); });
     connect(qApp, &QCoreApplication::aboutToQuit, this, [this] { save(); });
     QTimer::singleShot(0, this, [this] {
+      if (!initialRestorePending)
+        return;
+      initialRestorePending = false;
       const auto saved =
           QSettings().value(key("current"), "arrange").toString();
       if (!personalFeaturesEnabled()) {
@@ -268,13 +272,19 @@ public:
     updateButtons();
   }
   void activate(const QString &mode, bool rememberCurrent = true) {
-    if (!window || !personalFeaturesEnabled() || changing || mode == current)
+    if (!window || !personalFeaturesEnabled() || changing)
       return;
     QAction *selected = nullptr;
     for (auto action : choices->actions())
       if (action->data().toString() == mode)
         selected = action;
     if (!selected)
+      return;
+    // Opening a tool or choosing the current view takes priority over the
+    // deferred startup restoration.
+    if (rememberCurrent)
+      initialRestorePending = false;
+    if (mode == current)
       return;
     if (rememberCurrent)
       save();
