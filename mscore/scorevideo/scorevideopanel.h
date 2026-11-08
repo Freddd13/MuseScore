@@ -5,6 +5,7 @@
 #include <QElapsedTimer>
 #include <QTimer>
 class QMenu;
+class QAction;
 class QLabel;
 class QPushButton;
 class QComboBox;
@@ -12,6 +13,7 @@ class QTreeWidget;
 class QProgressBar;
 namespace Ms
 {
+class MuseScore;
 class VideoPreview;
 class VideoTimeline;
 class ScoreVideoPanel final : public QDockWidget
@@ -57,5 +59,6 @@ class ScoreVideoPanel final : public QDockWidget
     Q_INVOKABLE bool isPlaying() const { return _playing; }
     double position() const { return _position; }
 };
-void addScoreVideoAction(QMenu*);
+QAction* scoreVideoAction(MuseScore*);
+void addScoreVideoAction(QMenu*, MuseScore*);
 } // namespace Ms

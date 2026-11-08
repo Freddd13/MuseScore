@@ -27,12 +27,6 @@ MIDI 轨用来对照分离乐器、自动扒谱或自己的演奏，也可以临
 
 ![MIDI轨道、卷帘和力度](images/midi-tracks-160.png)
 
-![MIDI轨道、卷帘和力度](images/midi-tracks-160.png)
-
-![MIDI轨道、卷帘和力度](images/midi-tracks-160.png)
-
-![MIDI轨道、卷帘和力度](images/midi-tracks-160.png)
-
 ## 对齐录音、MIDI 和谱子
 
 “录音时间”保留 MIDI 的实际秒数。“按谱对齐”根据原曲关联，把音符放到对应谱位。

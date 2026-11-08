@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "scorevideopanel.h"
 #include "mscore/musescore.h"
+#include "mscore/workspace.h"
 #include "mscore/seq.h"
 #include "mscore/workflow/featuregate.h"
 #include "mscore/workflow/paneldock.h"
@@ -938,28 +939,30 @@ void ScoreVideoPanel::commitCues()
     }
     _updating = false;
 }
-void addScoreVideoAction(QMenu* menu)
+QAction* scoreVideoAction(MuseScore* window)
 {
-    auto action = mscore->findChild<QAction*>("kumo-score-video");
+    auto action = window->findChild<QAction*>("kumo-score-video");
     if (!action) {
-        action = new QAction(componentToolIcon("video"), QObject::tr("动态乐谱视频…"), mscore);
+        action = new QAction(componentToolIcon("video"), QObject::tr("动态乐谱视频…"), window);
         action->setObjectName("kumo-score-video");
         action->setCheckable(true);
+        action->setData("kumo-score-video");
         markPersonalAction(action);
-        QObject::connect(action, &QAction::triggered, mscore, [action](bool visible) {
+        Workspace::addActionAndString(action, "kumo-score-video");
+        QObject::connect(action, &QAction::triggered, window, [action, window](bool visible) {
             if (!personalFeaturesEnabled())
                 return;
-            auto dock = mscore->findChild<ScoreVideoPanel*>();
+            auto dock = window->findChild<ScoreVideoPanel*>();
             if (!visible) {
                 if (dock)
                     dock->hide();
                 return;
             }
-            if (auto mode = mscore->findChild<QAction*>("kumo-workspace-post"))
+            if (auto mode = window->findChild<QAction*>("kumo-workspace-post"))
                 mode->trigger();
             if (!dock) {
-                dock = new ScoreVideoPanel(mscore);
-                arrangeWorkflowDock(mscore, dock, "score-video", "bottomTools",
+                dock = new ScoreVideoPanel(window);
+                arrangeWorkflowDock(window, dock, "score-video", "bottomTools",
                                     Qt::BottomDockWidgetArea);
                 QObject::connect(dock, &QDockWidget::visibilityChanged, action,
                                  [action](bool shown) {
@@ -967,9 +970,9 @@ void addScoreVideoAction(QMenu* menu)
                                      action->setChecked(shown);
                                  });
                 if (!dock->isFloating())
-                    QTimer::singleShot(0, dock, [dock] {
+                    QTimer::singleShot(0, dock, [dock, window] {
                         if (dock->isVisible())
-                            mscore->resizeDocks({dock}, {mscore->height() * 3 / 4}, Qt::Vertical);
+                            window->resizeDocks({dock}, {window->height() * 3 / 4}, Qt::Vertical);
                     });
             }
             dock->show();
@@ -977,6 +980,17 @@ void addScoreVideoAction(QMenu* menu)
             dock->activateWindow();
         });
     }
-    menu->addAction(action);
+    action->setText(QObject::tr("动态乐谱视频…"));
+    action->setToolTip(QObject::tr("制作动态乐谱视频：选择谱表、预览换行，导出 MP4 或透明 MOV。"));
+    return action;
+}
+void addScoreVideoAction(QMenu* menu, MuseScore* window)
+{
+    if (!menu)
+        return;
+    auto action = scoreVideoAction(window);
+    if (menu->actions().contains(action))
+        return;
+    menu->insertAction(getAction("transpose"), action);
 }
 } // namespace Ms

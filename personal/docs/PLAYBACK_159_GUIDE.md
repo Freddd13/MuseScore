@@ -49,4 +49,4 @@
 - [个人开发以来的57项上游更新](UPSTREAM_159_REPORT.md)
 - [当前进度与后续完整计划](REWORK_PROGRESS.md)
 
-多轨MIDI、卷帘演奏调整、频谱、原曲关联控件及动态乐谱按本轮已批准计划逐批继续。[本批检查记录](PLAYBACK_159_CHECKS.md)包括实际操作、倚音谱图和Kawai发送量。
+本轮后续功能已分别提供：[MIDI轨道](MIDI_TRACKS_160_GUIDE.md)、[卷帘演奏调整](PERFORMANCE_TIMING_161_GUIDE.md)、[频谱](SPECTRUM_162_GUIDE.md)、[原曲关联控件](REFERENCE_CONTROLS_163_GUIDE.md)和[动态乐谱](SCORE_VIDEO_164_GUIDE.md)。[本批检查记录](PLAYBACK_159_CHECKS.md)包括实际操作、倚音谱图和Kawai发送量。

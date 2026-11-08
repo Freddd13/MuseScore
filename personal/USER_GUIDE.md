@@ -1,6 +1,8 @@
 # MuseScore Evolution 个人功能说明
 
-当前版本：**0.164.0 · Kumo branch / Freddd13**。
+当前版本：**0.165.0 · Kumo branch / Freddd13**。
+
+本次动态乐谱入口修复与整轮审视见[0.165更新](docs/ROUND_165_REVIEW.md)（`personal-v0.165.0`）。
 
 先按下面的任务找到入口。每章有完整操作例子、按钮说明、保存和撤销方法。“帮助 → 个人功能说明”可以在软件里直接阅读。
 
@@ -10,7 +12,7 @@
 
 | 想完成的事 | 从哪里开始 |
 |---|---|
-| 用原生谱面制作带声音或透明背景的视频 | [动态乐谱完整操作](docs/SCORE_VIDEO_164_GUIDE.md) |
+| 用原生谱面制作带声音或透明背景的视频 | 工具 → 动态乐谱视频…；[准备、试听和导出](docs/SCORE_VIDEO_164_GUIDE.md) |
 | 了解当前44项AI工具、数据和调用方法 | [AI连接完整实现报告](docs/AI_CONNECTION_IMPLEMENTATION_159.md) |
 | 从谱面播放原曲片段，查看范围并移动按钮 | [谱面原曲控件](docs/REFERENCE_CONTROLS_163_GUIDE.md) |
 | 听辨频谱、看基音和倍频，对照外部MIDI | [频谱完整操作](docs/SPECTRUM_162_GUIDE.md) |
@@ -76,6 +78,9 @@
 | 查看和弦、级数和构成音 | 视图 → 和弦助手 |
 | 查看编配提示 | 插件 → Arrangement Check |
 | 听原曲、慢放、循环 | 视图 → 原曲参考 |
+| 导入外部MIDI或临时画音 | 视图 → MIDI轨道 |
+| 看频谱、试音与标注 | 演奏编辑器 → 扒谱 |
+| 制作乐谱视频 | 工具 → 动态乐谱视频… |
 | 把演奏 MIDI 的力度用于谱子 | 视图 → 演奏表达 |
 | 用完整谱副本比较方案 | 插件 → Arrangement Variants |
 | 导出适合瀑布流视频的 MIDI | 文件 → 导出 → MIDI → 人性化裁剪 |

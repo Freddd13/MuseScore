@@ -1,9 +1,9 @@
 topic	path	symbol	line	role	tests
 启动	main/main.cpp	int main(	56	资源与应用入口	-
 模块装配	main/modulessetup.cpp	void ModulesSetup::setup()	52	可选模块注册	-
-主应用初始化	mscore/musescore.cpp	int runApplication(	9037	应用初始化与CLI	-
-命令分发	mscore/musescore.cpp	void MuseScore::cmd(QAction* a)	7021	状态检查与事务	-
-主窗口更新	mscore/musescore.cpp	void MuseScore::endCmd(bool undoRedo)	7106	UI与插件结束通知	-
+主应用初始化	mscore/musescore.cpp	int runApplication(	9039	应用初始化与CLI	-
+命令分发	mscore/musescore.cpp	void MuseScore::cmd(QAction* a)	7023	状态检查与事务	-
+主窗口更新	mscore/musescore.cpp	void MuseScore::endCmd(bool undoRedo)	7108	UI与插件结束通知	-
 快捷键	mscore/shortcut.cpp	Shortcut::getShortcut(	4466	命令注册与查询	-
 视图命令	mscore/scoreview.cpp	void ScoreView::cmd(const char* s)	2262	视图本地命令表	-
 事件与输入模式	mscore/events.cpp	void ScoreView::changeState(ViewState s)	1166	交互状态切换	-
@@ -57,7 +57,7 @@ MIDI左右手拆分	importexport/midiimport/importmidi_lrhand.h	void splitIntoLe
 力度曲线	mscore/pianoroll/pianolevels.cpp	void PianoLevels::adjustLevelLerp(	1182	批量线性调整	-
 起音参数	mscore/pianoroll/pianolevelsfilter.cpp	void PianoLevelFilterOnTime::setValue(	72	ChangeNoteEvent	-
 主窗口键盘	mscore/pianotools.cpp	PianoTools::PianoTools(	467	独立虚拟钢琴	-
-实时MIDI输入	mscore/musescore.cpp	void MuseScore::midiNoteReceived(	3942	硬件与UI输入转发	-
+实时MIDI输入	mscore/musescore.cpp	void MuseScore::midiNoteReceived(	3944	硬件与UI输入转发	-
 生成播放事件	libmscore/rendermidi.cpp	void Score::createPlayEvents(Chord* chord)	2440	Auto/User事件策略	mtest/libmscore/midi
 播放MIDI渲染	libmscore/rendermidi.cpp	void MidiRenderer::renderScore(	2589	分块渲染	mtest/libmscore/midi
 踏板播放	libmscore/rendermidi.cpp	void MidiRenderer::renderSpanners(	1169	踏板控制器及跨时元素	mtest/libmscore/spanners
@@ -98,10 +98,10 @@ SF2文件跳转	audio/midi/fluid/sfont.cpp	void SFont::safe_fseek(qint64 ofs)	18
 自动节奏策略	libmscore/inputrhythm.cpp	bool InputRhythm::normalize	61	局部链比较/重组/数值选区与光标恢复	mtest/libmscore/inputrhythm
 复杂对象保护	libmscore/inputrhythm.cpp	bool InputRhythm::eligible	42	自定义事件和复杂附着保守跳过	mtest/libmscore/inputrhythm
 和弦输入延音链	libmscore/inputrhythm.cpp	Note* InputRhythm::addToChain	160	新音高覆盖整链/延音/逻辑光标	mtest/libmscore/inputrhythm
-自动记谱开关	mscore/musescore.cpp	QAction* autoRhythm	2337	工具菜单/默认true/应用偏好	mtest/mscore/pluginhost
+自动记谱开关	mscore/musescore.cpp	QAction* autoRhythm	2338	工具菜单/默认true/应用偏好	mtest/mscore/pluginhost
 卷帘记谱输入	mscore/pianoroll/pianoview.cpp	QVector<Note*> PianoView::addNote	4037	明确输入与普通粘贴分开/重新查找片段	mtest/mscore/pluginhost
 rhythm-rules	libmscore/durationtype.cpp	std::vector<TDuration> toRhythmicDurationList	526	Simple/compound meter duration spelling; see personal guide 13	mtest/libmscore/inputrhythm
-restored-rhythm-menu	mscore/musescore.cpp	void MuseScore::updateMenus()	2849	Restore personal action into old workspace menus	mtest/mscore/pluginhost
+restored-rhythm-menu	mscore/musescore.cpp	void MuseScore::updateMenus()	2850	Restore personal action into old workspace menus	mtest/mscore/pluginhost
 text-font-fallback	libmscore/textbase.cpp	QFont TextFragment::font(	851	ScoreText music font vs ordinary Qt font merging	mtest/libmscore/text
 music-text-fallback	libmscore/sym.cpp	const char* ScoreFont::fallbackTextFont()	7174	Bravura Text fallback; not CJK title fallback	-
 harmony-regions	share/workflow/panels/HarmonyAssistant/Timeline.js	function createBuilder	92	Numeric interval builder and manual overlays	mtest/mscore/scoreobserver
@@ -170,7 +170,7 @@ harmony-range-editing	share/plugins/HarmonyAssistant/RangeEditor.qml	"objectName
 自由曲线检视器	mscore/inspector/freeslurinspector.h	class FreeSlurInspector	15	数字／名称拖动／安全队列	mtest/mscore/performanceeditor/freeslur_tests.inc
 谱带鼠标隔离	mscore/performanceeditor/performanceoverlay.cpp	bool PerformanceEditor::overlayEvent	67	完整frame阻断／原生双向选音	mtest/mscore/performanceeditor
 谱带重叠回归	mtest/mscore/performanceeditor/performance_controls_tests.inc	void reaperStemsAndStripSelection	62	双谱行和弦／真实选择拖拽／一次Undo	mtest/mscore/performanceeditor
-独立谱带入口	mscore/musescore.cpp	auto bandAction = new QAction	2049	共享菜单／工具栏Action与面板同步	mtest/mscore/performanceeditor
+独立谱带入口	mscore/musescore.cpp	auto bandAction = new QAction	2050	共享菜单／工具栏Action与面板同步	mtest/mscore/performanceeditor
 独立谱带生命周期	mscore/performanceeditor/performanceeditor.cpp	bool PerformanceEditor::surfacesActive() const	950	面板或谱带激活／关闭停刷	mtest/mscore/performanceeditor
 hand-bracket-geometry	libmscore/symbol.cpp	QPainterPath Symbol::handPath	111	Optional SMuFL hand geometry in spatium	mtest/mscore/performanceeditor/handsymbol_tests.inc
 hand-bracket-grips	libmscore/symbol.cpp	void Symbol::startEditDrag	166	Native Undo and cancellable endpoint preview	mtest/mscore/performanceeditor/handsymbol_tests.inc
@@ -531,7 +531,7 @@ CFX状态比较	audio/vst/plugin.cpp	comparableUnit	65	具名附件顺序与效�
 尺寸手势及时结束	mscore/performanceeditor/performanceeditor.cpp	const bool releasedBeforeMove	1287	无按键移动、新点击归还鼠标	mtest/mscore/pluginhost/input_121_tests.inc
 谱行带尺寸与光标	mscore/performanceeditor/performanceoverlay.cpp	void PerformanceEditor::endBandResize	54	正常完成、取消与边缘光标	mtest/mscore/pluginhost/input_121_tests.inc
 工具图标统一中心	mscore/workflow/workspaceviews.cpp	QIcon personalToolIcon	437	共用图形、中心与视觉尺寸	mtest/mscore/pluginhost/input_121_tests.inc
-工具按钮跟随尺寸	mscore/musescore.cpp	button->setIconSize(tools->iconSize())	780	原生按钮图标尺寸与菜单动作	mtest/mscore/pluginhost/input_121_tests.inc
+工具按钮跟随尺寸	mscore/musescore.cpp	button->setIconSize(tools->iconSize())	781	原生按钮图标尺寸与菜单动作	mtest/mscore/pluginhost/input_121_tests.inc
 实际演奏版本	mscore/plugin/api/analysisplayback.cpp	QString ScoreObserver::analysisPlaybackRevision	48	修改、静音及播放设置的读取版本	mtest/mscore/pluginhost/arrangement_122_tests.inc
 实际演奏准备	mscore/plugin/api/analysisplayback.cpp	QVariantMap ScoreObserver::analysisPlaybackPrepare	65	按音乐块与事件分批准备	mtest/mscore/pluginhost/arrangement_122_tests.inc
 实际演奏分页	mscore/plugin/api/analysisplayback.cpp	QVariantMap ScoreObserver::analysisPlaybackPage	117	原生tick、实际秒数、反复与音符身份	mtest/mscore/pluginhost/arrangement_122_tests.inc
@@ -638,7 +638,7 @@ AI连接独立控制	mscore/workflow/aiconnectionpanel.inc	ConnectionDialog	150	
 MCP会话控制	../../mcp-musescore/src/sessions.py	sessions	74	进程身份、活动记录及所选连接退出	../../mcp-musescore/tests/test_sessions.py
 MCP会话控制	../../mcp-musescore/src/sessions.py	end_session	167	进程身份、活动记录及所选连接退出	../../mcp-musescore/tests/test_sessions.py
 MCP会话控制	../../mcp-musescore/src/sessions.py	ClientSession	207	进程身份、活动记录及所选连接退出	../../mcp-musescore/tests/test_sessions.py
-MIDI反复与导出时间	audio/exports/exportmidi.cpp	ExportMidi::write	261	当前反复、暂停和提前起音元数据	mtest/mscore/p0native/tst_p0native.cpp
+MIDI反复与导出时间	audio/exports/exportmidi.cpp	ExportMidi::write	258	当前反复、暂停和提前起音元数据	mtest/mscore/p0native/tst_p0native.cpp
 导出选项与音符身份	audio/exports/midigatefile.cpp	midiGateSnapshot	9	RPN变化保留手别与松手	mtest/mscore/p0native/tst_p0native.cpp
 MIDI试听与提前区定位	mscore/workflow/playbackpreview.cpp	startPlaybackPreview	194	第二遍、声音位置、暂停和普通设置恢复	mtest/mscore/performanceeditor/midi_repeat_134_tests.inc
 Tap格式与指定标记	mscore/taptempo/tapmark.cpp	tapTempoText	56	格式、拍单位与精确目标	mtest/mscore/p1native/notation_135_tests.inc
@@ -717,7 +717,7 @@ SF3初次钢琴准备	audio/midi/fluid/fluid.cpp	bool Fluid::prepareDefaultPrese
 运行MCP版本	../../mcp-musescore/src/sessions.py	def connection_report(values, codex):	108	运行与配置分别记录，提示旧版本	personal/docs/AI_CONNECTION_154_CHECKS.md
 谱旁提示首帧	mtest/mscore/pluginhost/arrangement_083_tests.inc	QSignalSpy hintFrames(nearby,&QQuickWindow::frameSwapped);	102	实际显示后核对完整操作和窗口图像	personal/docs/QML_WINDOW_154_CHECKS.md
 反复中改速	mscore/seq.cpp	void Seq::setRelTempo(double relTempo)	1774	先更新反复时间，再保持当前拍位	mtest/mscore/pluginhost/upstream_155_tests.inc
-最近文件历史	mscore/musescore.cpp	QFileInfoList MuseScore::recentScores() const	8132	记住60份，显示20份，已打开提示	mtest/mscore/pluginhost/upstream_155_tests.inc
+最近文件历史	mscore/musescore.cpp	QFileInfoList MuseScore::recentScores() const	8134	记住60份，显示20份，已打开提示	mtest/mscore/pluginhost/upstream_155_tests.inc
 新版文字换行	libmscore/xmlreader.cpp	void XmlReader::htmlToString(int level, QString* s)	352	新版br换行及旧HTML保持	mtest/mscore/pluginhost/upstream_155_tests.inc
 旧HTML换行	libmscore/read114.cpp	QString convertFromHtml(TextBase* t, const QString& ss)	136	HTML行分隔转为真实文字换行	mtest/mscore/pluginhost/upstream_155_tests.inc
 分节停顿	libmscore/repeatlist.cpp	void RepeatList::flatten()	263	未展开反复仍保留分节时间	mtest/mscore/pluginhost/upstream_155_tests.inc
@@ -761,5 +761,6 @@ MIDI录制与播放	mscore/performanceeditor/miditrackplayback.cpp	void MidiTrac
 动态乐谱时间	mscore/scorevideo/scorevideotimeline.cpp	void ScoreVideoDocument::rebuildTimeline(	93	反复、原曲关联与手动换行	mtest/mscore/pluginhost/scorevideo_164_tests.inc
 动态乐谱画面	mscore/scorevideo/scorevideoframe.cpp	QImage scoreVideoFrame(	99	统一对齐、透明、反相与光标高亮	mtest/mscore/pluginhost/scorevideo_164_tests.inc
 动态乐谱视频	mscore/scorevideo/scorevideoexport.cpp	void ScoreVideoExport::encode(	145	后台编码、有限队列与取消	mtest/mscore/pluginhost/scorevideo_164_tests.inc
-动态乐谱面板	mscore/scorevideo/scorevideopanel.cpp	ScoreVideoPanel::ScoreVideoPanel(	273	预览、试听、时间与位置编辑	mtest/mscore/pluginhost/scorevideo_164_tests.inc
+动态乐谱面板	mscore/scorevideo/scorevideopanel.cpp	ScoreVideoPanel::ScoreVideoPanel(	274	预览、试听、时间与位置编辑	mtest/mscore/pluginhost/scorevideo_164_tests.inc
 视频原曲声音	mscore/referenceaudio/mediaexport.cpp	void ReferenceAudioExport::render(	30	有界离线解码、空隙与原子声音文件	mtest/mscore/spectrum/tst_spectrum.cpp
+动态乐谱入口	mscore/scorevideo/scorevideopanel.cpp	QAction* scoreVideoAction(	942	共用菜单与工具栏动作、旧工作区恢复及实验开关	mtest/mscore/pluginhost/scorevideo_164_tests.inc

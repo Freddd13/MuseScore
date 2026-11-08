@@ -422,11 +422,47 @@ void TestPluginHost::scoreVideoWorkspace164()
     QVERIFY(score);
     main->resize(1280, 900);
     main->show();
-    QMenu menu(main);
-    addScoreVideoAction(&menu);
+    // Use the actions created by normal startup. Creating a private menu here
+    // hides omissions in the actual menu and toolbar initialization.
     auto action = main->findChild<QAction*>("kumo-score-video");
     QVERIFY(action);
     QVERIFY(!action->icon().isNull());
+    auto toolbar = main->findChild<QToolBar*>("kumoPersonalTools");
+    QVERIFY(toolbar);
+    auto toolbarHasAction = [toolbar, action] {
+        for (auto button : toolbar->findChildren<QToolButton*>())
+            if (button->defaultAction() == action)
+                return true;
+        return false;
+    };
+    QVERIFY(toolbarHasAction());
+    auto tools = Workspace::findMenuFromString("menu-tools");
+    QVERIFY(tools && main->menuBar()->actions().contains(tools->menuAction()));
+    QCOMPARE(tools->actions().count(action), 1);
+
+    QDir().mkpath(dataPath + "/workspaces/global");
+    Workspace::writeGlobalMenuBar(main->menuBar());
+    QFile saved(dataPath + "/workspaces/global/menubar.xml");
+    QVERIFY(saved.open(QIODevice::ReadOnly));
+    QByteArray xml = saved.readAll();
+    saved.close();
+    QVERIFY(xml.contains("<action>kumo-score-video</action>"));
+    xml.replace("<action>kumo-score-video</action>", "");
+    QVERIFY(saved.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    QCOMPARE(saved.write(xml), qint64(xml.size()));
+    saved.close();
+    XmlReader reader(xml);
+    QVERIFY(reader.readNextStartElement());
+    Workspace workspace;
+    workspace.read(reader);
+    main->updateMenus();
+    main->updateMenus();
+    tools = Workspace::findMenuFromString("menu-tools");
+    QVERIFY(tools && main->menuBar()->actions().contains(tools->menuAction()));
+    QCOMPARE(tools->actions().count(action), 1);
+    QVERIFY(tools->actions().indexOf(action) < tools->actions().indexOf(getAction("transpose")));
+    QCOMPARE(main->findChild<QAction*>("kumo-score-video"), action);
+    QVERIFY(toolbarHasAction());
     auto arrange = main->findChild<QAction*>("kumo-workspace-arrange");
     auto post = main->findChild<QAction*>("kumo-workspace-post");
     QVERIFY(arrange && post);

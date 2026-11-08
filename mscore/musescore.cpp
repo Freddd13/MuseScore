@@ -769,7 +769,8 @@ void MuseScore::populateAlternativeOperations()
       const auto oldTools=tools->actions();tools->clear();
       for(auto action:oldTools)if(action->parent()==tools)delete action;
       for (const char* name : {"performance-editor", "performance-score-band", "harmony-assistant", "reference-player", "performance-expression", "kumo-spectrum", "arrangement-suggestions", "kumo-vst", "kumo-score-video"}) {
-            auto action = findChild<QAction*>(name);
+            auto action = QString(name) == "kumo-score-video"
+                  ? scoreVideoAction(this) : findChild<QAction*>(name);
 #ifdef SCRIPT_INTERFACE
             if (!action && QStringList{"harmony-assistant", "reference-player", "performance-expression", "arrangement-suggestions"}.contains(name)) action = getAction(name);
 #endif
@@ -2302,7 +2303,7 @@ MuseScore::MuseScore()
       markPersonalAction(getAction("tap-tempo"));
       menuTools->addAction(getAction("tap-tempo"));
       addReferenceActions(menuTools);
-      addScoreVideoAction(menuTools);
+      addScoreVideoAction(menuTools, this);
 #ifdef SCRIPT_INTERFACE
       addRegionalVariantAction(menuTools);
 #endif
@@ -2865,6 +2866,7 @@ void MuseScore::updateMenus()
       updateMenu(menuFormat,      "menu-format",       "Format");
       updateMenu(menuStretch,     "menu-stretch",      "");
       updateMenu(menuTools,       "menu-tools",        "Tools");
+      addScoreVideoAction(menuTools, this);
       if(menuTools)addInputNotationMenu(menuTools);
       for (const char* actionName : {"auto-rhythmic-input", "auto-tie-beams", "coherent-tie-stems"}) if (auto action = findChild<QAction*>(actionName)) {
             if (menuTools && !menuTools->actions().contains(action)) {
