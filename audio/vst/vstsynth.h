@@ -25,6 +25,7 @@ class VstSynth final : public Synthesizer {
   std::array<std::atomic<int>,256> pianoBanks;
   QVector<int> configuredPianoBanks = QVector<int>(256,0);
   QVariantMap playbackConfiguration(const QVariantMap&) const;
+  void updatePatchList();
 
 public:
   explicit VstSynth(bool offline = false, Synthesizer *fallback = nullptr,
@@ -52,10 +53,12 @@ public:
   void clearState() override;
   SynthesizerGroup state() const override;
   bool setState(const SynthesizerGroup &) override;
-  bool setConfiguration(const QVariantMap &);
+  bool setConfiguration(const QVariantMap &, bool deferCfx = false);
+  bool setScoreState(const SynthesizerGroup &, bool deferCfx);
+  bool adoptPreparedSources();
   bool setReferenceSources(const QVariantList&);
-  QVariantMap configuration(bool snapshot = true);
-  QVariantMap runtimeConfiguration(bool snapshot = true);
+  QVariantMap configuration(bool snapshot = true, bool changedOnly = false);
+  QVariantMap runtimeConfiguration(bool snapshot = true, bool changedOnly = false);
   void rememberPianoSnapshot(const QVariantMap& value) {
     config["commonPianoSnapshot"]=value; config["schema"]=1;
   }

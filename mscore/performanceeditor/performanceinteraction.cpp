@@ -350,11 +350,12 @@ void PerformanceEditor::updatePlayhead()
       const bool recording=workflowContext()->captureCurrent(_score)&&workflowContext()->capture().value("recording").toBool();
       const int tick = recording ? workflowContext()->capture().value("matchedTick",-1).toInt() : playing ? _score->repeatList().utick2tick(seq->getCurTick()) : _score->playPos().ticks();
       const int previous = _playTick; _playTick = tick;
-      bool midiCursor=false;
+      bool ownsTimeline = false;
 #ifdef SCRIPT_INTERFACE
-      midiCursor=_midiTracks&&_midiTracks->ownsPlaybackCursor();
+      ownsTimeline = (_midiTracks && _midiTracks->ownsPlaybackCursor()) ||
+                     (_spectrum && _spectrum->controlsPlaybackViewport());
 #endif
-      if (!midiCursor && _following && (playing||recording) && tick>=0 && !_dragging && !_marquee && !_seeking) {
+      if (!ownsTimeline && _following && (playing||recording) && tick>=0 && !_dragging && !_marquee && !_seeking) {
             _followButton->setText(tr("跟随播放"));
             const int span = _scroll->pageStep();
             const int shown=comparisonPlayTick(tick);

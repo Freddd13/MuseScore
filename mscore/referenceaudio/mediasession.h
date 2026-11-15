@@ -29,6 +29,7 @@ class ReferenceMediaSession:public QObject {
  bool _waveformEnabled=true,_reading=false;
  QString _requestedPath;
  QString _path,_status;
+ QVariantMap _identity;
  double _duration=0,_position=0,_speed=1,_volume=.8,_a=0,_b=0,_origin=0;
  bool _loop=false,_fade=true;
  int _rate=44100,_generation=0,_loadGeneration=0;

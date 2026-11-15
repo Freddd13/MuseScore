@@ -91,6 +91,7 @@ class QmlPlugin : public QQuickItem {
       Q_INVOKABLE void setPanelFloating(bool floating);
       Q_INVOKABLE void focusPanel();
       Q_INVOKABLE void hidePanel();
+      Q_INVOKABLE bool panelMinimized() const;
       Q_INVOKABLE void resizePanel(int width,int height);
       Q_INVOKABLE void showPanelHint(const QString& text, QQuickItem* target);
       Q_INVOKABLE QVariantMap panelScreen(QQuickItem* target) const;

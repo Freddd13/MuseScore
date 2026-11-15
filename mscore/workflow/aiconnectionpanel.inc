@@ -7,11 +7,52 @@ class ConnectionDialog : public QDialog {
   QCheckBox *automatic = nullptr, *codexEnabled = nullptr;
   QToolButton *sessionMore = nullptr;
   QWidget *sessionDetails = nullptr;
+  QToolButton *materialsMore = nullptr;
+  QWidget *materialsDetails = nullptr;
+  QLabel *engravingSkill = nullptr, *engravingLibrary = nullptr;
+  QLabel *expressionSkill = nullptr, *expressionLibrary = nullptr;
+  QPushButton *engravingHelp = nullptr, *expressionHelp = nullptr;
+  QString engravingGuide, expressionGuide;
   QList<QPushButton *> operations;
   QJsonObject lastCodex;
   QTimer refresh;
   bool busy = false;
   QString lastWindows;
+
+  void refreshMaterials() {
+    const auto details = [](QLabel* label, const QString &text, const QString &path) {
+      label->setText(text);
+      label->setToolTip(QDir::toNativeSeparators(path));
+    };
+    const auto engraving = installedSkill("piano-engraving");
+    const auto engravingVersion = skillVersion(engraving);
+    const auto engravingManifest = findResearchFile("MCP_MUSESCORE_DIR", "mcp-musescore",
+                                                    "docs/engraving/release_1_0_0_evidence.json");
+    const auto libraryVersion = readJson(engravingManifest).value("version").toString();
+    engravingGuide = findResearchFile("MCP_MUSESCORE_DIR", "mcp-musescore", "docs/ENGRAVING_SKILL.md");
+    details(engravingSkill, engraving.isEmpty() ? tr("净书技能：Codex 用户目录中未找到")
+      : engravingVersion.isEmpty() ? tr("净书技能：已找到，文件中未标版本")
+                                    : tr("净书技能：%1").arg(engravingVersion), engraving);
+    details(engravingLibrary, libraryVersion.isEmpty() ? tr("净书资料：未找到 1.0.0 发布记录")
+                                                       : tr("净书资料：%1").arg(libraryVersion), engravingManifest);
+    engravingHelp->setEnabled(!engravingGuide.isEmpty());
+
+    const QString release = "piano-expression-0.3.3";
+    const QString relative = "output/releases/" + release + "/";
+    const auto manifestPath = findResearchFile("PIANO_EXPRESSION_DIR", "music-explore", relative + "manifest.json");
+    const auto manifest = readJson(manifestPath);
+    const bool hasRelease = manifest.value("version").toString() == release;
+    const auto expression = installedSkill("piano-midi-expression");
+    const auto expressionVersion = skillVersion(expression);
+    expressionGuide = hasRelease ? readableFile(QFileInfo(manifestPath).dir().filePath("START_HERE.md")) : QString();
+    details(expressionSkill, expression.isEmpty() ? tr("力度技能：Codex 用户目录中未找到")
+      : hasRelease && matchesReleaseSkill(expression, manifest) ? tr("力度技能：与 0.3.3 发布内容一致")
+      : expressionVersion.isEmpty() ? tr("力度技能：已找到，文件中未标版本")
+                                    : tr("力度技能：%1").arg(expressionVersion), expression);
+    details(expressionLibrary, hasRelease ? tr("力度资料：%1").arg(release)
+                                          : tr("力度资料：未找到 %1").arg(release), manifestPath);
+    expressionHelp->setEnabled(!expressionGuide.isEmpty());
+  }
 
   void refreshService() {
     connectionState->setText(bridge ? bridge->status() : tr("AI 读谱连接已停止。点击“开启读谱连接”后可继续使用。"));
@@ -132,6 +173,14 @@ class ConnectionDialog : public QDialog {
           status->setText(result.value("error").toString(process->property("timedOut").toBool()
             ? tr("操作超时，请重试。") : tr("MCP 检查未完成，请确认程序包完整后重试。")));
         }
+        if (mode == "--register-codex" || mode == "--diagnose")
+          refreshMaterials();
+        for (const auto item : result.value("skills").toArray()) {
+          const auto skill = item.toObject();
+          const auto error = skill.value("configureError").toString();
+          if (!error.isEmpty())
+            status->setText(status->text() + "\n" + tr("%1技能安装失败：%2").arg(skill.value("label").toString(), error));
+        }
         updateOperations(); refreshWindows(); refreshService(); process->deleteLater();
       });
     const auto item = windows->currentItem();
@@ -140,7 +189,7 @@ class ConnectionDialog : public QDialog {
     args << "--application" << target; process->start(mcpProgram(), args);
   }
   void showEvent(QShowEvent *event) override {
-    QDialog::showEvent(event); refreshWindows(); refreshService(); refresh.start();
+    QDialog::showEvent(event); refreshWindows(); refreshService(); refreshMaterials(); refresh.start();
     QTimer::singleShot(0, this, [this] { if (isVisible() && !busy) run("--sessions"); });
   }
   void hideEvent(QHideEvent *event) override {
@@ -183,8 +232,12 @@ public:
     auto configure = new QPushButton(tr("配置 Codex")); setComponentToolIcon(configure, "settings"); configure->setObjectName("aiConfigureCodex"); row->addWidget(configure);
     auto check = new QPushButton(tr("检查连接")); setComponentToolIcon(check, "refresh"); check->setObjectName("aiCheckConnection"); row->addWidget(check);
     auto copy = new QPushButton(tr("复制配置")); setComponentToolIcon(copy, "copy"); row->addWidget(copy); row->addStretch();
-    connect(configure, &QPushButton::clicked, this, [this] { run("--register-codex"); });
-    connect(check, &QPushButton::clicked, this, [this] { run("--diagnose"); });
+    connect(configure, &QPushButton::clicked, this, [this] {
+      refreshMaterials(); materialsMore->setChecked(true); run("--register-codex");
+    });
+    connect(check, &QPushButton::clicked, this, [this] {
+      refreshMaterials(); run("--diagnose");
+    });
     connect(copy, &QPushButton::clicked, this, [this] {
       const auto item = windows->currentItem();
       const auto target = item ? item->data(Qt::UserRole + 1).toString() : QCoreApplication::applicationFilePath();
@@ -194,6 +247,27 @@ public:
     });
     codexEnabled = new QCheckBox(tr("允许 Codex 启动 MuseScore MCP")); codexEnabled->setObjectName("aiCodexEnabled"); codexEnabled->setEnabled(false); layout->addWidget(codexEnabled);
     connect(codexEnabled, &QCheckBox::clicked, this, [this](bool checked) { run(checked ? "--enable-codex" : "--disable-codex"); });
+    row = new QHBoxLayout; layout->addLayout(row);
+    materialsMore = new QToolButton; materialsMore->setText(tr("钢琴净书与力度资料")); materialsMore->setCheckable(true);
+    materialsMore->setObjectName("aiMaterialsToggle"); materialsMore->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    materialsMore->setArrowType(Qt::RightArrow); row->addWidget(materialsMore); row->addStretch();
+    materialsDetails = new QWidget; layout->addWidget(materialsDetails);
+    auto materials = new QVBoxLayout(materialsDetails); materials->setContentsMargins(4, 0, 0, 0);
+    auto materialLabel = [materials](const char* name) {
+      auto label = new QLabel; label->setObjectName(name); label->setWordWrap(true);
+      label->setTextFormat(Qt::PlainText); materials->addWidget(label); return label;
+    };
+    engravingSkill = materialLabel("aiEngravingSkill"); engravingLibrary = materialLabel("aiEngravingLibrary");
+    expressionSkill = materialLabel("aiExpressionSkill"); expressionLibrary = materialLabel("aiExpressionLibrary");
+    auto materialLinks = new QHBoxLayout; materials->addLayout(materialLinks);
+    engravingHelp = new QPushButton(tr("打开净书使用说明")); materialLinks->addWidget(engravingHelp);
+    expressionHelp = new QPushButton(tr("打开力度示例说明")); materialLinks->addWidget(expressionHelp); materialLinks->addStretch();
+    connect(engravingHelp, &QPushButton::clicked, this, [this] { QDesktopServices::openUrl(QUrl::fromLocalFile(engravingGuide)); });
+    connect(expressionHelp, &QPushButton::clicked, this, [this] { QDesktopServices::openUrl(QUrl::fromLocalFile(expressionGuide)); });
+    connect(materialsMore, &QToolButton::toggled, this, [this](bool visible) {
+      materialsDetails->setVisible(visible); materialsMore->setArrowType(visible ? Qt::DownArrow : Qt::RightArrow);
+    });
+    materialsDetails->hide(); refreshMaterials();
     row = new QHBoxLayout; layout->addLayout(row);
     sessionMore = new QToolButton; sessionMore->setObjectName("aiSessionDetailsToggle"); sessionMore->setText(tr("Codex 连接")); sessionMore->setCheckable(true);
     sessionMore->setToolButtonStyle(Qt::ToolButtonTextBesideIcon); row->addWidget(sessionMore);

@@ -1,5 +1,7 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "arrangement.h"
+#include "arrangementcontext.h"
+#include "engravingcandidate.h"
 #include "featuregate.h"
 #include "playbackpreview.h"
 #include "regionalcomparison.h"
@@ -23,6 +25,7 @@
 #include "libmscore/notevelocity.h"
 #include "libmscore/velocitybackup.h"
 #include "libmscore/pitchspelling.h"
+#include "libmscore/playbackenvelope.h"
 #include "libmscore/regionalvariants.h"
 #include "libmscore/regionalconnections.h"
 #include "libmscore/segment.h"
@@ -43,6 +46,7 @@
 #include <algorithm>
 #include <memory>
 #include <cmath>
+#include <limits>
 
 namespace Ms {
 namespace {
@@ -50,6 +54,8 @@ struct Option {
     QString id, snapshot, title, summary;
     QVariantMap scope, values, brief;
     QVariantList differences;
+    QVariantList velocityDifferences;
+    QVariantList engravingDifferences;
     QVariantMap preparation;
     std::shared_ptr<MasterScore> copy;
     bool used = false;
@@ -108,9 +114,194 @@ Note *noteFor(Score *score, const QString &id) {
     }
     return index < int(chord->notes().size()) ? chord->notes()[index] : nullptr;
 }
+QString noteIdentity(const Note *note) {
+    if (!note) return {};
+    const auto chord = note->chord();
+    const auto &notes = chord->notes();
+    const auto it = std::find(notes.cbegin(), notes.cend(), note);
+    if (it == notes.cend()) return {};
+    const auto main = chord->isGrace() ? toChord(chord->parent()) : chord;
+    auto id = QString("%1:%2:%3").arg(main->tick().ticks()).arg(note->track())
+        .arg(int(it - notes.cbegin()));
+    if (chord->isGrace())
+        id += QString(":g%1").arg(main->graceNotes().indexOf(chord));
+    return id;
+}
 bool contains(const QVariantMap &scope, int at, int track) {
     return at >= scope.value("start").toInt() && at < scope.value("end").toInt() &&
            track >= scope.value("firstTrack").toInt() && track < scope.value("endTrack").toInt();
+}
+QVariantList actualAttacks(Score *score, const QVariantMap &scope, const QString &snapshot) {
+    QVariantList result;
+    EventMap rendered;
+    score->renderMidi(&rendered, true, MScore::playRepeats, mscore->synthesizerState());
+    QHash<int, QVector<const RepeatSegment *>> passes;
+    for (const auto &event : rendered) {
+        const auto &play = event.second;
+        if (play.type() != ME_NOTEON || !play.velo() || play.discard() || play.isMuted()) continue;
+        const auto source = play.note();
+        const auto owner = play.noteEventOwner() ? play.noteEventOwner() : source;
+        const auto represented = source ? source : owner;
+        const int track = represented ? represented->track() : play.harmony() ? play.harmony()->track() : -1;
+        const auto chord = represented ? represented->chord() : nullptr;
+        const auto main = chord && chord->isGrace() ? toChord(chord->parent()) : chord;
+        const int tick = main ? main->tick().ticks() : score->repeatList().utick2tick(event.first);
+        if (!contains(scope, tick, track)) continue;
+        QVariantMap row{{"unfoldedTick", event.first}, {"tick", tick}, {"track", track},
+            {"pitch", play.pitch()}, {"velocity", play.velo()}, {"channel", play.channel()}};
+        if (represented) {
+            const auto id = noteIdentity(represented);
+            const auto ownerId = noteIdentity(owner);
+            if (id.isEmpty() || ownerId.isEmpty()) continue;
+            auto position = owner->chord()->tick().ticks();
+            if (owner->chord()->isGrace()) position = toChord(owner->chord()->parent())->tick().ticks();
+            if (!passes.contains(position)) {
+                QVector<const RepeatSegment *> entries;
+                for (auto pass : score->repeatList())
+                    if (position >= pass->tick && position < pass->tick + pass->len()) entries.append(pass);
+                passes.insert(position, entries);
+            }
+            int occurrence = 1, offset = 0;
+            int nearest = std::numeric_limits<int>::max();
+            for (auto pass : passes.value(position)) {
+                const int distance = qAbs(play.nominalTick() - (position + pass->utick - pass->tick));
+                if (distance >= nearest) continue;
+                nearest = distance;
+                occurrence = pass->playbackCount;
+                offset = pass->utick - pass->tick;
+            }
+            arrangementPitchDetails(row, represented);
+            row["pitch"] = play.pitch();
+            row["writtenPitch"] = represented->pitch();
+            row["writtenTpc"] = represented->tpc();
+            row["ref"] = QVariantMap{{"snapshotId", snapshot}, {"id", id}};
+            row["ownerId"] = ownerId;
+            row["eventIndex"] = play.noteEventIndex();
+            row["occurrence"] = occurrence;
+            row["offset"] = offset;
+            const auto measure = represented->chord()->measure();
+            row["beat"] = 1. + (tick - measure->tick().ticks()) / (DIVISION * 4. / measure->timesig().denominator());
+            const auto &events = owner->playEvents();
+            const int eventIndex = play.noteEventIndex();
+            if (eventIndex >= 0 && eventIndex < events.size()) {
+                row["envelopeFactor"] = PlaybackEnvelope::eventFactor(owner, events[eventIndex]);
+                row["base"] = NoteVelocity::referenceBaseAt(represented, event.first - offset,
+                    mscore->synthesizerState().method());
+            }
+        }
+        result.append(row);
+        if (result.size() >= 20000) break;
+    }
+    return result;
+}
+QString attackKey(const QVariantMap &row) {
+    return QString("%1/%2/%3/%4/%5").arg(row.value("ref").toMap().value("id").toString())
+        .arg(row.value("ownerId").toString()).arg(row.value("eventIndex").toInt())
+        .arg(row.value("unfoldedTick").toInt()).arg(row.value("pitch").toInt());
+}
+QVariantList velocityComparison(Score *original, Score *proposed, const Option &option) {
+    QVariantMap edits;
+    for (auto value : option.values.value("changes").toList()) {
+        const auto row = value.toMap();
+        if (row.contains("velocity"))
+            edits.insert(row.value("ref").toMap().value("id").toString(), row);
+    }
+    if (edits.isEmpty()) return {};
+    QHash<QString, QVariantMap> changed;
+    for (auto value : actualAttacks(proposed, option.scope, option.snapshot)) {
+        const auto row = value.toMap();
+        if (edits.contains(row.value("ref").toMap().value("id").toString()))
+            changed.insert(attackKey(row), row);
+    }
+    QVariantList result;
+    for (auto value : actualAttacks(original, option.scope, option.snapshot)) {
+        auto row = value.toMap();
+        const auto matching = changed.constFind(attackKey(row));
+        if (matching == changed.cend() || row.value("velocity") == matching->value("velocity")) continue;
+        const auto edit = edits.value(row.value("ref").toMap().value("id").toString()).toMap();
+        row["before"] = row.take("velocity");
+        row["after"] = matching->value("velocity");
+        row["role"] = edit.value("role");
+        row["reason"] = edit.value("reason");
+        result.append(row);
+    }
+    return result;
+}
+QVariantMap velocityProposal(Score *score, const QVariantMap &scope, const QString &snapshot,
+                             const QVariantMap &request) {
+    const auto kind = request.value("kind").toString();
+    if (kind != "melody" && kind != "background" && kind != "phrase")
+        return error(QObject::tr("请选择突出旋律、收轻背景或乐句起伏。"));
+    const int amount = request.value("amount", 3).toInt();
+    if (amount < 1 || amount > 24) return error(QObject::tr("力度幅度请填 1 至 24。"));
+    const int start = scope.value("start").toInt(), end = scope.value("end").toInt();
+    const int peak = request.value("peakTick", start + (end - start) / 2).toInt();
+    if (kind == "phrase" && (peak < start || peak >= end))
+        return error(QObject::tr("请在选段内指定句峰。"));
+    const auto roles = request.value("roles").toMap();
+    const auto noteRoles = request.value("noteRoles").toMap();
+    QSet<QString> locked;
+    for (auto value : request.value("lockedNotes").toList()) locked.insert(value.toString());
+    const auto attacks = actualAttacks(score, scope, snapshot);
+    if (attacks.size() >= 20000) return error(QObject::tr("演奏事件较多，请按乐句分段生成建议。"));
+    QSet<QString> seen;
+    QVariantList result;
+    for (auto value : attacks) {
+        const auto event = value.toMap();
+        const auto ref = event.value("ref").toMap();
+        const auto id = ref.value("id").toString();
+        if (id.isEmpty() || seen.contains(id) || locked.contains(id)) continue;
+        const auto track = QString::number(event.value("track").toInt());
+        const auto role = noteRoles.value(id, roles.value(track)).toString();
+        if ((kind == "background" ? role != "background" : role != "melody")) continue;
+        const auto note = noteFor(score, id);
+        if (!note || note->tieBack()) continue;
+        if (request.value("preserveManual", true).toBool()
+            && (note->veloType() != Note::ValueType::OFFSET_VAL || note->veloOffset() != 0
+                || note->chord()->playEventType() == PlayEventType::User))
+            continue;
+        seen.insert(id);
+        const int tick = event.value("tick").toInt();
+        const int before = event.value("velocity").toInt();
+        int delta = kind == "background" ? -amount : amount;
+        if (kind == "phrase") {
+            const double weight = tick <= peak ? double(tick - start) / qMax(1, peak - start)
+                : double(end - tick) / qMax(1, end - peak);
+            delta = qRound(amount * weight);
+        }
+        const int wanted = qBound(1, before + delta, 127);
+        if (before == wanted) continue;
+        const double factor = event.value("envelopeFactor", 1.).toDouble();
+        if (factor <= 0.) continue;
+        const int base = event.contains("base") ? event.value("base").toInt()
+            : NoteVelocity::referenceBase(note, mscore->synthesizerState().method());
+        const int target = qBound(1, qRound(wanted / factor), 127);
+        const QString reason = kind == "background" ? QObject::tr("给旋律留出空间")
+            : kind == "melody" ? QObject::tr("突出指定的旋律")
+            : QObject::tr("向指定句峰推进，再逐渐收回");
+        result.append(QVariantMap{{"ref", ref}, {"velocity", target}, {"velocityBase", base},
+            {"velocityMode", "preserve"}, {"role", role}, {"reason", reason}});
+    }
+    if (result.isEmpty())
+        return error(QObject::tr("没有可调整的起音。请标记需要的旋律或背景，再检查力度保护设置。"));
+    const auto title = kind == "background" ? QObject::tr("收轻背景") : kind == "melody" ? QObject::tr("突出旋律") : QObject::tr("乐句起伏");
+    const QVariantMap option{{"title", title}, {"summary", QObject::tr("试听原版与这版，再选择需要采用的音。")},
+        {"scope", scope}, {"changes", result}, {"source", QVariantMap{{"kind", "velocityProposal"}, {"recipeVersion", "piano-expression-0.3.3"}}}};
+    return {{"snapshotId", snapshot}, {"options", QVariantList{option}},
+        {"taskBrief", QVariantMap{{"scope", scope}, {"preserveNotes", request.value("lockedNotes")}}}};
+}
+bool velocityOnly(const Option &option) {
+    const auto changes = option.values.value("changes").toList();
+    if (changes.isEmpty() || !option.values.value("voices").toList().isEmpty()) return false;
+    for (auto value : changes) {
+        const auto row = value.toMap();
+        if (!row.contains("velocity") || row.contains("pitch") || row.contains("finger") || row.contains("hand"))
+            return false;
+    }
+    return true;
+}
+bool engravingOnly(const Option &option) {
+    return option.values.contains("engravingChanges");
 }
 QSet<int> protectedTracks(const QVariantMap &brief) {
     QSet<int> result;
@@ -120,7 +311,7 @@ QSet<int> protectedTracks(const QVariantMap &brief) {
         result.insert(0);
     return result;
 }
-QByteArray digest(Score *score, const QVariantMap &scope) {
+QByteArray digest(Score *score, const QVariantMap &scope, bool layoutOnly = false) {
     QByteArray bytes;
     QDataStream out(&bytes, QIODevice::WriteOnly);
     for (auto s = score->firstSegment(SegmentType::ChordRest);
@@ -139,8 +330,12 @@ QByteArray digest(Score *score, const QVariantMap &scope) {
                             << bool(n->tieBack()) << bool(n->tieFor());
                         out<<int(n->chord()->playEventType());if(n->chord()->playEventType()==PlayEventType::User)out<<n->playEvents().size();if(n->chord()->playEventType()==PlayEventType::User)for(const auto &event:n->playEvents())out<<event.pitch()<<event.ontime()<<event.len();
                         for (auto a : n->el())
-                            if (a->isFingering() || a->isSymbol())
-                                out << a->mimeData(QPointF());
+                            if (a->isFingering() || a->isSymbol()) {
+                                if (layoutOnly)
+                                    out << int(a->type()) << a->accessibleInfo();
+                                else
+                                    out << a->mimeData(QPointF());
+                            }
                     }
             }
     return QCryptographicHash::hash(bytes, QCryptographicHash::Sha256);
@@ -285,7 +480,8 @@ bool mutate(Score *score, const Option &option, QString *problem) {
             *problem = QObject::tr("建议改到了需要保留的旋律或声部，请调整写法或本次要求。");
             return false;
         }
-        const QSet<QString> allowed{"ref", "pitch", "tpc1", "tpc2", "velocity", "finger", "hand", "handEnd"};
+        const QSet<QString> allowed{"ref", "pitch", "tpc1", "tpc2", "velocity", "velocityMode",
+            "velocityBase", "role", "reason", "finger", "hand", "handEnd"};
         for (auto key : row.keys())
             if (!allowed.contains(key)) {
                 *problem = QObject::tr("建议中有尚未支持的音符修改：%1").arg(key);
@@ -332,6 +528,18 @@ bool mutate(Score *score, const Option &option, QString *problem) {
         if (row.contains("velocity") && (row["velocity"].toInt() < 1 || row["velocity"].toInt() > 127)) {
             *problem = QObject::tr("音符力度应在1至127之间。");
             return false;
+        }
+        if (row.contains("velocity")) {
+            if (protectedNotes.contains(id)) {
+                *problem = QObject::tr("建议改到了已锁定的音，请从建议中移除此音。");
+                return false;
+            }
+            const auto mode = row.value("velocityMode", "fixed").toString();
+            if ((mode != "preserve" && mode != "fixed" && mode != "relative") ||
+                (row.contains("velocityBase") && (row["velocityBase"].toInt() < 1 || row["velocityBase"].toInt() > 127))) {
+                *problem = QObject::tr("力度方式或参考值无效，请重新读取此音。");
+                return false;
+            }
         }
         if (row.contains("finger") && (row["finger"].toInt() < 1 || row["finger"].toInt() > 5)) {
             *problem = QObject::tr("钢琴指法请使用1至5。");
@@ -590,8 +798,17 @@ bool mutate(Score *score, const Option &option, QString *problem) {
             score->undoChangePitch(n, row["pitch"].toInt(), row["tpc1"].toInt(), row["tpc2"].toInt());
         if (row.contains("velocity")) {
             VelocityBackup::remember(score, n);
-            n->undoChangeProperty(Pid::VELO_TYPE, int(Note::ValueType::USER_VAL));
-            n->undoChangeProperty(Pid::VELO_OFFSET, row["velocity"].toInt());
+            const auto mode = row.value("velocityMode", "fixed").toString();
+            const auto type = mode == "preserve" ? n->veloType()
+                : mode == "relative" ? Note::ValueType::OFFSET_VAL : Note::ValueType::USER_VAL;
+            int value = row["velocity"].toInt();
+            if (type == Note::ValueType::OFFSET_VAL) {
+                const int base = row.contains("velocityBase") ? row["velocityBase"].toInt()
+                    : NoteVelocity::referenceBase(n, mscore->synthesizerState().method());
+                value = NoteVelocity::offsetFor(base, value);
+            }
+            n->undoChangeProperty(Pid::VELO_TYPE, int(type));
+            n->undoChangeProperty(Pid::VELO_OFFSET, value);
         }
         if (row.contains("finger")) {
             for (auto e : n->el())
@@ -877,6 +1094,10 @@ QVariantMap summary(const Option &option) {
             {"summary", option.summary},
             {"scope", option.scope},
             {"differences", option.differences},
+            {"velocityDifferences", option.velocityDifferences},
+            {"engravingDifferences", option.engravingDifferences},
+            {"engravingOnly", engravingOnly(option)},
+            {"velocityOnly", velocityOnly(option)},
             {"localSettings",option.brief.value("localSettings")},
             {"localKind",option.brief.value("localKind")},
             {"pianoSettings",option.brief.value("pianoSettings")},
@@ -896,6 +1117,16 @@ QSet<QString> adoptedOptions(Score *score) {
     return cache->adopted;
 }
 } // namespace
+
+QString arrangementNoteIdentity(const Note *note) { return noteIdentity(note); }
+void clearArrangementPreview(ScoreView *view) {
+    if (!view || !view->score()) return;
+    view->score()->QObject::setProperty("kumoVelocitySuggestion", QVariant());
+    showRegionalDifference(view, nullptr, {}, "arrangement");
+    if (mscore)
+        if (auto canvas = mscore->findChild<QWidget *>("performanceParameterCanvas"))
+            canvas->update();
+}
 
 QString rollNotationIdentity(Score* score,const QVariantMap& scope){return score?QString::fromLatin1(digest(score,scope).toHex()):QString();}
 QVariantMap applyRollNotation(PluginAPI::ScoreObserver* observer,Score* score,const QVariantMap& request){
@@ -990,12 +1221,23 @@ QVariantMap arrangementOperation(PluginAPI::ScoreObserver *observer, Score *scor
             result["snapshotId"] = observer->analysisContentRevision();
             return result;
         }
+        if (action == "proposeVelocityAdjustment") {
+            if (request.value("snapshotId") != observer->analysisContentRevision())
+                return error(QObject::tr("请先读取当前选段，再按这一版生成力度建议。"));
+            if (seq && (seq->isPlaying() || !seq->backgroundRenderingIdle()))
+                return error(QObject::tr("暂停播放后即可生成力度建议。"));
+            const auto state = observer->arrangementState({{"scope", request.value("scope")}});
+            if (state.contains("error")) return state;
+            auto proposed = velocityProposal(score, state.value("scope").toMap(),
+                observer->analysisContentRevision(), request);
+            if (proposed.contains("error")) return proposed;
+            proposed["showPanel"] = request.value("showPanel", true);
+            return arrangementOperation(observer, score, "submitArrangementOptions", proposed);
+        }
         if (action == "submitArrangementOptions") {
             const QString snapshot = request.value("snapshotId").toString();
             if (snapshot != observer->analysisContentRevision())
                 return error(QObject::tr("乐谱已经更新，请按现在的谱子重新比较写法。"));
-            if (!score->isMaster())
-                return error(QObject::tr("请在总谱中比较编配写法。"));
             if (seq && (!seq->backgroundRenderingIdle() || seq->isPlaying()))
                 return error(QObject::tr("停止播放后即可准备新的写法。"));
             const auto choices = request.value("options").toList();
@@ -1013,10 +1255,16 @@ QVariantMap arrangementOperation(PluginAPI::ScoreObserver *observer, Score *scor
                 option.id = uuid();
                 option.snapshot = snapshot;
                 option.scope = state["scope"].toMap();
-                option.title = row.value("title", QObject::tr("另一种写法")).toString().left(100);
+                option.title = row.value("title", row.contains("engravingChanges")
+                    ? QObject::tr("排版调整") : QObject::tr("另一种写法")).toString().left(100);
                 option.summary = row.value("summary").toString().left(2000);
                 option.values = row;
                 option.brief = request.value("taskBrief").toMap();
+                if (!score->isMaster() && !engravingOnly(option))
+                    return error(QObject::tr("请在总谱中比较编配写法。"));
+                if (engravingOnly(option) &&
+                    (!row.value("changes").toList().isEmpty() || !row.value("voices").toList().isEmpty()))
+                    return error(QObject::tr("请分别提交排版和音乐修改，便于逐项查看和采用。"));
                 const auto allowed = option.brief.value("scope").toMap();
                 if (!allowed.isEmpty() &&
                     (option.scope["start"].toInt() < allowed["start"].toInt() ||
@@ -1027,13 +1275,29 @@ QVariantMap arrangementOperation(PluginAPI::ScoreObserver *observer, Score *scor
                 QString problem;
                 QElapsedTimer preparationClock;
                 preparationClock.start();
-                option.copy=std::shared_ptr<MasterScore>(score->masterScore()->clone(),TemporaryScoreDeleter{});
+                option.copy=std::shared_ptr<MasterScore>(score->isMaster() ? score->masterScore()->clone()
+                    : static_cast<MasterScore*>(score->clone()), TemporaryScoreDeleter{});
                 option.preparation["cloneMs"] = double(preparationClock.nsecsElapsed()) / 1000000.;
                 preparationClock.restart();
                 if (!option.copy)
                     return error(QObject::tr("准备试听材料失败，请重试。"));
+                if (engravingOnly(option) && !option.copy->pageMode())
+                    option.copy->switchToPageMode();
                 option.copy->startCmd();
-                const bool ok = mutate(option.copy.get(), option, &problem);
+                bool ok;
+                if (engravingOnly(option)) {
+                    const auto musicalContent = digest(option.copy.get(), option.scope, true);
+                    const auto edited = applyEngravingChanges(option.copy.get(), option.scope,
+                                                                row.value("engravingChanges").toList());
+                    problem = edited.value("error").toString();
+                    option.engravingDifferences = edited.value("changes").toList();
+                    ok = problem.isEmpty();
+                    if (ok && musicalContent != digest(option.copy.get(), option.scope, true)) {
+                        ok = false;
+                        problem = QObject::tr("预览改变了乐谱内容，请重新指定排版位置。");
+                    }
+                } else
+                    ok = mutate(option.copy.get(), option, &problem);
                 option.copy->endCmd(!ok);
                 if (!ok)
                     return error(problem);
@@ -1042,8 +1306,12 @@ QVariantMap arrangementOperation(PluginAPI::ScoreObserver *observer, Score *scor
                 option.copy->doLayout();
                 option.preparation["layoutMs"] = double(preparationClock.nsecsElapsed()) / 1000000.;
                 preparationClock.restart();
-                option.differences = differences(score, option.copy.get(), option.scope);
-                if (option.differences.isEmpty())
+                if (!engravingOnly(option)) {
+                    option.differences = differences(score, option.copy.get(), option.scope);
+                    option.velocityDifferences = velocityComparison(score, option.copy.get(), option);
+                }
+                if (option.differences.isEmpty() && option.velocityDifferences.isEmpty() &&
+                    option.engravingDifferences.isEmpty())
                     return error(QObject::tr("这版与当前写法相同，请补充具体变化。"));
                 prepared.append(option);
             }
@@ -1058,7 +1326,7 @@ QVariantMap arrangementOperation(PluginAPI::ScoreObserver *observer, Score *scor
             if (step == "stop") {
                 stopPlaybackPreview(true);
                 if (mscore && mscore->currentScoreView())
-                    showRegionalDifference(mscore->currentScoreView(), nullptr, {});
+                    clearArrangementPreview(mscore->currentScoreView());
                 return {{"ok", true}};
             }
             for (auto &option : values->choices)
@@ -1072,50 +1340,71 @@ QVariantMap arrangementOperation(PluginAPI::ScoreObserver *observer, Score *scor
                         return error(QObject::tr("分手或演奏检查设置已改变，请点“分析选段”更新建议。"));
                     if (mscore && mscore->currentScore() != score)
                         return error(QObject::tr("请先切回这份乐谱。"));
+                    if (engravingOnly(option)) {
+                        if (step == "preview")
+                            return {{"ok", true}, {"engravingDifferences", option.engravingDifferences}};
+                        if (step == "compare") {
+                            if (seq && seq->isPlaying())
+                                return error(QObject::tr("暂停播放后即可查看排版前后图。"));
+                            auto settings = request;
+                            if (!settings.contains("atTick"))
+                                settings["atTick"] = option.engravingDifferences.first().toMap().value("tick");
+                            TemporaryScore pages;
+                            if (!score->pageMode()) {
+                                pages.reset(score->isMaster() ? score->masterScore()->clone()
+                                    : static_cast<MasterScore*>(score->clone()));
+                                if (!pages)
+                                    return error(QObject::tr("暂时无法准备原来的页面。"));
+                                pages->switchToPageMode();
+                            }
+                            const auto before = renderArrangementImage(pages ? pages.get() : score,
+                                                                        option.scope, option.snapshot, settings);
+                            if (before.contains("error")) return before;
+                            const auto after = renderArrangementImage(option.copy.get(), option.scope,
+                                                                       option.snapshot, settings);
+                            if (after.contains("error")) return after;
+                            return {{"ok", true}, {"before", before}, {"after", after},
+                                    {"engravingDifferences", option.engravingDifferences}};
+                        }
+                        if (step == "copy")
+                            return saveEngravingCopy(score, option.copy.get(), request);
+                        if (step != "apply")
+                            return error(QObject::tr("这条建议可以查看排版前后图、另存副本或采用。"));
+                    }
                     if (step == "preview") {
-                        if (mscore && mscore->currentScoreView())
-                            showRegionalDifference(mscore->currentScoreView(), option.copy.get(),
-                                                   option.differences);
-                        return {{"ok", true}, {"differences", option.differences}};
+                        if (mscore && mscore->currentScoreView()) {
+                            clearArrangementPreview(mscore->currentScoreView());
+                            QVariantMap bars;
+                            for (auto value : option.velocityDifferences) {
+                                const auto row = value.toMap();
+                                const auto id = row.value("ref").toMap().value("id").toString();
+                                if (!bars.contains(id)) bars.insert(id, row);
+                            }
+                            score->QObject::setProperty("kumoVelocitySuggestion", bars);
+                            if (auto canvas = mscore->findChild<QWidget *>("performanceParameterCanvas"))
+                                canvas->update();
+                            if (!velocityOnly(option))
+                                showRegionalDifference(mscore->currentScoreView(), option.copy.get(),
+                                                       option.differences, "arrangement");
+                        }
+                        return {{"ok", true}, {"differences", option.differences},
+                            {"velocityDifferences", option.velocityDifferences}};
                     }
                     if (step == "performance") {
-                        auto events = [&](Score *source) {
-                            QVariantList result;
-                            EventMap rendered;
-                            source->renderMidi(&rendered, true, MScore::playRepeats,
-                                               mscore->synthesizerState());
-                            for (const auto &event : rendered) {
-                                const auto &e = event.second;
-                                const auto note = e.noteEventOwner() ? e.noteEventOwner() : e.note();
-                                const int track = note          ? note->track()
-                                                  : e.harmony() ? e.harmony()->track()
-                                                                : -1;
-                                const int tick = note ? note->chord()->tick().ticks()
-                                                      : source->repeatList().utick2tick(event.first);
-                                if (e.type() == ME_NOTEON && e.velo() > 0 &&
-                                    contains(option.scope, tick, track))
-                                    result.append(QVariantMap{{"unfoldedTick", event.first},
-                                                              {"tick", tick},
-                                                              {"track", track},
-                                                              {"pitch", e.pitch()},
-                                                              {"velocity", e.velo()},
-                                                              {"channel", e.channel()}});
-                                if (result.size() >= 20000)
-                                    break;
-                            }
-                            return result;
-                        };
-                        return {{"original", events(score)},
-                                {"proposed", events(option.copy.get())},
-                                {"maximumAttacks", 20000}};
+                        return {{"original", actualAttacks(score, option.scope, option.snapshot)},
+                                {"proposed", actualAttacks(option.copy.get(), option.scope, option.snapshot)},
+                                {"velocityDifferences", option.velocityDifferences}, {"maximumAttacks", 20000}};
                     }
                     if (step == "audition" || step == "original") {
+                        stopPlaybackPreview(true);
                         if (!playbackPreviewPrepared(score, option.id))
                             preparePlaybackPreview(score, option.id, renderPlaybackPreview(score, score),
                                                    renderPlaybackPreview(score, option.copy.get()));
                         auto range = option.scope;
                         if (request.value("exactStart").toBool())
                             range["exactStart"] = true;
+                        if (request.contains("occurrence"))
+                            range["occurrence"] = request.value("occurrence");
                         return startPlaybackPreview(score, step == "audition", range);
                     }
                     if (seq && seq->isPlaying())
@@ -1183,13 +1472,47 @@ QVariantMap arrangementOperation(PluginAPI::ScoreObserver *observer, Score *scor
                     if (step == "apply") {
                         if (score->readOnly())
                             return error(QObject::tr("另存为可编辑的乐谱后采用这版。"));
-                        const auto expected = digest(option.copy.get(), option.scope);
+                        auto applied = option;
+                        QSet<QString> selected;
+                        const bool partial = request.contains("noteIds");
+                        if (partial) {
+                            if (!velocityOnly(option))
+                                return error(QObject::tr("此写法包含结构修改，请采用整条建议。"));
+                            for (auto value : request.value("noteIds").toList()) selected.insert(value.toString());
+                            QVariantList changes;
+                            for (auto value : option.values.value("changes").toList()) {
+                                const auto id = value.toMap().value("ref").toMap().value("id").toString();
+                                if (selected.contains(id)) changes.append(value);
+                            }
+                            if (changes.isEmpty() || changes.size() != selected.size())
+                                return error(QObject::tr("请重新勾选这条建议中的音。"));
+                            applied.values["changes"] = changes;
+                        }
+                        const auto expected = digest(option.copy.get(), option.scope, engravingOnly(option));
                         QString problem;
                         score->startCmd();
-                        bool ok = mutate(score, option, &problem);
-                        if (ok && digest(score, option.scope) != expected) {
+                        bool ok;
+                        if (engravingOnly(option)) {
+                            const auto edited = applyEngravingChanges(score, option.scope,
+                                option.values.value("engravingChanges").toList(), option.engravingDifferences);
+                            problem = edited.value("error").toString();
+                            ok = problem.isEmpty();
+                        } else
+                            ok = mutate(score, applied, &problem);
+                        bool matches = !partial ? digest(score, option.scope, engravingOnly(option)) == expected : true;
+                        if (partial && ok) {
+                            for (const auto &id : selected) {
+                                const auto note = noteFor(score, id);
+                                const auto replacement = noteFor(option.copy.get(), id);
+                                if (!note || !replacement || note->veloType() != replacement->veloType() ||
+                                    note->veloOffset() != replacement->veloOffset()) matches = false;
+                            }
+                        }
+                        if (ok && !matches) {
                             ok = false;
-                            problem = QObject::tr("写入后的音符与预览不同，请重新准备这版。已恢复原写法。");
+                            problem = engravingOnly(option)
+                                ? QObject::tr("排版调整后的乐谱内容与预览不同，请重新准备这版。")
+                                : QObject::tr("写入后的音符与预览不同，请重新准备这版。已恢复原写法。");
                         }
                         if (ok) {
                             auto saved = observer->workflowData("arrangement");
@@ -1217,6 +1540,7 @@ QVariantMap arrangementOperation(PluginAPI::ScoreObserver *observer, Score *scor
                                                        {"title", option.title},
                                                        {"sourceSnapshot", option.snapshot},
                                                        {"scope", option.scope},
+                                                       {"selectedNotes", request.value("noteIds")},
                                                        {"summary", option.summary}});
                             while (history.size() > 100)
                                 history.removeFirst();
@@ -1240,7 +1564,8 @@ QVariantMap arrangementOperation(PluginAPI::ScoreObserver *observer, Score *scor
                         option.used = true;
                         notifyArrangementSuggestions(score);
                         return {{"ok", true},
-                                {"changed", option.differences.size()},
+                                {"changed", partial ? selected.size() : qMax(option.engravingDifferences.size(),
+                                    qMax(option.differences.size(), option.velocityDifferences.size()))},
                                 {"snapshotId", observer->analysisContentRevision()}};
                     }
                     return error(QObject::tr("请选择查看差异、试听、采用或存为另一种写法。"));

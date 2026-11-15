@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "mediasession.h"
+#include "audiofileidentity.h"
 #include <QAudioDeviceInfo>
 #include <QIODevice>
 #include <QUrl>
@@ -57,11 +58,14 @@ void ReferenceMediaSession::open(const QString& url) {
  _loads.erase(std::remove_if(_loads.begin(),_loads.end(),[](const QFuture<void>& f){return f.isFinished();}),_loads.end());
  _loads.append(QtConcurrent::run([this,path,token,cancel,makeWave]{
   KumoAudio::Reader reader;QString error;
-  auto failed=[&](QString reason){if(reason.isEmpty()||reason.startsWith("Cannot decode"))reason=tr("请选择一份可以播放的 WAV、MP3 或 FLAC 文件。");QMetaObject::invokeMethod(this,[this,path,reason,token]{if(token==_loadGeneration){_reading=false;_requestedPath.clear();_status=tr("无法读取音频：%1").arg(reason);emit changed();emit fileError(path,reason);}},Qt::QueuedConnection);};
+  auto failed=[&](QString reason){if(reason.isEmpty())reason=tr("请选择一份可读取的音频。");QMetaObject::invokeMethod(this,[this,path,reason,token]{if(token==_loadGeneration){_reading=false;_requestedPath.clear();_status=tr("无法读取音频：%1").arg(reason);emit changed();emit fileError(path,reason);}},Qt::QueuedConnection);};
   if(!reader.open(path,&error,cancel.get())){if(!*cancel)failed(error);return;}
   auto count=reader.frames();int rate=reader.rate(),channels=reader.channels();
   if(count<=0||rate<=0||channels<=0){failed(tr("文件里没有可播放的音频。"));return;}
-  QMetaObject::invokeMethod(this,[this,path,count,rate,token]{if(token!=_loadGeneration)return;_path=path;_duration=double(count)*1000/rate;_position=0;_wave.clear();_tiles.clear();_reading=false;_requestedPath.clear();_a=0;_b=_duration;_rate=rate;_status=tr("Ready");emit waveformChanged();emit changed();emit fileReady(identity());},Qt::QueuedConnection);
+  auto identity=KumoAudio::audioIdentity(QFileInfo(path));
+  identity["path"]=path;
+  identity["duration"]=double(count)*1000/rate;
+  QMetaObject::invokeMethod(this,[this,path,identity,rate,token]{if(token!=_loadGeneration)return;_path=path;_identity=identity;_duration=identity.value("duration").toDouble();_position=0;_wave.clear();_tiles.clear();_reading=false;_requestedPath.clear();_a=0;_b=_duration;_rate=rate;_status=tr("Ready");emit waveformChanged();emit changed();emit fileReady(_identity);},Qt::QueuedConnection);
   if(!makeWave)return;
   QVector<double> peaks(4096,0);std::vector<float> block(8192*channels);qint64 position=0;
   while(position<count&&!*cancel) {
@@ -124,7 +128,7 @@ void ReferenceMediaSession::setLoop(double a,double b,bool enabled,bool fade){
  if(restart){sampleClock();stopWorker();}_a=a;_b=b;_loop=enabled;_fade=fade;emit changed();if(resume)play();
 }
 QVariantMap ReferenceMediaSession::identity()const {
- QFileInfo file(_path);return {{"path",_path},{"size",file.size()},{"modified",file.lastModified().toMSecsSinceEpoch()},{"duration",_duration}};
+ return _identity;
 }
 
 void ReferenceMediaSession::requestWaveform(double from,double until,int bins) {

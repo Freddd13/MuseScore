@@ -117,6 +117,10 @@ class Proxy final : public Plugin {
 
 public:
   explicit Proxy(Descriptor value) : descriptor(std::move(value)) {}
+  void moveControlTo(QThread* thread) override {
+    child.moveToThread(thread);
+    socket.moveToThread(thread);
+  }
   ~Proxy() override {
     if (bridge.memory) {
       InterlockedExchange(&bridge.memory->stop, 1);

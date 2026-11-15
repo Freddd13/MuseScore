@@ -14,6 +14,7 @@
 #include "measure.h"
 #include "musescoreCore.h"
 #include "rest.h"
+#include "savepropertyoverrides.h"
 #include "score.h"
 #include "scoreElement.h"
 #include "undo.h"
@@ -399,9 +400,11 @@ bool ScoreElement::readProperty(const QStringRef& s, XmlReader& e, Pid id)
 
 void ScoreElement::writeProperty(XmlWriter& xml, Pid pid, bool force) const
       {
-      if (isStyled(pid))
+      QVariant p = ScopedSavePropertyOverrides::value(this, pid);
+      if (!p.isValid() && isStyled(pid))
             return;
-      QVariant p = getProperty(pid);
+      if (!p.isValid())
+            p = getProperty(pid);
       if (!p.isValid()) {
             qDebug("%s invalid property %d <%s>", name(), int(pid), propertyName(pid));
             return;

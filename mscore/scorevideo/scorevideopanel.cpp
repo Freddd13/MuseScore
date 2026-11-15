@@ -5,6 +5,7 @@
 #include "mscore/seq.h"
 #include "mscore/workflow/featuregate.h"
 #include "mscore/workflow/paneldock.h"
+#include "mscore/workflow/panelwindowcontrols.h"
 #include "mscore/workflow/referencefactory.h"
 #include "mscore/workflow/toolicons.h"
 #include "mscore/workflow/workspaceviews.h"
@@ -572,6 +573,8 @@ ScoreVideoPanel::ScoreVideoPanel(QWidget* parent)
     body->installEventFilter(this);
     installEventFilter(this);
     addEditorDockActions(this);
+    installPanelWindowControls(this)->setTransport(
+        [this] { return _playing || _playAfterPrepare; }, [this] { stopPlayback(); });
     refresh();
 }
 ScoreVideoPanel::~ScoreVideoPanel() { stopPlayback(); }
@@ -731,10 +734,14 @@ void ScoreVideoPanel::showEvent(QShowEvent* event)
 void ScoreVideoPanel::hideEvent(QHideEvent* event)
 {
     commitCues();
-    stopPlayback();
     for (const char* name : {"scoreVideoHorizontal", "scoreVideoVertical"})
         QSettings().setValue(QString("scoreVideoPanel/") + name,
                              findChild<QSplitter*>(name)->saveState());
+    if (property("kumoPanelMinimized").toBool()) {
+        QDockWidget::hideEvent(event);
+        return;
+    }
+    stopPlayback();
     _timer.stop();
     _document.cancel();
     if (_export.busy())
@@ -885,6 +892,8 @@ void ScoreVideoPanel::poll()
             stopPlayback();
         }
     }
+    if (!isVisible())
+        return;
     _positionLabel->setText(timeText(_position) + " / " + timeText(_document.snapshot().duration));
     if (_preview->position != _position) {
         _preview->position = _timeline->position = _position;

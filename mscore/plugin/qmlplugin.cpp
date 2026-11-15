@@ -106,6 +106,7 @@ void QmlPlugin::focusPanel()
       if(window()){window()->requestActivate();forceActiveFocus(Qt::OtherFocusReason);}
       }
 void QmlPlugin::hidePanel() { if(_panelDock)_panelDock->hide(); }
+bool QmlPlugin::panelMinimized() const { return _panelDock && _panelDock->property("kumoPanelMinimized").toBool(); }
 void QmlPlugin::resizePanel(int width,int height) { if(_panelDock&&_panelDock->isFloating())_panelDock->resize(qBound(200,width,1600),qBound(100,height,1200)); }
 void QmlPlugin::showPanelHint(const QString& text, QQuickItem* target)
       {

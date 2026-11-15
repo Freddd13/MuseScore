@@ -351,6 +351,7 @@ class TestPluginHost : public QObject {
       void context143LayoutRefresh();
       void context143Transport();
       void aiSuggestionState144();
+      void nativeImageAndVelocityProposal168();
       void systemLockIndependentParts138();
       void systemLockMenuRange138();
       void systemLockMenuOwner157();
@@ -913,7 +914,8 @@ class TestPluginHost : public QObject {
             optionTabs->setCurrentIndex(2);QTest::qWait(50);const int gridUndo=score->undoStack()->getCurIdx();
             for(int tap=0;tap<4;++tap){QTest::keyClick(canvas,Qt::Key_Space,Qt::ShiftModifier);if(tap<3)QTest::qWait(250);}
             auto bpm=pane->findChild<QDoubleSpinBox*>("spectrumGridBpm");QVERIFY(bpm);QVERIFY(bpm->value()>220&&bpm->value()<260);QCOMPARE(score->undoStack()->getCurIdx(),gridUndo);
-            auto saveGrid=pane->findChild<QToolButton*>("spectrumSaveGrid");QVERIFY(saveGrid);optionsScroll->ensureWidgetVisible(saveGrid);QTest::mouseClick(saveGrid,Qt::LeftButton);QTRY_COMPARE(score->undoStack()->getCurIdx(),gridUndo+1);
+            auto beatScroll=pane->findChild<QScrollArea*>("spectrumBeatScroll");QVERIFY(beatScroll);
+            auto saveGrid=pane->findChild<QToolButton*>("spectrumSaveGrid");QVERIFY(saveGrid);beatScroll->ensureWidgetVisible(saveGrid);QTest::mouseClick(saveGrid,Qt::LeftButton);QTRY_COMPARE(score->undoStack()->getCurIdx(),gridUndo+1);
             auto stored=QJsonDocument::fromJson(score->metaTag("kumo.transcription").toUtf8()).toVariant().toMap();QCOMPARE(stored["grids"].toMap()["spectral-test"].toMap()["bpm"].toDouble(),bpm->value());
             QVERIFY(separate->grab().save(out.filePath("spectrum-grid-066.png")));EditData gridEdit;score->undoRedo(true,&gridEdit);QTest::qWait(50);QVERIFY(!QJsonDocument::fromJson(score->metaTag("kumo.transcription").toUtf8()).toVariant().toMap()["grids"].toMap().contains("spectral-test"));
             auto drawTool=pane->findChild<QComboBox*>("transcriptionTool");QVERIFY(drawTool);drawTool->setCurrentIndex(3);optionTabs->setCurrentIndex(3);QTest::qWait(50);

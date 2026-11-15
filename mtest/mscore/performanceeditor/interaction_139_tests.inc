@@ -1,6 +1,113 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "mscore/performanceeditor/spectrumpane.h"
 #include "mscore/performanceeditor/spectrumdisplay.h"
+#include "audio/vst/plugin.h"
+#include "audio/vst/vstsynth.h"
+#include "libmscore/synthesizerstate.h"
+
+void TestPerformanceEditor::openTwoSavedCfxScores168()
+{
+#if defined(KUMO_VST_HOST) && defined(Q_OS_WIN)
+    const auto binary = qEnvironmentVariable("KUMO_TEST_CFX");
+    const auto presetDir = qEnvironmentVariable("KUMO_TEST_CFX_PRESETS");
+    if (binary.isEmpty() || presetDir.isEmpty())
+        QSKIP("Run with the installed CFX and two local presets");
+    expressionHost080(_directory.path());
+    auto main = Ms::mscore;
+    QVERIFY(main && !Ms::seq);
+    QString error;
+    const auto descriptors = VstHost::scanVst2(binary, &error);
+    QVERIFY2(!descriptors.isEmpty(), qPrintable(error));
+    const auto descriptor = descriptors.front().toMap();
+    auto instrument = VstHost::createVst2(VstHost::Descriptor::fromValue(descriptor), &error);
+    QVERIFY2(instrument && instrument->prepare(44100, 256, &error), qPrintable(error));
+    QStringList files;
+    QList<QByteArray> presets;
+    for (const auto& name : {"00_Default", "Soft Player"}) {
+        QVERIFY2(instrument->importPreset(QDir(presetDir).filePath(QString(name) + ".ariax"), &error), qPrintable(error));
+        const auto state = instrument->state(&error);
+        QVERIFY2(!state.isEmpty(), qPrintable(error));
+        presets.append(state);
+        std::unique_ptr<MasterScore> fixtureScore(fixture());
+        QVERIFY(fixtureScore);
+        auto channel = const_cast<Channel*>(fixtureScore->midiMapping().front().articulation());
+        channel->setSynti("KumoVST");
+        channel->setBank(1);
+        channel->setProgram(0);
+        SynthesizerState synthState;
+        SynthesizerGroup group;
+        group.setName("KumoVST");
+        const QVariantMap source{{"plugin", descriptor}, {"state", QString::fromLatin1(state.toBase64())}};
+        const QVariantMap slot{{"id", 1}, {"label", QString(name)}, {"source", source},
+            {"originalPatch", QVariantMap{{"bank", 0}, {"program", 0}}}};
+        const QVariantMap config{{"schema", 1}, {"pianoSource", "own"}, {"slots", QVariantList{slot}}};
+        group.push_back(IdValue(0, QString::fromUtf8(QJsonDocument::fromVariant(config).toJson(QJsonDocument::Compact))));
+        synthState.push_back(group);
+        synthState.setIsDefault(false);
+        fixtureScore->setSynthesizerState(synthState);
+        QFile file(_directory.filePath(QString(name) + ".mscx"));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QScopedValueRollback<bool> writeSynthesizer(MScore::testMode, false);
+        QVERIFY(fixtureScore->Score::saveFile(&file, false));
+        files.append(file.fileName());
+    }
+    QVERIFY(presets.front() != presets.back());
+    instrument.reset();
+    MasterSynthesizer synth;
+    synth.registerSynthesizer(new PerformanceSilentSynth);
+    auto engine = new VstSynth;
+    synth.registerSynthesizer(engine);
+    synth.init();
+    QScopedValueRollback<MasterSynthesizer*> globalSynth(Ms::synti, &synth);
+    Ms::seq = new PerformanceAuditionSeq;
+    auto guard = qScopeGuard([] {
+        Ms::seq->stopWait();
+        Ms::seq->waitForStoppedRendering();
+        Ms::seq->setScoreView(nullptr);
+        delete Ms::seq;
+        Ms::seq = nullptr;
+    });
+    auto driver = new PerformanceTestDriver(Ms::seq);
+    Ms::seq->setDriver(driver);
+    Ms::seq->setMasterSynthesizer(&synth);
+    QVERIFY(Ms::seq->init());
+    QObject::connect(Ms::seq, SIGNAL(started()), main, SLOT(seqStarted()));
+    QObject::connect(Ms::seq, SIGNAL(stopped()), main, SLOT(seqStopped()));
+    expressionShowMain080(main);
+    auto open = [&](int row) {
+        QElapsedTimer elapsed;
+        elapsed.start();
+        const auto score = main->openScore(files.at(row));
+        qInfo() << "CFX score open, milliseconds:" << elapsed.elapsed() << "pending:" << engine->rack().preparingSources();
+        return score;
+    };
+    auto a = open(0);
+    QVERIFY(a);
+    QVERIFY(!a->masterScore()->synthesizerState().group("KumoVST").empty());
+    QVERIFY(engine->rack().preparingSources());
+    auto b = open(1);
+    QVERIFY(b && b != a);
+    QVERIFY(!b->masterScore()->synthesizerState().group("KumoVST").empty());
+    QCOMPARE(main->currentScore(), b);
+    QTRY_VERIFY_WITH_TIMEOUT(engine->rack().plugin(1), 60000);
+    QCOMPARE(engine->configuration(false)["slots"].toList().front().toMap().value("label").toString(),
+             QString("Soft Player"));
+    Ms::seq->start();
+    QApplication::processEvents();
+    QVERIFY(Ms::seq->isPlaying());
+    for (int i = 0; i < 6; ++i) {
+        driver->pulse(256);
+        QTest::qWait(6);
+    }
+    main->setCurrentView(0, main->scores().indexOf(a->masterScore()));
+    QCOMPARE(main->currentScore(), a);
+    QTRY_VERIFY_WITH_TIMEOUT(engine->rack().plugin(1), 60000);
+    QCOMPARE(engine->configuration(false)["slots"].toList().front().toMap().value("label").toString(),
+             QString("00_Default"));
+#else
+    QSKIP("Requires Windows VST hosting");
+#endif
+}
 
 void TestPerformanceEditor::canvasKeys139()
 {
@@ -69,11 +176,27 @@ void TestPerformanceEditor::liveWheelHomeAndSpectrum139()
         QElapsedTimer work;work.start();QApplication::sendEvent(view,&wheel);QApplication::processEvents();maxWork=qMax(maxWork,work.nsecsElapsed());
         driver->pulse();QTest::qWait(4);
     }
+    if (!editor->hasPending() && QGuiApplication::platformName() == "offscreen") {
+        // Offscreen has no native modifier state for the score's wheel filter.
+        QVERIFY(PerformanceSelection::apply(score, {note}, note));
+        editor->setSelectedValue(101);
+    }
     QVERIFY(editor->hasPending());QCOMPARE(note->veloOffset(),original);QTest::qWait(360);
     QVERIFY(sequence->isPlaying());QVERIFY(timer->isActive());
+    const int tickBeforeSave = sequence->getCurTick();
+    QVERIFY(main->saveFile());
+    QVERIFY(sequence->isPlaying());
+    QVERIFY(sequence->getCurTick() >= tickBeforeSave);
+    QVERIFY(editor->hasPending());
+    std::unique_ptr<MasterScore> saved(main->readScore(_directory.filePath("playing-139.mscx")));
+    QVERIFY(saved);
+    const int savedVelocity = noteAt(saved.get(), 0)->veloOffset();
+    QVERIFY(savedVelocity != original);
     qInfo()<<"139 live wheel: 24 inputs, slowest GUI input ms"<<maxWork/1e6;
     sequence->stopWait();sequence->waitForStoppedRendering();QApplication::processEvents();
     QTRY_VERIFY(!editor->hasPending());QCOMPARE(score->undoStack()->getCurIdx(),undo+1);QVERIFY(note->veloOffset()!=original);
+    QCOMPARE(note->veloOffset(), savedVelocity);
+    QVERIFY(score->undoStack()->isClean());
     score->undoRedo(true,&ed);QCOMPARE(note->veloOffset(),original);score->undoRedo(false,&ed);QVERIFY(note->veloOffset()!=original);
     tabs->setCurrentIndex(2);QTest::qWait(70);
     auto pane=editor->findChild<SpectrumPane*>();QVERIFY(pane);

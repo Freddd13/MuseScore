@@ -13,13 +13,17 @@ public:
       std::function<std::unique_ptr<Plugin>(const Descriptor &, QString *)>;
   explicit Rack(bool offline = false, InternalFactory factory = {});
   ~Rack();
-  bool load(const QVariantMap &, double rate, QStringList *problems = nullptr);
+  bool load(const QVariantMap &, double rate, QStringList *problems = nullptr,
+            bool deferCfx = false);
+  bool preparingSources() const;
+  bool adoptPreparedSources(QStringList* problems);
+  bool backgroundSource(int slot) const;
   void selectSession(const QString& id, const QString& label, bool retain);
   void releaseSession(const QString& id);
   void releaseInactiveSessions();
   void releaseCommonPianos();
   QVariantList retainedSessions() const;
-  QVariantMap state();
+  QVariantMap state(bool changedOnly = false);
   QVariantList instruments(bool includeReference = false) const;
   QVariantList effects(int slot) const;
   Plugin *plugin(int slot, int effect = -1) const;

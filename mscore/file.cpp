@@ -526,14 +526,12 @@ bool MuseScore::saveFile()
 
 bool MuseScore::saveFile(MasterScore* score)
       {
-      PerformanceEditor::flushForScore(score);
-#ifdef SCRIPT_INTERFACE
-      flushReferencePanelForScore(score);
-#endif
-      saveVstEdits(score,true);
       if (score == 0)
             return false;
-      if (score->created()) {
+      const bool firstSave = score->created();
+      const QFileInfo previousFile(*score->fileInfo());
+      QString targetFile = previousFile.absoluteFilePath();
+      if (firstSave) {
             QString fileBaseName = score->masterScore()->fileInfo()->completeBaseName();
             QString fileName = score->masterScore()->fileInfo()->fileName();
             // is backup file
@@ -575,20 +573,35 @@ bool MuseScore::saveFile(MasterScore* score)
             fileBaseName = mscore->getSaveScoreName(tr("Save Score"), fname, filter);
             if (fileBaseName.isEmpty())
                   return false;
-            score->masterScore()->fileInfo()->setFile(fileBaseName);
-
-            mscore->lastSaveDirectory = score->masterScore()->fileInfo()->absolutePath();
-
-            if (!score->masterScore()->saveFile(preferences.getBool(PREF_APP_BACKUP_GENERATE_BACKUP))) {
-                  QMessageBox::critical(mscore, tr("Save File"), MScore::lastError);
-                  return false;
-                  }
-            addRecentScore(score);
-            writeSessionFile(false);
+            targetFile = fileBaseName;
             }
-      else if (!score->masterScore()->saveFile(preferences.getBool(PREF_APP_BACKUP_GENERATE_BACKUP))) {
+
+      saveVstEdits(score, true);
+      const auto edits = PerformanceEditor::prepareScoreSave(score);
+      bool saved = false;
+      {
+#ifdef SCRIPT_INTERFACE
+      ReferenceScoreSave referenceSave(score, targetFile);
+#endif
+      ScopedSavePropertyOverrides properties(edits);
+      if (firstSave)
+            score->fileInfo()->setFile(targetFile);
+      saved = score->saveFile(preferences.getBool(PREF_APP_BACKUP_GENERATE_BACKUP));
+#ifdef SCRIPT_INTERFACE
+      if (saved)
+            referenceSave.accept();
+#endif
+      }
+      if (!saved) {
+            *score->fileInfo() = previousFile;
             QMessageBox::critical(mscore, tr("Save File"), MScore::lastError);
             return false;
+                  }
+      PerformanceEditor::scoreSaved(score, edits);
+      if (firstSave) {
+            mscore->lastSaveDirectory = score->fileInfo()->absolutePath();
+            addRecentScore(score);
+            writeSessionFile(false);
             }
       score->setCreated(false);
       updateWindowTitle(score);
@@ -1917,11 +1930,14 @@ void MuseScore::printFile()
 
 bool MuseScore::saveAs(Score* cs_, bool saveCopy, const QString& path, const QString& ext, SaveReplacePolicy* replacePolicy)
       {
-      PerformanceEditor::flushForScore(cs_);
+      const bool nativeSave = ext == "mscx" || ext == "mscz";
+      if (!nativeSave) {
+            PerformanceEditor::flushForScore(cs_);
 #ifdef SCRIPT_INTERFACE
-      flushReferencePanelForScore(cs_);
+            flushReferencePanelForScore(cs_);
 #endif
-      saveVstEdits(cs_,ext=="mscx" || ext=="mscz");
+            }
+      saveVstEdits(cs_, nativeSave);
       bool rv = false;
       QString suffix = "." + ext;
       QString fn(path);
@@ -1929,10 +1945,13 @@ bool MuseScore::saveAs(Score* cs_, bool saveCopy, const QString& path, const QSt
             fn += suffix;
 
       LayoutMode layoutMode = cs_->layoutMode();
-      if (ext == "mscx" || ext == "mscz") {
+      if (nativeSave) {
             // save as mscore *.msc[xz] file
             QFileInfo fi(fn);
-            rv = true;
+            const auto edits = PerformanceEditor::prepareScoreSave(cs_);
+#ifdef SCRIPT_INTERFACE
+            ReferenceScoreSave referenceSave(cs_, fn);
+#endif
             // store new file and path into score fileInfo
             // to have it accessible to resources
             QFileInfo originalScoreFileInfo(*cs_->masterScore()->fileInfo());
@@ -1957,10 +1976,11 @@ bool MuseScore::saveAs(Score* cs_, bool saveCopy, const QString& path, const QSt
                         }
                   }
             try {
+                  ScopedSavePropertyOverrides properties(edits);
                   if (ext == "mscz")
-                        cs_->saveCompressedFile(fi, false);
+                        rv = cs_->saveCompressedFile(fi, false);
                   else
-                        cs_->saveFile(fi);
+                        rv = cs_->saveFile(fi);
                   }
             catch (QString s) {
                   rv = false;
@@ -1978,9 +1998,14 @@ bool MuseScore::saveAs(Score* cs_, bool saveCopy, const QString& path, const QSt
             *cs_->masterScore()->fileInfo() = originalScoreFileInfo;          // restore original file info
 
             if (rv && !saveCopy) {
+#ifdef SCRIPT_INTERFACE
+                  if (cs_->isMaster())
+                        referenceSave.accept();
+#endif
                   cs_->masterScore()->fileInfo()->setFile(fn);
                   updateWindowTitle(cs_);
                   cs_->undoStack()->setClean();
+                  PerformanceEditor::scoreSaved(cs_, edits);
                   dirtyChanged(cs_);
                   cs_->setCreated(false);
                   scoreCmpTool->updateScoreVersions(cs_);

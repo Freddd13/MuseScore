@@ -4,7 +4,8 @@
 #include <QVariantMap>
 namespace Ms {
 class Score;class ScoreView;
-void showRegionalDifference(ScoreView*,Score* other,const QVariantList& changes);
+void showRegionalDifference(ScoreView*,Score* other,const QVariantList& changes,
+                            const QString& owner = QStringLiteral("regional"));
 bool regionalAuditionEnabled();
 void setRegionalAuditionEnabled(bool);
 QVariantMap switchRegionalWriting(ScoreView*,const QString& group,const QString& variant);

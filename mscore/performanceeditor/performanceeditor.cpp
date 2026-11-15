@@ -23,6 +23,7 @@
 #include <QToolButton>
 #include <QSettings>
 #include <QScopedValueRollback>
+#include <QScopeGuard>
 #include <QElapsedTimer>
 #include "mscore/musescore.h"
 #include "mscore/scoreview.h"
@@ -850,6 +851,25 @@ void PerformanceEditor::applyPending()
             if (!hasPending()) { status(); return; }
             if (_dirty || _score->masterScore()->state() != _state) { _commitTimer.start(20); return; }
             }
+      const auto history = _score->undoStack();
+      const bool alreadySaved = history->isClean() && history->state() == _savedPendingState
+                                && !_savedPending.isEmpty() && _savedPending == pendingSaveProperties();
+      auto completeSavedDraft = qScopeGuard([this, history, alreadySaved] {
+            const auto matches = [](const auto& saved) {
+                  for (auto it = saved.cbegin(); it != saved.cend(); ++it)
+                        for (auto property = it->cbegin(); property != it->cend(); ++property)
+                              if (it.key()->getProperty(property.key()) != property.value())
+                                    return false;
+                  return true;
+                  };
+            if (alreadySaved && matches(_savedPending)) {
+                  history->setClean();
+                  if (mscore)
+                        mscore->dirtyChanged(_score);
+                  }
+            _savedPending.clear();
+            _savedPendingState = -1;
+            });
       const auto edits = _pending;
       if (!_propertyPending.isEmpty()) {
             auto properties = _propertyPending; _propertyPending.clear();
@@ -917,6 +937,55 @@ void PerformanceEditor::queueProperty(Element* element, Pid pid, const QVariant&
 void PerformanceEditor::flushForScore(Score* score)
       {
       for (auto editor : editors) if (editor->_score && score && editor->_score->masterScore() == score->masterScore()) editor->flushPending();
+      }
+
+SavePropertyOverrides PerformanceEditor::pendingSaveProperties() const
+      {
+      SavePropertyOverrides properties;
+      auto add = [&](ScoreElement* element, Pid property, const QVariant& value) {
+            const auto targets = propertyLink(property) ? element->linkList() : QList<ScoreElement*>{element};
+            for (const auto* target : targets)
+                  properties[target].insert(property, value);
+            };
+      for (const auto& property : _propertyPending)
+            add(property.element, property.pid, property.value);
+      for (auto it = _pending.cbegin(); it != _pending.cend(); ++it) {
+            add(it.key(), Pid::VELO_TYPE, int(it->type));
+            add(it.key(), Pid::VELO_OFFSET, it->raw);
+            }
+      return properties;
+      }
+
+SavePropertyOverrides PerformanceEditor::prepareScoreSave(Score* score)
+      {
+      SavePropertyOverrides properties;
+      for (auto editor : editors) {
+            if (!editor->_score || !score || editor->_score->masterScore() != score->masterScore())
+                  continue;
+            if (!editor->hasPending())
+                  continue;
+            editor->finishWheel(false);
+            editor->cancelGesture();
+            editor->applyPending();
+            const auto pending = editor->pendingSaveProperties();
+            for (auto it = pending.cbegin(); it != pending.cend(); ++it)
+                  properties[it.key()].insert(it.value());
+            }
+      return properties;
+      }
+
+void PerformanceEditor::scoreSaved(Score* score, const SavePropertyOverrides& properties)
+      {
+      for (auto editor : editors) {
+            if (!editor->_score || !score || editor->_score->masterScore() != score->masterScore())
+                  continue;
+            const auto pending = editor->pendingSaveProperties();
+            bool matches = !pending.isEmpty();
+            for (auto it = pending.cbegin(); it != pending.cend(); ++it)
+                  matches &= properties.value(it.key()) == it.value();
+            editor->_savedPending = matches ? pending : SavePropertyOverrides();
+            editor->_savedPendingState = matches ? score->undoStack()->state() : -1;
+            }
       }
 
 void PerformanceEditor::fit(bool selection)

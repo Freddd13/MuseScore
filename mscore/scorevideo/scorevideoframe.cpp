@@ -1,11 +1,7 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "scorevideo.h"
-#include <QCoreApplication>
-#include <QDir>
-#include <QFileInfo>
+#include "mscore/referenceaudio/ffmpegtool.h"
 #include <QPainter>
-#include <QSettings>
-#include <QStandardPaths>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -187,16 +183,6 @@ QImage scoreVideoFrame(const VideoSnapshot& snapshot, double seconds, VideoFrame
 }
 QString scoreVideoEncoder()
 {
-    const auto custom = QSettings().value("scoreVideo/ffmpeg").toString();
-    if (!custom.isEmpty() && QFileInfo(custom).isExecutable())
-        return custom;
-    const QDir directory(QCoreApplication::applicationDirPath());
-    for (const auto& name : {QString("tools/video/ffmpeg.exe"), QString("ffmpeg.exe"),
-                             QString("tools/video/ffmpeg"), QString("ffmpeg")}) {
-        const auto path = directory.filePath(name);
-        if (QFileInfo(path).isExecutable())
-            return path;
-    }
-    return QStandardPaths::findExecutable("ffmpeg");
+    return KumoAudio::ffmpegExecutable();
 }
 } // namespace Ms

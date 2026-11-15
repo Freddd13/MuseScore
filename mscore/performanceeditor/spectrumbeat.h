@@ -14,7 +14,7 @@ namespace Ms {
 class SpectrumBeatControls : public QWidget {
     Q_OBJECT
     QDoubleSpinBox *_bpm, *_first;
-    QSpinBox *_numerator;
+    QSpinBox *_numerator, *_offset, *_distance;
     QComboBox *_denominator, *_source, *_candidates, *_unit;
     QCheckBox *_visible;
     QToolButton *_estimate;
@@ -33,6 +33,8 @@ class SpectrumBeatControls : public QWidget {
     QVariantMap values() const;
     void restore(const QVariantMap &);
     void setFirstBeat(double ms);
+    void setOffset(int ms);
+    bool setGridFromPoints(double firstMs, double lastMs);
     void tap(double sourceMs, bool sourcePlaying);
     void setBusy(bool);
     void setCandidates(const QVariantMap &);
@@ -41,6 +43,7 @@ class SpectrumBeatControls : public QWidget {
     void estimateRequested();
     void tapRequested();
     void firstBeatRequested();
+    void twoPointsRequested();
     void saveRequested();
 };
 } // namespace Ms

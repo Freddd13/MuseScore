@@ -39,3 +39,104 @@ void TestPluginHost::aiSuggestionState144() {
     QTest::qWait(80);QVERIFY(mscore->grab().save(folder.filePath("ai-adopt-144.png")));
     showSuggestionPanel(false);
 }
+
+void TestPluginHost::nativeImageAndVelocityProposal168()
+{
+    auto xml = arrangementScore115({QVariantList{66, 0, 1920, 0, 20},
+                                    QVariantList{49, 0, 1920, 4, 21}});
+    xml.replace("</TimeSig>", "</TimeSig><KeySig><accidental>2</accidental></KeySig>");
+    const QByteArray measureEnd = "</voice></Measure>";
+    const QByteArray staffEnd = measureEnd + "</Staff>";
+    const int upperStaff = xml.indexOf(staffEnd), lowerStaff = xml.lastIndexOf(staffEnd);
+    QVERIFY(upperStaff >= 0 && lowerStaff > upperStaff);
+    xml.insert(lowerStaff + measureEnd.size(),
+               "<Measure><voice><Chord><durationType>whole</durationType>"
+               "<Note><pitch>49</pitch><tpc>21</tpc></Note>"
+               "<Note><pitch>54</pitch><tpc>20</tpc></Note></Chord></voice></Measure>");
+    xml.insert(upperStaff + measureEnd.size(),
+               "<Measure><voice><Chord><durationType>whole</durationType>"
+               "<Note><pitch>78</pitch><tpc>20</tpc></Note></Chord></voice></Measure>");
+    const auto path = _settings.filePath("native-image-velocity-168.mscx");
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    QCOMPARE(file.write(xml), qint64(xml.size()));
+    file.close();
+
+    auto score = mscore->readScore(path);
+    QVERIFY(score);
+    mscore->setCurrentScoreView(mscore->appendScore(score));
+    const auto close = qScopeGuard([&] {
+        showSuggestionPanel(false);
+        score->undoStack()->setClean();
+        mscore->closeScore(score);
+    });
+    score->doLayout();
+    const auto measure = score->firstMeasure()->nextMeasure();
+    QVERIFY(measure);
+    QVERIFY(measure->system() == score->firstMeasure()->system());
+    const auto chordRest = score->findCR(measure->tick(), 4);
+    QVERIFY(chordRest && chordRest->isChord());
+    const auto chord = toChord(chordRest);
+    QCOMPARE(int(chord->notes().size()), 2);
+    auto edited = chord->downNote();
+    auto locked = chord->upNote();
+    for (auto note : {edited, locked}) {
+        note->setVeloType(Note::ValueType::USER_VAL);
+        note->setVeloOffset(67);
+    }
+    const auto editedId = arrangementNoteIdentity(edited);
+    const auto lockedId = arrangementNoteIdentity(locked);
+
+    PluginAPI::Score wrapped(score);
+    PluginAPI::ScoreObserver observer;
+    observer.setScore(&wrapped);
+    const auto state = observer.arrangementState({{"firstMeasure", 2}, {"lastMeasure", 2}});
+    QVERIFY2(!state.contains("error"), qUtf8Printable(state.value("error").toString()));
+    QVariantMap request{{"snapshotId", state.value("snapshotId")}, {"scope", state.value("scope")}};
+    auto image = observer.arrangementImage(request);
+    QVERIFY2(!image.contains("error"), qUtf8Printable(image.value("error").toString()));
+    const auto context = image.value("musicalContext").toMap();
+    QVERIFY(!context.value("systemHeaderShown").toBool());
+    const auto staves = context.value("staves").toList();
+    QCOMPARE(staves.size(), 2);
+    QCOMPARE(staves.last().toMap().value("key").toInt(), 2);
+    QCOMPARE(staves.last().toMap().value("timeSignature").toMap().value("numerator").toInt(), 4);
+    request["wholeSystem"] = true;
+    const auto full = observer.arrangementImage(request);
+    QVERIFY2(!full.contains("error"), qUtf8Printable(full.value("error").toString()));
+    QCOMPARE(full.value("measures").toList().size(), 2);
+    QImage png;
+    QVERIFY(png.loadFromData(QByteArray::fromBase64(full.value("pngBase64").toString().toLatin1()), "PNG"));
+    QVERIFY(png.width() > image.value("width").toInt());
+    QVERIFY(full.value("musicalContext").toMap().value("systemHeaderShown").toBool());
+
+    const auto result = observer.arrangementRequest("proposeVelocityAdjustment", {
+        {"snapshotId", state.value("snapshotId")}, {"scope", state.value("scope")},
+        {"kind", "background"}, {"roles", QVariantMap{{"4", "background"}}},
+        {"lockedNotes", QVariantList{lockedId}}, {"preserveManual", false}, {"showPanel", false},
+    });
+    QVERIFY2(!result.contains("error"), qUtf8Printable(result.value("error").toString()));
+    const auto options = result.value("options").toList();
+    QCOMPARE(options.size(), 1);
+    const auto option = options.first().toMap();
+    const auto changes = option.value("velocityDifferences").toList();
+    QCOMPARE(changes.size(), 1);
+    const auto row = changes.first().toMap();
+    QCOMPARE(row.value("ref").toMap().value("id").toString(), editedId);
+    QCOMPARE(row.value("before").toInt(), 67);
+    QCOMPARE(row.value("after").toInt(), 64);
+    QCOMPARE(edited->veloOffset(), 67);
+    QCOMPARE(locked->veloOffset(), 67);
+
+    const auto undo = score->undoStack()->getCurIdx();
+    const auto applied = observer.arrangementRequest("arrangementOption", {
+        {"optionId", option.value("id")}, {"action", "apply"}, {"noteIds", QVariantList{editedId}},
+    });
+    QVERIFY2(!applied.contains("error"), qUtf8Printable(applied.value("error").toString()));
+    QCOMPARE(score->undoStack()->getCurIdx(), undo + 1);
+    QCOMPARE(edited->veloType(), Note::ValueType::USER_VAL);
+    QCOMPARE(edited->veloOffset(), 64);
+    QCOMPARE(locked->veloOffset(), 67);
+    mscore->cmd(getAction("undo"));
+    QCOMPARE(edited->veloOffset(), 67);
+}

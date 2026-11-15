@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "mediaexport.h"
 #include "audioreader.h"
+#include "audiofileidentity.h"
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QFileInfo>
@@ -54,9 +55,7 @@ void ReferenceAudioExport::render(const QVariantMap& request)
         const auto identity = request.value("identity").toMap();
         if (!file.isFile())
             problem = tr("找不到原曲：%1").arg(path);
-        if (!identity.isEmpty() &&
-            (identity.value("size").toLongLong() != file.size() ||
-             identity.value("modified").toLongLong() != file.lastModified().toMSecsSinceEpoch()))
+        else if (!KumoAudio::matchesAudioIdentity(file, identity))
             problem = tr("原曲文件已改变，请重新选择音频。");
         double previous = 0;
         for (auto value : pieces) {

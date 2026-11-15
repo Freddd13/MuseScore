@@ -31,6 +31,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGridLayout>
+#include <QHBoxLayout>
 #include <QJsonDocument>
 #include <QKeyEvent>
 #include <QLabel>
@@ -40,6 +41,7 @@
 #include <QPainter>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QScopedValueRollback>
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QSlider>
@@ -47,7 +49,6 @@
 #include <QSplitter>
 #include <QTabBar>
 #include <QTabWidget>
-#include <QTabBar>
 #include <QToolButton>
 #include <QUrl>
 #include <QUuid>
@@ -120,6 +121,10 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     auto layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(3);
+    auto transport = new QHBoxLayout;
+    transport->setContentsMargins(0, 0, 0, 0);
+    transport->setSpacing(4);
+    layout->addLayout(transport);
     auto toolHost = new QWidget;
     auto tools = new ControlFlowLayout(toolHost);
     _tools = tools;
@@ -129,8 +134,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     toolbarScroll->setWidget(toolHost);
     toolbarScroll->setWidgetResizable(true);
     toolbarScroll->setFrameShape(QFrame::NoFrame);
-    toolbarScroll->setMaximumHeight(125);
-    toolbarScroll->setMinimumHeight(32);
+    toolbarScroll->setMaximumHeight(96);
     toolbarScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     layout->addWidget(toolbarScroll);
     auto button = [this, tools](const QString &text, int row, int col, auto fn) {
@@ -178,7 +182,8 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     tools->addWidget(_preset);
     _tool = new QComboBox;
     _tool->setObjectName("transcriptionTool");
-    _tool->addItems({tr("取音／试音"), tr("选择循环"), tr("手形平移"), tr("画／调整标注")});
+    _tool->addItems({tr("取音／试音"), tr("选择循环"), tr("手形平移"), tr("画／调整标注"),
+                     tr("拖动节拍网格")});
     tools->addWidget(_tool);
     auto cacheButton = button(tr("缓存设置"), 0, 6, [this] { cacheSettings(); });
     setComponentToolIcon(cacheButton, "settings");
@@ -186,6 +191,32 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _play->setObjectName("transcriptionPlay");
     setComponentToolIcon(_play, "play");
     _play->setEnabled(false);
+    tools->removeWidget(_play);
+    transport->addWidget(_play);
+    _follow = new QComboBox;
+    _follow->setObjectName("spectrumPlaybackFollow");
+    _follow->addItems({tr("固定视图"), tr("到边翻页"), tr("平滑跟随")});
+    _follow->setCurrentIndex(qBound(0, QSettings().value("spectrum/playbackFollow", 0).toInt(), 2));
+    _follow->setToolTip(tr("原曲正在播放时，选择频谱视图怎样跟随播放线。"));
+    transport->addWidget(_follow);
+    _returnToPlayback = new QToolButton;
+    _returnToPlayback->setObjectName("spectrumReturnToPlayback");
+    _returnToPlayback->setAccessibleName(tr("回到播放位置"));
+    _returnToPlayback->setToolTip(tr("回到播放位置。手动平移或缩放后，也可在这里恢复跟随。"));
+    setComponentToolIcon(_returnToPlayback, "fit");
+    transport->addWidget(_returnToPlayback);
+    connect(_returnToPlayback, &QToolButton::clicked, this, [this] {
+        _followSuspended = false;
+        _returnToPlayback->setToolTip(tr("回到播放位置。手动平移或缩放后，也可在这里恢复跟随。"));
+        followPlaybackView(true);
+    });
+    connect(_follow, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int mode) {
+        QSettings().setValue("spectrum/playbackFollow", mode);
+        _followSuspended = false;
+        _returnToPlayback->setToolTip(tr("回到播放位置。手动平移或缩放后，也可在这里恢复跟随。"));
+        if (mode)
+            followPlaybackView();
+    });
     _loop = button(tr("循环"), 1, 1, [this] {
         if (_a < 0 || _b <= _a) {
             setStatus(tr("使用“选择循环”拖过要反复听的片段。"));
@@ -201,6 +232,9 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     });
     _loop->setCheckable(true);
     setComponentToolIcon(_loop, "loop");
+    tools->removeWidget(_loop);
+    transport->addWidget(_loop);
+    transport->addStretch(1);
     _speed = new QDoubleSpinBox;
     _speed->setRange(50, 150);
     _speed->setSuffix("%");
@@ -280,13 +314,27 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _displayControls = new SpectrumDisplayControls(this);
     auto options = new QTabWidget;
     options->setObjectName("spectrumOptionsTabs");
-    options->addTab(_displayControls, tr("显示"));
+    auto addOptionsPage = [options](QWidget* page, const QString& title, const char* name) {
+        auto scroll = new QScrollArea;
+        scroll->setObjectName(name);
+        scroll->setWidgetResizable(true);
+        scroll->setFrameShape(QFrame::NoFrame);
+        auto content = new QWidget;
+        auto row = new QHBoxLayout(content);
+        row->setContentsMargins(0, 0, 0, 0);
+        page->setMaximumWidth(560);
+        row->addWidget(page, 1, Qt::AlignTop);
+        row->addStretch();
+        scroll->setWidget(content);
+        options->addTab(scroll, title);
+    };
+    addOptionsPage(_displayControls, tr("显示"), "spectrumOptionsScroll");
     _listenControls = new SpectrumListenControls(this);
-    options->addTab(_listenControls, tr("听辨"));
+    addOptionsPage(_listenControls, tr("听辨"), "spectrumListenScroll");
     _beatControls = new SpectrumBeatControls(this);
-    options->addTab(_beatControls, tr("节拍"));
+    addOptionsPage(_beatControls, tr("节拍"), "spectrumBeatScroll");
     tools->removeWidget(_preset);
-    tools->removeWidget(_controls[6]);
+    tools->removeWidget(cacheButton);
     tools->removeWidget(rebuild);
     tools->removeWidget(cancel);
     auto analysis = new QWidget;
@@ -306,24 +354,17 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     connect(_durationFromMark, &QCheckBox::clicked, this,
             [](bool checked) { QSettings().setValue("spectrum/inputMarkedDuration", checked); });
     auto analysisButtons = new QHBoxLayout;
-    analysisButtons->addWidget(_controls[6]);
+    analysisButtons->addWidget(cacheButton);
     analysisButtons->addWidget(rebuild);
     analysisButtons->addWidget(cancel);
     analysisBox->addLayout(analysisButtons);
     analysisBox->addStretch();
-    options->addTab(analysis, tr("分析"));
-    for(auto page:QList<QWidget*>{_displayControls,_listenControls,_beatControls,analysis}) {
-        page->setMaximumWidth(560);
-        const int index=options->indexOf(page);const auto title=options->tabText(index);options->removeTab(index);
-        auto wrapper=new QWidget;auto row=new QHBoxLayout(wrapper);row->setContentsMargins(0,0,0,0);
-        row->addWidget(page,0,Qt::AlignLeft|Qt::AlignTop);row->addStretch(1);options->insertTab(index,wrapper,title);page->show();
-    }
+    addOptionsPage(analysis, tr("分析"), "spectrumAnalysisScroll");
     options->setCurrentIndex(0);
-    const auto primary = _controls;
-    for (auto control : primary)
+    for (auto control : _controls)
         tools->removeWidget(control);
-    _controls = {primary[0],  primary[1],    primary[2], primary[7],  primary[8],  primary[3], primary[5],
-                 primary[13], displayButton, primary[9], primary[10], primary[11], primary[12]};
+    _controls = {referenceButton, _tracks, _clips, _display, _tool, inputButton,
+                 displayButton, speedControl, _tuning, _transpose, _harmonics};
     for (auto control : _controls) {
         control->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
         control->setMinimumWidth(0);
@@ -342,22 +383,30 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
             tools->addWidget(_fitTime);
     }
 
-    _displayPanel = new QScrollArea;
-    _displayPanel->setObjectName("spectrumOptionsScroll");
-    _displayPanel->setWidget(options);
-    _displayPanel->setWidgetResizable(true);
-    _displayPanel->setFrameShape(QFrame::NoFrame);
-    _displayPanel->setMinimumHeight(50);
+    _displayPanel = options;
+    _displayPanel->setMinimumHeight(64);
     _displayPanel->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Ignored);
     _displayPanel->setVisible(QSettings().value("spectrum/displayControls", false).toBool());
     _workspaceSplitter=new QSplitter(Qt::Vertical);_workspaceSplitter->setObjectName("spectrumWorkspaceSplitter");
     _workspaceSplitter->setChildrenCollapsible(false);_workspaceSplitter->addWidget(_displayPanel);
     layout->addWidget(_workspaceSplitter,1);
     connect(_workspaceSplitter,&QSplitter::splitterMoved,this,[this]{const auto sizes=_workspaceSplitter->sizes();if(_displayPanel->isVisible() && !sizes.isEmpty() && sizes[0]>0)QSettings().setValue("spectrum/settingsHeight",sizes[0]);});
-    connect(displayButton,&QToolButton::clicked,this,[this]{
+    auto updateSettingsHeight = [this] {
         _workspaceSplitter->setVisible(!_displayPanel->isHidden()||!_marksSplitter->isHidden());
         if(!_displayPanel->isHidden()){const int h=QSettings().value("spectrum/settingsHeight",160).toInt();_workspaceSplitter->setSizes({h,qMax(80,_workspaceSplitter->height()-h)});}
         setMinimumHeight(_display->currentIndex()==0?180:72);
+    };
+    connect(displayButton, &QToolButton::clicked, this, updateSettingsHeight);
+    auto gridButton = new QToolButton;
+    gridButton->setObjectName("spectrumGridSettings");
+    gridButton->setText(tr("网格"));
+    gridButton->setToolTip(tr("打开节拍网格、第一拍和偏移设置。"));
+    transport->insertWidget(4, gridButton);
+    connect(gridButton, &QToolButton::clicked, this, [this, options, updateSettingsHeight] {
+        options->setCurrentIndex(2);
+        options->show();
+        QSettings().setValue("spectrum/displayControls", true);
+        updateSettingsHeight();
     });
     connect(_beatControls, &SpectrumBeatControls::changed, this, [this] {
         if (!_track.value("id").toString().isEmpty())
@@ -369,6 +418,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     connect(_beatControls, &SpectrumBeatControls::tapRequested, this, &SpectrumPane::tapGrid);
     connect(_beatControls, &SpectrumBeatControls::firstBeatRequested, this,
             [this] { _beatControls->setFirstBeat(sourceInPlayback() ? sourcePosition() : _cursorMs); });
+    connect(_beatControls, &SpectrumBeatControls::twoPointsRequested, this, [this] { selectGridPoints(true); });
     connect(_beatControls, &SpectrumBeatControls::saveRequested, this, [this] {
         if (_track.value("id").toString().isEmpty()) {
             setStatus(tr("先选择一条原曲音轨，再保存节拍网格。"));
@@ -413,6 +463,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _workspaceSplitter->addWidget(_marksSplitter);
     _workspaceSplitter->setSizes({QSettings().value("spectrum/settingsHeight",160).toInt(),400});
     connect(_timeScroll, &QScrollBar::valueChanged, this, [this](int value) {
+        suspendPlaybackFollow();
         if (!usesScoreTimeline())
             _from = value;
         else
@@ -519,6 +570,9 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
         if (path != _path) {
             _path = path;
             _drawingMark = false;
+            _gridDragging = false;
+            selectGridPoints(false);
+            _followSuspended = false;
             _editingMark.clear();
             _image = QImage();
             _rawImage = QImage();
@@ -620,7 +674,11 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     });
     connect(_speed, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
             [this](double) { _listenTimer.start(); });
-    connect(_editor->_scroll, &QScrollBar::valueChanged, this, [this] { viewChanged(); });
+    connect(_editor->_scroll, &QScrollBar::valueChanged, this, [this] {
+        if (usesScoreTimeline() && !_editor->_automaticScroll)
+            suspendPlaybackFollow();
+        viewChanged();
+    });
     updateMarksVisibility();
     setMinimumHeight(_display->currentIndex() == 1 ? 126 : 180);
     applyAppearance();
@@ -643,6 +701,7 @@ QString SpectrumPane::timeViewKey() const {
     return "spectrum/timeView/" + QCryptographicHash::hash(identity, QCryptographicHash::Sha256).toHex();
 }
 void SpectrumPane::fitTimeRange() {
+    suspendPlaybackFollow();
     if (!_clip.isEmpty()) {
         if (!_editor->score())
             return;
@@ -713,6 +772,12 @@ bool SpectrumPane::eventFilter(QObject *object, QEvent *event) {
         applyAppearance();
     if (isVisible() && event->type() == QEvent::KeyPress && (object == _canvas || object == _marks)) {
         auto key = static_cast<QKeyEvent *>(event);
+        if (key->key() == Qt::Key_Escape && _selectingGridPoints) {
+            selectGridPoints(false);
+            setStatus(tr("已取消选择拍点。"));
+            event->accept();
+            return true;
+        }
         if (key->key() == Qt::Key_Delete && key->modifiers() == Qt::NoModifier &&
             (_tool->currentIndex() == 3 || object == _marks)) {
             if (auto remove = findChild<QToolButton *>("spectrumDeleteMarks"))
@@ -748,6 +813,20 @@ void SpectrumPane::tapGrid() {
     _beatControls->tap(playing ? sourcePosition() : _cursorMs, playing);
     _canvas->update();
     _editor->_noteCanvas->update();
+}
+void SpectrumPane::selectGridPoints(bool start) {
+    if (start && _path.isEmpty()) {
+        setStatus(tr("先选择原曲音轨，再选拍点。"));
+        return;
+    }
+    _selectingGridPoints = start;
+    _firstGridPoint = -1;
+    if (start) {
+        QWidget* surface = _display->currentIndex() == 1
+            ? static_cast<QWidget*>(_editor->_noteCanvas) : _canvas;
+        surface->setFocus(Qt::OtherFocusReason);
+        setStatus(tr("在频谱图上点击起始拍。按 Esc 取消。"));
+    }
 }
 void SpectrumPane::estimateTempo() {
     if (!_session || _path.isEmpty()) {
@@ -800,7 +879,7 @@ void SpectrumPane::paintGrid(QPainter &p, const QRectF &bounds) {
     }
     const double interval = 60000. / values.value("bpm", 120.).toDouble() * 4 /
                             values.value("denominator", 4).toInt(),
-                 first = values.value("firstBeat", 0.).toDouble();
+                 first = values.value("firstBeat", 0.).toDouble() + values.value("offset", 0).toInt();
     const int numerator = values.value("numerator", 4).toInt();
     const double from = timeAtX(gutter), until = timeAtX(bounds.right());
     if (interval <= 0 || until <= from)
@@ -1034,6 +1113,59 @@ bool SpectrumPane::sourceInPlayback() const {
     }
     return false;
 }
+bool SpectrumPane::controlsPlaybackViewport() const {
+    return isVisible() && _sourceWasPlaying && usesScoreTimeline();
+}
+bool SpectrumPane::sourceTransportActive() const {
+    return ownsPlayback() && _media->property("playing").toBool();
+}
+void SpectrumPane::stopSourceTransport() {
+    if (!sourceTransportActive())
+        return;
+    _cursorMs = sourcePosition();
+    QMetaObject::invokeMethod(_media, "stop");
+}
+void SpectrumPane::suspendPlaybackFollow() {
+    if (_follow->currentIndex() && _sourceWasPlaying) {
+        _followSuspended = true;
+        _returnToPlayback->setToolTip(tr("跟随已暂停。点击回到播放位置并继续跟随。"));
+    }
+}
+bool SpectrumPane::followPlaybackView(bool recenter) {
+    const int mode = _follow->currentIndex();
+    if (!isVisible() || !_audioLoaded || (!recenter &&
+        (!mode || _followSuspended || !_sourceWasPlaying || _dragging || _drawingMark || _gridDragging)))
+        return false;
+    const double at = _sourceWasPlaying ? _lastAudioMs : _cursorMs;
+    if (!_clip.isEmpty() && (at < _clip.value("from").toDouble() || at > _clip.value("until").toDouble()))
+        return false;
+
+    const auto width = plotWidth();
+    const auto current = xAtTime(at) - gutter;
+    const double anchor = recenter || mode == 2 ? .45 : .12;
+    if (!recenter && current >= 0 && current < width * (mode == 2 ? .45 : .85))
+        return false;
+    if (usesScoreTimeline()) {
+        if (!_editor->score())
+            return false;
+        const auto tick = _clip.isEmpty() ? _editor->score()->tempomap()->time2tick(at / 1000.)
+                                          : qRound(tickAt(_clip, at));
+        auto scroll = _editor->_scroll;
+        const auto wanted = qBound(scroll->minimum(), _editor->leftTickForAnchor(tick, gutter + width * anchor),
+                                   scroll->maximum());
+        if (wanted == scroll->value())
+            return false;
+        QScopedValueRollback<bool> automatic(_editor->_automaticScroll, true);
+        scroll->setValue(wanted);
+    } else {
+        const double wanted = qBound(0., at - _span * anchor, double(_timeScroll->maximum()));
+        if (qAbs(_from - wanted) < qMax(1., _span / width))
+            return false;
+        _from = wanted;
+        viewChanged();
+    }
+    return true;
+}
 int SpectrumPane::linkedTimelineWidth() const { return isVisible() && usesScoreTimeline() ? sourceWidth() : -1; }
 double SpectrumPane::sourcePosition() const {
     double at = -1;
@@ -1108,8 +1240,11 @@ void SpectrumPane::projectChanged() {
     const double previous=_lastAudioMs;
     const bool wasPlaying=_sourceWasPlaying;
     const bool playing = _media->property("playing").toBool();
-    _play->setText(playing ? tr("暂停原曲") : tr("播放原曲"));
-    setComponentToolIcon(_play, playing ? "pause" : "play");
+    const auto label = playing ? tr("暂停原曲") : tr("播放原曲");
+    if (_play->text() != label) {
+        _play->setText(label);
+        setComponentToolIcon(_play, playing ? "pause" : "play");
+    }
     _lastAudioMs = sourcePosition();
     _sourceWasPlaying=sourceInPlayback();
     if (!playing) {
@@ -1117,6 +1252,8 @@ void SpectrumPane::projectChanged() {
         setStatus(_media->property("status").toString());
     }
     if (isVisible()) {
+        if (followPlaybackView())
+            return;
         if(wasPlaying && _sourceWasPlaying) {
             for(double at:{previous,_lastAudioMs}) {
                 _canvas->update(QRect(qRound(xAtTime(at))-4,0,9,_canvas->height()));
@@ -1140,16 +1277,21 @@ void SpectrumPane::showEvent(QShowEvent *) {
 }
 void SpectrumPane::hideEvent(QHideEvent *) {
     clearHover();
+    bool minimized = false;
     for (auto owner = static_cast<QWidget*>(this); owner; owner = owner->parentWidget())
-        if (owner->property("kumoAreaMoving").toBool() || owner->property("kumoWindowTransition").toBool())
+        if (owner->property("kumoPanelMinimized").toBool())
+            minimized = true;
+        else if (owner->property("kumoAreaMoving").toBool() || owner->property("kumoWindowTransition").toBool())
             return;
     _drawingMark = false;
+    _gridDragging = false;
+    selectGridPoints(false);
     _listenTimer.stop();
     _requestTimer.stop();
     _request.clear();
     if (_session)
         QMetaObject::invokeMethod(_session, "cancel");
-    if (ownsPlayback())
+    if (!minimized && ownsPlayback())
         QMetaObject::invokeMethod(_media, "stop");
     if (_audio && !_audioLoaded && _session && _session->property("available").toBool()) {
         _metadataCancelled = true;
@@ -1221,7 +1363,10 @@ void SpectrumPane::viewChanged() {
     _canvas->update();
 }
 void SpectrumPane::editorTimelineZoomed(double,double) {
-    if(isVisible() && _display->currentIndex()==1)viewChanged();
+    if (isVisible() && usesScoreTimeline()) {
+        suspendPlaybackFollow();
+        viewChanged();
+    }
 }
 double SpectrumPane::timeAtX(double x) const {
     if(!_clip.isEmpty())return audioAt(_clip,_editor->tickForX(x,false));
@@ -1254,13 +1399,25 @@ void SpectrumPane::requestVisible() {
     }
     if (until <= from)
         return;
+    const bool buffered = _follow->currentIndex() == 2 && _sourceWasPlaying && !_followSuspended;
+    if (buffered) {
+        // Keep one look-ahead range while the playhead moves by small amounts.
+        // Otherwise every transport update would replace the projection of the same blocks.
+        const double span = qBound(250., std::ceil((until - from) / 250.) * 250., 43200000.);
+        from = std::floor(from / (span / 2.)) * (span / 2.);
+        until = from + span * 2.;
+        if (!_clip.isEmpty()) {
+            from = qMax(_clip.value("from").toDouble(), from);
+            until = qMin(_clip.value("until").toDouble(), until);
+        }
+    }
     // One bounded viewport; horizontal requests are quantized to avoid repaint-sized recomputation.
     from = qMax(0., std::floor(from / 20.) * 20.);
     until = qMin(from + 86400000., std::ceil(until / 20.) * 20.);
     QVariantMap request{{"path", _path},
                         {"from", from},
                         {"until", until},
-                        {"columns", qBound(64, (sourceWidth() - gutter) / 2, 1024)},
+                        {"columns", qBound(64, (sourceWidth() - gutter) / (buffered ? 1 : 2), 1024)},
                         {"rows", 512},
                         {"lowPitch", 0.},
                         {"highPitch", 128.},
@@ -1527,6 +1684,45 @@ void SpectrumPane::pointer(QMouseEvent *e, bool release) {
         e->accept();
         return;
     }
+    const bool leftPress = e->type() == QEvent::MouseButtonPress && e->button() == Qt::LeftButton;
+    if (!_path.isEmpty() && e->x() >= gutter && _selectingGridPoints) {
+        if (leftPress) {
+            const double point = qMax(0., timeAtX(e->x()));
+            if (_firstGridPoint < 0.) {
+                _firstGridPoint = point;
+                setStatus(tr("起始拍在 %1 秒。请点击后面的拍点。").arg(point / 1000., 0, 'f', 3));
+            } else if (_beatControls->setGridFromPoints(_firstGridPoint, point)) {
+                selectGridPoints(false);
+                setStatus(tr("网格已按两个拍点对齐。点“保存节拍”随乐谱保留。"));
+            } else {
+                setStatus(tr("请选在起始拍之后、符合所填拍数的结束拍。"));
+            }
+        }
+        e->accept();
+        return;
+    }
+    if (!_path.isEmpty() && (_gridDragging || (leftPress && e->x() >= gutter && _tool->currentIndex() == 4))) {
+        if (leftPress) {
+            const auto grid = _beatControls->values();
+            if (!grid.value("source").toInt() || _clip.isEmpty()) {
+                _gridDragging = true;
+                _gridDragTime = timeAtX(e->x());
+                _gridDragOffset = grid.value("offset").toInt();
+            } else {
+                setStatus(tr("当前网格随乐谱拍位。如需移动录音，请在原曲参考中编辑关联。"));
+            }
+        } else {
+            const auto offset = _gridDragOffset + qRound(timeAtX(e->x()) - _gridDragTime);
+            _beatControls->setOffset(offset);
+            if (release) {
+                _gridDragging = false;
+                setStatus(tr("网格偏移 %1 毫秒。点“保存节拍”随乐谱保留。")
+                              .arg(_beatControls->values().value("offset").toInt()));
+            }
+        }
+        e->accept();
+        return;
+    }
     if (_path.isEmpty() || _image.isNull()) {
         e->accept();
         return;
@@ -1605,6 +1801,8 @@ void SpectrumPane::pointer(QMouseEvent *e, bool release) {
         _pressFrom = _from;
         _panning = e->button() == Qt::MiddleButton || _tool->currentIndex() == 2;
         _dragging = true;
+        if (_panning)
+            suspendPlaybackFollow();
         if (_tool->currentIndex() == 1 && !_panning) {
             _a = ms;
             _b = ms;
@@ -1673,6 +1871,14 @@ bool SpectrumPane::overlayEvent(QEvent *event) {
     if(auto tabs=_editor->findChild<QTabBar*>("workflowExpressionTabs"))if(tabs->currentIndex()!=2)return false;
     if (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) {
         auto key = static_cast<QKeyEvent *>(event);
+        if (_selectingGridPoints && key->key() == Qt::Key_Escape) {
+            if (event->type() == QEvent::KeyPress) {
+                selectGridPoints(false);
+                setStatus(tr("已取消选择拍点。"));
+            }
+            event->accept();
+            return true;
+        }
         if (key->key() == Qt::Key_Space &&
             (key->modifiers() == Qt::NoModifier || key->modifiers() == Qt::ShiftModifier)) {
             event->accept();
@@ -1704,6 +1910,7 @@ bool SpectrumPane::overlayEvent(QEvent *event) {
     return false;
 }
 void SpectrumPane::wheel(QWheelEvent *e) {
+    suspendPlaybackFollow();
     const double factor = std::pow(1.2, e->angleDelta().y() / 120.);
     if (e->modifiers() & Qt::ShiftModifier) {
         double centre = pitchAtY(e->posF().y()), span = qBound(12., (_high - _low) / factor, 108.);
@@ -1718,7 +1925,7 @@ void SpectrumPane::wheel(QWheelEvent *e) {
             _editor->zoomTimeline(factor, e->posF().x());
         }
     } else {
-        if (_clip.isEmpty())
+        if (!usesScoreTimeline())
             _from = qMax(0., _from - e->angleDelta().y() / 120. * _span * .15);
         else
             _editor->_scroll->setValue(_editor->_scroll->value() - e->angleDelta().y() * 2);
@@ -1732,6 +1939,7 @@ int SpectrumPane::inputPitch(const QVariantMap &mark) const {
 void SpectrumPane::updateActions() {
     updateInputTarget();
     _fitTime->setEnabled(!_path.isEmpty() && _audioLoaded && _audio && !_audio->property("reading").toBool());
+    _returnToPlayback->setEnabled(_fitTime->isEnabled());
     _fitTime->setText(_clip.isEmpty() ? tr("匹配音频") : tr("匹配片段"));
     _fitTime->setToolTip(_clip.isEmpty() ? tr("扩大可见原曲范围；用底部滚动条浏览整条录音。")
                                      : tr("将当前关联片段放到视口内，卷帘与频谱一起调整。"));

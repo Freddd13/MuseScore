@@ -132,6 +132,9 @@ QVariantMap arrangementPlaybackRead(PluginAPI::ScoreObserver *observer, Score *s
                         id=QString("%1:%2:%3:g%4").arg(event.value("tick").toInt()).arg(event.value("track").toInt())
                             .arg(event.value("index").toInt()).arg(event.value("graceIndex").toInt());
                     event["ref"] = QVariantMap{{"snapshotId",snapshot},{"id",id}};
+                    const auto source = event.take("velocitySourceId").toString();
+                    if (!source.isEmpty())
+                        event["velocityRef"] = QVariantMap{{"snapshotId", snapshot}, {"id", source}};
                 }
                 event["scoreTick"] = score->repeatList().utick2tick(event.value("nominalTick").toInt());
                 value = event;

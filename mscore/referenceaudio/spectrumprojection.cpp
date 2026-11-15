@@ -50,34 +50,45 @@ void projectSpectrumBlock(const SpectrumRequest& view, const SpectrumTile& block
             rows.append({int(std::floor(at - band / 2. + .5)), int(std::ceil(at + band / 2. - .5)),
                          0, false});
     }
+    const double msPerColumn = (view.untilMs - view.fromMs) / view.columns;
+    const double rawPerMs = block.image.width() / (block.untilMs - block.fromMs);
+    const bool interpolateTime = msPerColumn * rawPerMs <= 1.;
     for (int x = left; x < right && !cancel; ++x) {
-        const double start = view.fromMs + x * (view.untilMs - view.fromMs) / view.columns;
-        const double end = view.fromMs + (x + 1) * (view.untilMs - view.fromMs) / view.columns;
-        const int a = qBound(0,
-                             int(std::floor((start - block.fromMs) /
-                                            (block.untilMs - block.fromMs) * block.image.width())),
-                             block.image.width() - 1);
-        const int b = qBound(a + 1,
-                             int(std::ceil((end - block.fromMs) / (block.untilMs - block.fromMs) *
-                                           block.image.width())),
-                             block.image.width());
+        const double rawStart = (view.fromMs + x * msPerColumn - block.fromMs) * rawPerMs;
+        const double rawEnd = rawStart + msPerColumn * rawPerMs;
+        const double centre = (rawStart + rawEnd) / 2.;
+        if (interpolateTime && (centre < 0. || centre >= block.image.width()))
+            continue;
+        const double sample = qBound(0., centre - .5, double(block.image.width() - 1));
+        const int a = interpolateTime ? int(sample)
+                                      : qBound(0, int(std::floor(rawStart)), block.image.width() - 1);
+        const int b = interpolateTime ? qMin(a + 1, block.image.width() - 1)
+                                      : qBound(a + 1, int(std::ceil(rawEnd)), block.image.width());
+        const auto columnValue = [&](const uchar* row) {
+            return qRound(row[a] + (row[b] - row[a]) * (sample - a));
+        };
         for (int y = 0; y < view.rows; ++y) {
             const auto row = rows[y];
             int value = 0;
             if (row.interpolate) {
-                for (int i = a; i < b; ++i) {
-                    const int low = row.first < 0 || row.first >= block.image.height()
-                                        ? 0
-                                        : block.image.constScanLine(row.first)[i];
-                    const int high = row.last < 0 || row.last >= block.image.height()
-                                         ? 0
-                                         : block.image.constScanLine(row.last)[i];
-                    value = qMax(value, qRound(low * (1. - row.blend) + high * row.blend));
-                }
-            } else
-                for (int r = qMax(0, row.first); r <= qMin(block.image.height() - 1, row.last); ++r)
+                const auto low = row.first >= 0 && row.first < block.image.height()
+                                     ? block.image.constScanLine(row.first) : nullptr;
+                const auto high = row.last >= 0 && row.last < block.image.height()
+                                      ? block.image.constScanLine(row.last) : nullptr;
+                if (interpolateTime)
+                    value = qRound((low ? columnValue(low) : 0) * (1. - row.blend) +
+                                   (high ? columnValue(high) : 0) * row.blend);
+                else
                     for (int i = a; i < b; ++i)
-                        value = qMax(value, int(block.image.constScanLine(r)[i]));
+                        value = qMax(value, qRound((low ? low[i] : 0) * (1. - row.blend) +
+                                                   (high ? high[i] : 0) * row.blend));
+            } else {
+                for (int r = qMax(0, row.first); r <= qMin(block.image.height() - 1, row.last); ++r) {
+                    const auto line = block.image.constScanLine(r);
+                    value = qMax(value, interpolateTime ? columnValue(line)
+                                                       : int(*std::max_element(line + a, line + b)));
+                }
+            }
             image.scanLine(y)[x] = uchar(qMax(int(image.constScanLine(y)[x]), value));
         }
     }

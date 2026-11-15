@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "arrangement.h"
+#include "engravingtools.h"
 #include "arrangementcontext.h"
 #include "mscore/musescore.h"
 #include "featuregate.h"
@@ -383,6 +384,18 @@ QVariantMap ScoreObserver::arrangementRequest(const QString &action, const QVari
         return arrangementRange(request);
     if (action == "arrangementImage")
         return arrangementImage(request);
+    if (action == "readEngravingLayout") {
+        const auto state = arrangementState(request);
+        if (state.contains("error"))
+            return state;
+        if (request.value("snapshotId") != state.value("snapshotId"))
+            return {{"error", tr("请重新读取选段，再查看页面排版。")}};
+        if (playing())
+            return {{"error", tr("请暂停播放，再查看页面排版。")}};
+        auto layout = engravingLayout(_score, state.value("scope").toMap());
+        layout["snapshotId"] = state.value("snapshotId");
+        return layout;
+    }
     if (action == "arrangementPlaybackPrepare" || action == "arrangementPlaybackPage")
         return arrangementPlaybackRead(this,_score,action,request);
     return arrangementOperation(this, _score, action, request);

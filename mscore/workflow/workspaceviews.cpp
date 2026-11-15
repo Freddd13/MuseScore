@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "workspaceviews.h"
 #include "systemlocks.h"
+#include "engravingtools.h"
 #include "editorareas.h"
 #include "panelwindowcontrols.h"
 #include "featuregate.h"
@@ -271,6 +272,25 @@ public:
     selectors.append(button);
     updateButtons();
   }
+  void syncScoreLayout() {
+    if (!window || !window->currentScore() || !window->currentScoreView() ||
+        !personalFeaturesEnabled())
+      return;
+    auto score = window->currentScore();
+    const char* savedView = "kumoArrangementLayoutMode";
+    const auto previous = score->QObject::property(savedView);
+    if (current == "engrave") {
+      if (!previous.isValid())
+        score->QObject::setProperty(savedView, int(score->layoutMode()));
+      if (!score->pageMode())
+        window->switchLayoutMode(LayoutMode::PAGE);
+    } else if (previous.isValid()) {
+      score->QObject::setProperty(savedView, QVariant());
+      const auto mode = LayoutMode(previous.toInt());
+      if (score->layoutMode() != mode)
+        window->switchLayoutMode(mode);
+    }
+  }
   void activate(const QString &mode, bool rememberCurrent = true) {
     if (!window || !personalFeaturesEnabled() || changing)
       return;
@@ -284,12 +304,18 @@ public:
     // deferred startup restoration.
     if (rememberCurrent)
       initialRestorePending = false;
-    if (mode == current)
+    if (mode == current) {
+      if (mode == "engrave")
+        openEngravingTools(window);
       return;
+    }
     if (rememberCurrent)
       save();
     changing = true;
+    if (mode == "engrave")
+      openEngravingTools(window);
     current = mode;
+    syncScoreLayout();
     window->setProperty("kumoWorkspaceView", mode);
     const auto state = QSettings().value(key(mode + "/layout")).toByteArray();
     const auto initialState = state.isEmpty() && (mode == "engrave" || mode == "post")
@@ -313,6 +339,8 @@ public:
           dock->hide();
       }
     }
+    if (auto tools = window->findChild<QDockWidget*>("kumoEngravingTools"))
+      tools->setVisible(mode == "engrave" && (state.isEmpty() || !tools->isHidden()));
     if (auto video = window->findChild<QDockWidget *>("kumoPanel/score-video"))
       video->setVisible(QSettings().value(key(mode + "/videoVisible"), mode == "post").toBool());
     if (state.isEmpty() && mode == "engrave")
@@ -365,6 +393,10 @@ WorkspaceViews *controller(MuseScore *main = nullptr) {
   return views;
 }
 } // namespace
+void syncWorkingScoreLayout(MuseScore* window) {
+  if (window && views)
+    views->syncScoreLayout();
+}
 void addWorkspaceViews(QMenu *menu) {
   if (auto instance = controller(
           qobject_cast<MuseScore *>(menu ? menu->parentWidget() : nullptr)))
@@ -604,6 +636,11 @@ void addEditorDockActions(QDockWidget *dock) {
   full->setAutoRaise(true);
   full->setDefaultAction(windows->fullscreenAction());
   row->addWidget(full);
+  auto minimize = new QToolButton(title);
+  minimize->setObjectName("kumoPanelMinimizeButton");
+  minimize->setAutoRaise(true);
+  minimize->setDefaultAction(windows->minimizeAction());
+  row->addWidget(minimize);
   auto detach = new QToolButton(title);
   detach->setAutoRaise(true);
   detach->setIcon(dock->style()->standardIcon(QStyle::SP_TitleBarNormalButton));

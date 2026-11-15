@@ -1,5 +1,7 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "mscore/plugin/api/scoreobserver.h"
+#include "arrangementcontext.h"
+#include "engravingcandidate.h"
 #include "libmscore/chord.h"
 #include "libmscore/measure.h"
 #include "libmscore/mscore.h"
@@ -7,9 +9,12 @@
 #include "libmscore/page.h"
 #include "libmscore/segment.h"
 #include "libmscore/system.h"
+#include "libmscore/staff.h"
+#include "libmscore/timesig.h"
 #include <QBuffer>
 #include <QCache>
 #include <QCryptographicHash>
+#include <QCoreApplication>
 #include <QDataStream>
 #include <QElapsedTimer>
 #include <QImage>
@@ -41,15 +46,32 @@ QCache<QString,QVariantMap>& imageCache() {
 
 namespace Ms { namespace PluginAPI {
 QVariantMap ScoreObserver::arrangementImage(const QVariantMap& request) {
-    QElapsedTimer watch;watch.start();
     auto state=arrangementState(request);
     if(state.contains("error"))return state;
     const QString snapshot=state.value("snapshotId").toString();
     if(request.value("snapshotId").toString()!=snapshot)
         return {{"error",tr("乐谱已经更新，请重新读取这一段后取图。")}};
     if(playing())return {{"error",tr("请暂停乐谱播放后读取谱面图片。")}};
-    if(_score->pages().isEmpty())return {{"error",tr("乐谱正在排版，稍后即可读取图片。")}};
     const auto scope=state.value("scope").toMap();
+    auto result = Ms::renderArrangementImage(_score, scope, snapshot, request);
+    if (!result.contains("error"))
+        result["identity"] = state.value("identity");
+    return result;
+}
+}}
+
+namespace Ms {
+using PluginAPI::ImageSlice;
+using PluginAPI::imageCache;
+using PluginAPI::imageRect;
+using PluginAPI::imageSystem;
+
+QVariantMap renderArrangementImage(Ms::Score* _score, const QVariantMap& scope, const QString& snapshot,
+                                   const QVariantMap& request) {
+    QElapsedTimer watch;
+    watch.start();
+    const auto tr = [](const char* text) { return QCoreApplication::translate("ScoreObserver", text); };
+    if(_score->pages().isEmpty())return {{"error",tr("乐谱正在排版，稍后即可读取图片。")}};
     const int start=scope.value("start").toInt(),end=scope.value("end").toInt();
     const int firstTrack=scope.value("firstTrack").toInt(),endTrack=scope.value("endTrack").toInt();
     const qreal targetScale=qMin(qreal(2),14/_score->spatium());
@@ -68,9 +90,35 @@ QVariantMap ScoreObserver::arrangementImage(const QVariantMap& request) {
             slices.append({system,{},box});
         slices.back().measures.append(measure);slices.back().rect|=box;
     }
-    const int index=request.value("imageIndex",0).toInt();
+    int index=request.value("imageIndex",0).toInt();
+    if (request.contains("atTick")) {
+        const int tick = request.value("atTick").toInt();
+        index = -1;
+        for (int i = 0; i < slices.size() && index < 0; ++i)
+            for (const auto measure : slices.at(i).measures) {
+                const auto first = measure->isMMRest() ? measure->mmRestFirst() : measure;
+                const auto last = measure->isMMRest() ? measure->mmRestLast() : measure;
+                if (first && last && tick >= first->tick().ticks() && tick < last->endTick().ticks()) {
+                    index = i;
+                    break;
+                }
+            }
+    }
     if(index<0||index>=slices.size())return {{"error",tr("这个范围共有%1张谱图，请选择有效的图片序号。").arg(slices.size())}};
-    const auto slice=slices[index];auto page=slice.system->page();
+    auto slice=slices[index];auto page=slice.system->page();
+    const auto firstRequested = slice.measures.front();
+    const bool wholeSystem = request.value("wholeSystem", false).toBool();
+    if (wholeSystem) {
+        slice.measures.clear();
+        slice.rect = {};
+        for (auto element : slice.system->measures()) {
+            if (element->isMeasure()) {
+                auto measure = Ms::toMeasure(element);
+                slice.measures.append(measure);
+                slice.rect |= measure->pageBoundingRect();
+            }
+        }
+    }
     if(!page)return {{"error",tr("这一行尚未完成排版，稍后即可读取。")}};
     auto elements=page->elements();
     QRectF crop(slice.rect.left(),slice.system->pageBoundingRect().top(),slice.rect.width(),slice.system->height());
@@ -78,7 +126,7 @@ QVariantMap ScoreObserver::arrangementImage(const QVariantMap& request) {
     // articulations. Keep the requested measure boundaries on the horizontal axis.
     QRectF ink;bool hasInk=false;
     QByteArray geometry;QDataStream stream(&geometry,QIODevice::WriteOnly);
-    stream<<snapshot<<scope<<index<<slice.rect<<page->bbox();
+    stream<<snapshot<<scope<<index<<wholeSystem<<slice.rect<<page->bbox();
     for(auto element:elements) {
         if(!element->visible()||imageSystem(element)!=slice.system)continue;
         if(element->isSystem()||element->isMeasure()||element->isBox()||element->isPage())continue;
@@ -141,14 +189,30 @@ QVariantMap ScoreObserver::arrangementImage(const QVariantMap& request) {
             }
         }
     }
+    const auto contextTick = Fraction::fromTicks(qMax(start, firstRequested->tick().ticks()));
+    const auto contextScope = QVariantMap{{"start", contextTick.ticks()}, {"end", contextTick.ticks() + 1},
+        {"firstTrack", 0}, {"endTrack", _score->ntracks()}};
+    auto staves = Ms::arrangementSourceDetails(_score, contextScope).value("staves").toList();
+    for (auto &value : staves) {
+        auto staff = value.toMap();
+        const auto source = _score->staff(staff.value("index").toInt());
+        const auto signature = source->timeSig(contextTick);
+        const auto meter = signature ? signature->sig() : firstRequested->timesig();
+        staff["timeSignature"] = QVariantMap{{"numerator", meter.numerator()},
+            {"denominator", meter.denominator()}};
+        value = staff;
+    }
+    const QVariantMap musicalContext{{"tick", contextTick.ticks()}, {"staves", staves},
+        {"systemHeaderShown", slice.measures.front() == slice.system->firstMeasure()}};
     QVariantMap result{{"schemaVersion","score-image/1"},{"snapshotId",snapshot},{"geometryVersion",geometryVersion},
-        {"identity",state.value("identity")},{"scope",scope},{"imageIndex",index},{"imageCount",slices.size()},
+        {"scope",scope},{"imageIndex",index},{"imageCount",slices.size()},
         {"nextImage",index+1<slices.size()?QVariant(index+1):QVariant()},
         {"page",page->no()+1},{"width",size.width()},{"height",size.height()},{"scale",scale},
         {"pageRect",imageRect(crop)},{"measures",measures},{"notes",notes},
+        {"musicalContext",musicalContext},{"wholeSystem",wholeSystem},
         {"mimeType","image/png"},{"pngBase64",QString::fromLatin1(png.toBase64())},
         {"cacheHit",false},{"milliseconds",watch.nsecsElapsed()/1e6}};
     const int cost=QJsonDocument::fromVariant(result).toJson(QJsonDocument::Compact).size()*2;
     imageCache().insert(geometryVersion,new QVariantMap(result),cost);return result;
 }
-}}
+}

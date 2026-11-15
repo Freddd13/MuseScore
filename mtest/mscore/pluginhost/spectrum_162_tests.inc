@@ -92,9 +92,10 @@ void TestPluginHost::spectrumInteraction162()
     QTest::mouseClick(reference, Qt::LeftButton);
     QCOMPARE(options->values().value("harmonicCount").toInt(), 4);
     QCOMPARE(qvariant_cast<QImage>(session->property("image")).cacheKey(), original.cacheKey());
+    const int heightWithSettings = canvas->height();
     QTest::mouseClick(settings, Qt::LeftButton);
     QTRY_VERIFY(!panel->isVisible());
-    QVERIFY(canvas->height() > 300);
+    QTRY_VERIFY(canvas->height() > heightWithSettings);
     const auto view = pane->viewInfo();
     const QPoint point(
         PerformanceViewport::gutter + 150,
@@ -119,6 +120,69 @@ void TestPluginHost::spectrumInteraction162()
     QTest::mouseClick(settings, Qt::LeftButton);
     QTest::qWait(60);
     QVERIFY(dock->grab().save(out.filePath("spectrum-settings-162.png")));
+
+    auto grid = pane->findChild<QToolButton*>("spectrumGridSettings");
+    auto tabsOptions = pane->findChild<QTabWidget*>("spectrumOptionsTabs");
+    auto beatScroll = pane->findChild<QScrollArea*>("spectrumBeatScroll");
+    auto points = pane->findChild<QToolButton*>("spectrumGridTwoPoints");
+    QVERIFY(grid && tabsOptions && beatScroll && points);
+    QTest::mouseClick(grid, Qt::LeftButton);
+    QCOMPARE(tabsOptions->currentWidget(), beatScroll);
+    beatScroll->ensureWidgetVisible(points);
+    QTest::mouseClick(points, Qt::LeftButton);
+    auto beatView = pane->viewInfo();
+    const int gutter = PerformanceViewport::gutter;
+    const int width = canvas->width() - gutter - PerformanceViewport::rightMargin;
+    const int left = gutter + width / 4, right = gutter + width / 2;
+    QTest::mouseClick(canvas, Qt::LeftButton, {}, QPoint(left, canvas->height() / 2));
+    QTest::mouseClick(canvas, Qt::LeftButton, {}, QPoint(right, canvas->height() / 2));
+    auto bpm = pane->findChild<QDoubleSpinBox*>("spectrumGridBpm");
+    auto offset = pane->findChild<QSpinBox*>("spectrumGridOffset");
+    auto tool = pane->findChild<QComboBox*>("transcriptionTool");
+    QVERIFY(bpm && offset && tool);
+    const double msPerPixel = (beatView.value("until").toDouble() - beatView.value("from").toDouble()) / width;
+    QVERIFY(qAbs(bpm->value() - 240000. / ((right - left) * msPerPixel)) < .02);
+    const auto before = pane->viewInfo();
+    tool->setCurrentIndex(4);
+    QTest::mousePress(canvas, Qt::LeftButton, {}, QPoint(left, canvas->height() / 2));
+    QTest::mouseRelease(canvas, Qt::LeftButton, {}, QPoint(left + 25, canvas->height() / 2));
+    QCOMPARE(offset->value(), qRound(25 * msPerPixel));
+    QCOMPARE(pane->viewInfo().value("from"), before.value("from"));
+
+    auto follow = pane->findChild<QComboBox*>("spectrumPlaybackFollow");
+    auto returnToPlay = pane->findChild<QToolButton*>("spectrumReturnToPlayback");
+    auto timeScroll = pane->findChild<QScrollBar*>("spectrumTimeScroll");
+    auto minimize = dock->findChild<QAction*>("kumoPanelMinimize");
+    auto media = referenceProject();
+    QVERIFY(follow && returnToPlay && timeScroll && minimize && media);
+    const int oldMode = follow->currentIndex();
+    const auto stop = qScopeGuard([&] {
+        QMetaObject::invokeMethod(media, "stop");
+        follow->setCurrentIndex(oldMode);
+    });
+    follow->setCurrentIndex(2);
+    tool->setCurrentIndex(0);
+    QTest::mouseClick(canvas, Qt::LeftButton, {}, QPoint(gutter + width * 3 / 4, canvas->height() / 2));
+    QTest::keyClick(canvas, Qt::Key_Space);
+    QTRY_VERIFY(media->property("playing").toBool());
+    QTRY_VERIFY(pane->viewInfo().value("from").toDouble() > before.value("from").toDouble());
+    const int end = timeScroll->maximum();
+    QVERIFY(end > 0);
+    timeScroll->setValue(end);
+    QTest::qWait(200);
+    QCOMPARE(timeScroll->value(), end);
+    QTest::mouseClick(returnToPlay, Qt::LeftButton);
+    QTRY_VERIFY(timeScroll->value() < end);
+    minimize->trigger();
+    QTRY_VERIFY(!dock->isVisible() && media->property("playing").toBool());
+    auto minimized = main->findChild<QToolBar*>("kumoMinimizedPanels");
+    auto stopPlayback = dock->findChild<QAction*>("kumoStopMinimizedPanel");
+    auto restoreDock = dock->findChild<QAction*>("kumoRestorePanel");
+    QVERIFY(minimized && minimized->isVisible() && stopPlayback && stopPlayback->isVisible() && restoreDock);
+    stopPlayback->trigger();
+    QTRY_VERIFY(!media->property("playing").toBool());
+    restoreDock->trigger();
+    QTRY_VERIFY(dock->isVisible() && !minimized->isVisible());
     dock->close();
 }
 void TestPluginHost::spectrumSharedTimeline162()

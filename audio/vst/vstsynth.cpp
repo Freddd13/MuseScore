@@ -112,29 +112,42 @@ SynthesizerGroup VstSynth::state() const {
   return group;
 }
 bool VstSynth::setState(const SynthesizerGroup &group) {
+  return setScoreState(group, false);
+}
+bool VstSynth::setScoreState(const SynthesizerGroup &group, bool deferCfx) {
   for (const auto &value : group)
     if (value.id == 0) {
       QJsonParseError error;
       const auto doc = QJsonDocument::fromJson(value.data.toUtf8(), &error);
       if (error.error != QJsonParseError::NoError)
         return false;
-      return setConfiguration(doc.toVariant().toMap());
+      return setConfiguration(doc.toVariant().toMap(), deferCfx);
     }
-  clearState();
-  return true;
+  return setConfiguration({}, deferCfx);
 }
-bool VstSynth::setConfiguration(const QVariantMap &value) {
+bool VstSynth::setConfiguration(const QVariantMap &value, bool deferCfx) {
   ++_revision;
   config = value;
   _problems.clear();
+  if (enabled)
+    _rack.load(playbackConfiguration(value), _sampleRate, &_problems, deferCfx);
+  updatePatchList();
+  return true;
+}
+bool VstSynth::adoptPreparedSources() {
+  if (!_rack.preparingSources() || !_rack.adoptPreparedSources(&_problems))
+    return false;
+  updatePatchList();
+  ++_revision;
+  return true;
+}
+void VstSynth::updatePatchList() {
   available.fill(false);
   originalBank.fill(0);
   originalProgram.fill(0);
-  if (enabled)
-    _rack.load(playbackConfiguration(value), _sampleRate, &_problems);
   auto oldPatches = patches;
   patches.clear();
-  const auto instruments = enabled ? _rack.instruments(true) : value["slots"].toList();
+  const auto instruments = enabled ? _rack.instruments(true) : config.value("slots").toList();
   for (const auto &v : instruments) {
     const auto c = v.toMap();
     const int id = c["id"].toInt();
@@ -165,9 +178,8 @@ bool VstSynth::setConfiguration(const QVariantMap &value) {
   }
   qDeleteAll(oldPatches);
   hasGraph.store(!instruments.isEmpty() ||
-                     !value["masterEffects"].toList().isEmpty(),
+                     !config.value("masterEffects").toList().isEmpty(),
                  std::memory_order_release);
-  return true;
 }
 bool VstSynth::setReferenceSources(const QVariantList& sources) {
   if(VstHost::sameConfiguration({{"slots",referenceSources}},{{"slots",sources}}))return true;
@@ -175,9 +187,9 @@ bool VstSynth::setReferenceSources(const QVariantList& sources) {
   referenceSources=sources;
   return setConfiguration(current);
 }
-QVariantMap VstSynth::configuration(bool snapshot) {
+QVariantMap VstSynth::configuration(bool snapshot, bool changedOnly) {
   if (enabled && snapshot) {
-    const auto actual = runtimeConfiguration(true);
+    const auto actual = runtimeConfiguration(true, changedOnly);
     auto rows = config.value("slots").toList();
     for (auto &row : rows) {
       const int id=row.toMap()["id"].toInt();
@@ -199,8 +211,8 @@ QVariantMap VstSynth::playbackConfiguration(const QVariantMap& value) const {
   rows.append(pianoInstances); rows.append(referenceSources); result["slots"]=rows;
   return result;
 }
-QVariantMap VstSynth::runtimeConfiguration(bool snapshot) {
-  const auto value=enabled && snapshot ? _rack.state() : playbackConfiguration(config);
+QVariantMap VstSynth::runtimeConfiguration(bool snapshot, bool changedOnly) {
+  const auto value=enabled && snapshot ? _rack.state(changedOnly) : playbackConfiguration(config);
   if (snapshot && !pianoInstances.isEmpty()) {
     QVariantList current;
     for (const auto& row:value["slots"].toList())

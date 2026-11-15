@@ -9,6 +9,8 @@ set(PERFORMANCEEDITOR_SRC
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/vstpresets.h
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/systemlocks.cpp
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/systemlocks.h
+      ${CMAKE_CURRENT_LIST_DIR}/../workflow/engravingtools.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/../workflow/engravingtools.h
       ${CMAKE_CURRENT_LIST_DIR}/rollnotation.cpp
       ${CMAKE_CURRENT_LIST_DIR}/rollnotation.h
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/featuregate.cpp
@@ -47,6 +49,7 @@ set(PERFORMANCEEDITOR_SRC
       )
 
 if(SCRIPT_INTERFACE)
+ list(APPEND PERFORMANCEEDITOR_SRC ${CMAKE_CURRENT_LIST_DIR}/../workflow/engravingcandidate.cpp ${CMAKE_CURRENT_LIST_DIR}/../workflow/engravingcandidate.h)
  list(APPEND PERFORMANCEEDITOR_SRC ${CMAKE_CURRENT_LIST_DIR}/timingeditor.cpp ${CMAKE_CURRENT_LIST_DIR}/timingeditor.h)
  list(APPEND PERFORMANCEEDITOR_SRC ${CMAKE_CURRENT_LIST_DIR}/miditrackpane.cpp ${CMAKE_CURRENT_LIST_DIR}/miditrackpane.h ${CMAKE_CURRENT_LIST_DIR}/miditrackinteraction.cpp ${CMAKE_CURRENT_LIST_DIR}/miditrackplayback.cpp ${CMAKE_CURRENT_LIST_DIR}/miditrackalignment.cpp)
  list(APPEND PERFORMANCEEDITOR_SRC ${CMAKE_CURRENT_LIST_DIR}/rollwriting.cpp ${CMAKE_CURRENT_LIST_DIR}/rollwritingmodel.cpp ${CMAKE_CURRENT_LIST_DIR}/rollwritinginteraction.cpp ${CMAKE_CURRENT_LIST_DIR}/rollwriting.h)

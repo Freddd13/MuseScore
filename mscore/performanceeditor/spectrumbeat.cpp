@@ -63,7 +63,7 @@ SpectrumBeatControls::SpectrumBeatControls(QWidget *parent) : QWidget(parent) {
     _first->setObjectName("spectrumFirstBeat");
     _first->setRange(0, 1e8);
     _first->setDecimals(3);
-    _first->setSingleStep(.01);
+    _first->setSingleStep(.001);
     _first->setSuffix(tr(" 秒"));
     grid->addWidget(new QLabel(tr("第一拍")), 3, 0);
     grid->addWidget(_first, 3, 1);
@@ -73,30 +73,54 @@ SpectrumBeatControls::SpectrumBeatControls(QWidget *parent) : QWidget(parent) {
     first->setToolTip(tr("将当前播放位置或频谱光标作为第一小节第一拍。"));
     grid->addWidget(first, 3, 2);
     connect(first, &QToolButton::clicked, this, &SpectrumBeatControls::firstBeatRequested);
+    _offset = new QSpinBox;
+    _offset->setObjectName("spectrumGridOffset");
+    _offset->setRange(-3600000, 3600000);
+    _offset->setSuffix(tr(" 毫秒"));
+    _offset->setToolTip(tr("正数让整组节拍线晚一些，负数让它早一些。录音位置保持原样。"));
+    grid->addWidget(new QLabel(tr("网格偏移")), 4, 0);
+    grid->addWidget(_offset, 4, 1);
+    connect(_offset, QOverload<int>::of(&QSpinBox::valueChanged), this, &SpectrumBeatControls::edited);
+    auto resetOffset = new QToolButton;
+    resetOffset->setText(tr("偏移归零"));
+    grid->addWidget(resetOffset, 4, 2);
+    connect(resetOffset, &QToolButton::clicked, this, [this] { setOffset(0); });
+    auto fromPoints = new QToolButton;
+    fromPoints->setText(tr("从两点定速度"));
+    fromPoints->setObjectName("spectrumGridTwoPoints");
+    fromPoints->setToolTip(tr("在图上依次点起始拍和结束拍，按所填的拍点间隔换算速度。"));
+    grid->addWidget(fromPoints, 5, 0);
+    connect(fromPoints, &QToolButton::clicked, this, &SpectrumBeatControls::twoPointsRequested);
+    _distance = new QSpinBox;
+    _distance->setObjectName("spectrumGridBeatDistance");
+    _distance->setRange(1, 128);
+    _distance->setValue(4);
+    _distance->setSuffix(tr(" 拍间隔"));
+    grid->addWidget(_distance, 5, 1);
     _estimate = new QToolButton;
     _estimate->setObjectName("spectrumEstimateTempo");
     _estimate->setText(tr("估计这段速度"));
     _estimate->setToolTip(tr("优先分析循环片段；其它情况下，从当前画面起分析至少 4 秒、最多 2 分钟。"));
-    grid->addWidget(_estimate, 4, 0);
+    grid->addWidget(_estimate, 6, 0);
     connect(_estimate, &QToolButton::clicked, this, &SpectrumBeatControls::estimateRequested);
     _candidates = new QComboBox;
     _candidates->setObjectName("spectrumTempoCandidates");
     _candidates->addItem(tr("估计后选择候选"));
     _candidates->setEnabled(false);
-    grid->addWidget(_candidates, 4, 1, 1, 2);
+    grid->addWidget(_candidates, 6, 1, 1, 2);
     connect(_candidates, QOverload<int>::of(&QComboBox::activated), this, &SpectrumBeatControls::choose);
     auto tapButton = new QToolButton;
     tapButton->setObjectName("spectrumTap");
     tapButton->setText(tr("跟拍"));
     tapButton->setToolTip(tr("跟着音乐点至少 4 拍；也可在频谱中按 Shift+空格。"));
-    grid->addWidget(tapButton, 5, 0);
+    grid->addWidget(tapButton, 7, 0);
     connect(tapButton, &QToolButton::clicked, this, &SpectrumBeatControls::tapRequested);
     _unit = new QComboBox;
     _unit->addItems({tr("每次四分音符"), tr("每次八分音符"), tr("每次附点四分"), tr("每次二分音符")});
-    grid->addWidget(_unit, 5, 1);
+    grid->addWidget(_unit, 7, 1);
     auto reset = new QToolButton;
     reset->setText(tr("重测"));
-    grid->addWidget(reset, 5, 2);
+    grid->addWidget(reset, 7, 2);
     connect(reset, &QToolButton::clicked, this, [this] {
         _tap.reset();
         _lastTap = -1;
@@ -105,11 +129,12 @@ SpectrumBeatControls::SpectrumBeatControls(QWidget *parent) : QWidget(parent) {
     auto save = new QToolButton;
     save->setText(tr("保存节拍"));
     save->setObjectName("spectrumSaveGrid");
-    grid->addWidget(save, 6, 0);
+    grid->addWidget(save, 8, 0);
     connect(save, &QToolButton::clicked, this, &SpectrumBeatControls::saveRequested);
     _status = new QLabel(tr("调整速度和第一拍后，对照音乐检查网格，再保存到乐谱。"));
     _status->setWordWrap(true);
-    grid->addWidget(_status, 6, 1, 1, 2);
+    grid->addWidget(_status, 8, 1, 1, 2);
+    grid->setRowStretch(9, 1);
     grid->setColumnStretch(1, 1);
 }
 QVariantMap SpectrumBeatControls::values() const {
@@ -118,7 +143,8 @@ QVariantMap SpectrumBeatControls::values() const {
             {"bpm", _bpm->value()},
             {"numerator", _numerator->value()},
             {"denominator", _denominator->currentData()},
-            {"firstBeat", _first->value() * 1000}};
+            {"firstBeat", _first->value() * 1000},
+            {"offset", _offset->value()}};
 }
 void SpectrumBeatControls::restore(const QVariantMap &value) {
     _loading = true;
@@ -128,6 +154,7 @@ void SpectrumBeatControls::restore(const QVariantMap &value) {
     _numerator->setValue(value.value("numerator", 4).toInt());
     _denominator->setCurrentIndex(qMax(0, _denominator->findData(value.value("denominator", 4).toInt())));
     _first->setValue(value.value("firstBeat", 0.).toDouble() / 1000);
+    _offset->setValue(value.value("offset", 0).toInt());
     _choices.clear();
     _candidates->clear();
     _candidates->addItem(tr("估计后选择候选"));
@@ -143,9 +170,30 @@ void SpectrumBeatControls::edited() {
     emit changed();
 }
 void SpectrumBeatControls::setFirstBeat(double ms) {
+    const QSignalBlocker first(_first), offset(_offset), source(_source);
     _first->setValue(qMax(0., ms) / 1000);
+    _offset->setValue(0);
+    _source->setCurrentIndex(0);
     _visible->setChecked(true);
     edited();
+}
+void SpectrumBeatControls::setOffset(int ms) {
+    if (_offset->value() == ms)
+        return;
+    _visible->setChecked(true);
+    _offset->setValue(ms);
+}
+bool SpectrumBeatControls::setGridFromPoints(double firstMs, double lastMs) {
+    if (lastMs <= firstMs)
+        return false;
+    const double bpm = 60000. * _distance->value() * 4. /
+                       (_denominator->currentData().toInt() * (lastMs - firstMs));
+    if (!std::isfinite(bpm) || bpm < _bpm->minimum() || bpm > _bpm->maximum())
+        return false;
+    const QSignalBlocker speed(_bpm);
+    _bpm->setValue(bpm);
+    setFirstBeat(firstMs);
+    return true;
 }
 void SpectrumBeatControls::tap(double sourceMs, bool playing) {
     const qint64 timestamp = playing ? qRound64(sourceMs) : _clock.elapsed();
@@ -163,10 +211,9 @@ void SpectrumBeatControls::tap(double sourceMs, bool playing) {
         _firstTap = sourceMs;
     const double units[] = {1., .5, 1.5, 2.};
     if (_tap.ready()) {
+        const QSignalBlocker speed(_bpm);
         _bpm->setValue(_tap.bpm(units[_unit->currentIndex()]));
-        _first->setValue(_firstTap / 1000);
-        _visible->setChecked(true);
-        edited();
+        setFirstBeat(_firstTap);
     }
     _status->setText(tr("已记录 %1 拍 · %2")
                          .arg(_tap.count())
@@ -181,10 +228,9 @@ void SpectrumBeatControls::choose(int index) {
     if (index < 0 || index >= _choices.size())
         return;
     const auto value = _choices[index].toMap();
+    const QSignalBlocker speed(_bpm);
     _bpm->setValue(value.value("bpm").toDouble());
-    _first->setValue(value.value("firstBeat").toDouble() / 1000);
-    _visible->setChecked(true);
-    edited();
+    setFirstBeat(value.value("firstBeat").toDouble());
 }
 void SpectrumBeatControls::setCandidates(const QVariantMap &result) {
     if (result.contains("error")) {

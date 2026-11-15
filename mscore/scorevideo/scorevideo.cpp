@@ -243,6 +243,7 @@ void ScoreVideoDocument::prepare(const QVariantMap& fields)
             return;
         }
         auto copy = build.score.get();
+        copy->switchToPageMode();
         copy->setExpandRepeats(_settings.value("expandRepeats", true).toBool());
         copy->tempomap()->setRelTempo(_source->tempomap()->relTempo());
         copy->updateVelo();

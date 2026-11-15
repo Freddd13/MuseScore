@@ -283,6 +283,8 @@ Seq::~Seq()
 
 void Seq::setScoreView(ScoreView* v)
       {
+      const auto* nextScore = v && v->score() ? v->score()->masterScore() : nullptr;
+      const bool changeSources = cs != nextScore || !cv;
 #ifdef SCRIPT_INTERFACE
       if(cv!=v)stopMidiTrackPlayback();
 #endif
@@ -308,8 +310,10 @@ void Seq::setScoreView(ScoreView* v)
             heartBeatTimer->start(20);    // msec
 
       playlistChanged = true;
-      _synti->reset();
-      restoreVstForScore(cs);
+      if (changeSources) {
+            _synti->reset();
+            restoreVstForScore(cs, true);
+            }
       if (cs) {
             initInstruments();
             connect(cs, SIGNAL(playlistChanged()), this, SLOT(setPlaylistChanged()));

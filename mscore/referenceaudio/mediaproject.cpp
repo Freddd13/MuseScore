@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL version 2.
 #include "mediaproject.h"
+#include "audiofileidentity.h"
 #include "pcmring.h"
 #include "audioreader.h"
 #include "auditionfilter.h"
@@ -220,7 +221,7 @@ QVariantMap ReferenceMediaProject::start(const QVariantMap& plan) {
       // Complete validation before starting any producer.
       for(auto clipValue:clips){auto clip=clipValue.toMap();const auto pieces=clip.value("pieces").toList();if(pieces.isEmpty()||pieces.size()>4096)return {{"error",tr("片段为空或对齐点过多。")}};
             QString path=localPath(clip.value("path").toString());QFileInfo file(path);if(!file.exists()||!file.isFile())return {{"error",tr("找不到音频：%1").arg(path)}};
-            auto identity=clip.value("identity").toMap();if(!identity.isEmpty()&&(identity.value("size").toLongLong()!=file.size()||identity.value("modified").toLongLong()!=file.lastModified().toMSecsSinceEpoch()))return {{"error",tr("音频文件已经改变，请重新核对关联：%1").arg(path)}};
+            const auto identity=clip.value("identity").toMap();if(!KumoAudio::matchesAudioIdentity(file,identity))return {{"error",tr("音频文件已经改变，请重新核对关联：%1").arg(path)}};
             const double gain=clip.value("volume",1.).toDouble();if(!std::isfinite(gain)||gain<0||gain>1)return {{"error",tr("音轨音量应在 0–100% 之间。")}};
             double previous=0;for(auto pieceValue:pieces){auto piece=pieceValue.toMap();double from=piece.value("from").toDouble(),until=piece.value("until").toDouble(),at=piece.value("at").toDouble(),duration=piece.value("duration").toDouble();double speed=(until-from)/duration;
                   if(!std::isfinite(from)||!std::isfinite(until)||!std::isfinite(at)||!std::isfinite(duration)||from<0||until<=from||at+0.01<previous||duration<=0||at+duration>86400000||speed<.499999||speed>1.500001)return {{"error",tr("对齐需要的保调速度超出 50–150%，或片段时间不正确；请调整对齐点。")}};

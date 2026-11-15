@@ -4,6 +4,8 @@
 class QMenu;
 namespace Ms {
 class Score;
+class Note;
+class ScoreView;
 namespace PluginAPI {
 class ScoreObserver;
 }
@@ -14,4 +16,6 @@ QVariantMap arrangementSuggestions(Score *);
 void showSuggestionPanel(bool visible = true);
 void addSuggestionPanelAction(QMenu *);
 void notifyArrangementSuggestions(Score *);
+QString arrangementNoteIdentity(const Note *);
+void clearArrangementPreview(ScoreView *);
 } // namespace Ms

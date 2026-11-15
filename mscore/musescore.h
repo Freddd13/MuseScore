@@ -507,7 +507,6 @@ class MuseScore : public QMainWindow, public MuseScoreCore {
 
       void updateViewModeCombo();
 
-      void switchLayoutMode(LayoutMode);
       void setPlayRepeats(bool repeat);
       void setPanPlayback(bool pan);
 
@@ -633,6 +632,7 @@ class MuseScore : public QMainWindow, public MuseScoreCore {
    public:
       MuseScore();
       ~MuseScore();
+      void switchLayoutMode(LayoutMode);
       bool checkDirty(MasterScore*);
       IPlayPanel* playPanelInterface() const;
       PlayPanel* getPlayPanel() const { return playPanel; }

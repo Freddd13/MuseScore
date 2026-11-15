@@ -130,7 +130,7 @@ class Panel final : public QDockWidget {
   QLineEdit *commonName;
   QPushButton *adoptCommon;
   QLabel *commonState;
-  QPushButton *releaseInactive;
+  QPushButton *releaseInactive, *retrySource;
   QLabel *retainedState;
   QProcess scanner;
   QTimer watch;
@@ -606,6 +606,9 @@ class Panel final : public QDockWidget {
     choose->setEnabled(c && !picked().isEmpty() &&
                        picked()["instrument"].toBool());
     const bool loaded = id && engine && engine->rack().plugin(id);
+    const bool preparing = engine && engine->rack().preparingSources();
+    retrySource->setVisible((externalSource || sharedDesired) && !loaded && !preparing);
+    retrySource->setEnabled(!seq || !seq->isPlaying());
     sourceModeBox->setVisible(externalSource);
     sourceMode->setEnabled(loaded && externalSource);
     {
@@ -651,7 +654,9 @@ class Panel final : public QDockWidget {
     up->setEnabled(chain->currentRow() > 0);
     down->setEnabled(chain->currentRow() >= 0 &&
                      chain->currentRow() < chain->count() - 1);
-    if (engine && !engine->problems().isEmpty())
+    if (preparing)
+      state->setText(tr("正在载入音源。可先使用内置 SF2；就绪后在停播时切换。"));
+    else if (engine && !engine->problems().isEmpty())
       state->setText(engine->problems().join('\n'));
     lastPatch = displayedPatch;
     updating = false;
@@ -920,6 +925,15 @@ public:
     state->setMinimumHeight(fontMetrics().lineSpacing() * 3);
     state->setTextInteractionFlags(Qt::TextSelectableByMouse);
     layout->addWidget(state);
+    retrySource = new QPushButton(tr("重新载入音源"), body);
+    retrySource->setObjectName("kumoVstRetrySource");
+    layout->addWidget(retrySource, 0, Qt::AlignLeft);
+    connect(retrySource, &QPushButton::clicked, this, [this] {
+      if (!seq || !seq->isPlaying()) {
+        restoreVstForScore(score, true);
+        refresh();
+      }
+    });
     known = QJsonDocument::fromJson(
                 QSettings().value("kumo/vst/catalog").toByteArray())
                 .toVariant()
@@ -1279,17 +1293,36 @@ void routeVstChannels(MasterSynthesizer *master, Score *score) {
   if (master==synti && mscore)
     for (auto details:mscore->findChildren<MixerDetails*>()) details->refreshPlaybackSource();
 }
-void restoreVstForScore(Score *score) {
+static void checkPreparedSources(MasterScore* score) {
+  QTimer::singleShot(80, score, [score] {
+    auto* engine = backend();
+    if (!engine || !mscore || !mscore->currentScore() ||
+        mscore->currentScore()->masterScore() != score)
+      return;
+    if ((!seq || (!seq->isPlaying() && seq->backgroundRenderingIdle()))
+        && engine->adoptPreparedSources()) {
+      routeVstChannels(synti, score);
+      if (seq)
+        seq->initInstruments();
+      refreshVstParameterWindows();
+    }
+    if (engine->rack().preparingSources())
+      checkPreparedSources(score);
+  });
+}
+void restoreVstForScore(Score *score, bool inBackground) {
   if (auto engine = backend()) {
     selectSourceSession(score);
     prepareCommonPianos(synti,score,false);
     if (score)
-      engine->setState(
-          score->masterScore()->synthesizerState().group("KumoVST"));
+      engine->setScoreState(
+          score->masterScore()->synthesizerState().group("KumoVST"), inBackground);
     else
       engine->clearState();
     routeVstChannels(synti, score);
     refreshVstParameterWindows();
+    if (score && engine->rack().preparingSources())
+      checkPreparedSources(score->masterScore());
   }
 }
 QVariantMap applyVstConfiguration(Score *score, const QVariantMap &value) {
@@ -1420,7 +1453,7 @@ void saveVstEdits(Score *score,bool fileSave) {
       !personalFeaturesEnabled() || !backend())
     return;
   captureCommonPianoEdits(score);
-  const auto value = backend()->configuration();
+  const auto value = backend()->configuration(true, true);
   const auto group = score->masterScore()->synthesizerState().group("KumoVST");
   if (!value.isEmpty() && (group.empty() || !VstHost::sameConfiguration(value,
       QJsonDocument::fromJson(group.front().data.toUtf8()).toVariant().toMap()))) {
@@ -1510,7 +1543,7 @@ void addVstPanelAction(QMenu *menu) {
 namespace Ms {
 void addVstPanelAction(QMenu *) {}
 void showVstPanel(Channel *) {}
-void restoreVstForScore(Score *) {}
+void restoreVstForScore(Score *, bool) {}
 void saveVstEdits(Score *,bool) {}
 QVariantMap copyVstInstrument(Score *, Channel *, int) { return {}; }
 void routeVstChannels(MasterSynthesizer *, Score *) {}

@@ -10,6 +10,7 @@
 #include <functional>
 #include <memory>
 class QWidget;
+class QThread;
 namespace Ms {
 namespace VstHost {
 struct Descriptor {
@@ -90,6 +91,7 @@ public:
   // Processing is stopped. Clear transient DSP history while retaining the
   // instance, loaded samples and user parameters.
   virtual bool resetAudio() { return true; }
+  virtual void moveControlTo(QThread*) {}
   virtual bool restore(const QByteArray &, QString *error) = 0;
   virtual QByteArray state(QString *error) = 0;
   virtual int latency() const = 0;

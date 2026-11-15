@@ -11,6 +11,7 @@
 #include <QTransform>
 #include "libmscore/mscoreview.h"
 #include "libmscore/score.h"
+#include "libmscore/savepropertyoverrides.h"
 #include "libmscore/tempo.h"
 #include "libmscore/changeMap.h"
 #include "parameteredit.h"
@@ -101,6 +102,9 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QMap<Note*, VelocityEdit> _pending, _gestureBefore;
       struct PropertyDraft { Element* element; Pid pid; QVariant value; };
       QVector<PropertyDraft> _propertyPending;
+      SavePropertyOverrides _savedPending;
+      int _savedPendingState = -1;
+      SavePropertyOverrides pendingSaveProperties() const;
       QMap<int, double> _tempoDraft;
       QWidget* _canvas = nullptr;
       PerformanceCanvas *_noteCanvas = nullptr, *_ruler = nullptr;
@@ -410,6 +414,8 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       void flushPending();
       static void paintForView(ScoreView*, QPainter&);
       static void flushForScore(Score*);
+      static SavePropertyOverrides prepareScoreSave(Score*);
+      static void scoreSaved(Score*, const SavePropertyOverrides&);
       void layoutChanged() override;
       void dataChanged(const QRectF&) override { scheduleRefresh(); }
       void updateAll() override { scheduleRefresh(); }

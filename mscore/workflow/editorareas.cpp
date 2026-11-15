@@ -1,14 +1,19 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "editorareas.h"
 #include "mscore/musescore.h"
+#include "mscore/scoreview.h"
+#include "mscore/seq.h"
 #include <QApplication>
 #include "mscore/performanceeditor/performanceeditor.h"
 #include "mscore/performanceeditor/performanceview.h"
+#include "mscore/performanceeditor/spectrumpane.h"
+#include "panelwindowcontrols.h"
 #include "workspaceviews.h"
 #include <QDockWidget>
 #include <QDynamicPropertyChangeEvent>
 #include <QEvent>
 #include <QHash>
+#include <QJSValue>
 #include <QMenu>
 #include <QPointer>
 #include <QSettings>
@@ -21,6 +26,45 @@
 
 namespace Ms {
 namespace {
+void setEditorPanelTransport(QDockWidget* dock, QWidget* region) {
+  const QPointer<QWidget> current = region;
+  auto spectrum = [current]() -> SpectrumPane* {
+    auto pane = qobject_cast<SpectrumPane*>(current.data());
+    return current && !pane ? current->findChild<SpectrumPane*>() : pane;
+  };
+  auto expression = [current]() -> QObject* {
+    if (!current)
+      return nullptr;
+    auto host = current->objectName() == "embeddedExpressionPage"
+                   ? current.data() : current->findChild<QWidget*>("embeddedExpressionPage");
+    return host ? host->property("root").value<QObject*>() : nullptr;
+  };
+  auto isExpressionPlaying = [expression] {
+    auto root = expression();
+    if (!root)
+      return false;
+    const auto value = root->property("playbackState");
+    const auto playback = value.userType() == qMetaTypeId<QJSValue>()
+                              ? value.value<QJSValue>().toVariant().toMap() : value.toMap();
+    return playback.value("playing").toBool() || playback.value("preparing").toBool();
+  };
+  auto isScorePlaying = [current] {
+    const auto editor = qobject_cast<PerformanceEditor*>(current.data());
+    return editor && editor->score() && seq && seq->isPlaying() &&
+           seq->score() == editor->score()->masterScore();
+  };
+  installPanelWindowControls(dock)->setTransport([spectrum, isExpressionPlaying, isScorePlaying] {
+    auto pane = spectrum();
+    return (pane && pane->sourceTransportActive()) || isExpressionPlaying() || isScorePlaying();
+  }, [spectrum, expression, isExpressionPlaying, isScorePlaying] {
+    if (auto pane = spectrum())
+      pane->stopSourceTransport();
+    if (isExpressionPlaying())
+      QMetaObject::invokeMethod(expression(), "stopAudition");
+    else if (isScorePlaying() && mscore && mscore->currentScoreView())
+      mscore->currentScoreView()->cmd("play");
+  });
+}
 class EditorAreas : public QObject {
   struct Area {
     QPointer<QWidget> widget;
@@ -198,6 +242,8 @@ class EditorAreas : public QObject {
       area.dock->setObjectName("kumoEditorArea/" + area.widget->objectName());
       area.dock->installEventFilter(this);
       addEditorDockActions(area.dock);
+      if (area.page == 1 || area.page == 2)
+        setEditorPanelTransport(area.dock, area.widget);
       mscore->addDockWidget(Qt::RightDockWidgetArea, area.dock);
       area.dock->addAction(area.restore);
       connect(area.dock, &QDockWidget::visibilityChanged, this, [this, index] {
@@ -542,6 +588,8 @@ QHash<const PerformanceEditor *, QPointer<EditorAreas>> controllers;
 void installEditorAreas(PerformanceEditor *editor, QSplitter *splitter,
                         QMenu *menu) {
   auto controller = new EditorAreas(editor, splitter, menu);
+  if (auto dock = qobject_cast<QDockWidget*>(editor->parentWidget()))
+    setEditorPanelTransport(dock, editor);
   controllers.insert(editor, controller);
   QObject::connect(editor, &QObject::destroyed,
                    [editor] { controllers.remove(editor); });

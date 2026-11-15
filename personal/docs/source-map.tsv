@@ -768,3 +768,9 @@ MIDI录制与播放	mscore/performanceeditor/miditrackplayback.cpp	void MidiTrac
 视频统一比例	mscore/scorevideo/scorevideoframe.cpp	const double raster =	63	按原谱单位对齐各行	mtest/mscore/pluginhost/scorevideo_166_review.inc
 AI原图尺寸	mscore/workflow/arrangementimages.cpp	const int dotsPerMeter	102	原生谱图设备分辨率	mtest/mscore/pluginhost/scorevideo_166_review.inc
 首次工作视图恢复	mscore/workflow/workspaceviews.cpp	bool initialRestorePending	38	明确选择视图后结束排队的启动恢复，保留个人布局	mtest/mscore/pluginhost/composition_flow_tests.inc
+逐谱 CFX	mscore/workflow/vstpanel.cpp	static void checkPreparedSources	1296	准备、回退与采用	openTwoSavedCfxScores168
+播放中保存	mscore/performanceeditor/performanceeditor.cpp	SavePropertyOverrides PerformanceEditor::prepareScoreSave	959	保存和停播撤销	liveWheelHomeAndSpectrum139
+原曲便携路径	mscore/workflow/referencepanel.cpp	ReferenceScoreSave::ReferenceScoreSave	44	按另存目标重算路径	portableReferenceUsesRelativeThenAbsolute
+频谱跟随	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::suspendPlaybackFollow	1128	浏览及恢复跟随	spectrumInteraction162
+雕版工具	mscore/workflow/engravingtools.cpp	void openEngravingTools	158	符号、拍位、谱表与分行	-
+雕版候选	mscore/workflow/engravingcandidate.cpp	QVariantMap applyEngravingChanges	206	共享候选、布局和撤销	-

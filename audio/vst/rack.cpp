@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "rack.h"
+#include <QCoreApplication>
 #include <QJsonDocument>
+#include <QMutex>
 #include <QSet>
+#include <QThread>
+#include <QThreadPool>
 #include <algorithm>
 #include <cmath>
 #include <thread>
@@ -10,6 +14,67 @@ namespace Ms {
 namespace VstHost {
 namespace {
 constexpr int Block = 4096, MaxChannels = 256;
+bool isCfx(const QVariantMap& source) {
+  const auto plugin = Descriptor::fromValue(source.value("plugin").toMap());
+  return plugin.format.startsWith("VST") && plugin.instrument
+      && (plugin.name + plugin.path).contains("CFX", Qt::CaseInsensitive);
+}
+
+void retireIsolated(std::unique_ptr<Plugin> source) {
+  auto* processor = source.release();
+  if (!processor)
+    return;
+  if (QCoreApplication::closingDown()) {
+    delete processor;
+    return;
+  }
+  auto* worker = QThread::create([processor] { delete processor; });
+  processor->moveControlTo(worker);
+  QObject::connect(worker, &QThread::finished, worker, &QObject::deleteLater);
+  worker->start();
+}
+
+// A slot owns its request. A superseded score releases it before another
+// score can publish a result into the same rack.
+struct DeferredCfx {
+  QMutex mutex;
+  bool done = false;
+  bool abandoned = false;
+  QString error;
+  std::unique_ptr<Plugin> processor;
+};
+
+std::shared_ptr<DeferredCfx> prepareCfx(const QVariantMap& source, double rate) {
+  auto job = std::make_shared<DeferredCfx>();
+  auto* target = QThread::currentThread();
+  static QThreadPool workers;
+  workers.setMaxThreadCount(2);
+  workers.start([job, source, rate, target] {
+    {
+      QMutexLocker lock(&job->mutex);
+      if (job->abandoned)
+        return;
+    }
+    const auto descriptor = Descriptor::fromValue(source.value("plugin").toMap());
+    auto isolated = createIsolated(descriptor);
+    QString error;
+    const bool prepared = isolated && isolated->prepare(rate, Block, &error)
+        && (!source.contains("state") ||
+            isolated->restore(QByteArray::fromBase64(source.value("state").toByteArray()), &error));
+    QMutexLocker lock(&job->mutex);
+    if (job->abandoned)
+      return;
+    if (prepared) {
+      isolated->moveControlTo(target);
+      job->processor = std::move(isolated);
+    } else {
+      job->error = QObject::tr("%1 未能载入。当前可使用 SF2。%2").arg(descriptor.name, error);
+    }
+    job->done = true;
+  });
+  return job;
+}
+
 struct Delay {
   std::vector<float> left, right;
   size_t at = 0;
@@ -36,9 +101,24 @@ struct Delay {
 struct Unit {
   QVariantMap config;
   std::unique_ptr<Plugin> processor;
+  std::shared_ptr<DeferredCfx> pending;
+  bool backgroundOwned = false;
+  bool needsSnapshot = false;
   Delay dryDelay;
   bool bypass = false;
   std::array<float, Block> l{}, r{}, dryL{}, dryR{};
+  Unit() = default;
+  Unit(Unit&&) = default;
+  Unit& operator=(Unit&&) = default;
+  ~Unit() {
+    if (pending) {
+      QMutexLocker lock(&pending->mutex);
+      pending->abandoned = true;
+      retireIsolated(std::move(pending->processor));
+    }
+    if (backgroundOwned)
+      retireIsolated(std::move(processor));
+  }
   void process(int count, float *inL, float *inR, const Midi *midi, int events,
                const Clock &clock) {
     if (!processor)
@@ -79,7 +159,7 @@ struct Unit {
     return true;
   }
   bool restoreSource(const QVariantMap& value,const Clock& clock) {
-    if (!processor || !value.contains("state") || config.value("plugin")!=value["plugin"] ||
+    if (backgroundOwned || !processor || !value.contains("state") || config.value("plugin")!=value["plugin"] ||
         config.value("isolated").toBool()!=value["isolated"].toBool()) return false;
     QString error;
     std::array<Midi,132> release{};
@@ -91,13 +171,24 @@ struct Unit {
     if (!processor->restore(QByteArray::fromBase64(value["state"].toByteArray()),&error)) return false;
     config=value;bypass=value["bypass"].toBool();dryDelay.clear();return true;
   }
-  QVariantMap save() {
+  bool takeChanges() {
+    if (!processor || !processor->takeChanges())
+      return false;
+    needsSnapshot = true;
+    return true;
+  }
+  bool needsSave() const {
+    return processor && (needsSnapshot || !config.contains("state") || processor->editorVisible());
+  }
+  QVariantMap save(bool changedOnly) {
     auto value = config;
-    if (processor) {
+    if (processor && (!changedOnly || needsSave())) {
       QString error;
       const auto bytes = processor->state(&error);
-      if (error.isEmpty())
+      if (error.isEmpty()) {
         value["state"] = QString::fromLatin1(bytes.toBase64());
+        needsSnapshot = false;
+      }
     }
     return value;
   }
@@ -354,8 +445,13 @@ struct Rack::Impl {
     std::fill_n(l.data(),samples,0);std::fill_n(r.data(),samples,0);
     slot.source.process(samples,l.data(),r.data(),notes.data(),count,clock);
     if (!closeEditors) return true;
-    if (slot.source.processor) slot.source.processor->closeEditor();
-    bool reset=slot.source.resetAudio(clock);
+    // Give an isolated instrument a complete release before retiring it.
+    // Disposal, including closing its editor, takes place on its worker.
+    bool reset = !slot.source.backgroundOwned;
+    if (reset) {
+      if (slot.source.processor) slot.source.processor->closeEditor();
+      reset = slot.source.resetAudio(clock);
+    }
     for (auto& unit:slot.effects) {
       if (unit->processor) unit->processor->closeEditor();
       reset=unit->resetAudio(clock) && reset;
@@ -393,7 +489,7 @@ void Rack::resume() {
   if (d->suspendDepth && !--d->suspendDepth)
     d->enabled.store(true, std::memory_order_release);
 }
-bool Rack::load(const QVariantMap &value, double rate, QStringList *problems) {
+bool Rack::load(const QVariantMap &value, double rate, QStringList *problems, bool deferCfx) {
   suspend();
   if (d->rate != rate) { d->stored.clear(); d->commonPianos.clear(); }
   if (d->session != d->nextSession) {
@@ -475,8 +571,17 @@ bool Rack::load(const QVariantMap &value, double rate, QStringList *problems) {
     const auto source = c["source"].toMap();
     slot->nativeControls =
         source["plugin"].toMap()["format"].toString() == "SF2";
-    if (previous && (sameUnit(previous->source.config, source) || previous->source.restoreSource(source,preparation)))
+    const bool delayed = !d->offline && deferCfx && isCfx(source);
+    if (previous && (sameUnit(previous->source.config, source) ||
+                     (!delayed && previous->source.restoreSource(source,preparation)))
+        && (previous->source.processor || previous->source.pending))
       slot->source = std::move(previous->source);
+    else if (delayed) {
+      slot->source.config = source;
+      slot->source.pending = prepareCfx(source, rate);
+      slot->source.backgroundOwned = true;
+      slot->source.bypass = source.value("bypass").toBool();
+    }
     else {
       auto unit = d->make(source, problems);
       slot->source = std::move(*unit);
@@ -522,6 +627,38 @@ bool Rack::load(const QVariantMap &value, double rate, QStringList *problems) {
   resume();
   return true;
 }
+bool Rack::preparingSources() const {
+  return std::any_of(d->slots.begin(), d->slots.end(),
+                     [](const auto& slot) { return bool(slot->source.pending); });
+}
+bool Rack::backgroundSource(int id) const {
+  const auto* slot = d->find(id);
+  return slot && slot->source.backgroundOwned;
+}
+bool Rack::adoptPreparedSources(QStringList* problems) {
+  bool changed = false;
+  suspend();
+  for (auto& slot : d->slots) {
+    const auto job = slot->source.pending;
+    if (!job)
+      continue;
+    QMutexLocker lock(&job->mutex);
+    if (!job->done)
+      continue;
+    slot->source.processor = std::move(job->processor);
+    slot->source.pending.reset();
+    if (!job->error.isEmpty() && problems)
+      problems->append(job->error);
+    const auto commonKey = slot->config.value("commonPiano").toString();
+    if (!commonKey.isEmpty() && slot->source.processor)
+      d->commonPianos[commonKey] = slot;
+    changed = true;
+  }
+  if (changed)
+    d->recalculate();
+  resume();
+  return changed;
+}
 void Rack::selectSession(const QString& id,const QString& label,bool retain) {
   if (d->session.isEmpty() && d->nextSession.isEmpty() && !id.isEmpty()) d->session=id;
   d->nextSession=id; d->nextLabel=label; d->nextRetain=retain && !d->offline;
@@ -553,17 +690,28 @@ QVariantList Rack::retainedSessions() const {
                                {"instances",1+int(row.second->effects.size())},{"commonPiano",true}});
   return result;
 }
-QVariantMap Rack::state() {
+QVariantMap Rack::state(bool changedOnly) {
+  if (changedOnly) {
+    takeChanges();
+    auto dirty = [](const auto& units) {
+      return std::any_of(units.begin(), units.end(), [](const auto& unit) { return unit->needsSave(); });
+    };
+    if (!dirty(d->master) &&
+        std::none_of(d->slots.begin(), d->slots.end(), [&](const auto& slot) {
+          return slot->source.needsSave() || dirty(slot->effects);
+        }))
+      return d->config;
+  }
   suspend();
   auto value = d->config;
   QVariantList slots, master;
   for (auto &s : d->slots) {
     auto c = s->config;
-    c["source"] = s->source.save();
+    c["source"] = s->source.save(changedOnly);
     s->source.config = c["source"].toMap();
     QVariantList effects;
     for (auto &e : s->effects) {
-      e->config = e->save();
+      e->config = e->save(changedOnly);
       effects.append(e->config);
     }
     c["effects"] = effects;
@@ -571,7 +719,7 @@ QVariantMap Rack::state() {
     slots.append(c);
   }
   for (auto &e : d->master) {
-    e->config = e->save();
+    e->config = e->save(changedOnly);
     master.append(e->config);
   }
   value["slots"] = slots;
@@ -618,19 +766,15 @@ Plugin *Rack::plugin(int id, int effect) const {
 bool Rack::takeChanges() {
   bool changed = false;
   for (auto &s : d->slots) {
-    bool instrumentChanged = false;
-    if (s->source.processor)
-      instrumentChanged |= s->source.processor->takeChanges();
+    bool instrumentChanged = s->source.takeChanges();
     for (auto &e : s->effects)
-      if (e->processor)
-        instrumentChanged |= e->processor->takeChanges();
+      instrumentChanged |= e->takeChanges();
     if (instrumentChanged && !s->config.value("commonPiano").toString().isEmpty())
       d->changedCommonPiano = s->id;
     changed |= instrumentChanged;
   }
   for (auto &e : d->master)
-    if (e->processor)
-      changed |= e->processor->takeChanges();
+    changed |= e->takeChanges();
   return changed;
 }
 int Rack::takeChangedCommonPiano() {

@@ -35,16 +35,39 @@ MuseScore {
  property real lastLinkedTick:-1
  property var pendingAudioAdds:[]
  property var audioLoadContexts:[]
+ readonly property var audioExtensions:["wav","mp3","flac","m4a","aac","ogg","oga","opus","aif","aiff"]
  property int readingAudioCount:{var n=0;for(var i=0;i<sessions.length;++i)if(sessions[i].reading)++n;if(media&&sessions.indexOf(media)<0&&media.reading)++n;return n}
  function scheduleDocument(){if(documentReady&&!restoringDocument&&!writingDocument&&owner&&observer)documentTimer.restart()}
+ function referenceProjectSnapshot(){
+  if(!documentReady||restoringDocument||writingDocument||!owner||!observer)return undefined
+  if(!tracks.length&&!observer.workflowData("reference").schema)return undefined
+  var list=capturedTracks().filter(function(t){
+   return !pendingAudioAdds.some(function(job){return job.id===t.id})
+  })
+  var selected=selectedTrack>=0&&selectedTrack<tracks.length?tracks[selectedTrack].id:""
+  list.forEach(function(t){
+   var path=observer.referenceFileLocation(t.path)
+   if(!t.missing&&path.exists){
+    t.path=path.path
+    t.originalPath=path.path
+    t.relativePath=path.relative
+   }
+   delete t.missing
+  })
+  return {schema:2,structure:observer.referenceStructureKey(),tracks:list,
+          selectedTrack:Math.max(0,list.findIndex(function(t){return t.id===selected})),
+          playbackMode:playbackMode,volume:jointVolume,linked:linkEditor}
+ }
+ function rememberSavedReference(){
+  if(observer)documentJSON=JSON.stringify(observer.workflowData("reference"))
+ }
  function saveScoreProject(){
   if(!documentReady||restoringDocument||writingDocument||!owner||!observer||typeof observer.setWorkflowData!=="function")return
   if(observer.playing||(audioProject&&audioProject.playing)||readingAudioCount>0){documentTimer.restart();return}
-  if(!tracks.length&&!observer.workflowData("reference").schema)return
-  var list=Project.copy(tracks);list.forEach(function(t){delete t.missing;var p=observer.referenceFileLocation(t.path);if(p.exists||!t.originalPath)t.originalPath=p.path;if(p.exists||!t.relativePath)t.relativePath=p.relative})
-  var data={schema:2,structure:observer.referenceStructureKey(),tracks:list,selectedTrack:selectedTrack,playbackMode:playbackMode,volume:jointVolume,linked:linkEditor}
+  var data=referenceProjectSnapshot()
+  if(!data)return
   writingDocument=true;var result=observer.setWorkflowData("reference",data);writingDocument=false
-  if(result.error){status=result.error;return}documentJSON=JSON.stringify(observer.workflowData("reference"))
+  if(result.error){status=result.error;return}rememberSavedReference()
  }
  function restoreScoreProject(){
   deletedTracks=[]
@@ -54,7 +77,15 @@ MuseScore {
   if(!observer||typeof observer.workflowData!=="function")return
   var data=observer.workflowData("reference");documentJSON=JSON.stringify(data);restoringDocument=true
   if(data.schema===2&&data.tracks&&data.tracks.length){
-   var value=Project.copy(data);value.tracks.forEach(function(t){var p=observer.referenceFileLocation(t.originalPath||t.path,t.relativePath||"");t.path=p.path;t.missing=!p.exists;if(data.structure&&data.structure!==root.observer.referenceStructureKey())(t.associations||[]).forEach(function(a){a.stale=true})})
+   var value=Project.copy(data);value.tracks.forEach(function(t){
+    var p=observer.referenceFileLocation(t.originalPath||t.path,t.relativePath||"")
+    if(!p.exists&&t.path&&t.path!==t.originalPath){
+     var legacy=observer.referenceFileLocation(t.path)
+     if(legacy.exists)p=legacy
+    }
+    t.path=p.path;t.missing=!p.exists
+    if(data.structure&&data.structure!==root.observer.referenceStructureKey())(t.associations||[]).forEach(function(a){a.stale=true})
+   })
    restoreTracks(value,"");jointVolume=data.volume===undefined?.5:data.volume;linkEditor=!!data.linked
    status=value.tracks.some(function(t){return t.missing})?"音轨与关联已恢复；缺少的音频可点“找回文件”。":"正在读取这份乐谱的参考音轨。"
   }else{
@@ -131,17 +162,29 @@ MuseScore {
  function seekAudio(value){var resume=audioProject&&audioProject.playing&&!audioProject.joint&&audioProject.playbackPlan.owner==="reference-panel";if(resume)stopJoint();media.seek(value);if(resume)playOriginal(value)}
  function changeSpeed(value){var resume=audioProject&&audioProject.playing&&!audioProject.joint&&audioProject.playbackPlan.owner==="reference-panel";if(resume)keepAudioCursor();media.speed=value;if(resume)speedRestart.restart()}
  Timer {id:speedRestart;interval:90;onTriggered:{if(root.audioProject&&root.audioProject.playing&&!root.audioProject.joint){root.keepAudioCursor();var at=root.media.position;root.stopJoint();root.playOriginal(at)}}}
+ function capturedTracks(){
+  var list=Project.copy(tracks)
+  if(switchingTrack||selectedTrack<0||selectedTrack>=list.length||!media||media.duration<=0)return list
+  var t=list[selectedTrack]
+  t.path=media.path;t.identity=sourceIdentity;t.a=a;t.b=b;t.duration=media.duration;t.loop=looping;t.onlyRange=onlyRange;t.fade=fade;t.bookmarks=Project.copy(bookmarks);t.associations=Project.copy(associations);t.selectedAssociation=selectedAssociation;t.volume=media.volume;t.speed=media.speed
+  return list
+ }
  function storeTrack(){
-  if(switchingTrack||selectedTrack<0||selectedTrack>=tracks.length||!media||media.duration<=0)return;
-  var list=Project.copy(tracks),t=list[selectedTrack];t.path=media.path;t.identity=sourceIdentity;t.a=a;t.b=b;t.duration=media.duration;t.loop=looping;t.onlyRange=onlyRange;t.fade=fade;t.bookmarks=Project.copy(bookmarks);t.associations=Project.copy(associations);t.selectedAssociation=selectedAssociation;t.volume=media.volume;t.speed=media.speed;tracks=list;
+  if(switchingTrack||selectedTrack<0||selectedTrack>=tracks.length||!media||media.duration<=0)return
+  tracks=capturedTracks()
   if(audioProject&&audioProject.available&&!audioProject.playing){if(observer&&typeof observer.setReferenceTracks==="function")observer.setReferenceTracks(tracks);else audioProject.setTracks(tracks);audioProject.selectedTrack=selectedTrack;audioProject.playbackSettings={mode:playbackMode,selectedTrack:selectedTrack,selectedAssociation:selectedAssociation,speed:media.speed,volume:jointVolume,fade:fade};}
+ }
+ function sameRecording(first,second){
+  if(!first||!second||first.size!==second.size)return false
+  if(first.fingerprint&&second.fingerprint)return first.fingerprint===second.fingerprint
+  return first.modified===second.modified
  }
  function selectTrack(index){
   associationUndo=[];sliceBefore=null;
   if(audioProject&&audioProject.playing&&audioProject.playbackPlan.owner==="reference-panel")stopJoint();
   if(index<0||index>=tracks.length)return;storeTrack();if(usable)media.pause();switchingTrack=true;selectedTrack=index;media=sessions[index];var t=tracks[index];restored=media.duration<=0?Project.copy(t):null;
   sourceIdentity=t.identity||null;a=t.a||0;b=t.b||media.duration;looping=!!t.loop;onlyRange=t.onlyRange===undefined?!!t.loop:!!t.onlyRange;fade=t.fade!==false;bookmarks=t.bookmarks||[];associations=identifiedAssociations(t.associations,t.id);selectedAssociation=Math.max(-1,Math.min(associations.length-1,t.selectedAssociation===undefined?(associations.length?0:-1):t.selectedAssociation));if(selectedAssociation>=0){a=associations[selectedAssociation].from;b=associations[selectedAssociation].until;}viewStart=0;viewEnd=media.duration;
-  if(media.duration>0&&t.identity){var fresh=media.identity();if(fresh.size!==t.identity.size||fresh.modified!==t.identity.modified)associations=associations.map(function(v){var n=Project.copy(v);n.stale=true;return n});}
+  if(media.duration>0&&t.identity&&!sameRecording(t.identity,media.identity()))associations=associations.map(function(v){var n=Project.copy(v);n.stale=true;return n});
   viewportPeaks=[];media.volume=t.volume===undefined?.8:t.volume;media.speed=t.speed||1;switchingTrack=false;if(audioProject)audioProject.selectedTrack=index;applyLoop();wave.requestPaint();status="已选音轨："+t.name;
  }
  function trackOption(name,value){if(selectedTrack<0)return;storeTrack();var list=Project.copy(tracks);list[selectedTrack][name]=value;if(name==="name")list[selectedTrack].automaticName=false;tracks=list;if(audioProject&&!audioProject.playing)audioProject.setTracks(tracks);}
@@ -173,7 +216,7 @@ MuseScore {
    if(context&&!context.keep){track.a=0;track.b=session.duration;track.associations=[];track.bookmarks=[];track.selectedAssociation=-1;}
    track.identity=info;track.path=session.path;track.missing=false;
    if(!(track.b>track.a))track.b=session.duration;
-   if(previous && (previous.size!==info.size || previous.modified!==info.modified))track.associations=(track.associations||[]).map(function(v){v.stale=true;return v});
+   if(previous&&!root.sameRecording(previous,info))track.associations=(track.associations||[]).map(function(v){v.stale=true;return v});
    root.tracks=list;
    if(root.media===session){root.restored=Project.copy(track);root.updateFile(info);}
    if(root.audioProject && !root.audioProject.playing)root.audioProject.setTracks(list);
@@ -216,7 +259,7 @@ MuseScore {
   pendingAudioAdds=[];audioLoadContexts=[];
   var retired=sessions.slice();if(media&&retired.indexOf(media)<0)retired.push(media);
   if(audioProject&&audioProject.playing)observer.stopReferencePlayback();
-  var list=Project.copy(data.tracks),objects=[];for(var i=0;i<list.length;++i){list[i].path=Project.resolve(url,list[i].path);var session=root.newReferenceMedia();objects.push(session);if(!list[i].id)list[i].id="restored-"+i;list[i].associations=identifiedAssociations(list[i].associations,list[i].id);watchTrackFile(session,list[i].id);session.open(Project.fileUrl(list[i].path));}
+  var list=Project.copy(data.tracks),objects=[];for(var i=0;i<list.length;++i){list[i].path=Project.resolve(url,list[i].path);var session=root.newReferenceMedia();objects.push(session);if(!list[i].id)list[i].id="restored-"+i;list[i].associations=identifiedAssociations(list[i].associations,list[i].id);watchTrackFile(session,list[i].id);if(!list[i].missing)session.open(list[i].path);}
   tracks=list;sessions=objects;selectedTrack=-1;selectTrack(Math.max(0,Math.min(list.length-1,data.selectedTrack||0)));restored=list[selectedTrack];if(audioProject&&!audioProject.playing&&observer)observer.setReferenceTracks(tracks);if(!restoringDocument)workspace=String(url);playbackMode=data.playbackMode||0;status="正在恢复音轨与关联。";
   if(typeof root.releaseReferenceMedia==="function")retired.forEach(function(m){root.releaseReferenceMedia(m)});
  }
@@ -251,7 +294,7 @@ MuseScore {
   if(observer.playing){status="请先停止乐谱播放。";return;}
   if(selectedAssociation<0){status="在下方选择一条片段关联，再点播放；也可选谱段后点“关联当前选段”。";return;}
   storeTrack();for(var i=0;i<sessions.length;++i)sessions[i].pause();
-  for(var ti=0;ti<tracks.length;++ti){if(tracks[ti].participate===false||tracks[ti].mute)continue;if(!sessions[ti]||sessions[ti].duration<=0){status="音轨尚未读完或文件不能播放："+tracks[ti].name;return;}var identity=sessions[ti].identity();if(tracks[ti].identity&&(identity.size!==tracks[ti].identity.size||identity.modified!==tracks[ti].identity.modified)){status="音频已改变，请选择该音轨，重新核对关联："+tracks[ti].name;return;}}
+  for(var ti=0;ti<tracks.length;++ti){if(tracks[ti].participate===false||tracks[ti].mute)continue;if(!sessions[ti]||sessions[ti].duration<=0){status="音轨尚未读完或文件不能播放："+tracks[ti].name;return;}if(tracks[ti].identity&&!sameRecording(tracks[ti].identity,sessions[ti].identity())){status="音频已改变，请选择该音轨，重新核对关联："+tracks[ti].name;return;}}
   documentTimer.stop();saveScoreProject();
   var item=associations[selectedAssociation];observer.score=curScore;
   var request={revision:observer.analysisRevision(),start:item.start,end:item.end,occurrence:item.occurrence||1,mode:playbackMode,leader:item,speed:media.speed,tracks:tracks,volume:jointVolume,fade:fade};
@@ -305,11 +348,11 @@ MuseScore {
   sourceIdentity=info;a=0;b=media.duration;viewStart=0;viewEnd=b;bookmarks=[];associations=[];selectedAssociation=-1;
   if(restored) {
    var data=restored;restored=null;
-   if(data.identity && (data.identity.size!==info.size || data.identity.modified!==info.modified))status="音频内容已变化 · 关联待核查";
+   if(data.identity&&!sameRecording(data.identity,info))status="音频内容已变化 · 关联待核查";
    else status="已恢复项目";
    a=Math.max(0,Math.min(data.a||0,b));b=Math.max(a,Math.min(data.b||b,b));looping=!!data.loop;onlyRange=data.onlyRange===undefined?!!data.loop:!!data.onlyRange;fade=data.fade!==false;
    bookmarks=data.bookmarks||[];associations=identifiedAssociations(data.associations,selectedTrack>=0?tracks[selectedTrack].id:media.path);selectedAssociation=Math.max(-1,Math.min(associations.length-1,data.selectedAssociation===undefined?(associations.length?0:-1):data.selectedAssociation));if(selectedAssociation>=0){a=associations[selectedAssociation].from;b=associations[selectedAssociation].until;}
-   if(data.identity && (data.identity.size!==info.size || data.identity.modified!==info.modified))associations=associations.map(function(v){v=Project.copy(v);v.stale=true;return v});
+   if(data.identity&&!sameRecording(data.identity,info))associations=associations.map(function(v){v=Project.copy(v);v.stale=true;return v});
    if(data.score && curScore && (data.score.name!==curScore.scoreName || data.score.measures!==curScore.nmeasures))associations=associations.map(function(v){v=Project.copy(v);v.stale=true;return v});
   }else status="已载入原曲";
   applyLoop();storeTrack();
@@ -427,13 +470,13 @@ MuseScore {
   linkFromScore();
  }
  Component.onDestruction:{if(audioProject&&audioProject.playing&&observer)observer.stopReferencePlayback();cancelAudioReads();for(var i=0;i<sessions.length;++i)sessions[i].pause();if(usable)media.pause();storeTrack();documentTimer.stop();saveScoreProject();persist()}
- onVisibleChanged:{if(!visible){spaceDown=false;spacePanned=false;if(usable&&pauseWhenHidden){if(audioProject&&audioProject.playing)stopJoint();else media.pause();}storeTrack();saveScoreProject();persist()}}
+ onVisibleChanged:{if(!visible){spaceDown=false;spacePanned=false;if(usable&&pauseWhenHidden&&(typeof root.panelMinimized!=="function"||!root.panelMinimized())){if(audioProject&&audioProject.playing)stopJoint();else media.pause();}storeTrack();saveScoreProject();persist()}}
  Connections {target:observer;ignoreUnknownSignals:true;onWorkflowPlaybackError:root.status=message;onActiveScoreChanged:root.bindScore()}
  Connections {target:media;ignoreUnknownSignals:true;onFileReady:{if(root.selectedTrack<0)root.updateFile(info)}onFileError:{if(root.selectedTrack<0){root.relocating=false;root.status=Messages.readable(message)}}onWaveformChanged:wave.requestPaint();onWaveformReady:{root.peaksFrom=from;root.peaksUntil=until;root.viewportPeaks=peaks;wave.requestPaint()}}
  Rectangle {anchors.fill:parent;color:theme.background}
  DropArea {anchors.fill:parent;onDropped:{
   if(!drop.urls.length)return;
-  var added=0;for(var i=0;i<drop.urls.length;++i){var url=String(drop.urls[i]);if(/\.(wav|mp3|flac)$/i.test(url)){root.addingAudio=true;root.openAudio(url);added++;}}
+  var added=0;for(var i=0;i<drop.urls.length;++i){var url=String(drop.urls[i]),suffix=Project.path(url).split(".").pop().toLowerCase();if(root.audioExtensions.indexOf(suffix)>=0){root.addingAudio=true;root.openAudio(url);added++;}}
   if(added){drop.acceptProposedAction();root.status="已添加 "+added+" 条音轨";}
  }}
  property string panelSpaceHandler:"toggleReferencePlayback"
@@ -600,7 +643,7 @@ MuseScore {
     onCanceled:{root.sliceBefore=null;if(root.spaceDown)root.spacePanned=true}
     onWheel:{root.zoom(wheel.angleDelta.y>0?.8:1.25,wheel.x/width);wheel.accepted=true}
    }
-   Label {anchors.centerIn:parent;visible:!root.usable||!root.media.path||root.media.duration<=0;text:root.selectedTrack>=0&&root.tracks[root.selectedTrack]&&root.tracks[root.selectedTrack].missing?"找不到音频，点音轨旁的“找回文件”。":"将 WAV、MP3、FLAC 拖到这里";color:theme.muted}
+   Label {anchors.centerIn:parent;visible:!root.usable||!root.media.path||root.media.duration<=0;text:root.selectedTrack>=0&&root.tracks[root.selectedTrack]&&root.tracks[root.selectedTrack].missing?"找不到音频，点音轨旁的“找回文件”。":"将音频拖到这里（WAV、MP3、FLAC、M4A 等）";color:theme.muted}
   }
 
     ScrollBar {objectName:"referenceTimeScroll";width:parent.width;orientation:Qt.Horizontal;policy:ScrollBar.AlwaysOn;active:true
@@ -704,7 +747,7 @@ MuseScore {
    RowLayout {Desk.DeskButton {text:"移除此关联";onClicked:{root.deleteAssociation(root.selectedAssociation);associationDialog.close()}} Desk.DeskButton {iconName:"close";text:"关闭";onClicked:associationDialog.close()}}
   }
  }
- Files.FileDialog {id:audioDialog;title:"打开原曲";nameFilters:["音频 (*.wav *.mp3 *.flac)"];onAccepted:root.openAudio(String(fileUrl));onRejected:root.relocating=false}
+ Files.FileDialog {id:audioDialog;title:"打开原曲";nameFilters:["音频 ("+root.audioExtensions.map(function(ext){return "*."+ext}).join(" ")+")"];onAccepted:root.openAudio(String(fileUrl));onRejected:root.relocating=false}
  Files.FileDialog {id:loadDialog;title:"打开工作区";nameFilters:["Kumo 工作区 (*.json)"];onAccepted:root.loadProject(String(fileUrl))}
  Files.FileDialog {id:saveDialog;title:"保存工作区";selectExisting:false;nameFilters:["Kumo 工作区 (*.json)"];onAccepted:root.saveProject(String(fileUrl))}
 }

@@ -3,7 +3,11 @@
 #include "paneldock.h"
 #include "featuregate.h"
 #include "aiconnection.h"
+#include "referencepaths.h"
+#include "referencefactory.h"
+#include "panelwindowcontrols.h"
 #include "workspaceviews.h"
+#include "libmscore/score.h"
 #include "mscore/musescore.h"
 #include "mscore/shortcut.h"
 #include "mscore/plugin/qmlpluginengine.h"
@@ -17,15 +21,75 @@
 #include <QMenu>
 #include <QApplication>
 #include <QFileInfo>
+#include <QJsonDocument>
 #include <QSignalBlocker>
-namespace Ms {namespace {QPointer<QDockWidget> referenceDock;QPointer<QmlPlugin> referenceRoot;}
-void flushReferencePanelForScore(Score* score){
- if(!score||!referenceRoot)return;
+namespace Ms {namespace {
+QPointer<QDockWidget> referenceDock;
+QPointer<QmlPlugin> referenceRoot;
+const QString referenceTag = QStringLiteral("kumo.reference");
+
+bool panelOwnsScore(Score* score)
+{
+ if(!score||!referenceRoot)return false;
  const auto value=referenceRoot->property("owner");auto object=value.canConvert<QJSValue>()?value.value<QJSValue>().toQObject():value.value<QObject*>();auto owner=qobject_cast<PluginAPI::Score*>(object);
- if(!owner||!owner->score()||owner->score()->masterScore()!=score->masterScore())return;
+ return owner && owner->score() && owner->score()->masterScore()==score->masterScore();
+}
+}
+void flushReferencePanelForScore(Score* score){
+ if(!panelOwnsScore(score))return;
  QMetaObject::invokeMethod(referenceRoot,"storeTrack",Qt::DirectConnection);
  QMetaObject::invokeMethod(referenceRoot,"saveScoreProject",Qt::DirectConnection);
 }
+
+ReferenceScoreSave::ReferenceScoreSave(Score* score, const QString& targetPath)
+{
+    if (!score || targetPath.isEmpty())
+        return;
+    _master = score->masterScore();
+    const auto& tags = _master->metaTags();
+    _hadReference = tags.contains(referenceTag);
+    _previous = tags.value(referenceTag);
+    auto document = QJsonDocument::fromJson(_previous.toUtf8()).toVariant().toMap();
+    if (panelOwnsScore(score)) {
+        QVariant captured;
+        if (QMetaObject::invokeMethod(referenceRoot, "referenceProjectSnapshot", Qt::DirectConnection,
+                                      Q_RETURN_ARG(QVariant, captured))) {
+            if (captured.userType() == qMetaTypeId<QJSValue>())
+                captured = captured.value<QJSValue>().toVariant();
+            if (!captured.toMap().isEmpty())
+                document = captured.toMap();
+        }
+    }
+    if (document.value("schema").toInt() != 2)
+        return;
+    const auto sourcePath = _master->created() ? QString() : _master->fileInfo()->absoluteFilePath();
+    const auto serialized = QJsonDocument::fromVariant(
+        referenceDocumentForSave(document, sourcePath, targetPath)).toJson(QJsonDocument::Compact);
+    if (serialized.size() > 4 * 1024 * 1024)
+        return;
+    _master->metaTags().insert(referenceTag, QString::fromUtf8(serialized));
+    _staged = true;
+}
+
+ReferenceScoreSave::~ReferenceScoreSave()
+{
+    if (!_staged)
+        return;
+    if (_hadReference)
+        _master->metaTags().insert(referenceTag, _previous);
+    else
+        _master->metaTags().remove(referenceTag);
+}
+
+void ReferenceScoreSave::accept()
+{
+    if (!_staged)
+        return;
+    _staged = false;
+    if (panelOwnsScore(_master))
+        QMetaObject::invokeMethod(referenceRoot, "rememberSavedReference", Qt::DirectConnection);
+}
+
 void showReferencePanel(bool visible){
  if(!mscore || !personalFeaturesEnabled())return;
  if(referenceDock&&referenceRoot){referenceDock->setVisible(visible);if(visible)referenceRoot->focusPanel();return;}
@@ -39,6 +103,17 @@ void showReferencePanel(bool visible){
  container->setMinimumSize(0,0);container->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Ignored);
  dock->setWidget(container);dock->setMinimumSize(270,96);
  addEditorDockActions(dock);
+ const QPointer<QmlPlugin> panel = root;
+ installPanelWindowControls(dock)->setTransport([] {
+     auto project = referenceProject();
+     if (!project || !project->property("playing").toBool())
+         return false;
+     const auto owner = project->property("workflowPlaybackOwner").toString();
+     return owner.isEmpty() || owner == "reference-panel" || project->property("joint").toBool();
+ }, [panel] {
+     if (panel)
+         QMetaObject::invokeMethod(panel.data(), "stopJoint");
+ });
  const bool restored=arrangeWorkflowDock(mscore,dock,"ReferencePlayer_MS3","bottomTools",Qt::BottomDockWidgetArea);
  QObject::connect(root,&QObject::destroyed,dock,&QObject::deleteLater);
  root->attachPanelDock(dock);root->setFilePath(QFileInfo(file).absolutePath());

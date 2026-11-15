@@ -18,7 +18,7 @@ class QLabel;
 class QListWidget;
 class QPainter;
 class QScrollBar;
-class QScrollArea;
+class QTabWidget;
 class QCheckBox;
 namespace Ms {
 class Score;
@@ -37,10 +37,11 @@ class SpectrumPane : public QWidget {
     double _pickMs = 0, _pickFrequency = 440;
     QObject *_session = nullptr, *_media = nullptr, *_audio = nullptr;
     QComboBox *_tracks = nullptr, *_clips = nullptr, *_display = nullptr, *_preset = nullptr,
-              *_tool = nullptr;
+              *_tool = nullptr, *_follow = nullptr;
     QDoubleSpinBox *_tuning = nullptr, *_speed = nullptr;
     QSpinBox *_transpose = nullptr;
-    QToolButton *_play = nullptr, *_fitTime = nullptr, *_loop = nullptr, *_harmonics = nullptr;
+    QToolButton *_play = nullptr, *_fitTime = nullptr, *_loop = nullptr, *_harmonics = nullptr,
+                *_returnToPlayback = nullptr;
     QLabel *_status = nullptr, *_target = nullptr;
     QCheckBox *_durationFromMark = nullptr;
     bool _drawingMark = false;
@@ -52,6 +53,10 @@ class SpectrumPane : public QWidget {
     int _hoverKey = -1;
     bool _hoverOnRoll = false;
     bool _sourceWasPlaying = false;
+    bool _followSuspended = false;
+    bool _gridDragging = false, _selectingGridPoints = false;
+    double _gridDragTime = 0, _firstGridPoint = -1;
+    int _gridDragOffset = 0;
     QVariantMap _coloredStyle;
     qint64 _coloredRaw = 0;
     bool _coloredOverlay = false;
@@ -66,7 +71,7 @@ class SpectrumPane : public QWidget {
     QVariantMap _grids;
     QTimer _listenTimer;
     QScrollBar *_timeScroll = nullptr, *_pitchScroll = nullptr;
-    QScrollArea *_displayPanel = nullptr;
+    QTabWidget *_displayPanel = nullptr;
     QImage _rawImage, _image;
     QVariantMap _info, _request, _track, _clip;
     QVariantList _annotations;
@@ -90,6 +95,9 @@ class SpectrumPane : public QWidget {
     void restoreGrid();
     void estimateTempo();
     void tapGrid();
+    void suspendPlaybackFollow();
+    bool followPlaybackView(bool recenter = false);
+    void selectGridPoints(bool start);
     void paintGrid(QPainter &, const QRectF &);
     void hoverChanged(QPointF,bool);
     void clearHover();
@@ -145,6 +153,9 @@ class SpectrumPane : public QWidget {
     void paintKeyboardHover(QPainter&,QWidget*) const;
     int timelineEndTick() const;
     bool paintRollPlayhead(QPainter&,QWidget*) const;
+    bool controlsPlaybackViewport() const;
+    bool sourceTransportActive() const;
+    void stopSourceTransport();
     int linkedTimelineWidth() const;
     bool overlayEvent(QEvent *);
     bool rollEvent(QEvent*,bool ruler);

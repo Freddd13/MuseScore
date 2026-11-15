@@ -107,7 +107,17 @@ public:
             }
 };
 }
-void showRegionalDifference(ScoreView* view,Score* other,const QVariantList& changes){if(!view)return;DifferenceLayer* layer=nullptr;for(auto child:view->children())if((layer=dynamic_cast<DifferenceLayer*>(child)))break;if(!layer&&other)layer=new DifferenceLayer(view);if(layer)layer->display(other,changes);}
+void showRegionalDifference(ScoreView *view, Score *other, const QVariantList &changes, const QString &owner)
+{
+    if (!view) return;
+    DifferenceLayer *layer = nullptr;
+    for (auto child : view->children())
+        if ((layer = dynamic_cast<DifferenceLayer *>(child))) break;
+    if (!layer && other) layer = new DifferenceLayer(view);
+    if (!layer) return;
+    if (other) layer->setProperty("comparisonOwner", owner);
+    if (layer->property("comparisonOwner") == owner) layer->display(other, changes);
+}
 bool regionalAuditionEnabled(){return QSettings().value("regionalVariants/auditionCompare",false).toBool();}
 void setRegionalAuditionEnabled(bool value){QSettings().setValue("regionalVariants/auditionCompare",value);}
 QVariantMap switchRegionalWriting(ScoreView* view,const QString& group,const QString& variant){

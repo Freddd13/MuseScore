@@ -12,18 +12,89 @@
 #include <QSignalBlocker>
 #include <QStyle>
 #include <QTimer>
+#include <QToolBar>
+#include <functional>
 
 namespace Ms {
-// Shared window behaviour for personal tool panels. Dock layout remains owned
-// by QMainWindow; this class only manages a panel's temporary full-screen state
-// and recovery of floating windows that were saved on a different screen.
+// QMainWindow holds the dock layout. The strip keeps an entry for each tool
+// that the user minimized and can stop its own playback while it is hidden.
 class PanelWindowControls final : public QObject {
     QPointer<QDockWidget> _dock;
+    QPointer<QToolBar> _strip;
     QByteArray _geometry;
+    QByteArray _minimizedGeometry;
     QSize _dockedSize;
+    QSize _minimizedSize;
     bool _wasFloating = false, _fitting = false;
     QAction* _fullscreen;
     QAction* _escape;
+    QAction* _minimize;
+    QAction* _restore;
+    QAction* _stop;
+    QTimer _transportTimer;
+    std::function<bool()> _playing;
+    std::function<void()> _stopPlayback;
+
+    void clearMinimized()
+    {
+        _transportTimer.stop();
+        if (_strip) {
+            _strip->removeAction(_restore);
+            _strip->removeAction(_stop);
+            _strip->setVisible(!_strip->actions().isEmpty());
+            _strip.clear();
+        }
+    }
+    void restoreMinimizedLayout()
+    {
+        _dock->setProperty("kumoPanelMinimized", false);
+        clearMinimized();
+        if (_dock->isFloating()) {
+            if (!_minimizedGeometry.isEmpty())
+                _dock->restoreGeometry(_minimizedGeometry);
+            return;
+        }
+        if (auto main = qobject_cast<QMainWindow*>(_dock->parentWidget())) {
+            const auto area = main->dockWidgetArea(_dock);
+            const bool side = area == Qt::LeftDockWidgetArea || area == Qt::RightDockWidgetArea;
+            main->resizeDocks({_dock.data()}, {side ? _minimizedSize.width() : _minimizedSize.height()},
+                              side ? Qt::Horizontal : Qt::Vertical);
+        }
+    }
+    void minimize()
+    {
+        auto main = _dock ? qobject_cast<QMainWindow*>(_dock->parentWidget()) : nullptr;
+        if (!main || _dock->isHidden())
+            return;
+        _fullscreen->setChecked(false);
+        _minimizedGeometry = _dock->isFloating() ? _dock->saveGeometry() : QByteArray();
+        _minimizedSize = _dock->size();
+        _dock->setProperty("kumoPanelMinimized", true);
+        _dock->hide();
+        const auto name = QStringLiteral("kumoMinimizedPanels");
+        _strip = main->findChild<QToolBar*>(name, Qt::FindDirectChildrenOnly);
+        if (!_strip) {
+            _strip = new QToolBar(tr("已最小化的工具"), main);
+            _strip->setObjectName(name);
+            _strip->setAllowedAreas(Qt::BottomToolBarArea);
+            _strip->setMovable(false);
+            _strip->setFloatable(false);
+            _strip->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+            _strip->toggleViewAction()->setVisible(false);
+            main->addToolBar(Qt::BottomToolBarArea, _strip);
+        }
+        _restore->setText(_dock->windowTitle());
+        _restore->setToolTip(tr("恢复%1").arg(_dock->windowTitle()));
+        _stop->setToolTip(tr("停止%1的播放").arg(_dock->windowTitle()));
+        _strip->addAction(_restore);
+        _strip->addAction(_stop);
+        if (_playing)
+            _transportTimer.start();
+        updateTransport();
+        _strip->show();
+    }
+    void updateTransport() { _stop->setVisible(_playing && _playing()); }
+
 
     void fullscreen(bool enabled)
     {
@@ -65,9 +136,14 @@ class PanelWindowControls final : public QObject {
     bool eventFilter(QObject* watched, QEvent* event) override
     {
         if (watched == _dock && (event->type() == QEvent::Show ||
-                                event->type() == QEvent::ScreenChangeInternal))
+                                event->type() == QEvent::ScreenChangeInternal)) {
+            if (event->type() == QEvent::Show && _strip)
+                restoreMinimizedLayout();
             QTimer::singleShot(0, this, [this] { fitOnScreen(); });
+        }
         if (watched == _dock && event->type() == QEvent::Close) {
+            _dock->setProperty("kumoPanelMinimized", false);
+            clearMinimized();
             if (_fullscreen->isChecked())
                 _fullscreen->setChecked(false);
             _dock->setProperty("kumoWindowTransition", false);
@@ -102,12 +178,51 @@ public:
         _escape->setEnabled(false);
         dock->addAction(_escape);
         connect(_escape, &QAction::triggered, this, [this] { _fullscreen->setChecked(false); });
+        _minimize = new QAction(dock->style()->standardIcon(QStyle::SP_TitleBarMinButton), tr("最小化面板"), this);
+        _minimize->setObjectName("kumoPanelMinimize");
+        _minimize->setToolTip(tr("把面板收到工作区底部，点击名称恢复。"));
+        dock->addAction(_minimize);
+        connect(_minimize, &QAction::triggered, this, [this] { minimize(); });
+        _restore = new QAction(dock->style()->standardIcon(QStyle::SP_TitleBarNormalButton), QString(), this);
+        _restore->setObjectName("kumoRestorePanel");
+        connect(_restore, &QAction::triggered, this, [this] {
+            if (!_dock)
+                return;
+            _dock->show();
+            _dock->raise();
+            if (_dock->isFloating())
+                _dock->activateWindow();
+        });
+        _stop = new QAction(dock->style()->standardIcon(QStyle::SP_MediaStop), tr("停止"), this);
+        _stop->setObjectName("kumoStopMinimizedPanel");
+        _stop->setVisible(false);
+        connect(_stop, &QAction::triggered, this, [this] {
+            if (_stopPlayback)
+                _stopPlayback();
+            updateTransport();
+        });
+        _transportTimer.setInterval(200);
+        connect(&_transportTimer, &QTimer::timeout, this, [this] { updateTransport(); });
         dock->installEventFilter(this);
         connect(dock, &QDockWidget::topLevelChanged, this, [this] {
             QTimer::singleShot(0, this, [this] { fitOnScreen(); });
         });
     }
+    ~PanelWindowControls() override { clearMinimized(); }
     QAction* fullscreenAction() const { return _fullscreen; }
+    QAction* minimizeAction() const { return _minimize; }
+    void setTransport(std::function<bool()> playing, std::function<void()> stop)
+    {
+        _playing = std::move(playing);
+        _stopPlayback = std::move(stop);
+        if (_strip) {
+            if (_playing)
+                _transportTimer.start();
+            else
+                _transportTimer.stop();
+            updateTransport();
+        }
+    }
     void fitOnScreen()
     {
         if (!_dock || !_dock->isFloating() || !_dock->isVisible() ||

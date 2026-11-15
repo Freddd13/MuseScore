@@ -1,9 +1,8 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "scorevideo.h"
-#include <QDir>
+#include "mscore/workflow/referencepaths.h"
 #include <QFileInfo>
 #include <QDateTime>
-#include <QUrl>
 #include <algorithm>
 #include <cmath>
 namespace Ms
@@ -62,17 +61,9 @@ double outputAt(const QVector<VideoClockPoint>& points, double native)
 }
 QString audioFile(Score* score, const QVariantMap& track)
 {
-    const auto url = QUrl(track.value("path", track.value("originalPath")).toString());
-    const auto original = url.isLocalFile() ? url.toLocalFile() : url.toString();
-    const auto relative = track.value("relativePath").toString();
-    if (score && !relative.isEmpty()) {
-        const auto candidate = QFileInfo(score->masterScore()->fileInfo()->absoluteFilePath())
-                                   .absoluteDir()
-                                   .filePath(relative);
-        if (QFileInfo(candidate).isFile())
-            return QFileInfo(candidate).absoluteFilePath();
-    }
-    return QFileInfo(original).absoluteFilePath();
+    const auto source = score && !score->masterScore()->created()
+        ? score->masterScore()->fileInfo()->absoluteFilePath() : QString();
+    return resolveReferenceTrack(track, source);
 }
 } // namespace
 QVariantList ScoreVideoDocument::audioSources() const
@@ -81,10 +72,11 @@ QVariantList ScoreVideoDocument::audioSources() const
     for (auto value : _reference.value("tracks").toList()) {
         const auto track = value.toMap();
         const auto path = audioFile(_source, track);
+        const QFileInfo file(path);
         result.append(QVariantMap{{"id", track.value("id")},
                                   {"name", track.value("name")},
                                   {"path", path},
-                                  {"missing", !QFileInfo(path).isFile()},
+                                  {"missing", !file.isFile() || !file.isReadable()},
                                   {"duration", track.value("duration")},
                                   {"associations", track.value("associations").toList().size()}});
     }
@@ -112,15 +104,17 @@ void ScoreVideoDocument::rebuildTimeline()
     if (_snapshot.audioKind == "reference") {
         const auto path = audioFile(_source, track);
         QFileInfo file(path);
-        if (track.isEmpty() || !file.isFile()) {
+        if (track.isEmpty() || !file.isFile() || !file.isReadable()) {
             _status = track.isEmpty() ? tr("选择一条原曲音轨后即可继续。")
                                       : tr("找不到原曲：%1。请在原曲参考中找回文件。").arg(path);
             emit changed();
             return;
         }
         _snapshot.audioPath = path;
-        _snapshot.audioIdentity = {{"size", file.size()},
-                                   {"modified", file.lastModified().toMSecsSinceEpoch()}};
+        _snapshot.audioIdentity = track.value("identity").toMap();
+        if (!_snapshot.audioIdentity.contains("size"))
+            _snapshot.audioIdentity = {{"size", file.size()},
+                                       {"modified", file.lastModified().toMSecsSinceEpoch()}};
         const auto associations = track.value("associations").toList();
         const double fileDuration = track.value("duration").toDouble() / 1000.;
         if (associations.isEmpty() || _settings.value("audioMapping").toString() == "whole") {

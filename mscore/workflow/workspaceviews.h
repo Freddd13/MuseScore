@@ -9,6 +9,7 @@ class QIcon;
 class QString;
 class QRect;
 namespace Ms {
+class MuseScore;
 class ScoreView;
 QRect playbackScoreViewport(const ScoreView *);
 void addWorkspaceViews(QMenu *);
@@ -16,6 +17,7 @@ void addWorkspaceSelector(QToolBar *);
 void addVisibleScoreFollow(QToolBar *);
 void addEditorDockActions(QDockWidget *);
 void finishToolFullscreen(QMainWindow *);
+void syncWorkingScoreLayout(MuseScore*);
 void ensureEditorAreas(QSplitter *);
 QIcon personalToolIcon(const QString &);
 } // namespace Ms

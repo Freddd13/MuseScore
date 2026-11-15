@@ -3384,6 +3384,7 @@ void MuseScore::setCurrentScoreView(ScoreView* view)
             cs = 0;
 
       if (_performanceEditor) _performanceEditor->setView(cv);
+      syncWorkingScoreLayout(this);
       notifyWorkflowCurrentScore(cs);
       scorePageLayoutChanged();
 

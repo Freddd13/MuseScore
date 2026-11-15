@@ -47,13 +47,16 @@ void reloadCurrent() {
 }
 class ChangeCommonPiano final:public UndoCommand {
   QVariantMap next;
+  bool captureLive;
   void flip(EditData*) override {
     const auto old=commonPianoSettings();
     const bool soundChanged=old["enabled"]!=next["enabled"] ||
         !sameInstance(old["instance"].toMap(),next["instance"].toMap()) ||
         (next["enabled"].toBool() && synti && !synti->property("kumoCommonPianoError").toString().isEmpty());
     writeSettings(next); next=old;
-    if (soundChanged) {
+    const bool alreadyLoaded = captureLive;
+    captureLive = false;
+    if (soundChanged && !alreadyLoaded) {
       reloadCurrent();
       if (auto source=engine(synti))
         for (const auto &row:source->runtimeConfiguration()["slots"].toList())
@@ -63,7 +66,8 @@ class ChangeCommonPiano final:public UndoCommand {
     }
   }
 public:
-  explicit ChangeCommonPiano(const QVariantMap& value):next(value) {}
+  explicit ChangeCommonPiano(const QVariantMap& value, bool capture = false)
+    : next(value), captureLive(capture) {}
   UNDO_NAME("ChangeCommonPiano")
 };
 bool instrumentIsPiano(const Instrument* instrument,const Channel* channel,Score* score) {
@@ -158,7 +162,7 @@ void captureCommonPianoEdits(Score* score,int preferredSlot) {
   const int edited=source->rack().takeChangedCommonPiano();
   if (!preferredSlot) preferredSlot=edited;
   QVariantMap found;
-  for (const auto& row:source->runtimeConfiguration()["slots"].toList()) {
+  for (const auto& row:source->runtimeConfiguration(true, true)["slots"].toList()) {
     const auto played=row.toMap();if (played["commonPiano"].toString().isEmpty()) continue;
     if (found.isEmpty() || played["id"].toInt()==preferredSlot) found=played;
     if (played["id"].toInt()==preferredSlot) break;
@@ -166,7 +170,13 @@ void captureCommonPianoEdits(Score* score,int preferredSlot) {
   if (found.isEmpty()) return;
   const auto next=instance(found);
   if (!sameInstance(next,settings["instance"].toMap())) {
-    settings["instance"]=next;applyCommonPianoSettings(score,settings);
+    settings["instance"] = next;
+    auto master = score->masterScore();
+    master->startCmd();
+    master->undo(new ChangeCommonPiano(settings, true));
+    master->endCmd();
+    getAction("undo")->setEnabled(master->undoStack()->canUndo());
+    getAction("redo")->setEnabled(master->undoStack()->canRedo());
   }
 }
 void prepareCommonPianos(MasterSynthesizer* master,Score* score,bool refresh) {
@@ -201,8 +211,9 @@ void routeCommonPianos(MasterSynthesizer* master,Score*,QVector<int>& banks) {
   auto source=engine(master);if (!source) return;
   QVector<int> routing(256,-1);bool unavailable=false;
   for (int i=0;i<banks.size();++i) if (source->pianoSlot(i)) {
-    const auto plugin=source->rack().plugin(source->pianoSlot(i));
-    unavailable|=!plugin || !plugin->status().isEmpty();
+    const int slot = source->pianoSlot(i);
+    const auto plugin = source->rack().plugin(slot);
+    unavailable |= !source->rack().backgroundSource(slot) && (!plugin || !plugin->status().isEmpty());
   }
   if (unavailable) {
     const auto error=source->problems().join('\n');

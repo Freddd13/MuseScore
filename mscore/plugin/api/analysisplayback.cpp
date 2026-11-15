@@ -5,6 +5,8 @@
 #include "libmscore/chord.h"
 #include "libmscore/measure.h"
 #include "libmscore/note.h"
+#include "libmscore/notevelocity.h"
+#include "libmscore/playbackenvelope.h"
 #include "libmscore/part.h"
 #include "libmscore/instrument.h"
 #include "libmscore/staff.h"
@@ -16,6 +18,7 @@
 #include "libmscore/textbase.h"
 #include "mscore/musescore.h"
 #include "mscore/seq.h"
+#include "mscore/workflow/arrangement.h"
 #include "audio/midi/event.h"
 #include <QElapsedTimer>
 #include <climits>
@@ -161,6 +164,17 @@ QVariantMap ScoreObserver::analysisPlaybackPage(int fromTick,int firstTrack,int 
                         row=describe(note,event.pitch(),true);row.insert("kind",event.velo()?"on":"off");
                         row.insert("velocity",event.velo());row.insert("discard",event.discard());row.insert("muted",event.isMuted());
                         row.insert("eventIndex",event.noteEventIndex());row.insert("grace",note->chord()->isGrace());
+                        if (event.velo()) {
+                              const auto source = event.note() ? event.note() : note;
+                              const auto index = event.noteEventIndex();
+                              const auto& attacks = note->playEvents();
+                              row.insert("velocitySourceId", arrangementNoteIdentity(source));
+                              row.insert("velocityMode", source->veloType() == Ms::Note::ValueType::USER_VAL ? "fixed" : "relative");
+                              row.insert("velocityRaw", source->veloOffset());
+                              row.insert("manualAttack", note->chord()->playEventType() == PlayEventType::User);
+                              if (index >= 0 && index < attacks.size())
+                                    row.insert("envelopeFactor", PlaybackEnvelope::eventFactor(note, attacks[index]));
+                              }
                         if(event.pitch()%12==note->ppitch()%12)row.insert("tpc",note->tpc1());
                         int grace=-1;
                         if(note->chord()->isGrace()) {

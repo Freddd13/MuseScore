@@ -5,9 +5,15 @@
 #include <QImage>
 #include <QDataStream>
 #include <QElapsedTimer>
+#include <QProcess>
+#include <QScopeGuard>
+#include <QSettings>
 #include "referenceaudio/spectrumfactory.h"
 #include "referenceaudio/mediaexportfactory.h"
 #include "referenceaudio/auditionfilter.h"
+#include "referenceaudio/audiofileidentity.h"
+#include "referenceaudio/ffmpegtool.h"
+#include "workflow/referencepaths.h"
 #include <cmath>
 
 class TestSpectrum : public QObject {
@@ -165,6 +171,89 @@ class TestSpectrum : public QObject {
         const auto path = QDir(folder).filePath(name);
         QVERIFY(QFileInfo::exists(path));
         request(options(path));
+        QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
+        const auto result = image();
+        QVERIFY2(!result.isNull(), qPrintable(_session->property("status").toString()));
+        const int row = qRound((108.5 - 69) / 88. * 352);
+        QVERIFY(result.constScanLine(row)[48] > 170);
+    }
+    void portableReferenceUsesRelativeThenAbsolute()
+    {
+        const auto original = _dir.filePath("旧工程/原曲/a440.wav");
+        const auto portable = _dir.filePath("移动后/原曲/a440.wav");
+        const auto newScore = _dir.filePath("移动后/编曲/乐谱.mscz");
+        for (const auto& destination : {original, portable}) {
+            QVERIFY(QDir().mkpath(QFileInfo(destination).absolutePath()));
+            QVERIFY(QFile::copy(tone(QFileInfo(destination).absoluteDir().dirName() +
+                                     QString::number(destination == original)), destination));
+        }
+        QFile migrated(portable);
+        QVERIFY(migrated.open(QIODevice::ReadWrite));
+        QVERIFY(migrated.setFileTime(QDateTime::currentDateTime().addDays(-2), QFileDevice::FileModificationTime));
+        migrated.close();
+        QVERIFY(KumoAudio::matchesAudioIdentity(QFileInfo(portable), KumoAudio::audioIdentity(QFileInfo(original))));
+        QVariantMap track{{"path", original}, {"originalPath", original},
+                          {"relativePath", "../原曲/a440.wav"}, {"associations", QVariantList{1}}};
+        QCOMPARE(Ms::resolveReferenceTrack(track, newScore), portable);
+        const auto alternate = _dir.filePath("导出副本/乐谱.mscz");
+        const auto updated = Ms::referenceDocumentForSave(
+            {{"schema", 2}, {"tracks", QVariantList{track}}}, newScore, alternate);
+        const auto saved = updated["tracks"].toList().first().toMap();
+        QCOMPARE(saved["relativePath"].toString(), QString("../移动后/原曲/a440.wav"));
+        QCOMPARE(saved["originalPath"].toString(), portable);
+        QCOMPARE(saved["associations"], track["associations"]);
+        QVERIFY(QFile::rename(portable, _dir.filePath("移动后/原曲/改名.wav")));
+        QCOMPARE(Ms::resolveReferenceTrack(track, newScore), original);
+        QVERIFY(QFile::rename(original, _dir.filePath("原录音已移开.wav")));
+        const auto missing = Ms::referenceDocumentForSave(
+            {{"schema", 2}, {"tracks", QVariantList{track}}}, newScore, alternate)
+                                 .value("tracks").toList().first().toMap();
+        QCOMPARE(missing["relativePath"].toString(), QString("../移动后/原曲/a440.wav"));
+        QCOMPARE(missing["originalPath"].toString(), original);
+        QCOMPARE(missing["associations"], track["associations"]);
+    }
+
+    void ffmpegReferenceFormats_data()
+    {
+        QTest::addColumn<QString>("extension");
+        QTest::addColumn<QString>("encoder");
+        QTest::newRow("m4a-aac") << QString("m4a") << QString("aac");
+        QTest::newRow("m4a-alac") << QString("m4a") << QString("alac");
+        QTest::newRow("adts-aac") << QString("aac") << QString("aac");
+        QTest::newRow("vorbis") << QString("ogg") << QString("libvorbis");
+        QTest::newRow("opus") << QString("opus") << QString("libopus");
+        QTest::newRow("aiff") << QString("aiff") << QString("pcm_s16be");
+    }
+
+    void ffmpegReferenceFormats()
+    {
+        QFETCH(QString, extension);
+        QFETCH(QString, encoder);
+        const auto ffmpeg = qEnvironmentVariable("KUMO_TEST_FFMPEG", KumoAudio::ffmpegExecutable());
+        if (ffmpeg.isEmpty())
+            QSKIP("Set KUMO_TEST_FFMPEG to the installed FFmpeg binary for format checks.");
+        QSettings settings;
+        const auto oldFfmpeg = settings.value("scoreVideo/ffmpeg");
+        const auto restoreSettings = qScopeGuard([&] {
+            if (oldFfmpeg.isValid())
+                settings.setValue("scoreVideo/ffmpeg", oldFfmpeg);
+            else
+                settings.remove("scoreVideo/ffmpeg");
+        });
+        settings.setValue("scoreVideo/ffmpeg", ffmpeg);
+        settings.sync();
+        const auto source = tone("频谱原声", 48000, 1, false, 440, false, .3);
+        const auto recording = _dir.filePath("录音 " + encoder + "." + extension);
+        QProcess process;
+        process.start(ffmpeg, {"-hide_banner", "-loglevel", "error", "-y", "-i", source,
+                               "-c:a", encoder, recording});
+        QVERIFY2(process.waitForFinished(10000), qPrintable(process.errorString()));
+        QVERIFY2(process.exitCode() == 0, process.readAllStandardError().constData());
+
+        auto value = options(recording);
+        value["from"] = 600.;
+        value["until"] = 1600.;
+        request(value);
         QTRY_VERIFY_WITH_TIMEOUT(!_session->property("busy").toBool(), 10000);
         const auto result = image();
         QVERIFY2(!result.isNull(), qPrintable(_session->property("status").toString()));

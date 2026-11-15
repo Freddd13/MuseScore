@@ -12,6 +12,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QDateTime>
+#include <QCryptographicHash>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QDialog>
@@ -28,6 +29,7 @@
 #include <QPointer>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QRegularExpression>
 #include <QPushButton>
 #include <QQmlComponent>
 #include <QQmlContext>
@@ -101,6 +103,57 @@ QJsonObject readJson(const QString &path) {
   if (!file.open(QIODevice::ReadOnly))
     return {};
   return QJsonDocument::fromJson(file.readAll()).object();
+}
+QString readableFile(const QString &path) {
+  const QFileInfo file(path);
+  return file.isFile() && file.isReadable() ? file.absoluteFilePath() : QString();
+}
+QString findResearchFile(const QString &envName, const QString &repository,
+                         const QString &relativePath) {
+  const auto configured = qEnvironmentVariable(envName.toLatin1().constData());
+  if (!configured.isEmpty()) {
+    if (auto file = readableFile(QDir(configured).filePath(relativePath)); !file.isEmpty())
+      return file;
+  }
+  for (auto root : {QDir(QCoreApplication::applicationDirPath()), QDir::current(),
+                    QDir(QDir::home().filePath("Downloads"))}) {
+    for (int level = 0; level < 7; ++level) {
+      if (auto file = readableFile(root.filePath(repository + "/" + relativePath)); !file.isEmpty())
+        return file;
+      if (!root.cdUp())
+        break;
+    }
+  }
+  return {};
+}
+QString installedSkill(const QString &name) {
+  const auto codexHome = qEnvironmentVariable("CODEX_HOME", QDir::home().filePath(".codex"));
+  for (const auto &root : {QDir::home().filePath(".agents/skills"), QDir(codexHome).filePath("skills")}) {
+    if (auto skill = readableFile(QDir(root).filePath(name + "/SKILL.md")); !skill.isEmpty())
+      return skill;
+  }
+  return {};
+}
+QString skillVersion(const QString &path) {
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly))
+    return {};
+  const auto intro = QString::fromUtf8(file.read(8192));
+  const auto end = intro.indexOf("\n---", 4);
+  if (!intro.startsWith("---") || end < 0)
+    return {};
+  static const QRegularExpression version(R"(^\s*version:\s*["']?([^\s"']+))",
+                                          QRegularExpression::MultilineOption);
+  return version.match(intro.left(end)).captured(1);
+}
+bool matchesReleaseSkill(const QString &installed, const QJsonObject &manifest) {
+  const auto expected = manifest.value("sha256").toObject().value("skill/SKILL.md").toString().toLatin1();
+  QFile file(installed);
+  if (expected.isEmpty() || !file.open(QIODevice::ReadOnly))
+    return false;
+  const auto contents = file.readAll();
+  return QCryptographicHash::hash(contents, QCryptographicHash::Sha256).toHex() == expected ||
+         QCryptographicHash::hash(QByteArray(contents).replace("\r\n", "\n"), QCryptographicHash::Sha256).toHex() == expected;
 }
 QString quoted(const QString &value) {
   const auto json = QString::fromUtf8(

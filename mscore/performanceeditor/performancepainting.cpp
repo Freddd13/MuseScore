@@ -8,6 +8,7 @@
 #include "miditrackpane.h"
 #include "timingeditor.h"
 #include "rhythmpane.h"
+#include "../workflow/arrangement.h"
 #endif
 #include "libmscore/select.h"
 #include "libmscore/pedal.h"
@@ -192,7 +193,12 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
       if (parameter == 0) {
             if(!onScore)paintVelocityHeaders(painter,rect);
             if(_relativeActual)paintOriginalVelocity(painter,rect,onScore);
-            if(!onScore&&comparisonActive()){paintExpressionComparison(painter,rect);painter.restore();return;}
+            QVariantMap suggestedVelocities;
+#ifdef SCRIPT_INTERFACE
+            if (!onScore && _score)
+                  suggestedVelocities = _score->QObject::property("kumoVelocitySuggestion").toMap();
+#endif
+            if(!onScore&&suggestedVelocities.isEmpty()&&comparisonActive()){paintExpressionComparison(painter,rect);painter.restore();return;}
             const auto active = painter.clipBoundingRect().intersected(rect.adjusted(-8, -8, 8, 8));
             int from = tickForX(active.left() - 8, onScore), until = tickForX(active.right() + 8, onScore);
             auto first = std::lower_bound(_notes.cbegin(), _notes.cend(), from, [](const NoteInfo& n, int t) { return n.tick < t; });
@@ -216,6 +222,39 @@ void PerformanceEditor::paintLane(QPainter& painter, const QRectF& rect, bool on
                   const auto noteLane=velocityLane(index,rect,onScore);if(noteLane.isEmpty())continue;
                   const double y = velocityY(index, rect, onScore);
                   const double noteBaseline=qBound(noteLane.top(),yForValue(rangeKind()==1?0:1,noteLane,onScore),noteLane.bottom());
+#ifdef SCRIPT_INTERFACE
+                  if (!suggestedVelocities.isEmpty()) {
+                        const auto change = suggestedVelocities.value(arrangementNoteIdentity(it->note)).toMap();
+                        if (!change.isEmpty()) {
+                              const int before = change.value("before").toInt(), after = change.value("after").toInt();
+                              const auto barY = [&](int value) {
+                                    const auto shown = rangeKind() == 1 ? NoteVelocity::offsetFor(it->base, value) : value;
+                                    return yForValue(shown, noteLane, onScore);
+                              };
+                              const auto drawBar = [&](double xBar, double yBar, QColor color) {
+                                    if (!it->enabled) color.setAlpha(100);
+                                    painter.setPen(Qt::NoPen);
+                                    painter.setBrush(color);
+                                    painter.drawRect(QRectF(xBar - 1.5, qMin(yBar, noteBaseline), 3.,
+                                                            qMax(2., qAbs(noteBaseline - yBar))));
+                              };
+                              drawBar(x - 2., barY(before), _appearance.colors[PerformanceAppearance::Text]);
+                              drawBar(x + 2., barY(after), _appearance.colors[PerformanceAppearance::Preview]);
+                              if (it->selected || index == _hover) {
+                                    const auto label = tr("%1 → %2").arg(before).arg(after);
+                                    const auto metrics = painter.fontMetrics();
+                                    const auto labelWidth = metrics.horizontalAdvance(label) + 8;
+                                    const auto top = qBound(noteLane.top(), qMin(barY(before), barY(after)) - metrics.height() - 3,
+                                                            qMax(noteLane.top(), noteLane.bottom() - metrics.height() - 3));
+                                    const QRectF badge(qMin(x + 6., active.right() - labelWidth), top, labelWidth, metrics.height() + 3);
+                                    painter.fillRect(badge, _appearance.colors[PerformanceAppearance::Background]);
+                                    painter.setPen(_appearance.colors[PerformanceAppearance::Text]);
+                                    painter.drawText(badge, Qt::AlignCenter, label);
+                              }
+                              continue;
+                        }
+                  }
+#endif
                   if (dense && !it->selected && index != _hover && !_playingNotes.contains(index) && !_pending.contains(it->note)) {
                         const int column = int((x - rect.left()) / columnWidth);
                         if (column >= 0 && column < density.size()) {

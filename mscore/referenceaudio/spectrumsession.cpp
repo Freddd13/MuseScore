@@ -2,6 +2,7 @@
 #include "spectrumsession.h"
 #include "spectrumprojection.h"
 #include "tempoestimate.h"
+#include "referencecache.h"
 #include <QThread>
 #include <QSettings>
 #include <QStandardPaths>
@@ -19,13 +20,6 @@
 #include <algorithm>
 
 namespace {
-QString defaultCache() {
-#ifdef Q_OS_WIN
-    if (QDir("E:/").exists())
-        return "E:/MuseScoreCache";
-#endif
-    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-}
 QString cachePath(const QString &directory, const QString &key) {
     return QDir(directory).filePath(key + ".kspec");
 }
@@ -65,24 +59,15 @@ void writeCache(const QString &directory, const QString &key, const KumoAudio::S
            << tile.highPitch << tile.sampleRate << png;
     if (stream.status() != QDataStream::Ok || !file.commit())
         return;
-    // Only this module's hashed cache files in its own versioned subdirectory.
-    const auto files = QDir(directory).entryInfoList({"*.kspec"}, QDir::Files | QDir::NoSymLinks, QDir::Time);
-    qint64 used = 0;
-    for (const auto &f : files)
-        used += f.size();
-    for (auto it = files.crbegin(); it != files.crend() && used > qint64(limitMiB) * 1024 * 1024; ++it) {
-        if (it->completeBaseName().size() != 64)
-            continue;
-        if (QFile::remove(it->absoluteFilePath()))
-            used -= it->size();
-    }
+    KumoAudio::pruneReferenceCache(QFileInfo(directory).absolutePath(),
+                                   qint64(limitMiB) * 1024 * 1024);
 }
 } // namespace
 
 ReferenceSpectrumSession::ReferenceSpectrumSession(QObject *parent) : QObject(parent), _memory(128 * 1024) {
     _pool.setMaxThreadCount(1);_tempoPool.setMaxThreadCount(1);
     QSettings settings;
-    _directory = QDir(settings.value("spectrum/cacheDirectory", defaultCache()).toString())
+    _directory = QDir(settings.value("spectrum/cacheDirectory", KumoAudio::referenceCacheDirectory()).toString())
                      .filePath("kumo-spectrum-v1");
     _memory.setMaxCost(qBound(8, settings.value("spectrum/memoryMiB", 128).toInt(), 1024) * 1024);
     _diskMiB = qBound(0, settings.value("spectrum/diskMiB", 1024).toInt(), 16384);
