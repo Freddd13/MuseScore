@@ -3,6 +3,7 @@
 #include "engravingedit.h"
 #include "systemlocks.h"
 #include "workspaceviews.h"
+#include "libmscore/arpeggio.h"
 #include "libmscore/element.h"
 #include "libmscore/measure.h"
 #include "libmscore/page.h"
@@ -66,6 +67,8 @@ void collectGeometry(void* data, Element* item)
         row["offsetY"] = item->offset().y() / item->spatium();
         row["minimumDistance"] = item->minDistance().val();
     }
+    if (item->type() == ElementType::ARPEGGIO)
+        row["staffSpan"] = static_cast<const Arpeggio*>(item)->span();
     if (item->isSpannerSegment()) {
         const auto spanner = toSpannerSegment(item)->spanner();
         row["connectionStart"] = spanner->tick().ticks();
@@ -93,7 +96,7 @@ bool engravingMovableSymbol(const Element* item)
         const auto span = toSpannerSegment(item)->spanner();
         return span && !span->systemFlag();
     }
-    return item->isTextBase() || item->isArticulation();
+    return item->isTextBase() || item->isArticulation() || item->type() == ElementType::ARPEGGIO;
 }
 
 EngravingTarget::operator bool() const

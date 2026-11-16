@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "engravingcandidate.h"
+#include "engravingedit.h"
 #include "referencepaths.h"
 #include "libmscore/element.h"
 #include "libmscore/layoutbreak.h"
@@ -70,15 +71,6 @@ QVariant position(double x, double y)
     return QVariantMap{{"x", precise(x)}, {"y", precise(y)}};
 }
 
-bool movable(const Element* item)
-{
-    if (!item->visible() || item->generated() || item->systemFlag())
-        return false;
-    if (item->isSpannerSegment())
-        return !toSpannerSegment(item)->spanner()->systemFlag();
-    return item->isTextBase() || item->isArticulation();
-}
-
 struct Search {
     QSet<Element*> result;
     QString type;
@@ -89,7 +81,7 @@ void collectSymbol(void* data, Element* item)
 {
     auto& target = *static_cast<Search*>(data);
     if (item->track() != target.track || item->tick().ticks() != target.tick ||
-        QLatin1String(item->name()) != target.type || !movable(item))
+        QLatin1String(item->name()) != target.type || !item->visible() || !engravingMovableSymbol(item))
         return;
     if (item->isSpannerSegment()) {
         const auto span = toSpannerSegment(item)->spanner();

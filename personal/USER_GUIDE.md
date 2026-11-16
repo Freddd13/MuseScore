@@ -1,6 +1,6 @@
 # MuseScore Evolution 个人功能说明
 
-**Kumo branch / Freddd13 · 0.169.0**
+**Kumo branch / Freddd13 · 0.169.1**
 
 在软件里打开“帮助 → 个人功能说明”，可按下面表格查到操作。Ctrl+F 查找关键词，导航栏可以返回刚读过的章节。
 

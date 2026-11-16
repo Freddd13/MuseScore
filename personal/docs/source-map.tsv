@@ -775,7 +775,8 @@ CFX 切谱与预设	mscore/workflow/vstpanel.cpp	void saveVstBeforeScoreSwitch	1
 播放中保存	mscore/performanceeditor/performanceeditor.cpp	SavePropertyOverrides PerformanceEditor::prepareScoreSave	959	保存和停播撤销	liveWheelHomeAndSpectrum139
 原曲便携路径	mscore/workflow/referencepanel.cpp	ReferenceScoreSave::ReferenceScoreSave	44	按另存目标重算路径	mtest/mscore/performanceeditor/reference_100_tests.inc
 频谱跟随	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::suspendPlaybackFollow	1128	浏览及恢复跟随	spectrumInteraction162
-雕版工具	mscore/workflow/engravingtools.cpp	void openEngravingTools	299	符号、拍位、谱表与分行	mtest/mscore/pluginhost/engraving_169_tests.inc
+雕版工具	mscore/workflow/engravingtools.cpp	void openEngravingTools	302	符号、拍位、谱表与分行	mtest/mscore/pluginhost/engraving_169_tests.inc
+雕版布局读取	mscore/workflow/engravingtools.cpp	QVariantMap engravingLayout	233	原生谱表、共同拍位、琶音线与跨行对象	-
 谱面雕版手柄	mscore/workflow/engravinghandles.cpp	void paintEngravingHandle	456	拖动预览、实际净距、落实原生排版和一次撤销	mtest/mscore/pluginhost/engraving_169_tests.inc
 力度资料标识	mscore/workflow/aiconnection.cpp	QString skillVersion	137	连接弹窗显示已装技能和固定版资料信息	../../mcp-musescore/tests/test_skill_configuration.py
-雕版候选	mscore/workflow/engravingcandidate.cpp	QVariantMap applyEngravingChanges	206	共享候选、布局和撤销	-
+雕版候选	mscore/workflow/engravingcandidate.cpp	QVariantMap applyEngravingChanges	203	共享候选、布局和撤销	-
