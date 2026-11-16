@@ -4,19 +4,84 @@
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QJsonDocument>
-#include <QLocalSocket>
 #include <QProcess>
+#include <QThread>
 #include <QUuid>
 #include <algorithm>
 #include <cstring>
 namespace Ms {
 namespace VstHost {
 namespace {
+// The control connection is prepared on one thread and later used by the
+// score and retirement threads. Qt 5's Windows pipe reader delivers I/O
+// completion to the submitting thread. An explicit event travels with the
+// pipe, so a completed read stays observable after a handover.
+class ControlPipe final {
+  HANDLE handle = INVALID_HANDLE_VALUE;
+  HANDLE ready = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+
+public:
+  ControlPipe() = default;
+  ControlPipe(const ControlPipe&) = delete;
+  ControlPipe& operator=(const ControlPipe&) = delete;
+  ~ControlPipe() {
+    close();
+    if (ready)
+      CloseHandle(ready);
+  }
+
+  bool connected() const { return handle != INVALID_HANDLE_VALUE; }
+
+  void close() {
+    if (connected()) {
+      CloseHandle(handle);
+      handle = INVALID_HANDLE_VALUE;
+    }
+  }
+
+  bool connect(const QString& key) {
+    if (!ready)
+      return false;
+    const auto name = QStringLiteral("\\\\.\\pipe\\KumoVst-") + key;
+    const auto path = reinterpret_cast<LPCWSTR>(name.utf16());
+    QElapsedTimer timer;
+    timer.start();
+    do {
+      handle = CreateFileW(path, GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+                           OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
+      if (connected())
+        return true;
+      const auto code = GetLastError();
+      if (code != ERROR_FILE_NOT_FOUND && code != ERROR_PIPE_BUSY)
+        return false;
+      QThread::msleep(15);
+    } while (timer.elapsed() < 10000);
+    return false;
+  }
+
+  int transfer(char* data, int size, DWORD timeout, bool write = false) const {
+    OVERLAPPED operation{};
+    operation.hEvent = ready;
+    ResetEvent(ready);
+    DWORD transferred = 0;
+    const BOOL done = write ? WriteFile(handle, data, DWORD(size), &transferred, &operation)
+                            : ReadFile(handle, data, DWORD(size), &transferred, &operation);
+    if (done)
+      return int(transferred);
+    if (GetLastError() != ERROR_IO_PENDING)
+      return -1;
+    if (WaitForSingleObject(ready, timeout) != WAIT_OBJECT_0)
+      CancelIoEx(handle, &operation);
+    // Wait for cancellation or completion before releasing the caller's buffer.
+    return GetOverlappedResult(handle, &operation, &transferred, TRUE) ? int(transferred) : -1;
+  }
+};
+
 class Proxy final : public Plugin {
   Descriptor descriptor;
   QProcess child;
   HANDLE job = nullptr;
-  QLocalSocket socket;
+  ControlPipe pipe;
   BridgeHandles bridge;
   Queue<Parameter, 1024> parametersToAudio;
   bool offline = false;
@@ -29,51 +94,75 @@ class Proxy final : public Plugin {
   QString preset;
   QVariantList parameterList;
   QByteArray replyBuffer;
+  quint32 requestId = 0;
+  void markChanged() {
+    if (bridge.memory)
+      InterlockedExchange(&bridge.memory->dirty, 1);
+  }
+  QVariantList pendingParameters() {
+    QVariantList values;
+    Parameter value;
+    while (parametersToAudio.pop(value))
+      values.append(QVariantMap{{"id", value.id}, {"value", value.value}});
+    return values;
+  }
   std::atomic<quint64> outputBuffers{0},missingBuffers{0},busyBuffers{0},failedBuffers{0};
   QVariantMap rpc(const QVariantMap &value, QString *error,
                   int timeout = 15000) {
-    if (child.state() != QProcess::Running ||
-        socket.state() != QLocalSocket::ConnectedState) {
+    if (child.state() != QProcess::Running || !pipe.connected()) {
       if (error)
         *error = QStringLiteral("音源进程已关闭，请重新载入音源。");
       return {};
     }
-    QByteArray bytes =
-        QJsonDocument::fromVariant(value).toJson(QJsonDocument::Compact);
-    quint32 size = quint32(bytes.size());
-    socket.write(reinterpret_cast<const char *>(&size), 4);
-    socket.write(bytes);
-    socket.flush();
-    if (socket.bytesToWrite())
-      socket.waitForBytesWritten(timeout);
+    const auto id = ++requestId;
+    auto request = value;
+    request["requestId"] = id;
+    const auto bytes = QJsonDocument::fromVariant(request).toJson(QJsonDocument::Compact);
+    const quint32 size = quint32(bytes.size());
+    QByteArray frame(reinterpret_cast<const char*>(&size), sizeof(size));
+    frame.append(bytes);
     QElapsedTimer timer;
     timer.start();
-    while (timer.elapsed() < timeout) {
-      replyBuffer += socket.readAll();
+    const auto remaining = [&] { return DWORD(qMax<qint64>(0, timeout - timer.elapsed())); };
+    int written = 0;
+    while (written < frame.size() && remaining()) {
+      const int count = pipe.transfer(frame.data() + written, frame.size() - written, remaining(), true);
+      if (count <= 0)
+        break;
+      written += count;
+    }
+    if (written != frame.size())
+      pipe.close();
+    std::array<char, 16384> chunk;
+    while (written == frame.size() && remaining()) {
       if (replyBuffer.size() >= 4) {
         quint32 length = 0;
         std::memcpy(&length, replyBuffer.constData(), 4);
-        if (length > 96u * 1024 * 1024)
+        if (length > 96u * 1024 * 1024) {
+          pipe.close();
           break;
+        }
         if (replyBuffer.size() >= qint64(length) + 4) {
           const auto result =
               QJsonDocument::fromJson(replyBuffer.mid(4, length))
                   .toVariant()
                   .toMap();
           replyBuffer.remove(0, 4 + length);
+          if (result.value("requestId").toUInt() != id)
+            continue;
           if (error && !result["error"].toString().isEmpty())
             *error = result["error"].toString();
           return result;
         }
       }
-      if (!socket.waitForReadyRead(
-              std::max(1, timeout - int(timer.elapsed())))) {
-        if (qEnvironmentVariableIsSet("KUMO_VST_TRACE"))
-          qWarning("VST control read: %s; bytes %d",
-                   qPrintable(socket.errorString()), replyBuffer.size());
+      const int count = pipe.transfer(chunk.data(), int(chunk.size()), remaining());
+      if (count <= 0)
         break;
-      }
+      replyBuffer.append(chunk.data(), count);
     }
+    if (qEnvironmentVariableIsSet("KUMO_VST_TRACE"))
+      qWarning("VST control response missing for %s (%lld ms)",
+               qPrintable(value.value("op").toString()), timer.elapsed());
     if (error)
       *error = QStringLiteral("音源暂未回应，保留当前设置后可重新载入。");
     return {};
@@ -93,8 +182,7 @@ class Proxy final : public Plugin {
     std::copy_n(source.inR.data(), source.count, packet.inR.data());
     std::copy_n(source.events.data(), source.eventCount, packet.events.data());
     Parameter parameter;
-    while (packet.parameterCount < BridgeParameters &&
-           parametersToAudio.pop(parameter))
+    while (packet.parameterCount < BridgeParameters && parametersToAudio.pop(parameter))
       packet.parameters[packet.parameterCount++] = parameter;
     InterlockedExchange(&packet.status, 1);
     SetEvent(bridge.request);
@@ -119,7 +207,6 @@ public:
   explicit Proxy(Descriptor value) : descriptor(std::move(value)) {}
   void moveControlTo(QThread* thread) override {
     child.moveToThread(thread);
-    socket.moveToThread(thread);
   }
   ~Proxy() override {
     if (bridge.memory) {
@@ -178,14 +265,7 @@ public:
         CloseHandle(process);
       }
     }
-    socket.connectToServer(QStringLiteral("KumoVst-") + key);
-    QElapsedTimer timer;
-    timer.start();
-    while (!socket.waitForConnected(100) && timer.elapsed() < 10000) {
-      socket.abort();
-      socket.connectToServer(QStringLiteral("KumoVst-") + key);
-    }
-    if (socket.state() != QLocalSocket::ConnectedState) {
+    if (!pipe.connect(key)) {
       if (error)
         *error = QStringLiteral("音源进程启动后未建立连接。");
       return false;
@@ -202,12 +282,8 @@ public:
     return result["ok"].toBool();
   }
   bool resetAudio() override {
-    QVariantList values;
-    Parameter p;
-    while (parametersToAudio.pop(p))
-      values.append(QVariantMap{{"id", p.id}, {"value", p.value}});
     QString error;
-    const bool ok = rpc({{"op", "resetAudio"}, {"parameters", values},
+    const bool ok = rpc({{"op", "resetAudio"}, {"parameters", pendingParameters()},
                          {"rate", sampleRate}}, &error)["ok"].toBool();
     fill = 0;
     serial = 0;
@@ -217,19 +293,19 @@ public:
     return ok;
   }
   bool restore(const QByteArray &value, QString *error) override {
-    return rpc({{"op", "restore"},
+    const bool ok = rpc({{"op", "restore"},
                 {"state", QString::fromLatin1(value.toBase64())}},
                error, 60000)["ok"]
         .toBool();
+    if (ok)
+      markChanged();
+    return ok;
   }
   QByteArray state(QString *error) override {
-    QVariantList values;
-    Parameter p;
-    while (parametersToAudio.pop(p))
-      values.append(QVariantMap{{"id", p.id}, {"value", p.value}});
-    return QByteArray::fromBase64(
-        rpc({{"op", "state"}, {"parameters", values}}, error, 60000)["state"]
-            .toByteArray());
+    const bool cfx = (descriptor.name + descriptor.path).contains("CFX", Qt::CaseInsensitive);
+    const auto result = rpc({{"op", "state"}, {"parameters", pendingParameters()}}, error,
+                            cfx && !offline ? 1000 : 60000);
+    return QByteArray::fromBase64(result.value("state").toByteArray());
   }
   int latency() const override {
     return pluginLatency + (offline ? 0 : BridgeFrames * 2);
@@ -248,13 +324,18 @@ public:
   }
   void closeEditor() override {
     QString error;
-    rpc({{"op", "closeEditor"}}, &error);
+    if (rpc({{"op", "closeEditor"}}, &error).value("ok").toBool() && bridge.memory)
+      InterlockedExchange(&bridge.memory->editorOpen, 0);
   }
   bool importPreset(const QString &path, QString *error) override {
-    return rpc({{"op", "import"}, {"path", path}}, error, 60000)["ok"].toBool();
+    const bool ok = rpc({{"op", "import"}, {"path", path}}, error, 60000)["ok"].toBool();
+    if (ok)
+      markChanged();
+    return ok;
   }
   void setParameter(quint32 id, double value) override {
-    parametersToAudio.push({id, value});
+    if (parametersToAudio.push({id, value}))
+      markChanged();
   }
   QVariantList parameters() const override {
     QString error;

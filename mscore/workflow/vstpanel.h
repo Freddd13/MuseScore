@@ -12,6 +12,9 @@ void addVstPanelAction(QMenu *);
 void showVstPanel(Channel *channel = nullptr);
 void restoreVstForScore(Score *, bool inBackground = false);
 void saveVstEdits(Score *,bool fileSave=false);
+bool hasPendingCfxEdits(Score *);
+bool showPendingCfxSave(Score *);
+void saveVstBeforeScoreSwitch(Score *);
 QVariantMap copyVstInstrument(Score *, Channel *, int);
 QVariantMap applyVstConfiguration(Score *, const QVariantMap &);
 QVariantMap assignVstInstrument(Score *, Channel *,

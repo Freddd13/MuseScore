@@ -146,9 +146,9 @@ QString skillVersion(const QString &path) {
                                           QRegularExpression::MultilineOption);
   return version.match(intro.left(end)).captured(1);
 }
-bool matchesReleaseSkill(const QString &installed, const QJsonObject &manifest) {
-  const auto expected = manifest.value("sha256").toObject().value("skill/SKILL.md").toString().toLatin1();
-  QFile file(installed);
+bool matchesResearchFile(const QString &path, const QJsonObject &manifest, const QString &key) {
+  const auto expected = manifest.value("sha256").toObject().value(key).toString().toLatin1();
+  QFile file(path);
   if (expected.isEmpty() || !file.open(QIODevice::ReadOnly))
     return false;
   const auto contents = file.readAll();

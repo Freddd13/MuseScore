@@ -42,6 +42,11 @@ VstSynth *backend() {
 bool retainOpenSources() {
   return personalFeaturesEnabled() && QSettings().value("kumo/vst/retainOpenScores",false).toBool();
 }
+constexpr char retiredCfxSnapshots[] = "kumoRetiredCfxSnapshots";
+bool isCurrentVstScore(const Score* score) {
+  return score && mscore && mscore->currentScore()
+      && mscore->currentScore()->masterScore() == score->masterScore();
+}
 void selectSourceSession(Score* score) {
   auto engine=backend(); if (!engine) return;
   if (!score) { engine->rack().selectSession({}, {}, false); return; }
@@ -114,6 +119,57 @@ public:
       : score(target), value(next), captureLive(capture) {}
   UNDO_NAME("ChangeVstState")
 };
+void applyRetiredCfxState(Score* score, int id, const QVariantMap& expected, const QByteArray& bytes) {
+  auto state = score->synthesizerState();
+  const auto group = state.group("KumoVST");
+  if (group.empty())
+    return;
+  auto config = QJsonDocument::fromJson(group.front().data.toUtf8()).toVariant().toMap();
+  const auto before = config;
+  auto instrumentSlots = config.value("slots").toList();
+  for (auto& value : instrumentSlots) {
+    auto slot = value.toMap();
+    if (slot.value("id").toInt() != id)
+      continue;
+    auto source = slot.value("source").toMap();
+    const auto encoded = QString::fromLatin1(bytes.toBase64());
+    if (source != expected || source.value("state").toString() == encoded)
+      return;
+    source["state"] = encoded;
+    slot["source"] = source;
+    value = slot;
+    config["slots"] = instrumentSlots;
+    if (VstHost::sameConfiguration(before, config))
+      return;
+    if (auto engine = backend(); engine && isCurrentVstScore(score))
+      engine->rack().rememberRetiredCfxState(id, expected, encoded);
+    score->startCmd();
+    score->undo(new ChangeVstState(score, withConfiguration(state, config), true));
+    score->endCmd();
+    updateVstHistory(score);
+    return;
+  }
+}
+void flushRetiredCfxState(Score* owner) {
+  if (owner->undoStack()->active())
+    return;
+  if (auto engine = backend(); engine && isCurrentVstScore(owner)
+      && engine->rack().hasOpenCfxEdits())
+    return;
+
+  auto deferred = owner->QObject::property(retiredCfxSnapshots).toMap();
+  for (auto it = deferred.begin(); it != deferred.end();) {
+    const auto item = it.value().toMap();
+    if (!item.contains("bytes")) {
+      ++it;
+      continue;
+    }
+    applyRetiredCfxState(owner, it.key().toInt(), item.value("expected").toMap(),
+                         item.value("bytes").toByteArray());
+    it = deferred.erase(it);
+  }
+  owner->QObject::setProperty(retiredCfxSnapshots, deferred);
+}
 QString identity(const QVariantMap &d) {
   return d["path"].toString() + "|" + d["uid"].toString();
 }
@@ -594,23 +650,30 @@ class Panel final : public QDockWidget {
     removeSource->setText(sharedDesired?tr("使用内置SF2"):tr("使用原内置音源"));
     restoreSource->setText(sharedDesired?tr("恢复上个共用音源"):tr("恢复刚才音源"));
     const auto patch = c && synti ? synti->getPatchInfo(c->synti(), c->bank(), c->program()) : nullptr;
-    const bool externalSource = c && (shared || c->synti() == "KumoVST") &&
-        unit(id, -1)["plugin"].toMap()["format"].toString() != "SF2";
-    current->setText(c ? tr("当前音源：%1\n音色：%2")
-                          .arg((shared?tr("共用钢琴 · "):QString())+(externalSource
-                                   ? tr("VST · %1").arg(unit(id,-1)["isolated"].toBool()?tr("独立运行"):tr("直接运行"))
-                                   : tr("内置 SF2／SF3")),
-                               shared?unit(id,-1)["plugin"].toMap()["name"].toString()
+    const auto source = unit(id, -1);
+    const auto descriptor = source.value("plugin").toMap();
+    const bool externalSource = c && (shared || c->synti() == "KumoVST")
+        && descriptor.value("format").toString() != "SF2";
+    const bool loaded = id && engine && engine->rack().plugin(id);
+    const bool preparing = engine && engine->rack().preparingSources();
+    const bool automaticCfx = externalSource && engine && engine->rack().backgroundSource(id);
+    const auto mode = automaticCfx || source.value("isolated").toBool() ? tr("独立运行") : tr("直接运行");
+    const auto activeSource = automaticCfx && !loaded ? tr("内置 SF2（临时）")
+        : externalSource ? tr("VST · %1").arg(mode) : tr("内置 SF2／SF3");
+    const auto sourceSummary = automaticCfx && !loaded ? tr("当前音源：%1\n谱中音色：%2")
+        : tr("当前音源：%1\n音色：%2");
+    current->setText(c ? sourceSummary
+                          .arg((shared?tr("共用钢琴 · "):QString()) + activeSource,
+                               shared || automaticCfx ? descriptor.value("name").toString()
                                      :patch ? patch->name : externalSource ? tr("音源文件待重新定位") : tr("乐谱中的内置音色"))
                         : tr("打开乐谱后选择乐器。"));
     choose->setEnabled(c && !picked().isEmpty() &&
                        picked()["instrument"].toBool());
-    const bool loaded = id && engine && engine->rack().plugin(id);
-    const bool preparing = engine && engine->rack().preparingSources();
     retrySource->setVisible((externalSource || sharedDesired) && !loaded && !preparing);
     retrySource->setEnabled(!seq || !seq->isPlaying());
     sourceModeBox->setVisible(externalSource);
     sourceMode->setEnabled(loaded && externalSource);
+    sourceMode->setToolTip(automaticCfx ? tr("选项随谱保存。CFX 从乐谱自动载入时使用独立进程。") : QString());
     {
       QSignalBlocker blocked(sourceMode);
       sourceMode->setCurrentIndex(unit(id,-1)["isolated"].toBool()?1:0);
@@ -842,10 +905,10 @@ public:
     sourceModeBox->setObjectName("kumoVstSourceModeBox");
     auto modeRow=new QHBoxLayout(sourceModeBox);
     modeRow->setContentsMargins(0,0,0,0);modeRow->setSpacing(6);
-    auto modeLabel=new QLabel(tr("运行方式"),sourceModeBox);
+    auto modeLabel=new QLabel(tr("预设运行方式"),sourceModeBox);
     sourceMode=new QComboBox(sourceModeBox);
     sourceMode->setObjectName("kumoVstSourceMode");
-    sourceMode->setAccessibleName(tr("当前音源运行方式"));
+    sourceMode->setAccessibleName(tr("预设的音源运行方式"));
     sourceMode->addItem(tr("直接运行"),false);
     sourceMode->addItem(tr("独立运行"),true);
     sourceMode->setSizeAdjustPolicy(QComboBox::AdjustToContents);
@@ -1447,11 +1510,26 @@ QVariantMap copyVstInstrument(Score *score, Channel *channel, int bank) {
   }
   return {{"error", QObject::tr("请重新选择这份音源。")}};
 }
+bool hasPendingCfxEdits(Score* score) {
+  if (!score || !personalFeaturesEnabled())
+    return false;
+  if (auto engine = backend(); engine && isCurrentVstScore(score)) {
+    engine->rack().takeChanges();
+    if (engine->rack().hasOpenCfxEdits())
+      return true;
+  }
+  return !score->masterScore()->QObject::property(retiredCfxSnapshots).toMap().isEmpty();
+}
 void saveVstEdits(Score *score,bool fileSave) {
-  if (!score || !mscore || !mscore->currentScore() ||
-      mscore->currentScore()->masterScore() != score->masterScore() ||
-      !personalFeaturesEnabled() || !backend())
+  if (!score || !personalFeaturesEnabled() || !backend())
     return;
+  auto* master = score->masterScore();
+  if (!isCurrentVstScore(master)) {
+    flushRetiredCfxState(master);
+    if (fileSave)
+      showPendingCfxSave(master);
+    return;
+  }
   captureCommonPianoEdits(score);
   const auto value = backend()->configuration(true, true);
   const auto group = score->masterScore()->synthesizerState().group("KumoVST");
@@ -1479,6 +1557,52 @@ void saveVstEdits(Score *score,bool fileSave) {
     score->masterScore()->setSynthesizerState(withConfiguration(score->masterScore()->synthesizerState(),c));
     backend()->rememberPianoSnapshot(snapshot);
   }
+  flushRetiredCfxState(master);
+  if (fileSave)
+    showPendingCfxSave(master);
+}
+bool showPendingCfxSave(Score* score) {
+  if (!mscore || !hasPendingCfxEdits(score))
+    return false;
+  const auto engine = backend();
+  const bool windowOpen = engine && isCurrentVstScore(score) && engine->rack().hasOpenCfxEdits();
+  mscore->statusBar()->showMessage(windowOpen
+    ? QObject::tr("请关闭 CFX 窗口后再保存，这样可写入刚调整的音色。")
+    : QObject::tr("正在读取 CFX 中的修改。读取完成后请再次保存。"), 10000);
+  return true;
+}
+void saveVstBeforeScoreSwitch(Score* score) {
+  auto engine = backend();
+  if (!score || !engine || !personalFeaturesEnabled())
+    return;
+  const QPointer<Score> owner(score->masterScore());
+  static quint64 nextCapture = 0;
+  const QVariant generation = QVariant::fromValue(++nextCapture);
+  const auto captured = engine->rack().captureCfxOnRetirement([owner, generation](int id, const QVariantMap& expected, const QByteArray& bytes) {
+    if (!owner)
+      return;
+    const auto key = QString::number(id);
+    auto deferred = owner->QObject::property(retiredCfxSnapshots).toMap();
+    if (deferred.value(key).toMap().value("generation") != generation)
+      return;
+    if (bytes.isEmpty()) {
+      deferred.remove(key);
+      if (mscore)
+        mscore->statusBar()->showMessage(QObject::tr("没有读到《%1》的 CFX 新音色，谱中仍保留上次的设置。")
+            .arg(owner->name()), 10000);
+    } else
+      deferred[key] = QVariantMap{{"generation", generation}, {"expected", expected}, {"bytes", bytes}};
+    owner->QObject::setProperty(retiredCfxSnapshots, deferred);
+    if (!isCurrentVstScore(owner.data()))
+      flushRetiredCfxState(owner.data());
+  });
+  if (!captured.isEmpty()) {
+    auto deferred = owner->QObject::property(retiredCfxSnapshots).toMap();
+    for (const auto id : captured)
+      deferred[QString::number(id)] = QVariantMap{{"generation", generation}};
+    owner->QObject::setProperty(retiredCfxSnapshots, deferred);
+  }
+  saveVstEdits(score);
 }
 void showVstPanel(Channel *channel) {
   if (!personalFeaturesEnabled() || !mscore)
@@ -1545,6 +1669,9 @@ void addVstPanelAction(QMenu *) {}
 void showVstPanel(Channel *) {}
 void restoreVstForScore(Score *, bool) {}
 void saveVstEdits(Score *,bool) {}
+bool hasPendingCfxEdits(Score *) { return false; }
+bool showPendingCfxSave(Score *) { return false; }
+void saveVstBeforeScoreSwitch(Score *) {}
 QVariantMap copyVstInstrument(Score *, Channel *, int) { return {}; }
 void routeVstChannels(MasterSynthesizer *, Score *) {}
 void prepareVstForScore(MasterSynthesizer *, Score *) {}

@@ -20,7 +20,9 @@ bool isCfx(const QVariantMap& source) {
       && (plugin.name + plugin.path).contains("CFX", Qt::CaseInsensitive);
 }
 
-void retireIsolated(std::unique_ptr<Plugin> source) {
+using Snapshot = std::function<void(const QByteArray&)>;
+
+void retireIsolated(std::unique_ptr<Plugin> source, Snapshot snapshot = {}) {
   auto* processor = source.release();
   if (!processor)
     return;
@@ -28,7 +30,19 @@ void retireIsolated(std::unique_ptr<Plugin> source) {
     delete processor;
     return;
   }
-  auto* worker = QThread::create([processor] { delete processor; });
+  auto* worker = QThread::create([processor, snapshot = std::move(snapshot)] {
+    std::unique_ptr<Plugin> closing(processor);
+    if (!snapshot)
+      return;
+    if (closing->editorVisible())
+      closing->closeEditor();
+    QString error;
+    const auto bytes = closing->state(&error);
+    if (auto app = QCoreApplication::instance()) {
+      const auto result = error.isEmpty() ? bytes : QByteArray();
+      QMetaObject::invokeMethod(app, [snapshot, result] { snapshot(result); }, Qt::QueuedConnection);
+    }
+  });
   processor->moveControlTo(worker);
   QObject::connect(worker, &QThread::finished, worker, &QObject::deleteLater);
   worker->start();
@@ -65,6 +79,7 @@ std::shared_ptr<DeferredCfx> prepareCfx(const QVariantMap& source, double rate) 
     if (job->abandoned)
       return;
     if (prepared) {
+      isolated->takeChanges();
       isolated->moveControlTo(target);
       job->processor = std::move(isolated);
     } else {
@@ -104,6 +119,7 @@ struct Unit {
   std::shared_ptr<DeferredCfx> pending;
   bool backgroundOwned = false;
   bool needsSnapshot = false;
+  Snapshot onRetired;
   Delay dryDelay;
   bool bypass = false;
   std::array<float, Block> l{}, r{}, dryL{}, dryR{};
@@ -117,7 +133,7 @@ struct Unit {
       retireIsolated(std::move(pending->processor));
     }
     if (backgroundOwned)
-      retireIsolated(std::move(processor));
+      retireIsolated(std::move(processor), std::move(onRetired));
   }
   void process(int count, float *inL, float *inR, const Midi *midi, int events,
                const Clock &clock) {
@@ -169,6 +185,7 @@ struct Unit {
     if (!processor->process(64,zero.data(),zero.data(),l.data(),r.data(),release.data(),int(release.size()),clock) ||
         !resetAudio(clock)) return false;
     if (!processor->restore(QByteArray::fromBase64(value["state"].toByteArray()),&error)) return false;
+    processor->takeChanges();
     config=value;bypass=value["bypass"].toBool();dryDelay.clear();return true;
   }
   bool takeChanges() {
@@ -178,14 +195,18 @@ struct Unit {
     return true;
   }
   bool needsSave() const {
-    return processor && (needsSnapshot || !config.contains("state") || processor->editorVisible());
+    return processor && (!backgroundOwned || (!onRetired && !processor->editorVisible()))
+        && (needsSnapshot || !config.contains("state") || processor->editorVisible());
   }
   QVariantMap save(bool changedOnly) {
     auto value = config;
-    if (processor && (!changedOnly || needsSave())) {
+    // CFX queries can wait on the vendor process. A saved CFX chunk already
+    // represents an unchanged instance, even when a caller requests a full
+    // snapshot of the rest of the rack.
+    if (processor && ((backgroundOwned || changedOnly) ? needsSave() : true)) {
       QString error;
       const auto bytes = processor->state(&error);
-      if (error.isEmpty()) {
+      if (error.isEmpty() && (!backgroundOwned || !bytes.isEmpty())) {
         value["state"] = QString::fromLatin1(bytes.toBase64());
         needsSnapshot = false;
       }
@@ -293,6 +314,8 @@ struct Rack::Impl {
         !unit->processor->restore(
             QByteArray::fromBase64(value["state"].toByteArray()), &error))
       unit->processor.reset();
+    if (unit->processor && value.contains("state"))
+      unit->processor->takeChanges();
     if (!error.isEmpty() && problems)
       problems->append(descriptor.name + QStringLiteral(": ") + error);
     unit->dryDelay.setup(std::min(int(rate * 10), unit->latency()));
@@ -647,6 +670,8 @@ bool Rack::adoptPreparedSources(QStringList* problems) {
       continue;
     slot->source.processor = std::move(job->processor);
     slot->source.pending.reset();
+    if (slot->source.processor)
+      slot->source.processor->takeChanges(); // Preparation notifications precede user edits.
     if (!job->error.isEmpty() && problems)
       problems->append(job->error);
     const auto commonKey = slot->config.value("commonPiano").toString();
@@ -691,8 +716,8 @@ QVariantList Rack::retainedSessions() const {
   return result;
 }
 QVariantMap Rack::state(bool changedOnly) {
+  takeChanges();
   if (changedOnly) {
-    takeChanges();
     auto dirty = [](const auto& units) {
       return std::any_of(units.begin(), units.end(), [](const auto& unit) { return unit->needsSave(); });
     };
@@ -777,6 +802,52 @@ bool Rack::takeChanges() {
     changed |= e->takeChanges();
   return changed;
 }
+bool Rack::hasOpenCfxEdits() const {
+  return std::any_of(d->slots.begin(), d->slots.end(), [](const auto& slot) {
+    const auto& source = slot->source;
+    return source.backgroundOwned && source.processor && source.processor->editorVisible()
+        && (source.needsSnapshot || !source.config.contains("state"));
+  });
+}
+QList<int> Rack::captureCfxOnRetirement(std::function<void(int, const QVariantMap&, const QByteArray&)> snapshot) {
+  QList<int> captured;
+  takeChanges();
+  for (auto& slot : d->slots) {
+    auto& source = slot->source;
+    if (!source.backgroundOwned || !source.processor || source.onRetired
+        || (!source.needsSnapshot && source.config.contains("state") && !source.processor->editorVisible())
+        || !slot->config.value("commonPiano").toString().isEmpty())
+      continue;
+    const auto id = slot->id;
+    const auto before = source.config;
+    source.onRetired = [id, before, snapshot](const QByteArray& bytes) {
+      snapshot(id, before, bytes);
+    };
+    captured.append(id);
+  }
+  return captured;
+}
+void Rack::rememberRetiredCfxState(int id, const QVariantMap& expected, const QString& encoded) {
+  auto* slot = d->find(id);
+  if (!slot || slot->source.config != expected)
+    return;
+  // Preserve the saved chunk for the next restore. The running instrument
+  // remains untouched, including notes already sounding.
+  suspend();
+  slot->source.config["state"] = encoded;
+  slot->config["source"] = slot->source.config;
+  auto rows = d->config.value("slots").toList();
+  for (auto& row : rows) {
+    auto value = row.toMap();
+    if (value.value("id").toInt() == id && value.value("source").toMap() == expected) {
+      value["source"] = slot->source.config;
+      row = value;
+      d->config["slots"] = rows;
+      break;
+    }
+  }
+  resume();
+}
 int Rack::takeChangedCommonPiano() {
   const int id=d->changedCommonPiano; d->changedCommonPiano=0; return id;
 }
@@ -856,7 +927,9 @@ void Rack::mix(int count, float *interleaved, const Clock &original, float *reve
       interleaved[(i + offset) * 2 + 1] = d->r[i];
     }
     for (auto &s : d->slots) {
-      if (!s->enabled && !s->count)
+      // A background source can already have a MIDI route while SF2 is
+      // carrying its audio. Only mix this slot once its plugin exists.
+      if (!s->source.processor || (!s->enabled && !s->count))
         continue;
       std::fill_n(d->l.data(), n, 0);
       std::fill_n(d->r.data(), n, 0);

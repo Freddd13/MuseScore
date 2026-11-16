@@ -200,6 +200,7 @@ class TestPerformanceEditor : public QObject, public MTest {
       void playBoundaryKeepsGesture158();
       void canvasKeys139();
       void liveWheelHomeAndSpectrum139();
+      void openTwoSavedCfxScores168_data();
       void openTwoSavedCfxScores168();
       void homePreview159();
       void waveTonePalette139();

@@ -3,6 +3,7 @@
 #include <QSemaphore>
 #include <QMessageBox>
 #include "libmscore/playbacktiming.h"
+#include "mscore/scorevideo/scorevideo.h"
 void TestPerformanceEditor::referenceFileRelocationAndFailures()
 {
     expressionHost080(_directory.path());auto main=Ms::mscore;QVERIFY(!Ms::seq);QVERIFY(QDir().mkpath(_directory.filePath("原项目/音频")));
@@ -116,6 +117,48 @@ void TestPerformanceEditor::referenceImmediateSaveIncludesAssociations()
     score->selection().setRangeTicks(Fraction::fromTicks(480),Fraction::fromTicks(1920),0,1);score->selection().updateSelectedElements();root->setProperty("a",500.);root->setProperty("b",2000.);QVERIFY(referenceClick081(root,"referenceAssociate"));
     auto save=getAction("file-save");QVERIFY(save&&save->isEnabled());save->trigger();
     std::unique_ptr<MasterScore> reopened(main->readScore(path));QVERIFY(reopened);const auto data=QJsonDocument::fromJson(reopened->metaTag("kumo.reference").toUtf8()).toVariant().toMap();const auto tracks=data.value("tracks").toList();QCOMPARE(tracks.size(),1);QCOMPARE(tracks[0].toMap().value("associations").toList().size(),1);QCOMPARE(tracks[0].toMap().value("associations").toList()[0].toMap().value("start").toInt(),480);
+
+    // Save the score in a subfolder, and copy that folder structure to
+    // another location while leaving the original absolute recording reachable.
+    QVERIFY(QDir().mkpath(_directory.filePath("写法")));
+    const auto nested = _directory.filePath("写法/乐谱");
+    QVERIFY(main->saveAs(score, true, nested, "mscz"));
+    std::unique_ptr<MasterScore> nestedScore(main->readScore(nested + ".mscz"));
+    QVERIFY(nestedScore);
+    const auto metadata = QJsonDocument::fromJson(nestedScore->metaTag("kumo.reference").toUtf8()).toVariant().toMap();
+    const auto track = metadata.value("tracks").toList().value(0).toMap();
+    QCOMPARE(track.value("relativePath").toString(), QString("../") + QFileInfo(audio).fileName());
+    QVERIFY(QDir().mkpath(_directory.filePath("搬家/写法")));
+    const auto relocatedPath = _directory.filePath("搬家/写法/乐谱.mscz");
+    const auto relocatedAudio = _directory.filePath("搬家/" + QFileInfo(audio).fileName());
+    QVERIFY(QFile::copy(nested + ".mscz", relocatedPath));
+    QVERIFY(QFile::copy(audio, relocatedAudio));
+    auto relocated = main->readScore(relocatedPath);
+    QVERIFY(relocated);
+    main->setCurrentScoreView(main->appendScore(relocated));
+    QTRY_VERIFY_WITH_TIMEOUT(referenceMedia081(root) && referenceMedia081(root)->property("path").toString() == relocatedAudio, 10000);
+    QTRY_COMPARE(referenceAssociations081(root).size(), 1);
+    root->setProperty("transportTarget", 0);
+    root->setProperty("onlyRange", true);
+    root->setProperty("looping", true);
+    QVERIFY(referenceClick081(root, "referenceJointPlay"));
+    auto project = referenceProject();
+    QVERIFY(project);
+    QTRY_VERIFY_WITH_TIMEOUT(project->property("playing").toBool(), 6000);
+    QTRY_VERIFY_WITH_TIMEOUT(project->property("position").toDouble() > 100, 6000);
+    const auto plan = project->property("playbackPlan").toMap();
+    QVERIFY(plan.value("loop").toBool());
+    QCOMPARE(plan.value("clips").toList().value(0).toMap().value("path").toString(), relocatedAudio);
+    QVERIFY(QMetaObject::invokeMethod(root, "stopJoint"));
+    ScoreVideoDocument video;
+    video.setScore(relocated);
+    video.prepare({{"audioKind", "reference"}, {"audioId", track.value("id")}});
+    QTRY_VERIFY_WITH_TIMEOUT(video.ready(), 15000);
+    QCOMPARE(video.snapshot().audioPath, relocatedAudio);
+    QVERIFY(!video.snapshot().pictures.isEmpty());
+    main->setCurrentScoreView(main->scores().indexOf(score));
+    QTRY_VERIFY_WITH_TIMEOUT(referenceMedia081(root) && referenceMedia081(root)->property("path").toString() == audio, 10000);
+
     QTest::qWait(300);QVERIFY(!score->dirty());QVERIFY(QMetaObject::invokeMethod(root,"deleteAssociation",Q_ARG(QVariant,0)));
     const auto copy=_directory.filePath("reference-immediate-copy-100");QVERIFY(main->saveAs(score,true,copy,"mscz"));std::unique_ptr<MasterScore> copied(main->readScore(copy+".mscz"));QVERIFY(copied);auto copiedData=QJsonDocument::fromJson(copied->metaTag("kumo.reference").toUtf8()).toVariant().toMap();QCOMPARE(copiedData.value("tracks").toList()[0].toMap().value("associations").toList().size(),0);
     save->trigger();QTest::qWait(300);QVERIFY(!score->dirty());root->setProperty("a",1000.);root->setProperty("b",2500.);QVERIFY(referenceClick081(root,"referenceAssociate"));

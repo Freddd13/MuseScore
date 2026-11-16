@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "engravingtools.h"
+#include "engravingedit.h"
 #include "systemlocks.h"
 #include "workspaceviews.h"
 #include "libmscore/element.h"
@@ -12,7 +13,9 @@
 #include "libmscore/spanner.h"
 #include "libmscore/system.h"
 #include "mscore/musescore.h"
+#include "mscore/scoreview.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDockWidget>
@@ -38,12 +41,6 @@ QVariantMap geometry(const QRectF& rect, qreal scale)
             {"width", rect.width() / scale}, {"height", rect.height() / scale}};
 }
 
-bool movableSymbol(const Element* item)
-{
-    return item && !item->generated() && !item->systemFlag()
-        && (item->isTextBase() || item->isArticulation() || item->isSpannerSegment());
-}
-
 struct GeometryItems {
     QVariantList items;
     int firstTrack;
@@ -55,16 +52,16 @@ struct GeometryItems {
 void collectGeometry(void* data, Element* item)
 {
     auto& result = *static_cast<GeometryItems*>(data);
-    if (!item->visible() || (!movableSymbol(item) && !item->isNote() && !item->isRest()
+    if (!item->visible() || (!engravingMovableSymbol(item) && !item->isNote() && !item->isRest()
         && !item->isAccidental() && !item->isStem() && !item->isBeam()))
         return;
     if (item->track() >= 0 && (item->track() < result.firstTrack || item->track() >= result.endTrack))
         return;
     QVariantMap row{{"type", item->name()}, {"tick", item->tick().ticks()},
                     {"track", item->track()}, {"box", geometry(item->pageBoundingRect(), result.scale)},
-                    {"autoplace", item->autoplace()}, {"movable", movableSymbol(item)},
+                    {"autoplace", item->autoplace()}, {"movable", engravingMovableSymbol(item)},
                     {"systemStart", result.systemStart}};
-    if (movableSymbol(item)) {
+    if (engravingMovableSymbol(item)) {
         row["offsetX"] = item->offset().x() / item->spatium();
         row["offsetY"] = item->offset().y() / item->spatium();
         row["minimumDistance"] = item->minDistance().val();
@@ -86,6 +83,148 @@ QDoubleSpinBox* distance(QWidget* owner, double minimum = -10.0)
     field->setSuffix(tr(" 谱间"));
     return field;
 }
+}
+
+bool engravingMovableSymbol(const Element* item)
+{
+    if (!item || item->generated() || item->systemFlag())
+        return false;
+    if (item->isSpannerSegment()) {
+        const auto span = toSpannerSegment(item)->spanner();
+        return span && !span->systemFlag();
+    }
+    return item->isTextBase() || item->isArticulation();
+}
+
+EngravingTarget::operator bool() const
+{
+    switch (tool) {
+    case EngravingTool::Symbol: return symbol;
+    case EngravingTool::Beat: return segment;
+    case EngravingTool::Measure: return measure;
+    case EngravingTool::Staff:
+    case EngravingTool::System: return measure && staff >= 0;
+    }
+    return false;
+}
+
+EngravingTarget engravingTarget(Score* score, EngravingTool tool)
+{
+    EngravingTarget result;
+    result.tool = tool;
+    if (!score || score->readOnly() || score->isPlaying())
+        return result;
+    const auto& selection = score->selection();
+    auto item = selection.element();
+    if (item && engravingMovableSymbol(item))
+        result.symbol = item;
+    if (item) {
+        for (auto current = item; current; current = current->parent()) {
+            if (current->isSegment() && toSegment(current)->isChordRestType())
+                result.segment = toSegment(current);
+            if (current->isSystem()) {
+                result.system = toSystem(current);
+                break;
+            }
+        }
+        result.measure = item->findMeasure();
+        result.staff = item->staffIdx();
+    } else if (selection.isRange()) {
+        selection.measureRange(&result.measure, &result.rangeEnd);
+        result.staff = selection.staffStart();
+    }
+    if (!result.system && result.measure)
+        result.system = result.measure->system();
+    if (result.measure && result.measure->isMMRest()) {
+        result.measure = nullptr;
+        result.segment = nullptr;
+    }
+    if (tool == EngravingTool::System && result.system && result.system->firstMeasure()) {
+        // A system spacer lives on the first measure and its last visible staff.
+        result.measure = result.system->firstMeasure();
+        result.staff = -1;
+        for (int i = result.system->staves()->size() - 1; i >= 0; --i)
+            if (result.system->staff(i)->show()) {
+                result.staff = i;
+                break;
+            }
+    }
+    if (!result.system || result.staff < 0 || result.staff >= result.system->staves()->size()
+        || !result.system->staff(result.staff)->show() || (result.measure && result.measure->isMMRest()))
+        result.staff = -1;
+    return result;
+}
+
+QVariant engravingValue(const EngravingTarget& target)
+{
+    switch (target.tool) {
+    case EngravingTool::Symbol: return target.symbol->offset();
+    case EngravingTool::Beat: return target.segment->extraLeadingSpace().val();
+    case EngravingTool::Measure: return target.measure->userStretch();
+    case EngravingTool::Staff:
+    case EngravingTool::System:
+        if (auto spacer = target.measure->vspacerDown(target.staff))
+            return spacer->gap() / target.measure->score()->spatium();
+        return {};
+    }
+    return {};
+}
+
+bool changeEngravingValue(const EngravingTarget& target, const QVariant& value, bool reset)
+{
+    if (!target)
+        return false;
+    const auto old = engravingValue(target);
+    const bool range = target.tool == EngravingTool::Measure
+        && target.rangeEnd && target.rangeEnd != target.measure;
+    if (!reset && !range && old == value)
+        return false;
+    auto score = target.symbol && target.tool == EngravingTool::Symbol
+        ? target.symbol->score() : target.measure ? target.measure->score() : target.segment->score();
+    if (score->isPlaying() || score->readOnly())
+        return false;
+    score->startCmd();
+    switch (target.tool) {
+    case EngravingTool::Symbol:
+        if (reset) {
+            target.symbol->undoResetProperty(Pid::OFFSET);
+            target.symbol->undoResetProperty(Pid::AUTOPLACE);
+        } else {
+            target.symbol->undoChangeProperty(Pid::OFFSET, value.toPointF());
+        }
+        break;
+    case EngravingTool::Beat:
+        target.segment->undoChangeProperty(Pid::LEADING_SPACE, Spatium(reset ? 0.0 : value.toDouble()));
+        break;
+    case EngravingTool::Measure:
+        for (auto bar = target.measure; bar; bar = bar->nextMeasure()) {
+            bar->undoChangeProperty(Pid::USER_STRETCH, reset ? 1.0 : value.toDouble());
+            if (!target.rangeEnd || bar == target.rangeEnd)
+                break;
+        }
+        break;
+    case EngravingTool::Staff:
+    case EngravingTool::System: {
+        auto spacer = target.measure->vspacerDown(target.staff);
+        const auto gap = value.toDouble() * score->spatium();
+        if (reset) {
+            if (spacer)
+                score->undoRemoveElement(spacer);
+        } else if (spacer) {
+            spacer->undoChangeProperty(Pid::SPACE, gap);
+        } else {
+            spacer = new Spacer(score);
+            spacer->setParent(target.measure);
+            spacer->setTrack(target.staff * VOICES);
+            spacer->setSpacerType(SpacerType::DOWN);
+            spacer->setGap(gap);
+            score->undoAddElement(spacer);
+        }
+        break;
+    }
+    }
+    score->endCmd();
+    return true;
 }
 
 QVariantMap engravingLayout(Score* source, const QVariantMap& scope)
@@ -169,6 +308,7 @@ void openEngravingTools(MuseScore* window)
     auto content = new QWidget(dock);
     auto layout = new QVBoxLayout(content);
     auto mode = new QComboBox(content);
+    mode->setObjectName("kumoEngravingTool");
     mode->addItems({tr("符号位置"), tr("横向间距"), tr("谱表与分行")});
     layout->addWidget(mode);
     auto pages = new QStackedWidget(content);
@@ -189,6 +329,7 @@ void openEngravingTools(MuseScore* window)
     stretch->setValue(100);
     stretch->setSuffix("%");
     auto spacingTarget = new QComboBox(content);
+    spacingTarget->setObjectName("kumoEngravingSpacingTarget");
     spacingTarget->addItems({tr("共用拍位"), tr("所选小节")});
     spacing->addRow(tr("调整"), spacingTarget);
     spacing->addRow(tr("拍位前增减"), leading);
@@ -205,6 +346,7 @@ void openEngravingTools(MuseScore* window)
     auto staffGap = distance(content, 0);
     staffGap->setValue(8);
     auto staffTarget = new QComboBox(content);
+    staffTarget->setObjectName("kumoEngravingStaffTarget");
     staffTarget->addItems({tr("所选谱表下方"), tr("所选谱行下方")});
     staves->addRow(tr("位置"), staffTarget);
     staves->addRow(tr("最小距离"), staffGap);
@@ -222,86 +364,73 @@ void openEngravingTools(MuseScore* window)
     actions->addWidget(restore);
     actions->addStretch();
     layout->addLayout(actions);
+    auto handles = new QCheckBox(tr("在谱面显示拖动手柄"), content);
+    handles->setObjectName("kumoEngravingHandles");
+    handles->setChecked(true);
+    layout->addWidget(handles);
     auto status = new QLabel(content);
     status->setWordWrap(true);
     layout->addWidget(status);
     layout->addStretch();
     auto prompt = [status](int index) {
         const QStringList instructions{
-            tr("选中文字、发音记号或曲线，再输入要移动的距离。正数向右或向下。"),
-            tr("选音或休止符调整两手共用的拍位；选小节可调整宽度。"),
-            tr("选中目标位置，为谱表或整行下方留出空间。")};
+            tr("选中文字、发音记号或曲线，拖动谱面手柄或输入移动量。正数向右或向下。"),
+            tr("选音或休止符后拖动共同拍位；也可以选择小节，调整宽度。"),
+            tr("选中目标位置后上下拖动，为谱表或整行下方留出空间。")};
         status->setText(instructions.at(index));
     };
     prompt(0);
     QObject::connect(mode, QOverload<int>::of(&QComboBox::currentIndexChanged), pages, &QStackedWidget::setCurrentIndex);
     QObject::connect(mode, QOverload<int>::of(&QComboBox::currentIndexChanged), content, prompt);
+    const auto tool = [=] {
+        if (mode->currentIndex() == 0)
+            return EngravingTool::Symbol;
+        if (mode->currentIndex() == 1)
+            return spacingTarget->currentIndex() == 0 ? EngravingTool::Beat : EngravingTool::Measure;
+        return staffTarget->currentIndex() == 0 ? EngravingTool::Staff : EngravingTool::System;
+    };
+    const auto updateHandle = [=] {
+        dock->setProperty("engravingTool", int(tool()));
+        refreshEngravingSelection(window);
+    };
+    for (auto selector : {mode, spacingTarget, staffTarget})
+        QObject::connect(selector, QOverload<int>::of(&QComboBox::currentIndexChanged), content, updateHandle);
+    QObject::connect(handles, &QCheckBox::toggled, content, [=](bool enabled) {
+        dock->setProperty("engravingShowHandles", enabled);
+        refreshEngravingSelection(window);
+    });
+    QObject::connect(dock, &QDockWidget::visibilityChanged, content, [window] {
+        refreshEngravingSelection(window);
+    });
     auto modify = [=](bool reset) {
         auto score = window->currentScore();
         if (!score || score->readOnly() || score->isPlaying()) {
             status->setText(tr("先停止播放，再打开要调整的乐谱。"));
             return;
         }
-        auto item = score->selection().element();
-        Measure* measure = item ? item->findMeasure() : nullptr;
-        Measure* last = nullptr;
-        if (!measure && score->selection().isRange())
-            score->selection().measureRange(&measure, &last);
-        auto segment = item;
-        while (segment && !segment->isSegment())
-            segment = segment->parent();
-        bool changed = false;
-        score->startCmd();
-        if (mode->currentIndex() == 0 && movableSymbol(item)) {
-            if (reset) {
-                item->undoResetProperty(Pid::OFFSET);
-                item->undoResetProperty(Pid::AUTOPLACE);
-            } else {
-                const auto delta = QPointF(x->value(), y->value()) * item->spatium();
-                item->undoChangeProperty(Pid::OFFSET, item->offset() + delta);
-            }
-            changed = true;
-        } else if (mode->currentIndex() == 1 && spacingTarget->currentIndex() == 0 && segment) {
-            const auto column = toSegment(segment);
-            const auto space = reset ? 0.0 : column->extraLeadingSpace().val() + leading->value();
-            column->undoChangeProperty(Pid::LEADING_SPACE, Spatium(space));
-            changed = true;
-        } else if (mode->currentIndex() == 1 && spacingTarget->currentIndex() == 1 && measure) {
-            for (auto bar = measure; bar; bar = bar->nextMeasure()) {
-                bar->undoChangeProperty(Pid::USER_STRETCH, reset ? 1.0 : stretch->value() / 100);
-                if (!last || bar == last)
-                    break;
-            }
-            changed = true;
-        } else if (mode->currentIndex() == 2 && measure && item && item->staffIdx() >= 0) {
-            int staff = item->staffIdx();
-            if (staffTarget->currentIndex() == 1 && measure->system()) {
-                for (int i = score->nstaves() - 1; i >= 0; --i)
-                    if (measure->system()->staff(i)->show()) {
-                        staff = i;
-                        break;
-                    }
-            }
-            auto spacer = measure->vspacerDown(staff);
-            if (reset && spacer)
-                score->undoRemoveElement(spacer);
-            else if (!reset && spacer)
-                spacer->undoChangeProperty(Pid::SPACE, staffGap->value() * score->spatium());
-            else if (!reset) {
-                spacer = new Spacer(score);
-                spacer->setParent(measure);
-                spacer->setTrack(staff * VOICES);
-                spacer->setSpacerType(SpacerType::DOWN);
-                spacer->setGap(staffGap->value() * score->spatium());
-                score->undoAddElement(spacer);
-            }
-            changed = true;
-        }
-        score->endCmd();
-        if (changed)
-            status->setText(tr("已调整排版。Ctrl+Z 可撤销。"));
-        else
+        const auto target = engravingTarget(score, tool());
+        if (!target) {
             prompt(mode->currentIndex());
+            return;
+        }
+        QVariant next;
+        switch (target.tool) {
+        case EngravingTool::Symbol:
+            next = engravingValue(target).toPointF() + QPointF(x->value(), y->value()) * target.symbol->spatium();
+            break;
+        case EngravingTool::Beat:
+            next = engravingValue(target).toDouble() + leading->value();
+            break;
+        case EngravingTool::Measure:
+            next = stretch->value() / 100;
+            break;
+        case EngravingTool::Staff:
+        case EngravingTool::System:
+            next = staffGap->value();
+            break;
+        }
+        if (changeEngravingValue(target, next, reset))
+            status->setText(tr("已调整排版。Ctrl+Z 可撤销。"));
     };
     QObject::connect(apply, &QPushButton::clicked, content, [modify] { modify(false); });
     QObject::connect(restore, &QPushButton::clicked, content, [modify] { modify(true); });
@@ -314,6 +443,8 @@ void openEngravingTools(MuseScore* window)
     dock->setWidget(content);
     window->addDockWidget(Qt::RightDockWidgetArea, dock);
     addEditorDockActions(dock);
+    dock->setProperty("engravingShowHandles", true);
+    updateHandle();
     dock->show();
 }
 }

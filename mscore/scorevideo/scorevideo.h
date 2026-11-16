@@ -33,6 +33,11 @@ struct VideoCue {
     double automaticFrom = 0, automaticUntil = 0, from = 0, until = 0;
     QVector<VideoClockPoint> clock;
     QVector<VideoNoteInk> notes;
+    static QString timingKey(int tick, int unfoldedTick)
+    {
+        return QStringLiteral("beat/%1/%2").arg(tick).arg(unfoldedTick);
+    }
+    QString timingKey() const { return timingKey(start, fromUtick); }
 };
 struct VideoSnapshot {
     QString title, audioPath, audioKind, audioId;

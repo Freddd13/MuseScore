@@ -758,7 +758,7 @@ MIDI录制与播放	mscore/performanceeditor/miditrackplayback.cpp	void MidiTrac
 频谱琴键与参考线	mscore/performanceeditor/spectrumguides.cpp	void SpectrumPane::paintReferences(	116	编号倍频、键盘强调、MIDI与共同时间尺	mtest/mscore/pluginhost/spectrum_162_tests.inc
 谱面原曲控件	mscore/workflow/referencecontrols.cpp	void installReferenceScoreControls(	589	分体播放、实际范围、摆放及撤销保存	mtest/mscore/pluginhost/reference_163_tests.inc
 动态乐谱资料	mscore/scorevideo/scorevideo.cpp	void ScoreVideoDocument::prepare(	206	原生谱行、副本与分批图像准备	mtest/mscore/pluginhost/scorevideo_164_tests.inc
-动态乐谱时间	mscore/scorevideo/scorevideotimeline.cpp	void ScoreVideoDocument::rebuildTimeline(	93	反复、原曲关联与手动换行	mtest/mscore/pluginhost/scorevideo_164_tests.inc
+动态乐谱时间	mscore/scorevideo/scorevideotimeline.cpp	void ScoreVideoDocument::rebuildTimeline(	137	反复、原曲关联和按原谱起始拍位找回手动换行	mtest/mscore/pluginhost/scorevideo_164_tests.inc
 动态乐谱画面	mscore/scorevideo/scorevideoframe.cpp	QImage scoreVideoFrame(	100	统一对齐、透明、反相与光标高亮	mtest/mscore/pluginhost/scorevideo_164_tests.inc
 动态乐谱视频	mscore/scorevideo/scorevideoexport.cpp	void ScoreVideoExport::encode(	145	后台编码、有限队列与取消	mtest/mscore/pluginhost/scorevideo_164_tests.inc
 动态乐谱面板	mscore/scorevideo/scorevideopanel.cpp	ScoreVideoPanel::ScoreVideoPanel(	274	预览、试听、时间与位置编辑	mtest/mscore/pluginhost/scorevideo_164_tests.inc
@@ -768,9 +768,14 @@ MIDI录制与播放	mscore/performanceeditor/miditrackplayback.cpp	void MidiTrac
 视频统一比例	mscore/scorevideo/scorevideoframe.cpp	const double raster =	63	按原谱单位对齐各行	mtest/mscore/pluginhost/scorevideo_166_review.inc
 AI原图尺寸	mscore/workflow/arrangementimages.cpp	const int dotsPerMeter	102	原生谱图设备分辨率	mtest/mscore/pluginhost/scorevideo_166_review.inc
 首次工作视图恢复	mscore/workflow/workspaceviews.cpp	bool initialRestorePending	38	明确选择视图后结束排队的启动恢复，保留个人布局	mtest/mscore/pluginhost/composition_flow_tests.inc
-逐谱 CFX	mscore/workflow/vstpanel.cpp	static void checkPreparedSources	1296	准备、回退与采用	openTwoSavedCfxScores168
+逐谱 CFX	mscore/workflow/vstpanel.cpp	static void checkPreparedSources	1359	准备、回退与采用	mtest/mscore/performanceeditor/interaction_139_tests.inc
+CFX 切谱与预设	mscore/workflow/vstpanel.cpp	void saveVstBeforeScoreSwitch	1574	后台结束厂商窗口并取回发起乐谱的预设	mtest/mscore/performanceeditor/interaction_139_tests.inc
+后台音源混音	audio/vst/rack.cpp	void Rack::mix	906	音源载入之前交由 SF2 出声	mtest/mscore/performanceeditor/interaction_139_tests.inc
+独立宿主通信	audio/vst/proxy.cpp	class ControlPipe	19	Windows 命名管道的逐条回复；跨线程准备、保存和释放	mtest/mscore/performanceeditor/interaction_139_tests.inc;mtest/mscore/pluginhost/common_piano_108_tests.inc
 播放中保存	mscore/performanceeditor/performanceeditor.cpp	SavePropertyOverrides PerformanceEditor::prepareScoreSave	959	保存和停播撤销	liveWheelHomeAndSpectrum139
-原曲便携路径	mscore/workflow/referencepanel.cpp	ReferenceScoreSave::ReferenceScoreSave	44	按另存目标重算路径	portableReferenceUsesRelativeThenAbsolute
+原曲便携路径	mscore/workflow/referencepanel.cpp	ReferenceScoreSave::ReferenceScoreSave	44	按另存目标重算路径	mtest/mscore/performanceeditor/reference_100_tests.inc
 频谱跟随	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::suspendPlaybackFollow	1128	浏览及恢复跟随	spectrumInteraction162
-雕版工具	mscore/workflow/engravingtools.cpp	void openEngravingTools	158	符号、拍位、谱表与分行	-
+雕版工具	mscore/workflow/engravingtools.cpp	void openEngravingTools	299	符号、拍位、谱表与分行	mtest/mscore/pluginhost/engraving_169_tests.inc
+谱面雕版手柄	mscore/workflow/engravinghandles.cpp	void paintEngravingHandle	456	拖动预览、实际净距、落实原生排版和一次撤销	mtest/mscore/pluginhost/engraving_169_tests.inc
+力度资料标识	mscore/workflow/aiconnection.cpp	QString skillVersion	137	连接弹窗显示已装技能和固定版资料信息	../../mcp-musescore/tests/test_skill_configuration.py
 雕版候选	mscore/workflow/engravingcandidate.cpp	QVariantMap applyEngravingChanges	206	共享候选、布局和撤销	-

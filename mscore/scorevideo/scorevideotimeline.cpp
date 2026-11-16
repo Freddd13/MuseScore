@@ -1,8 +1,11 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "scorevideo.h"
+#include "libmscore/repeatlist.h"
 #include "mscore/workflow/referencepaths.h"
 #include <QFileInfo>
 #include <QDateTime>
+#include <QHash>
+#include <QSet>
 #include <algorithm>
 #include <cmath>
 namespace Ms
@@ -64,6 +67,55 @@ QString audioFile(Score* score, const QVariantMap& track)
     const auto source = score && !score->masterScore()->created()
         ? score->masterScore()->fileInfo()->absoluteFilePath() : QString();
     return resolveReferenceTrack(track, source);
+}
+
+QString legacyTimingKey(const QString& id, const RepeatList& repeats)
+{
+    // Older files store a picture range and its repeat interval, followed by
+    // an optional reference slice. Find the same written and unfolded start.
+    const auto fields = id.split(':');
+    if (fields.size() != 5 && fields.size() != 6)
+        return {};
+    bool validFirst, validLast, validFrom, validUntil;
+    const int first = fields[0].toInt(&validFirst), last = fields[1].toInt(&validLast);
+    const int from = fields[3].toInt(&validFrom), until = fields[4].toInt(&validUntil);
+    if (!validFirst || !validLast || !validFrom || !validUntil || first < 0 || last <= first ||
+        from < 0 || until <= from || until > repeats.ticks())
+        return {};
+    const int written = repeats.utick2tick(from);
+    if (written < first || written >= last || until - from > last - written)
+        return {};
+    if (fields.size() == 5)
+        return VideoCue::timingKey(written, from);
+    const auto slice = fields[5].split('-');
+    if (slice.size() != 2)
+        return {};
+    bool validStart, validEnd;
+    const int start = slice[0].toInt(&validStart), end = slice[1].toInt(&validEnd);
+    if (!validStart || !validEnd || start < written || end <= start || end - written > until - from)
+        return {};
+    return VideoCue::timingKey(start, from + (start - written));
+}
+
+QHash<QString, double> legacyTimingPositions(const QVariantMap& overrides, const RepeatList& repeats)
+{
+    QHash<QString, double> positions;
+    QSet<QString> conflicts;
+    for (auto entry = overrides.cbegin(); entry != overrides.cend(); ++entry) {
+        const auto key = legacyTimingKey(entry.key(), repeats);
+        bool valid;
+        const auto seconds = entry.value().toDouble(&valid);
+        if (key.isEmpty() || !valid || !std::isfinite(seconds) || conflicts.contains(key))
+            continue;
+        const auto previous = positions.constFind(key);
+        if (previous != positions.cend() && previous.value() != seconds) {
+            positions.remove(key);
+            conflicts.insert(key);
+        } else {
+            positions.insert(key, seconds);
+        }
+    }
+    return positions;
 }
 } // namespace
 QVariantList ScoreVideoDocument::audioSources() const
@@ -178,6 +230,8 @@ void ScoreVideoDocument::rebuildTimeline()
                     auto cue = original;
                     cue.start = start;
                     cue.end = end;
+                    cue.fromUtick = original.fromUtick + (start - original.start);
+                    cue.untilUtick = original.fromUtick + (end - original.start);
                     cue.id += QString(":%1-%2").arg(start).arg(end);
                     cue.clock.clear();
                     cue.notes.clear();
@@ -276,14 +330,22 @@ void ScoreVideoDocument::rebuildTimeline()
     const auto sourceKey =
         _snapshot.audioKind == "reference" ? "reference/" + _snapshot.audioId : QString("score");
     const auto overrides = _settings.value("timingOverrides").toMap().value(sourceKey).toMap();
+    const auto legacy = _copy ? legacyTimingPositions(overrides, _copy->repeatList())
+                              : QHash<QString, double>();
     const double minimum = qMin(1. / qMax(1, _settings.value("fps", 30).toInt()),
                                 _snapshot.duration / qMax(1, _snapshot.cues.size() + 1) * .25);
     for (int i = 1; i < _snapshot.cues.size(); ++i) {
         auto& cue = _snapshot.cues[i];
-        if (!overrides.contains(cue.id))
-            continue;
-        const double at = overrides.value(cue.id).toDouble();
-        if (std::isfinite(at))
+        const auto key = cue.timingKey();
+        auto saved = overrides.value(key, overrides.value(cue.id));
+        if (!saved.isValid()) {
+            const auto inferred = legacy.constFind(key);
+            if (inferred != legacy.cend())
+                saved = inferred.value();
+        }
+        bool valid;
+        const double at = saved.toDouble(&valid);
+        if (valid && std::isfinite(at))
             cue.from = at;
     }
     for (int i = 1; i < _snapshot.cues.size(); ++i) {

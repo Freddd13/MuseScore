@@ -369,6 +369,8 @@ public:
     });
     selected->setChecked(true);
     updateButtons();
+    if (auto view = window->currentScoreView())
+      view->update();
     changing = false;
     QSettings().setValue(key("current"), current);
   }

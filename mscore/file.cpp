@@ -259,13 +259,15 @@ bool MuseScore::checkDirty(MasterScore* s)
 #ifdef SCRIPT_INTERFACE
       flushReferencePanelForScore(s);
 #endif
-      if (s->dirty() || (s->created() && !s->startedEmpty())) {
+      if (s->dirty() || hasPendingCfxEdits(s) || (s->created() && !s->startedEmpty())) {
             QMessageBox::StandardButton n = QMessageBox::warning(this, tr("MuseScore"),
                tr("Save changes to the score \"%1\"\n"
                "before closing?").arg(s->fileInfo()->completeBaseName()),
                QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
                QMessageBox::Save);
             if (n == QMessageBox::Save) {
+                  if (showPendingCfxSave(s))
+                        return true;
                   if (s->masterScore()->isSavable()) {
                         if (!saveFile(s))
                               return true;

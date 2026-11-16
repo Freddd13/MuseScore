@@ -159,6 +159,33 @@ void TestPluginHost::scoreVideoTimeAndStorage164()
     QVERIFY(document.moveBoundary(1, 14.));
     QCOMPARE(document.snapshot().cues[1].clock.front().seconds, 14.);
     QCOMPARE(document.snapshot().audioPieces.front().toMap().value("until").toDouble(), 24000.);
+
+    // Moving the line end changes the picture ID, but the musical start of
+    // its manual cue is unchanged. Old files used only the full picture ID.
+    const auto savedTimings = document.settings().value("timingOverrides").toMap();
+    const auto scoreCue = base.cues[1];
+    QVERIFY(document.changeSettings({{"audioKind", "none"},
+        {"timingOverrides", QVariantMap{{"score", QVariantMap{{scoreCue.id, old + .25}}}}}}));
+    QCOMPARE(document.snapshot().cues[1].from, old + .25);
+    auto line = new LayoutBreak(score);
+    line->setLayoutBreakType(LayoutBreak::LINE);
+    line->setParent(score->firstMeasure()->nextMeasure()->nextMeasure());
+    score->startCmd();
+    score->undoAddElement(line);
+    score->endCmd();
+    score->doLayout();
+    document.prepare();
+    QTRY_VERIFY_WITH_TIMEOUT(document.ready(), 15000);
+    QVERIFY(document.snapshot().cues.size() > base.cues.size());
+    auto reflowed = document.snapshot().cues[1];
+    QCOMPARE(reflowed.start, scoreCue.start);
+    QCOMPARE(reflowed.fromUtick, scoreCue.fromUtick);
+    QVERIFY(reflowed.id != scoreCue.id);
+    QCOMPARE(reflowed.from, old + .25);
+    QVERIFY(document.changeSettings({{"timingOverrides", savedTimings}}));
+    QCOMPARE(document.snapshot().cues[1].from, old + .25);
+    document.restoreTiming();
+    QCOMPARE(document.snapshot().cues[1].from, reflowed.automaticFrom);
 }
 void TestPluginHost::scoreVideoExport164()
 {

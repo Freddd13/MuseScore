@@ -31,6 +31,7 @@
 #include "performanceeditor/performanceeditor.h"
 #include "workflow/featuregate.h"
 #include "workflow/workspaceviews.h"
+#include "workflow/engravingtools.h"
 #include "seq.h"
 #include "splitstaff.h"
 #include "textcursor.h"
@@ -1138,6 +1139,7 @@ void ScoreView::paintEvent(QPaintEvent* ev)
 
       drawAnchorLines(vp);
       PerformanceEditor::paintForView(this, vp);
+      paintEngravingHandle(this, vp);
       paintTopChordPreview(vp);
 #ifdef SCRIPT_INTERFACE
       updateRegionalControls(this);

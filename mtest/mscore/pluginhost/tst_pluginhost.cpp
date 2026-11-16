@@ -126,6 +126,7 @@ class TestPluginHost : public QObject {
       QTemporaryDir _settings;
    private slots:
       void scoreVideoFidelity166();
+      void engravingHandles169();
       void scoreVideoWorkspace164();
       void scoreVideoLong164();
       void scoreVideoMusic164();
@@ -1585,6 +1586,7 @@ class TestPluginHost : public QObject {
 #include "spectrum_162_tests.inc"
 #include "reference_163_tests.inc"
 #include "scorevideo_164_tests.inc"
+#include "engraving_169_tests.inc"
 #include "scorevideo_166_review.inc"
 #include "layout_079_tests.inc"
 #include "arrangement_083_tests.inc"

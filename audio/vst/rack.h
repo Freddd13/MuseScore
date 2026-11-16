@@ -24,6 +24,9 @@ public:
   void releaseCommonPianos();
   QVariantList retainedSessions() const;
   QVariantMap state(bool changedOnly = false);
+  bool hasOpenCfxEdits() const;
+  QList<int> captureCfxOnRetirement(std::function<void(int, const QVariantMap&, const QByteArray&)>);
+  void rememberRetiredCfxState(int id, const QVariantMap& expected, const QString& encoded);
   QVariantList instruments(bool includeReference = false) const;
   QVariantList effects(int slot) const;
   Plugin *plugin(int slot, int effect = -1) const;

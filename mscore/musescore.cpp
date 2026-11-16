@@ -16,6 +16,7 @@
 #include "workflow/workflowcontext.h"
 #include "workflow/featuregate.h"
 #include "workflow/workspaceviews.h"
+#include "workflow/engravingtools.h"
 #include "workflow/editorareas.h"
 #include "workflow/systemlocks.h"
 #ifdef SCRIPT_INTERFACE
@@ -3096,6 +3097,7 @@ void MuseScore::selectionChanged(SelState selectionState)
       if (pianorollEditor)
             pianorollEditor->changeSelection(selectionState);
       if (_performanceEditor) _performanceEditor->selectionChanged();
+      refreshEngravingSelection(this);
       if (drumrollEditor)
             drumrollEditor->changeSelection(selectionState);
       if (timeline())
@@ -3362,8 +3364,8 @@ void MuseScore::setCurrentView(int tabIdx, int idx)
 
 void MuseScore::setCurrentScoreView(ScoreView* view)
       {
-      if (cs && cs != (view ? view->score() : nullptr))
-            saveVstEdits(cs);
+      if (cs && cs->masterScore() != (view && view->score() ? view->score()->masterScore() : nullptr))
+            saveVstBeforeScoreSwitch(cs);
       cv = view;
       if (cv) {
             ctab = (tab2 && tab2->view() == view) ? tab2 : tab1;
@@ -4826,6 +4828,10 @@ bool MuseScore::eventFilter(QObject *obj, QEvent *event)
                   if (e->key() == Qt::Key_Escape && obj->property("pianoParameterScrubbing").toBool()) {
                         obj->event(e); return true;
                         }
+
+                  if (e->key() == Qt::Key_Escape && e->modifiers() == Qt::NoModifier
+                      && cancelEngravingDrag(cv))
+                        return true;
 
                   if (zoomBoxAcceptKey(e)) {
                         zoomBox->acceptCurrentText();

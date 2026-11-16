@@ -722,7 +722,9 @@ bool ScoreVideoDocument::moveBoundary(int index, double seconds)
     }
     auto all = _settings.value("timingOverrides").toMap(),
          values = all.value(sourceKey(_snapshot)).toMap();
-    values[_snapshot.cues[index].id] = seconds;
+    const auto& cue = _snapshot.cues[index];
+    values[cue.timingKey()] = seconds;
+    values[cue.id] = seconds;
     all[sourceKey(_snapshot)] = values;
     return changeSettings({{"timingOverrides", all}});
 }

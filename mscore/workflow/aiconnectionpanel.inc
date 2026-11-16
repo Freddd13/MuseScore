@@ -41,16 +41,23 @@ class ConnectionDialog : public QDialog {
     const QString relative = "output/releases/" + release + "/";
     const auto manifestPath = findResearchFile("PIANO_EXPRESSION_DIR", "music-explore", relative + "manifest.json");
     const auto manifest = readJson(manifestPath);
-    const bool hasRelease = manifest.value("version").toString() == release;
+    const auto releaseDirectory = QFileInfo(manifestPath).dir();
+    const auto guidePath = releaseDirectory.filePath("START_HERE.md");
+    const bool hasRelease = manifest.value("version").toString() == release
+      && matchesResearchFile(guidePath, manifest, "START_HERE.md")
+      && matchesResearchFile(releaseDirectory.filePath("skill/SKILL.md"), manifest, "skill/SKILL.md");
     const auto expression = installedSkill("piano-midi-expression");
     const auto expressionVersion = skillVersion(expression);
-    expressionGuide = hasRelease ? readableFile(QFileInfo(manifestPath).dir().filePath("START_HERE.md")) : QString();
+    expressionGuide = hasRelease ? guidePath : QString();
     details(expressionSkill, expression.isEmpty() ? tr("力度技能：Codex 用户目录中未找到")
-      : hasRelease && matchesReleaseSkill(expression, manifest) ? tr("力度技能：与 0.3.3 发布内容一致")
+      : hasRelease && matchesResearchFile(expression, manifest, "skill/SKILL.md") ? tr("力度技能：与 0.3.3 发布内容一致")
+      : hasRelease ? tr("力度技能：已安装版本 %1，与 0.3.3 的内容不同")
+                     .arg(expressionVersion.isEmpty() ? tr("未知") : expressionVersion)
       : expressionVersion.isEmpty() ? tr("力度技能：已找到，文件中未标版本")
                                     : tr("力度技能：%1").arg(expressionVersion), expression);
     details(expressionLibrary, hasRelease ? tr("力度资料：%1").arg(release)
-                                          : tr("力度资料：未找到 %1").arg(release), manifestPath);
+      : manifestPath.isEmpty() ? tr("力度资料：未找到 %1").arg(release)
+                               : tr("力度资料：%1 的版本或校验值不符").arg(release), manifestPath);
     expressionHelp->setEnabled(!expressionGuide.isEmpty());
   }
 

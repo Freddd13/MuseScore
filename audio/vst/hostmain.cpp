@@ -157,11 +157,14 @@ int main(int argc, char **argv) {
           result["ok"] = true;
           app.quit();
         } else if (plugin) {
-          if (op == "state") {
+          const auto applyParameters = [&] {
             for (const auto &v : command["parameters"].toList()) {
               const auto p = v.toMap();
               plugin->setParameter(p["id"].toUInt(), p["value"].toDouble());
             }
+          };
+          if (op == "state") {
+            applyParameters();
             result["state"] =
                 QString::fromLatin1(plugin->state(&error).toBase64());
           } else if (op == "resetAudio") {
@@ -171,10 +174,7 @@ int main(int argc, char **argv) {
                   plugin->setParameter(packet.parameters[i].id, packet.parameters[i].value);
               InterlockedExchange(&packet.status, 0);
             }
-            for (const auto &v : command["parameters"].toList()) {
-              const auto p = v.toMap();
-              plugin->setParameter(p["id"].toUInt(), p["value"].toDouble());
-            }
+            applyParameters();
             // The last partial bridge block can contain note/pedal releases.
             // Deliver a complete release here before clearing the pipeline.
             std::array<Midi, 132> releases{};
@@ -207,6 +207,7 @@ int main(int argc, char **argv) {
             result["changed"] = plugin->takeChanges();
         } else
           error = QStringLiteral("音源尚未载入。");
+        result["requestId"] = command.value("requestId");
         result["error"] = error;
         const auto bytes =
             QJsonDocument::fromVariant(result).toJson(QJsonDocument::Compact);
@@ -214,8 +215,11 @@ int main(int argc, char **argv) {
         client->write(reinterpret_cast<const char *>(&size), 4);
         client->write(bytes);
         client->flush();
-        if (qEnvironmentVariableIsSet("KUMO_VST_TRACE"))
-          qWarning("VST response %u", size);
+        if (qEnvironmentVariableIsSet("KUMO_VST_TRACE")) {
+          std::fprintf(stderr, "response %s %u bytes; editor %d%s%s\n", qPrintable(op), size,
+                       plugin && plugin->editorVisible(), error.isEmpty() ? "" : "; ", qPrintable(error));
+          std::fflush(stderr);
+        }
       }
     });
     if (client->bytesAvailable())
