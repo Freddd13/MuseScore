@@ -6,7 +6,7 @@
 #include "libmscore/system.h"
 #include "libmscore/measure.h"
 #include <QPainter>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QFontMetrics>
 #include <QComboBox>
 #include <QCheckBox>
@@ -57,7 +57,7 @@ void PerformanceEditor::endBandResize(bool cancel)
       if (_bandResizing) {
             _bandResizing = false;
             if (cancel) _bandHeight = _bandResizeHeight;
-            else QSettings().setValue("performanceEditor/bandHeight", _bandHeight);
+            else DocumentSettings().setValue("performanceEditor/bandHeight", _bandHeight);
             syncInputTracking();
             if (_view && QWidget::mouseGrabber() == _view) _view->releaseMouse();
             }

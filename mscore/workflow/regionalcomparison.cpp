@@ -21,7 +21,7 @@
 #include <QPointer>
 #include <QPainter>
 #include <QEvent>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QSet>
 #include <QMap>
 #include <QHash>
@@ -118,8 +118,8 @@ void showRegionalDifference(ScoreView *view, Score *other, const QVariantList &c
     if (other) layer->setProperty("comparisonOwner", owner);
     if (layer->property("comparisonOwner") == owner) layer->display(other, changes);
 }
-bool regionalAuditionEnabled(){return QSettings().value("regionalVariants/auditionCompare",false).toBool();}
-void setRegionalAuditionEnabled(bool value){QSettings().setValue("regionalVariants/auditionCompare",value);}
+bool regionalAuditionEnabled(){return DocumentSettings().value("regionalVariants/auditionCompare",false).toBool();}
+void setRegionalAuditionEnabled(bool value){DocumentSettings().setValue("regionalVariants/auditionCompare",value);}
 QVariantMap switchRegionalWriting(ScoreView* view,const QString& group,const QString& variant){
       if(!view||!view->score()||!view->score()->isMaster())return {{"error",QObject::tr("请回到可编辑的总谱。")}};
       if (mscore->currentScoreView() != view) mscore->setCurrentScoreView(view);

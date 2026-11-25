@@ -33,7 +33,7 @@
 #include <QPainter>
 #include <QScrollArea>
 #include <QScrollBar>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QShowEvent>
 #include <QSignalBlocker>
 #include <QSpinBox>
@@ -144,16 +144,16 @@ RollWritingBar::RollWritingBar(PerformanceEditor *editor, QToolButton *toggle,
   _precision = optionsMenu->addAction(tr("保留拖动的细小时间差"));
   _precision->setCheckable(true);
   _precision->setChecked(
-      QSettings().value("rollWriting/precision", false).toBool());
+      DocumentSettings().value("rollWriting/precision", false).toBool());
   connect(_precision, &QAction::toggled, this, [](bool value) {
-    QSettings().setValue("rollWriting/precision", value);
+    DocumentSettings().setValue("rollWriting/precision", value);
   });
   _followDynamics = optionsMenu->addAction(tr("新音跟随力度记号"));
   _followDynamics->setCheckable(true);
   _followDynamics->setChecked(
-      QSettings().value("rollWriting/followDynamics", true).toBool());
+      DocumentSettings().value("rollWriting/followDynamics", true).toBool());
   connect(_followDynamics, &QAction::toggled, this, [](bool value) {
-    QSettings().setValue("rollWriting/followDynamics", value);
+    DocumentSettings().setValue("rollWriting/followDynamics", value);
   });
   auto velocityRow = new QWidget;
   auto velocityLayout = new QHBoxLayout(velocityRow);
@@ -163,7 +163,7 @@ RollWritingBar::RollWritingBar(PerformanceEditor *editor, QToolButton *toggle,
   _fixedVelocity->setObjectName("rollNewVelocity");
   _fixedVelocity->setRange(1, 127);
   _fixedVelocity->setValue(
-      QSettings().value("rollWriting/velocity", 80).toInt());
+      DocumentSettings().value("rollWriting/velocity", 80).toInt());
   _fixedVelocity->setEnabled(!_followDynamics->isChecked());
   velocityLayout->addWidget(_fixedVelocity);
   auto velocityAction = new QWidgetAction(optionsMenu);
@@ -171,7 +171,7 @@ RollWritingBar::RollWritingBar(PerformanceEditor *editor, QToolButton *toggle,
   optionsMenu->addAction(velocityAction);
   connect(
       _fixedVelocity, QOverload<int>::of(&QSpinBox::valueChanged), this,
-      [](int value) { QSettings().setValue("rollWriting/velocity", value); });
+      [](int value) { DocumentSettings().setValue("rollWriting/velocity", value); });
   connect(_followDynamics, &QAction::toggled, _fixedVelocity,
           [this](bool value) { _fixedVelocity->setEnabled(!value); });
   _precision->setToolTip(tr(

@@ -5,6 +5,7 @@
 #include "editorareas.h"
 #include "panelwindowcontrols.h"
 #include "featuregate.h"
+#include "mscore/shortcut.h"
 #include "mscore/musescore.h"
 #include "mscore/performanceeditor/performanceeditor.h"
 #include "mscore/scoreview.h"
@@ -18,7 +19,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPointer>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QSet>
 #include <QSignalBlocker>
 #include <QSplitter>
@@ -43,14 +44,47 @@ class WorkspaceViews : public QObject {
   QString key(const QString &name) const {
     return "personalWorkspaceViews/" + name;
   }
+  QAction* toolAction(const QString& name) const {
+    auto action=window->findChild<QAction*>(name);
+    if(!action&&QStringList{"performance-editor","harmony-assistant","reference-player","arrangement-suggestions"}.contains(name))
+      action=getAction(name.toLatin1().constData());
+    return action;
+  }
+  QString scoreViewKey() const {
+    auto score=window->currentScore();
+    return key(current+"/scoreView/"+(score&& !score->isMaster()?QString::fromLatin1(score->title().toUtf8().toBase64()):QString("master")));
+  }
   void save() {
-    if (!window || changing || restoring || !personalFeaturesEnabled())
+    if (!window || !documentUiState()->score() || changing || restoring || !personalFeaturesEnabled())
       return;
-    finishToolFullscreen(window);
     if (auto editor = window->findChild<PerformanceEditor *>())
       saveEditorAreaLayout(editor);
-    QSettings settings;
+    DocumentSettings settings;
     settings.setValue(key(current + "/layout"), window->saveState(1));
+    QVariantMap panelStates;
+    QStringList tools;
+    const QMap<QString,QString> toolNames{{"performanceEditorDock","performance-editor"},
+        {"kumoPanel/HarmonyAssistant_MS3","harmony-assistant"},{"kumoPanel/ReferencePlayer_MS3","reference-player"},
+        {"kumoPanel/ArrangementSuggestions","arrangement-suggestions"},{"kumoVstPanel","kumo-vst"},
+        {"kumoPanel/score-video","kumo-score-video"}};
+    for(auto dock:window->findChildren<QDockWidget*>(QString(),Qt::FindDirectChildrenOnly)) {
+      if(auto controls=dock->findChild<QObject*>("kumoPanelWindowControls",Qt::FindDirectChildrenOnly))
+        panelStates[dock->objectName()]=static_cast<PanelWindowControls*>(controls)->documentState();
+      if(toolNames.contains(dock->objectName())&&(!dock->isHidden()||dock->property("kumoPanelMinimized").toBool()))
+        tools.append(toolNames.value(dock->objectName()));
+      if(!dock->isHidden()&&dock->objectName().startsWith("kumoEditorArea/"))tools.append("performance-editor");
+    }
+    QVariantMap activeTools;
+    for(const auto& name:toolNames.values())if(auto action=toolAction(name))
+      if(action->isCheckable())activeTools[name]=action->isChecked();
+    settings.setValue(key(current+"/toolStates"),activeTools);
+    settings.setValue(key(current+"/panels"),panelStates);
+    settings.setValue(key(current+"/tools"),tools);
+    if(auto view=window->currentScoreView()) {
+      const auto zoom=view->logicalZoom();
+      settings.setValue(scoreViewKey(),QVariantMap{{"zoom",zoom.level},{"zoomIndex",int(zoom.index)},
+          {"x",view->xoffset()},{"y",view->yoffset()}});
+    }
     QVariantMap sideWidths;
     for (auto dock : window->findChildren<QDockWidget*>(QString(), Qt::FindDirectChildrenOnly)) {
       const auto area = window->dockWidgetArea(dock);
@@ -59,7 +93,7 @@ class WorkspaceViews : public QObject {
         continue;
       auto visible = dock;
       for (auto peer : window->tabifiedDockWidgets(dock))
-        if (!peer->visibleRegion().isEmpty())
+        if (!peer->isFloating() && !peer->visibleRegion().isEmpty())
           visible = peer;
       sideWidths.insert(dock->objectName(), visible->width());
     }
@@ -73,7 +107,7 @@ class WorkspaceViews : public QObject {
         // visible peer's extent so returning to this view restores the group.
         auto visible = dock;
         for (auto peer : window->tabifiedDockWidgets(dock))
-          if (!peer->visibleRegion().isEmpty())
+          if (!peer->isFloating() && !peer->visibleRegion().isEmpty())
             visible = peer;
         settings.setValue(key(current + "/editorExtent"),
                           QVariantMap{{"width", visible->width()},
@@ -89,7 +123,7 @@ class WorkspaceViews : public QObject {
     auto dock = window->findChild<QDockWidget *>("performanceEditorDock");
     if (!dock || dock->isHidden() || dock->isFloating())
       return;
-    const auto extent = QSettings().value(key(mode + "/editorExtent")).toMap();
+    const auto extent = DocumentSettings().value(key(mode + "/editorExtent")).toMap();
     const auto area = window->dockWidgetArea(dock);
     const bool side = area == Qt::LeftDockWidgetArea || area == Qt::RightDockWidgetArea;
     const int savedWindow = extent.value(side ? "windowWidth" : "windowHeight").toInt();
@@ -122,7 +156,7 @@ class WorkspaceViews : public QObject {
   void restoreSideWidths(const QString &mode) {
     if (!window || current != mode)
       return;
-    QSettings settings;
+    DocumentSettings settings;
     const bool firstLayout = settings.value(key(mode + "/layout")).toByteArray().isEmpty();
     const QString source = !settings.contains(key(mode + "/sideWidths")) && firstLayout
         ? "arrange" : mode;
@@ -155,7 +189,7 @@ class WorkspaceViews : public QObject {
     window->centralWidget()->setVisible(visible);
     window->setProperty("kumoScoreComparison", visible);
     if (current == "daw") {
-      QSettings().setValue(key("daw/showScore"), visible);
+      DocumentSettings().setValue(key("daw/showScore"), visible);
       if (visible && arrangeFirstTime)
         QTimer::singleShot(0, this, [this] {
           if (!window || current != "daw" ||
@@ -208,16 +242,23 @@ public:
     connect(scoreComparison, &QAction::triggered, this,
             [this](bool shown) { showScore(shown, true); });
     connect(qApp, &QCoreApplication::aboutToQuit, this, [this] { save(); });
+    connect(documentUiState(), &DocumentUiState::captureRequested, this, [this](Score*) { save(); });
+    connect(documentUiState(), &DocumentUiState::scoreChanged, this, [this](Score* score) {
+      if (!score || !personalFeaturesEnabled()) return;
+      initialRestorePending = false;
+      const auto mode = DocumentSettings().value(key("current"), "arrange").toString();
+      activate(mode, false, true);
+    });
     QTimer::singleShot(0, this, [this] {
       if (!initialRestorePending)
         return;
       initialRestorePending = false;
       const auto saved =
-          QSettings().value(key("current"), "arrange").toString();
+          DocumentSettings().value(key("current"), "arrange").toString();
       if (!personalFeaturesEnabled()) {
         if (saved != "arrange" && window)
           window->restoreState(
-              QSettings().value(key("arrange/layout")).toByteArray(), 1);
+              DocumentSettings().value(key("arrange/layout")).toByteArray(), 1);
         if (window)
           applyPersonalFeatureVisibility(window);
         return;
@@ -293,7 +334,7 @@ public:
         window->switchLayoutMode(mode);
     }
   }
-  void activate(const QString &mode, bool rememberCurrent = true) {
+  void activate(const QString &mode, bool rememberCurrent = true, bool forceRestore = false) {
     if (!window || !personalFeaturesEnabled() || changing)
       return;
     QAction *selected = nullptr;
@@ -306,7 +347,7 @@ public:
     // deferred startup restoration.
     if (rememberCurrent)
       initialRestorePending = false;
-    if (mode == current) {
+    if (mode == current && !forceRestore) {
       if (mode == "engrave")
         openEngravingTools(window);
       return;
@@ -316,16 +357,29 @@ public:
     changing = true;
     restoring = true;
     const auto serial = ++restoreSerial;
+    for(auto dock:window->findChildren<QDockWidget*>())
+      if(auto controls=dock->findChild<QObject*>("kumoPanelWindowControls",Qt::FindDirectChildrenOnly))
+        static_cast<PanelWindowControls*>(controls)->clearDocumentState();
     if (mode == "engrave")
       openEngravingTools(window);
     current = mode;
+    window->setProperty("kumoWorkspaceView", mode);
+    const auto activeTools=DocumentSettings().value(key(mode+"/toolStates")).toMap();
+    for(auto it=activeTools.cbegin();it!=activeTools.cend();++it)
+      if(auto action=toolAction(it.key()))if(action->isCheckable()&&action->isChecked()!=it.value().toBool())action->trigger();
+    for(const auto& name:DocumentSettings().value(key(mode+"/tools")).toStringList()) {
+      if(name=="performance-editor") {if(!window->performanceEditor())window->showPerformanceEditor(true);continue;}
+      auto action=toolAction(name);
+      if(activeTools.contains(name)&&action&&action->isChecked()==activeTools.value(name).toBool())continue;
+      if(action) {if(action->isCheckable())action->setChecked(false);action->trigger();}
+    }
     syncScoreLayout();
     window->setProperty("kumoWorkspaceView", mode);
-    const auto state = QSettings().value(key(mode + "/layout")).toByteArray();
+    const auto state = DocumentSettings().value(key(mode + "/layout")).toByteArray();
     const auto initialState = state.isEmpty() && (mode == "engrave" || mode == "post")
-        ? QSettings().value(key("arrange/layout")).toByteArray() : state;
+        ? DocumentSettings().value(key("arrange/layout")).toByteArray() : state;
     const bool visible =
-        mode != "daw" || QSettings().value(key("daw/showScore"), false).toBool();
+        mode != "daw" || DocumentSettings().value(key("daw/showScore"), false).toBool();
     // Dock sizes must be restored with the destination score area present.
     // A hidden DAW centre otherwise lets side docks consume its space.
     showScore(visible);
@@ -346,7 +400,7 @@ public:
     if (auto tools = window->findChild<QDockWidget*>("kumoEngravingTools"))
       tools->setVisible(mode == "engrave" && (state.isEmpty() || !tools->isHidden()));
     if (auto video = window->findChild<QDockWidget *>("kumoPanel/score-video"))
-      video->setVisible(QSettings().value(key(mode + "/videoVisible"), mode == "post").toBool());
+      video->setVisible(DocumentSettings().value(key(mode + "/videoVisible"), mode == "post").toBool());
     if (state.isEmpty() && mode == "engrave")
       if (auto dock = window->findChild<QDockWidget *>("performanceEditorDock"))
         dock->hide();
@@ -369,6 +423,16 @@ public:
           settleEditorAreaLayout(editor);
         restoreEditorExtent(mode);
         restoreSideWidths(mode);
+        const auto panels=DocumentSettings().value(key(mode+"/panels")).toMap();
+        for(auto dock:window->findChildren<QDockWidget*>())
+          if(auto controls=dock->findChild<QObject*>("kumoPanelWindowControls",Qt::FindDirectChildrenOnly))
+            static_cast<PanelWindowControls*>(controls)->restoreDocumentState(panels.value(dock->objectName()).toMap());
+        const auto scoreView=DocumentSettings().value(scoreViewKey()).toMap();
+        if(!scoreView.isEmpty())if(auto view=window->currentScoreView()) {
+          auto zoom=view->logicalZoom();zoom.level=scoreView.value("zoom",zoom.level).toDouble();
+          zoom.index=ZoomIndex(scoreView.value("zoomIndex",int(zoom.index)).toInt());
+          view->setLogicalZoom(zoom);view->setOffset(scoreView.value("x").toDouble(),scoreView.value("y").toDouble());
+        }
         restoring = false;
       }
     });
@@ -377,7 +441,7 @@ public:
     if (auto view = window->currentScoreView())
       view->update();
     changing = false;
-    QSettings().setValue(key("current"), current);
+    DocumentSettings().setValue(key("current"), current);
   }
   void returnToScore() {
     if (!window)

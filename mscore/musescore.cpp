@@ -16,6 +16,7 @@
 #include "workflow/workflowcontext.h"
 #include "workflow/featuregate.h"
 #include "workflow/workspaceviews.h"
+#include "workflow/documentsettings.h"
 #include "workflow/engravingtools.h"
 #include "workflow/editorareas.h"
 #include "workflow/systemlocks.h"
@@ -3364,6 +3365,8 @@ void MuseScore::setCurrentView(int tabIdx, int idx)
 
 void MuseScore::setCurrentScoreView(ScoreView* view)
       {
+      if (cv != view)
+            documentUiState()->capture(cs);
       if (cs && cs->masterScore() != (view && view->score() ? view->score()->masterScore() : nullptr))
             saveVstBeforeScoreSwitch(cs);
       cv = view;
@@ -3385,6 +3388,7 @@ void MuseScore::setCurrentScoreView(ScoreView* view)
       else
             cs = 0;
 
+      documentUiState()->activate(cs);
       if (_performanceEditor) _performanceEditor->setView(cv);
       syncWorkingScoreLayout(this);
       notifyWorkflowCurrentScore(cs);

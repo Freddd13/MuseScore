@@ -18,7 +18,7 @@
 #include <QLabel>
 #include <QPointer>
 #include <QPushButton>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QScrollArea>
 #include <QSpinBox>
 #include <QTableWidget>
@@ -49,14 +49,14 @@ void showPerformanceSettings(Score* score, QWidget* parent, std::function<void()
     auto explanation=new QLabel(QObject::tr("按住快捷键查看鼠标附近的音符力度；同时按住 Shift 可查看整个视口。松开后恢复原来的显示。"), input);
     explanation->setWordWrap(true); keys->addWidget(explanation);
     keys->addWidget(new QLabel(QObject::tr("临时查看音旁力度"), input));
-    auto key=new QKeySequenceEdit(QKeySequence(QSettings().value("performanceEditor/peekKey", "Ctrl+Alt+V").toString()), input);
+    auto key=new QKeySequenceEdit(QKeySequence(DocumentSettings().value("performanceEditor/peekKey", "Ctrl+Alt+V").toString()), input);
     key->setObjectName("performancePeekKey"); keys->addWidget(key);
     auto releaseRow=new QHBoxLayout;
     releaseRow->addWidget(new QLabel(QObject::tr("松开后继续显示"),input));
     auto releaseMs=new QSpinBox(input);releaseMs->setObjectName("performancePeekReleaseMs");
     releaseMs->setRange(0,10000);releaseMs->setSingleStep(100);releaseMs->setSuffix(QObject::tr(" 毫秒"));
     releaseMs->setSpecialValueText(QObject::tr("立即恢复"));
-    releaseMs->setValue(qBound(0,QSettings().value("performanceEditor/peekReleaseMs",0).toInt(),10000));
+    releaseMs->setValue(qBound(0,DocumentSettings().value("performanceEditor/peekReleaseMs",0).toInt(),10000));
     releaseRow->addWidget(releaseMs);releaseRow->addStretch();keys->addLayout(releaseRow);
     keys->addWidget(new QLabel(QObject::tr("谱面最近音滚轮快捷键"), input));
     auto wheel=new QComboBox(input); wheel->setObjectName("performanceNearestWheelKey");
@@ -64,7 +64,7 @@ void showPerformanceSettings(Score* score, QWidget* parent, std::function<void()
     wheel->addItem("Ctrl+Alt", int(Qt::ControlModifier|Qt::AltModifier));
     wheel->addItem("Ctrl+Shift", int(Qt::ControlModifier|Qt::ShiftModifier));
     wheel->addItem(QObject::tr("关闭"), 0);
-    wheel->setCurrentIndex(qMax(0,wheel->findData(QSettings().value("performanceEditor/nearestWheelModifiers", int(Qt::AltModifier|Qt::ShiftModifier)))));
+    wheel->setCurrentIndex(qMax(0,wheel->findData(DocumentSettings().value("performanceEditor/nearestWheelModifiers", int(Qt::AltModifier|Qt::ShiftModifier)))));
     keys->addWidget(wheel); keys->addStretch();
     auto inputScroll=new QScrollArea(tabs);inputScroll->setWidgetResizable(true);inputScroll->setFrameShape(QFrame::NoFrame);inputScroll->setWidget(input);
     tabs->addTab(inputScroll, QObject::tr("鼠标与按键"));
@@ -96,7 +96,7 @@ void showPerformanceSettings(Score* score, QWidget* parent, std::function<void()
         table->setRowHidden(row,row>=8); values.append(value);
     }
     auto includeExisting=new QCheckBox(QObject::tr("同时更新采用旧默认值的记号"),dynamics);
-    includeExisting->setObjectName("performanceDynamicsIncludeExisting");includeExisting->setChecked(QSettings().value("performanceEditor/updateExistingDynamics",true).toBool());
+    includeExisting->setObjectName("performanceDynamicsIncludeExisting");includeExisting->setChecked(DocumentSettings().value("performanceEditor/updateExistingDynamics",true).toBool());
     includeExisting->setToolTip(QObject::tr("例如，mp从64改到58时，乐谱中仍采用64的mp也改到58。其它数值继续保留。"));
     body->addWidget(includeExisting);
     auto extra=new QCheckBox(QObject::tr("显示极弱、极强记号"),dynamics);
@@ -149,7 +149,7 @@ void showPerformanceSettings(Score* score, QWidget* parent, std::function<void()
             for(auto part:target->scoreList())part->undoChangeStyleVal(Sid::dynamicsPlaybackVelocities,text);
             target->setPlaylistDirty(); target->endCmd();
         }
-        QSettings settings; settings.setValue("performanceEditor/updateExistingDynamics",includeExisting->isChecked());settings.setValue("performanceEditor/nearestWheelModifiers",wheel->currentData());
+        DocumentSettings settings; settings.setValue("performanceEditor/updateExistingDynamics",includeExisting->isChecked());settings.setValue("performanceEditor/nearestWheelModifiers",wheel->currentData());
         settings.setValue("performanceEditor/peekKey",key->keySequence().toString());
         settings.setValue("performanceEditor/peekReleaseMs",releaseMs->value());
         if(saved && editor)saved(); dialog->accept();

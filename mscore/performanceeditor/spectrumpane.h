@@ -76,6 +76,9 @@ class SpectrumPane : public QWidget {
     QVariantMap _info, _request, _track, _clip;
     QVariantList _annotations;
     QString _path, _savedData, _playOwner;
+    QVariantMap _pendingNavigation;
+    void captureDocumentState();
+    void restoreNavigation();
     double _playStart = 0, _playUntil = 0, _playSpeed = 1, _lastAudioMs = 0;
     double _from = 0, _span = 8000, _low = 20.5, _high = 108.5, _cursorMs = 0, _cursorPitch = 69;
     double _a = -1, _b = -1;

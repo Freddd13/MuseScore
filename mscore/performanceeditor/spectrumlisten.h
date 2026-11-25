@@ -12,6 +12,7 @@ class SpectrumListenControls : public QWidget {
 
   public:
     explicit SpectrumListenControls(QWidget *);
+    void reloadSettings();
     QVariantMap values() const { return _values; }
     void setFrequency(double);
   signals:

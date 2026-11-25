@@ -165,6 +165,8 @@ class TestPluginHost : public QObject {
       void upstreamGp6Files155();
       void workspaceSideWidthsRoundTrip();
       void paletteRemainsInteractiveAfterPlayback();
+      void wholeWindowInput171();
+      void documentToolState171();
       void referencePanelsAfterPlayback120();
       void resizePanelsAfterPlayback121();
       void personalToolbarIcons121();
@@ -1612,6 +1614,8 @@ class TestPluginHost : public QObject {
 #include "layout_089_tests.inc"
 #include "components_092_tests.inc"
 #include "workspace_093_tests.inc"
+#include "input_171_tests.inc"
+#include "document_171_tests.inc"
 #include "reference_input_120_tests.inc"
 #include "source_performance_tests.inc"
 #include "playback_gui_125_tests.inc"

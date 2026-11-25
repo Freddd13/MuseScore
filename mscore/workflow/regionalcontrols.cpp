@@ -22,7 +22,7 @@
 #include <QMouseEvent>
 #include <QPointer>
 #include <QSet>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QTimer>
 #include <QToolButton>
 #include <QToolTip>
@@ -252,10 +252,10 @@ class Controls : public QObject {
 };
 } // namespace
 bool regionalControlsVisible() {
-      return personalFeaturesEnabled() && QSettings().value("regionalVariants/scoreButtons", true).toBool();
+      return personalFeaturesEnabled() && DocumentSettings().value("regionalVariants/scoreButtons", true).toBool();
 }
 void setRegionalControlsVisible(bool value) {
-      QSettings().setValue("regionalVariants/scoreButtons", value);
+      DocumentSettings().setValue("regionalVariants/scoreButtons", value);
       for (auto widget : QApplication::allWidgets())
             if (auto view = qobject_cast<ScoreView *>(widget))
                   view->update();

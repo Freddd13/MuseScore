@@ -38,6 +38,8 @@ class RhythmPane : public QWidget {
     QUndoStack *_edits;
     QTimer _pages, _draftTimer;
     QVariantMap _state, _data, _midi, _draft;
+    QVariantMap _restoringSession;
+    void captureDocumentState();
     QVariantList _rows;
     QString _candidate;
     QString _pendingAction;

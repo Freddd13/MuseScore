@@ -167,6 +167,7 @@ MuseScore {
   if(switchingTrack||selectedTrack<0||selectedTrack>=list.length||!media||media.duration<=0)return list
   var t=list[selectedTrack]
   t.path=media.path;t.identity=sourceIdentity;t.a=a;t.b=b;t.duration=media.duration;t.loop=looping;t.onlyRange=onlyRange;t.fade=fade;t.bookmarks=Project.copy(bookmarks);t.associations=Project.copy(associations);t.selectedAssociation=selectedAssociation;t.volume=media.volume;t.speed=media.speed
+  t.position=shownPosition;t.viewStart=viewStart;t.viewEnd=viewEnd
   return list
  }
  function storeTrack(){
@@ -185,7 +186,9 @@ MuseScore {
   if(index<0||index>=tracks.length)return;storeTrack();if(usable)media.pause();switchingTrack=true;selectedTrack=index;media=sessions[index];var t=tracks[index];restored=media.duration<=0?Project.copy(t):null;
   sourceIdentity=t.identity||null;a=t.a||0;b=t.b||media.duration;looping=!!t.loop;onlyRange=t.onlyRange===undefined?!!t.loop:!!t.onlyRange;fade=t.fade!==false;bookmarks=t.bookmarks||[];associations=identifiedAssociations(t.associations,t.id);selectedAssociation=Math.max(-1,Math.min(associations.length-1,t.selectedAssociation===undefined?(associations.length?0:-1):t.selectedAssociation));if(selectedAssociation>=0){a=associations[selectedAssociation].from;b=associations[selectedAssociation].until;}viewStart=0;viewEnd=media.duration;
   if(media.duration>0&&t.identity&&!sameRecording(t.identity,media.identity()))associations=associations.map(function(v){var n=Project.copy(v);n.stale=true;return n});
-  viewportPeaks=[];media.volume=t.volume===undefined?.8:t.volume;media.speed=t.speed||1;switchingTrack=false;if(audioProject)audioProject.selectedTrack=index;applyLoop();wave.requestPaint();status="已选音轨："+t.name;
+  viewportPeaks=[];media.volume=t.volume===undefined?.8:t.volume;media.speed=t.speed||1;
+  if(media.duration>0){media.seek(Math.max(0,Math.min(media.duration,t.position||0)));viewStart=Math.max(0,t.viewStart||0);viewEnd=Math.min(media.duration,t.viewEnd>viewStart?t.viewEnd:media.duration);}
+  switchingTrack=false;if(audioProject)audioProject.selectedTrack=index;applyLoop();wave.requestPaint();status="已选音轨："+t.name;
  }
  function trackOption(name,value){if(selectedTrack<0)return;storeTrack();var list=Project.copy(tracks);list[selectedTrack][name]=value;if(name==="name")list[selectedTrack].automaticName=false;tracks=list;if(audioProject&&!audioProject.playing)audioProject.setTracks(tracks);}
  function mixRows(list){return list.map(function(t){return {id:t.id,volume:t.volume===undefined?.8:t.volume,mute:!!t.mute,solo:!!t.solo,participate:t.participate!==false}})}
@@ -340,7 +343,7 @@ MuseScore {
  function time(ms) {var sec=Math.max(0,ms)/1000;return Math.floor(sec/60)+":"+("0"+Math.floor(sec%60)).slice(-2)+"."+("00"+Math.floor(ms%1000)).slice(-3)}
  function error(e) {status=Messages.readable(e)}
  function persist() {
-  if(observer)observer.saveConfiguration("ReferencePlayer",{speed:usable?media.speed:config.speed,volume:usable?media.volume:config.volume,workspace:workspace,alignment:config.alignment,pauseWhenHidden:pauseWhenHidden,score:Project.scoreIdentity(curScore)})
+  if(observer)observer.saveConfiguration("ReferencePlayer",{speed:usable?media.speed:config.speed,volume:usable?media.volume:config.volume,workspace:workspace,alignment:config.alignment,pauseWhenHidden:pauseWhenHidden,score:Project.scoreIdentity(owner||curScore)})
  }
  function applyLoop(){if(usable)media.setLoop(onlyRange||playingAssociation?a:0,onlyRange||playingAssociation?b:media.duration,looping,fade);if(audioProject&&audioProject.playing&&!audioProject.joint&&audioProject.playbackPlan.owner==="reference-panel"){keepAudioCursor();var at=media.position;stopJoint();playOriginal(at)}}
  function updateFile(info) {
@@ -352,6 +355,7 @@ MuseScore {
    else status="已恢复项目";
    a=Math.max(0,Math.min(data.a||0,b));b=Math.max(a,Math.min(data.b||b,b));looping=!!data.loop;onlyRange=data.onlyRange===undefined?!!data.loop:!!data.onlyRange;fade=data.fade!==false;
    bookmarks=data.bookmarks||[];associations=identifiedAssociations(data.associations,selectedTrack>=0?tracks[selectedTrack].id:media.path);selectedAssociation=Math.max(-1,Math.min(associations.length-1,data.selectedAssociation===undefined?(associations.length?0:-1):data.selectedAssociation));if(selectedAssociation>=0){a=associations[selectedAssociation].from;b=associations[selectedAssociation].until;}
+   media.seek(Math.max(0,Math.min(media.duration,data.position||0)));viewStart=Math.max(0,data.viewStart||0);viewEnd=Math.min(media.duration,data.viewEnd>viewStart?data.viewEnd:media.duration);
    if(data.identity&&!sameRecording(data.identity,info))associations=associations.map(function(v){v=Project.copy(v);v.stale=true;return v});
    if(data.score && curScore && (data.score.name!==curScore.scoreName || data.score.measures!==curScore.nmeasures))associations=associations.map(function(v){v=Project.copy(v);v.stale=true;return v});
   }else status="已载入原曲";
@@ -403,8 +407,8 @@ MuseScore {
  function bindScore(){
   hasScore=!!curScore;if(!observer)return;
   var changed=!Project.sameScore(owner,curScore);
-  if(changed){if(observer.playing||(audioProject&&audioProject.playing))observer.stopReferencePlayback();documentTimer.stop();saveScoreProject();}owner=curScore;observer.score=curScore;
-  if(changed){structureKey=typeof observer.referenceStructureKey==="function"?observer.referenceStructureKey():"";lastLinkedTick=-1;restoreScoreProject();}
+  if(changed){persist();if(observer.playing||(audioProject&&audioProject.playing))observer.stopReferencePlayback();documentTimer.stop();saveScoreProject();}owner=curScore;observer.score=curScore;
+  if(changed){var prefs=observer.loadConfiguration("ReferencePlayer");config=prefs.speed?prefs:({speed:1,volume:.8});pauseWhenHidden=!!config.pauseWhenHidden;structureKey=typeof observer.referenceStructureKey==="function"?observer.referenceStructureKey():"";lastLinkedTick=-1;restoreScoreProject();}
  }
  function updateAssociationScore(){
   if(selectedAssociation<0||!curScore||!observer)return;var scope=observer.expressionSelection(true).scope;if(scope.end<=scope.start)return;
@@ -471,7 +475,7 @@ MuseScore {
  }
  Component.onDestruction:{if(audioProject&&audioProject.playing&&observer)observer.stopReferencePlayback();cancelAudioReads();for(var i=0;i<sessions.length;++i)sessions[i].pause();if(usable)media.pause();storeTrack();documentTimer.stop();saveScoreProject();persist()}
  onVisibleChanged:{if(!visible){spaceDown=false;spacePanned=false;if(usable&&pauseWhenHidden&&(typeof root.panelMinimized!=="function"||!root.panelMinimized())){if(audioProject&&audioProject.playing)stopJoint();else media.pause();}storeTrack();saveScoreProject();persist()}}
- Connections {target:observer;ignoreUnknownSignals:true;onWorkflowPlaybackError:root.status=message;onActiveScoreChanged:root.bindScore()}
+ Connections {target:observer;ignoreUnknownSignals:true;onWorkflowPlaybackError:root.status=message;onActiveScoreChanged:root.bindScore();onConfigurationSaveRequested:root.persist()}
  Connections {target:media;ignoreUnknownSignals:true;onFileReady:{if(root.selectedTrack<0)root.updateFile(info)}onFileError:{if(root.selectedTrack<0){root.relocating=false;root.status=Messages.readable(message)}}onWaveformChanged:wave.requestPaint();onWaveformReady:{root.peaksFrom=from;root.peaksUntil=until;root.viewportPeaks=peaks;wave.requestPaint()}}
  Rectangle {anchors.fill:parent;color:theme.background}
  DropArea {anchors.fill:parent;onDropped:{

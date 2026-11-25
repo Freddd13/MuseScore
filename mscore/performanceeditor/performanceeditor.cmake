@@ -42,6 +42,7 @@ set(PERFORMANCEEDITOR_SRC
       ${CMAKE_CURRENT_LIST_DIR}/performanceinteraction.cpp
       ${CMAKE_CURRENT_LIST_DIR}/performancecontrols.cpp
       ${CMAKE_CURRENT_LIST_DIR}/performanceux.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/editorstate.cpp
       ${CMAKE_CURRENT_LIST_DIR}/editorsettings.cpp
       ${CMAKE_CURRENT_LIST_DIR}/editorsettings.h
       ${CMAKE_CURRENT_LIST_DIR}/tempocurves.cpp

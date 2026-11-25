@@ -3,7 +3,7 @@
 #include "panelwindowcontrols.h"
 #include <QMainWindow>
 #include <QDockWidget>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QPointer>
 #include <QTimer>
 #include <QEvent>
@@ -16,7 +16,7 @@ class PanelPosition : public QObject {
       bool ready=false;
       void save() {
             if(!ready||!main||!dock||dock->property("kumoPanelFullScreen").toBool())return;
-            QSettings settings;settings.beginGroup(key);
+            DocumentSettings settings;settings.beginGroup(key);
             settings.setValue("area",int(main->dockWidgetArea(dock)));
             settings.setValue("floating",dock->isFloating());
             settings.setValue("geometry",dock->saveGeometry());
@@ -32,6 +32,8 @@ class PanelPosition : public QObject {
       PanelPosition(QMainWindow* m,QDockWidget* d,QString k):QObject(d),main(m),dock(d),key(k) {
             timer.setSingleShot(true);timer.setInterval(250);connect(&timer,&QTimer::timeout,this,[this]{save();});
             d->installEventFilter(this);
+            connect(documentUiState(), &DocumentUiState::captureRequested, this, [this](Score*) { timer.stop();save(); });
+            connect(documentUiState(), &DocumentUiState::scoreChanged, this, [this](Score*) { timer.stop(); });
             connect(d,&QDockWidget::dockLocationChanged,this,[this](Qt::DockWidgetArea){if(ready)timer.start();});
             connect(d,&QDockWidget::topLevelChanged,this,[this](bool){if(ready)timer.start();});
             QTimer::singleShot(0,this,[this]{ready=true;});
@@ -43,7 +45,7 @@ bool arrangeWorkflowDock(QMainWindow* main,QDockWidget* dock,const QString& id,c
       installPanelWindowControls(dock);
       const QString name=id.startsWith("kumoPanel/")?id.mid(10):id;
       dock->setObjectName("kumoPanel/"+name);
-      const QString key="kumoPanels/"+name;QSettings settings;settings.beginGroup(key);
+      const QString key="kumoPanels/"+name;DocumentSettings settings;settings.beginGroup(key);
       const bool saved=settings.contains("area");int raw=settings.value("area",int(requested)).toInt();
       auto area=(raw==Qt::LeftDockWidgetArea||raw==Qt::RightDockWidgetArea||raw==Qt::TopDockWidgetArea||raw==Qt::BottomDockWidgetArea)?Qt::DockWidgetArea(raw):requested;
       main->addDockWidget(area,dock);

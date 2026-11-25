@@ -4,14 +4,14 @@
 #include <QDoubleSpinBox>
 #include <QGridLayout>
 #include <QLabel>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QSignalBlocker>
 #include <QSlider>
 #include <QToolButton>
 namespace Ms {
 SpectrumListenControls::SpectrumListenControls(QWidget *parent) : QWidget(parent) {
     setObjectName("spectrumListenControls");
-    QSettings settings;
+    DocumentSettings settings;
     for (const auto &key : QStringList{"low", "middle", "high"})
         _values[key] = settings.value("spectrum/listen/" + key, 0.);
     _values["enabled"] = settings.value("spectrum/listen/enabled", false);
@@ -22,6 +22,7 @@ SpectrumListenControls::SpectrumListenControls(QWidget *parent) : QWidget(parent
     grid->setContentsMargins(4, 4, 4, 4);
     grid->setHorizontalSpacing(8);
     auto enabled = new QCheckBox(tr("试听均衡"));
+    enabled->setProperty("documentPreference", "enabled");
     enabled->setChecked(_values["enabled"].toBool());
     grid->addWidget(enabled, 0, 0, 1, 2);
     connect(enabled, &QCheckBox::clicked, this, [this](bool value) { save("enabled", value); });
@@ -35,6 +36,7 @@ SpectrumListenControls::SpectrumListenControls(QWidget *parent) : QWidget(parent
         bar->setTickPosition(QSlider::TicksBelow);
         bar->setTickInterval(6);
         auto number = new QDoubleSpinBox;
+        number->setProperty("documentPreference", key);
         number->setRange(-12, 12);
         number->setDecimals(0);
         number->setSuffix(tr(" dB"));
@@ -64,12 +66,14 @@ SpectrumListenControls::SpectrumListenControls(QWidget *parent) : QWidget(parent
             number->setValue(0);
     });
     auto selected = new QCheckBox(tr("按选频听"));
+    selected->setProperty("documentPreference", "selectedFrequency");
     selected->setObjectName("spectrumListenSelected");
     grid->addWidget(selected, 4, 0);
     connect(selected, &QCheckBox::clicked, this, [this](bool value) { save("selectedFrequency", value); });
     _frequency = new QLabel(tr("440 Hz"));
     grid->addWidget(_frequency, 4, 1);
     auto width = new QDoubleSpinBox;
+    width->setProperty("documentPreference", "width");
     width->setRange(.1, 4);
     width->setDecimals(2);
     width->setSingleStep(.1);
@@ -87,12 +91,24 @@ SpectrumListenControls::SpectrumListenControls(QWidget *parent) : QWidget(parent
 }
 void SpectrumListenControls::save(const QString &key, const QVariant &value) {
     _values[key] = value;
-    if (key != "selectedFrequency")
-        QSettings().setValue("spectrum/listen/" + key, value);
+    DocumentSettings().setValue("spectrum/listen/" + key, value);
     emit changed();
 }
 void SpectrumListenControls::setFrequency(double value) {
     _values["frequency"] = value;
     _frequency->setText(tr("%1 Hz").arg(value, 0, 'f', 1));
+}
+void SpectrumListenControls::reloadSettings() {
+    const QVariantMap defaults{{"low",0.},{"middle",0.},{"high",0.},{"enabled",false},{"selectedFrequency",false},{"width",.5},{"frequency",440.}};
+    DocumentSettings settings;
+    for(auto it=defaults.cbegin();it!=defaults.cend();++it)
+        _values[it.key()]=settings.value("spectrum/listen/"+it.key(),it.value());
+    for(auto widget:findChildren<QWidget*>()) {
+        const auto key=widget->property("documentPreference").toString();if(key.isEmpty())continue;
+        if(auto number=qobject_cast<QDoubleSpinBox*>(widget))number->setValue(_values.value(key).toDouble());
+        else if(auto check=qobject_cast<QCheckBox*>(widget))check->setChecked(_values.value(key).toBool());
+    }
+    setFrequency(_values.value("frequency").toDouble());
+    emit changed();
 }
 } // namespace Ms

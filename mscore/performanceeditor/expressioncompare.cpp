@@ -17,7 +17,7 @@
 #include <QPushButton>
 #include <QCheckBox>
 #include <QScrollBar>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <algorithm>
 namespace Ms {
 void PerformanceEditor::setupExpressionComparison()
@@ -29,12 +29,12 @@ void PerformanceEditor::setupExpressionComparison()
       _actionsRow->addWidget(_comparisonButton);
       _comparisonView=new QComboBox(this);_comparisonView->setObjectName("performanceComparisonView");
       _comparisonView->addItems({tr("同音对比"),tr("真实播放时间对比")});_comparisonView->hide();
-      _comparisonView->setCurrentIndex(qBound(0,QSettings().value("performanceEditor/comparisonView",0).toInt(),1));
+      _comparisonView->setCurrentIndex(qBound(0,DocumentSettings().value("performanceEditor/comparisonView",0).toInt(),1));
       _comparisonTime=_comparisonView->currentIndex()==1;
       _comparisonView->setToolTip(tr("同音对比把原、新力度放在同一个谱位。真实播放时间按两种效果各自的秒数排列，用来查看速度变化。"));
       _actionsRow->addWidget(_comparisonView);
       connect(_comparisonView,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int mode){cancelComparisonDrag();const double center=_canvas->width()*.5;const int anchor=tickForX(center,false);_comparisonTime=mode==1;
-            QSettings().setValue("performanceEditor/comparisonView",mode);surfaceResized(PerformanceSurface::Parameter);_scroll->setValue(qMax(0,leftTickForAnchor(anchor,center)));invalidateVisual();});
+            DocumentSettings().setValue("performanceEditor/comparisonView",mode);surfaceResized(PerformanceSurface::Parameter);_scroll->setValue(qMax(0,leftTickForAnchor(anchor,center)));invalidateVisual();});
       connect(_comparisonButton,&QToolButton::toggled,this,[this]{cancelComparisonDrag();syncExpressionComparison();updateSelection();status(comparisonActive()?tr("调整拟采用效果 · 中性色为谱中值，强调色为预览值"):tr("继续编辑谱中效果"));});
       connect(workflowContext(),&WorkflowContext::changed,this,&PerformanceEditor::syncExpressionComparison);
       connect(workflowContext(),&WorkflowContext::auditionChanged,this,[this]{const auto mode=workflowContext()->audition().value("mode").toString();if(_comparisonButton->property("auditionMode").toString()!=mode){_comparisonButton->setProperty("auditionMode",mode);updateSurfaces();}});
@@ -90,7 +90,7 @@ void PerformanceEditor::syncExpressionComparison()
       _comparisonView->setVisible(available&&_comparisonButton->isChecked());
       const bool guides=comparing&&_parameter->currentIndex()==0;
       if(guides!=_comparisonGuides){_comparisonGuides=guides;if(auto check=findChild<QCheckBox*>("performanceActualVelocity")){
-            QSignalBlocker block(check);_relativeActual=QSettings().value(guides?"performanceEditor/comparisonVelocityLines":"performanceEditor/markVelocityLines",!guides).toBool();check->setChecked(_relativeActual);}}
+            QSignalBlocker block(check);_relativeActual=DocumentSettings().value(guides?"performanceEditor/comparisonVelocityLines":"performanceEditor/markVelocityLines",!guides).toBool();check->setChecked(_relativeActual);}}
 
       _number->setEnabled(_parameter->currentIndex()!=2&&!waiting);
       if(comparing&&_parameter->currentIndex()==0&&!_selectedIndices.isEmpty()&&_comparisonValues.contains(_selectedIndices.front())){QSignalBlocker block(_number);_number->setValue(comparisonValue(_selectedIndices.front()));}
@@ -164,10 +164,10 @@ void PerformanceEditor::commitComparisonDrag()
 bool PerformanceEditor::comparisonEvent(QObject* object,QEvent* event)
       {
       if(_comparisonDragging&&(event->type()==QEvent::ShortcutOverride||event->type()==QEvent::KeyPress)&&static_cast<QKeyEvent*>(event)->key()==Qt::Key_Escape){event->accept();if(event->type()==QEvent::KeyPress){cancelComparisonDrag();updateSurfaces();}return true;}
-      if(_comparisonDragging&&(event->type()==QEvent::UngrabMouse||event->type()==QEvent::ApplicationDeactivate)){cancelComparisonDrag();updateSurfaces();return false;}
+      if(_comparisonDragging&&((event->type()==QEvent::UngrabMouse&&object==_canvas)||event->type()==QEvent::ApplicationDeactivate)){cancelComparisonDrag();updateSurfaces();return false;}
       if(object==_canvas&&comparisonWaiting()&&event->type()==QEvent::MouseButtonPress){status(tr("正在更新拟采用效果，完成后可以继续拖动。"));return true;}
       if(!comparisonActive()){if(_comparisonDragging)cancelComparisonDrag();return false;}
-      if(object!=_canvas&&!_comparisonDragging)return false;
+      if(object!=_canvas)return false;
       if(event->type()==QEvent::Hide){cancelComparisonDrag();return false;}
       if(event->type()==QEvent::ShortcutOverride||event->type()==QEvent::KeyPress){auto key=static_cast<QKeyEvent*>(event);const auto state=workflowContext()->expression();const bool undo=key->matches(QKeySequence::Undo)&&state.value("previewCanUndo").toBool(),redo=key->matches(QKeySequence::Redo)&&state.value("previewCanRedo").toBool();if(undo||redo){event->accept();if(event->type()==QEvent::KeyPress)workflowContext()->expressionAction(undo?"undoPreview":"redoPreview",QString(),QString());return true;}}
       if(event->type()==QEvent::ToolTip&&_parameter->currentIndex()==0){auto help=static_cast<QHelpEvent*>(event);int nearest=-1;double distance=1e20;for(int index:comparisonVisible(tickForX(help->pos().x()-12,false),tickForX(help->pos().x()+12,false))){if(!_notes[index].enabled||!_comparisonValues.contains(index)||qAbs(xForTick(comparisonDisplayTick(index),false)+4-help->pos().x())>9)continue;auto row=velocityLane(index,laneRect(),false);if(row.isEmpty())continue;double d=qAbs(yForValue(comparisonValue(index),row)-help->pos().y());if(d<distance){distance=d;nearest=index;}}if(nearest>=0){const auto& n=_notes[nearest];QToolTip::showText(help->globalPos(),tr("%1 · 谱表 %2 · 声部 %3\n力度参考线 %4：%5\n谱中 %6 → 拟采用 %7\n重音等演奏处理后的基础力度：%8").arg(n.name).arg(n.track/VOICES+1).arg(n.track%VOICES+1).arg(n.dynamicText).arg(n.markBase).arg(NoteVelocity::effective(n.base,n.type,n.raw)).arg(qRound(_comparisonValues.value(nearest).value("target").toDouble())).arg(n.base),_canvas);return true;}}

@@ -187,6 +187,7 @@ class ScoreObserver : public QObject {
       void scoreChanged();
       void activeScoreChanged();
       void workflowFileChanged();
+      void configurationSaveRequested();
       void positionChanged();
       void workflowPlaybackError(const QString& message);
       void previewActivated(int tick, int track);

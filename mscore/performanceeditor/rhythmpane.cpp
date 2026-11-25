@@ -35,7 +35,7 @@
 #include <QWindow>
 #include <QFutureWatcher>
 #include <QRegularExpression>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QSignalBlocker>
 #include <QPainter>
 #include <QMouseEvent>
@@ -373,12 +373,12 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     settingsRow->addWidget(_releases);
     auto original = new QCheckBox(tr("对照原卷帘"));
     original->setObjectName("rhythmShowOriginal");
-    original->setChecked(QSettings().value("rhythmWriting/showOriginal", false).toBool());
+    original->setChecked(DocumentSettings().value("rhythmWriting/showOriginal", false).toBool());
     setProperty("showOriginal", original->isChecked());
     settingsRow->addWidget(original);
     connect(original, &QCheckBox::toggled, this, [this, editor](bool on) {
         setProperty("showOriginal", on);
-        QSettings().setValue("rhythmWriting/showOriginal", on);
+        DocumentSettings().setValue("rhythmWriting/showOriginal", on);
         if (isVisible())
             if (auto notes = editor->findChild<QWidget *>("performanceNotesArea"))
                 notes->setVisible(on);
@@ -440,10 +440,10 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
     _table->setToolTip(
         tr("双击音序可按音名和原谱拍位选择对应。起音从选段第1拍算起；时值可输入1/3等分数，填0会按下一次起音重新估计。"));
     split->addWidget(_table);
-    if (!split->restoreState(QSettings().value("performanceEditor/rhythmDraftLayout").toByteArray()))
+    if (!split->restoreState(DocumentSettings().value("performanceEditor/rhythmDraftLayout").toByteArray()))
         split->setSizes({160, 150});
     connect(split, &QSplitter::splitterMoved, this,
-            [split] { QSettings().setValue("performanceEditor/rhythmDraftLayout", split->saveState()); });
+            [split] { DocumentSettings().setValue("performanceEditor/rhythmDraftLayout", split->saveState()); });
     layout->addWidget(split, 1);
     auto actionHost = new QWidget;
     actionHost->setObjectName("rhythmActionTools");
@@ -510,11 +510,11 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
             queueDraft(true);
     });
     connect(_grid, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
-        QSettings().setValue("rhythmWriting/grid", _grid->currentData());
+        DocumentSettings().setValue("rhythmWriting/grid", _grid->currentData());
         queueDraft();
     });
     connect(_releases, &QCheckBox::toggled, this, [this] {
-        QSettings().setValue("rhythmWriting/releases", _releases->isChecked());
+        DocumentSettings().setValue("rhythmWriting/releases", _releases->isChecked());
         queueDraft(true);
     });
     connect(_endMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -574,8 +574,11 @@ RhythmPane::RhythmPane(PerformanceEditor *editor) : QWidget(editor), _observer(t
                 if (!pending.isEmpty() && errors.isEmpty())
                     QTimer::singleShot(0, this, [this, pending] { operate(pending); });
             });
-    _grid->setCurrentIndex(qMax(0, _grid->findData(QSettings().value("rhythmWriting/grid", 120))));
-    _releases->setChecked(QSettings().value("rhythmWriting/releases", false).toBool());
+    _grid->setCurrentIndex(qMax(0, _grid->findData(DocumentSettings().value("rhythmWriting/grid", 120))));
+    _releases->setChecked(DocumentSettings().value("rhythmWriting/releases", false).toBool());
+    connect(documentUiState(),&DocumentUiState::captureRequested,this,[this](Score* score){
+        if(score&&_score&&score->masterScore()==_score->masterScore())captureDocumentState();
+    });
 }
 RhythmPane::~RhythmPane() {
     _closing = true;
@@ -615,6 +618,12 @@ void RhythmPane::resetForScore() {
         _cancelRead->store(true);
     ++_readGeneration;
     _score = current;
+    _restoringSession=DocumentSettings(current).value("rhythmWriting/session").toMap();
+    {QSignalBlocker grid(_grid),releases(_releases),endMode(_endMode),duration(_duration);
+     _grid->setCurrentIndex(qMax(0,_grid->findData(DocumentSettings(current).value("rhythmWriting/grid",120))));
+     _releases->setChecked(DocumentSettings(current).value("rhythmWriting/releases",false).toBool());
+     _endMode->setCurrentIndex(qBound(0,_restoringSession.value("endMode",0).toInt(),_endMode->count()-1));
+     _duration->setValue(_restoringSession.value("duration",30).toInt());}
     _ready = false;
     _calculating = false;
     _edits->clear();
@@ -628,7 +637,15 @@ void RhythmPane::resetForScore() {
     _table->setRowCount(0);
     _canvas->update();
     if (isVisible())
-        QTimer::singleShot(0, this, &RhythmPane::readScope);
+        QTimer::singleShot(0, this, [this]{readSource(_restoringSession.value("scope").toMap());});
+}
+void RhythmPane::captureDocumentState() {
+    if(!_score)return;
+    auto saved=_restoringSession;
+    if(saved.isEmpty())saved={{"scope",_data.value("scope")},{"rows",_rows},{"midi",_midi},
+        {"manual",_manualRows},{"applied",_applied},{"track",_tracks->currentData()}};
+    saved["endMode"]=_endMode->currentIndex();saved["duration"]=_duration->value();
+    DocumentSettings(_score).setValue("rhythmWriting/session",saved);
 }
 void RhythmPane::showEvent(QShowEvent *e) {
     PerformanceAppearance appearance;
@@ -676,7 +693,7 @@ void RhythmPane::hideEvent(QHideEvent *e) {
     _observer.cancelReadOnlyJob();
     QWidget::hideEvent(e);
 }
-void RhythmPane::readScope() { readSource({}); }
+void RhythmPane::readScope() { readSource(_restoringSession.value("scope").toMap()); }
 void RhythmPane::readSource(const QVariantMap &fixedScope, bool adopted) {
     if (_closing) return;
     if (_capture.state()["recording"].toBool()) {
@@ -766,12 +783,18 @@ void RhythmPane::readPage() {
     for (int track : ordered)
         _tracks->addItem(tr("谱表%1 · 声部%2").arg(track / 4 + 1).arg(track % 4 + 1), track);
     _tracks->setCurrentIndex(qMax(0, _tracks->findData(_tracks->property("preferredTrack"))));
+    if(!_restoringSession.isEmpty()) {
+        _tracks->setCurrentIndex(qMax(0,_tracks->findData(_restoringSession.value("track"))));
+        _rows=_restoringSession.value("rows").toList();_midi=_restoringSession.value("midi").toMap();
+        _manualRows=_restoringSession.value("manual").toBool();_applied=_restoringSession.value("applied").toBool();
+        _restoringSession.clear();
+    }
     _editing = false;
     auto scope = _data["scope"].toMap();
     _scopeLabel->setText(tr("写入第%1–%2小节 · 一次一条声部")
                              .arg(scope["firstMeasure"].toInt())
                              .arg(scope["lastMeasure"].toInt()));
-    queueDraft(true);
+    queueDraft(!_manualRows);
 }
 void RhythmPane::queueDraft(bool fresh) {
     if (_closing) return;
@@ -1267,7 +1290,7 @@ void installRhythmPane(PerformanceEditor *editor, QSplitter *splitter) {
                 if (auto notes = editor->findChild<QWidget *>("performanceNotesArea"))
                     notes->show();
             pane->show();
-            auto saved = QSettings().value("performanceEditor/modeLayout/3").toByteArray();
+            auto saved = DocumentSettings().value("performanceEditor/modeLayout/3").toByteArray();
             if (saved.isEmpty() || !splitter->restoreState(saved)) {
                 auto sizes = splitter->sizes();
                 for (int i = 0; i < sizes.size(); ++i)

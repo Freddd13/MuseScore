@@ -1,3 +1,4 @@
+#include "mscore/workflow/documentsettings.h"
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "vstpanel.h"
 #include "vstparameters.h"
@@ -40,7 +41,7 @@ VstSynth *backend() {
                : nullptr;
 }
 bool retainOpenSources() {
-  return personalFeaturesEnabled() && QSettings().value("kumo/vst/retainOpenScores",false).toBool();
+  return personalFeaturesEnabled() && DocumentSettings().value("kumo/vst/retainOpenScores",false).toBool();
 }
 constexpr char retiredCfxSnapshots[] = "kumoRetiredCfxSnapshots";
 bool isCurrentVstScore(const Score* score) {
@@ -338,7 +339,7 @@ class Panel final : public QDockWidget {
                   .toString());
   }
   void saveCatalog() {
-    QSettings().setValue(
+    DocumentSettings().setValue(
         "kumo/vst/catalog",
         QJsonDocument::fromVariant(known).toJson(QJsonDocument::Compact));
     populateCatalog();
@@ -372,14 +373,14 @@ class Panel final : public QDockWidget {
   void scanFile() {
     const auto path = QFileDialog::getOpenFileName(
         this, tr("添加 VST 音源或效果器"),
-        QSettings()
+        DocumentSettings()
             .value("kumo/vst/lastFolder",
                    QStringLiteral("C:/Program Files/Common Files/VST3"))
             .toString(),
         tr("VST 插件 (*.vst3 *.dll)"));
     if (path.isEmpty())
       return;
-    QSettings().setValue("kumo/vst/lastFolder", QFileInfo(path).absolutePath());
+    DocumentSettings().setValue("kumo/vst/lastFolder", QFileInfo(path).absolutePath());
     scan->setEnabled(false);
     state->setText(tr("正在扫描 %1…").arg(QFileInfo(path).fileName()));
     scanner.setProperty("path", path);
@@ -458,7 +459,7 @@ class Panel final : public QDockWidget {
     const QPointer<Score> owner = score;
     const auto before = unit(slot, effect), descriptor = before["plugin"].toMap();
     const auto label = descriptor["name"].toString();
-    const QString folder = QSettings().value("kumo/vst/presetFolder").toString();
+    const QString folder = DocumentSettings().value("kumo/vst/presetFolder").toString();
     const auto path =
         save ? QFileDialog::getSaveFileName(this, tr("保存%1预设").arg(label), folder,
                                             tr("插件预设 (*.json)"))
@@ -471,7 +472,7 @@ class Panel final : public QDockWidget {
       state->setText(tr("当前音源或效果已经变化，选中它后可以继续载入预设。"));
       return;
     }
-    QSettings().setValue("kumo/vst/presetFolder", QFileInfo(path).absolutePath());
+    DocumentSettings().setValue("kumo/vst/presetFolder", QFileInfo(path).absolutePath());
     if (seq) {
       seq->stopWait();
       seq->waitForStoppedRendering();
@@ -801,10 +802,10 @@ public:
     adoptCommon->setObjectName("kumoVstCommonPianoAdopt");
     auto commonActions=new ControlFlowLayout;commonActions->addWidget(adoptCommon);commonLayout->addLayout(commonActions);
     sourceLayout->addWidget(commonDetails);commonDetails->setVisible(false);
-    const bool detailsShown=QSettings().value("kumo/vst/commonPianoDetails",false).toBool();
+    const bool detailsShown=DocumentSettings().value("kumo/vst/commonPianoDetails",false).toBool();
     connect(commonDetailsButton,&QToolButton::toggled,this,[commonDetails,commonDetailsButton](bool shown) {
       commonDetails->setVisible(shown);commonDetailsButton->setArrowType(shown?Qt::DownArrow:Qt::RightArrow);
-      QSettings().setValue("kumo/vst/commonPianoDetails",shown);
+      DocumentSettings().setValue("kumo/vst/commonPianoDetails",shown);
     });
     commonDetailsButton->setChecked(detailsShown);
     connect(commonEnabled,&QCheckBox::toggled,this,[this](bool enabled) {
@@ -839,7 +840,7 @@ public:
     retainedState=new QLabel(body); retainedState->setObjectName("kumoVstRetainedState");
     retentionRow->addWidget(releaseInactive); retentionRow->addWidget(retainedState); sourceLayout->addLayout(retentionRow);
     connect(retainSources,&QCheckBox::toggled,this,[this](bool enabled) {
-      QSettings().setValue("kumo/vst/retainOpenScores",enabled); selectSourceSession(score);
+      DocumentSettings().setValue("kumo/vst/retainOpenScores",enabled); selectSourceSession(score);
       if (!enabled && backend()) backend()->rack().releaseInactiveSessions();
       state->setText(enabled?tr("已开启：换谱保留音源，返回时继续使用；关谱后释放。")
           :tr("已关闭：闲置音源已释放，换谱沿用原有加载方式。")); refreshRetained();
@@ -869,9 +870,9 @@ public:
     row->addStretch();
     libraryLayout->addLayout(row);
     isolate = new QCheckBox(tr("新添加的插件使用独立进程"), body);
-    isolate->setChecked(QSettings().value("kumo/vst/isolated", false).toBool());
+    isolate->setChecked(DocumentSettings().value("kumo/vst/isolated", false).toBool());
     connect(isolate, &QCheckBox::toggled, this,
-            [](bool value) { QSettings().setValue("kumo/vst/isolated", value); });
+            [](bool value) { DocumentSettings().setValue("kumo/vst/isolated", value); });
     isolate->setToolTip(tr("将这个插件放在单独进程，额外增加约两个 256 "
                            "样本块的播放延迟。直接运行适合低延迟弹奏。"));
     libraryLayout->addWidget(isolate);
@@ -998,7 +999,7 @@ public:
       }
     });
     known = QJsonDocument::fromJson(
-                QSettings().value("kumo/vst/catalog").toByteArray())
+                DocumentSettings().value("kumo/vst/catalog").toByteArray())
                 .toVariant()
                 .toList();
     populateCatalog();

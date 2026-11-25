@@ -161,7 +161,7 @@ MuseScore {
  onCandidateChanged:{previewVersion++;publishComparison();if(candidate&&previewing&&!legacyAudition&&playbackState.playing&&playbackState.mode==="candidate"&&!applying&&!refreshingApplication){pendingAudition=true;auditionRetry.restart()}}
  onSelectedChanged:{selectedIssueScoreId="";publishComparison()}
  onStatusChanged:{if(editorContext&&!switchingScore)editorContext.feedback=status}
- Connections {target:root.editorContext;ignoreUnknownSignals:true;onRequested:root.editorRequest(action,scoreId,midiId)}
+ Connections {target:root.editorContext;ignoreUnknownSignals:true;onRequested:root.editorRequest(action,scoreId,midiId);onSaveStateRequested:root.rememberSession()}
  property string workerSource:""
  property var midi:null
  property bool newImportPending:false
@@ -516,6 +516,7 @@ MuseScore {
   if(embeddedActiveDialog)embeddedActiveDialog.close();
   previewing=false;legacyAudition=false;selected=-1;stale=false;publishedComparisonKey="";revealResultsPending=false;
   sessionOwner=curScore;observer.score=curScore;captureSession=curScore?captureForScore():null;
+  var recording=observer.loadConfiguration("expression-recording");captureEndMode=Math.max(0,Math.min(2,recording.endMode||0));captureDuration=Math.max(1,Math.min(3600,recording.duration||30));captureMonitor=recording.monitor!==false;
   var saved=sessionOwner&&editorContext&&typeof editorContext.expressionSession==="function"?editorContext.expressionSession(sessionOwner):({});
   Session.restore(root,saved,ExpressionSettings.defaults());scopeOwner=retainedScope?curScore:null;
   refreshHistory();refreshLiveSelection();candidateTimer.stop();
@@ -523,9 +524,10 @@ MuseScore {
   var sameRanges=!config.rubato||Session.rangesKey(saved.tempoRanges)===Session.rangesKey(tempoTargetRanges());
   if(valid){revision=observer.analysisRevision();info=observer.workflowInfo();if(candidate){var restored=Project.copy(candidate);restored.revision=revision;candidate=restored;if(!saved.incomplete&&sameRanges)candidateConfig=candidateRequestKey();}}
   stale=notes.length>0&&(!valid||saved.incomplete===true);
-  if(stale){candidate=null;status="乐谱已有修改，点击“重新对应”更新演奏结果。";}
+  if(stale){candidate=null;status=saved.fromScoreFile?"已恢复演奏资料，正在更新谱面对应。":"乐谱已有修改，点击“重新对应”更新演奏结果。";}
   else if(midi)status="已恢复这份谱的演奏对应"+(dirtyProject?"；表达项目有未保存的调整。":"。");
   switchingScore=false;
+  if(saved.fromScoreFile&&midi){if(root.visible)Qt.callLater(function(){root.analyze()});else alignmentOnShow=true;}
   if(valid&&candidate&&!saved.incomplete&&!sameRanges)candidateTimer.restart();
   if(editorContext)editorContext.feedback=status;
   if(candidate)publishComparison();else observer.setEditorComparison({});

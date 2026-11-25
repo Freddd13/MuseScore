@@ -35,6 +35,9 @@ class ScoreVideoPanel final : public QDockWidget
     QTimer _timer;
     QElapsedTimer _clock;
     double _position = 0, _base = 0, _audioDuration = 0;
+    double _restoredPosition = -1;
+    void captureDocumentState();
+    void restoreDocumentState();
     bool _playing = false, _updating = false, _preparingPreview = false, _playAfterPrepare = false;
     QString _previewPath, _previewKey;
     QVariantMap _previewPlan;

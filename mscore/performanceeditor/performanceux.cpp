@@ -28,7 +28,7 @@
 #include <QMenu>
 #include <QPainter>
 #include <QPushButton>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QTableWidget>
 #include <QTextEdit>
 #include <QPlainTextEdit>
@@ -57,7 +57,7 @@ class PerformancePeekKeys : public QObject {
       };
 void PerformanceEditor::setupUsabilityControls()
       {
-      QSettings settings;
+      DocumentSettings settings;
       _dragSensitivity=settings.value("performanceEditor/dragSensitivity",1.).toDouble();
       if(!std::isfinite(_dragSensitivity)||_dragSensitivity<.25||_dragSensitivity>4)_dragSensitivity=1;
       _keyboardMode=qBound(0,settings.value("performanceEditor/keyboardMode",1).toInt(),2);
@@ -82,23 +82,23 @@ void PerformanceEditor::setupUsabilityControls()
       auto keyMode=new QComboBox(this); keyMode->setObjectName("performanceKeyboardMode");
       keyMode->addItems({tr("完整键盘"),tr("淡化无关音高"),tr("只显示相关音高")}); keyMode->setCurrentIndex(_keyboardMode);
       keyMode->setToolTip(tr("相关音高来自当前筛选允许显示的音符；收起音高时网格和选音一起调整。"));
-      connect(keyMode,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int mode){finishWheel();cancelGesture();_keyboardMode=mode;QSettings().setValue("performanceEditor/keyboardMode",mode);rebuildPitchRows();centerPitch(false,true);invalidateVisual();}); add(keyMode);
+      connect(keyMode,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int mode){finishWheel();cancelGesture();_keyboardMode=mode;DocumentSettings().setValue("performanceEditor/keyboardMode",mode);rebuildPitchRows();centerPitch(false,true);invalidateVisual();}); add(keyMode);
       auto actual=new QCheckBox(tr("显示力度参考线"),this);actual->setObjectName("performanceActualVelocity");
       actual->setToolTip(tr("MIDI力度视图中，虚线显示各谱表由力度记号给出的力度。显示方式由上方的MIDI力度／相对%选择；音符继续按原来的相对或固定方式保存。"));
       connect(actual,&QCheckBox::toggled,this,[this](bool on){finishWheel();cancelGesture();_relativeActual=on;_visibleScoreRect=QRect();_number->setSuffix(rangeKind()==1?" %":QString());_number->setRange(rangeKind()==1?NoteVelocity::minOffset:1,rangeKind()==1?NoteVelocity::maxOffset:127);invalidateVisual();invalidateOverlay();updateSelection();});add(actual);
       actual->setChecked(settings.value("performanceEditor/markVelocityLines",true).toBool());
-      connect(actual,&QCheckBox::toggled,this,[this](bool on){QSettings().setValue(_comparisonGuides?"performanceEditor/comparisonVelocityLines":"performanceEditor/markVelocityLines",on);});
+      connect(actual,&QCheckBox::toggled,this,[this](bool on){DocumentSettings().setValue(_comparisonGuides?"performanceEditor/comparisonVelocityLines":"performanceEditor/markVelocityLines",on);});
       auto arrangement=new QComboBox(this);arrangement->setObjectName("performanceVelocityArrangement");arrangement->addItems({tr("力度同图"),tr("按谱表分区")});arrangement->setCurrentIndex(qBound(0,settings.value("performanceEditor/velocityArrangement",0).toInt(),1));_velocityArrangement=arrangement->currentIndex();
-      connect(arrangement,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int i){finishWheel();cancelGesture();_velocityArrangement=i;QSettings().setValue("performanceEditor/velocityArrangement",i);invalidateVisual();});add(arrangement);
+      connect(arrangement,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int i){finishWheel();cancelGesture();_velocityArrangement=i;DocumentSettings().setValue("performanceEditor/velocityArrangement",i);invalidateVisual();});add(arrangement);
       auto together=new QComboBox(this);together->setObjectName("performanceGroupVelocity");together->addItems({tr("一起增减百分比"),tr("相同MIDI差值")});_groupRelative=settings.value("performanceEditor/groupRelative",true).toBool();together->setCurrentIndex(_groupRelative?0:1);
       together->setToolTip(tr("百分比方式分别按各音的力度参考线换算；例如80和40同时增加10%，得到88和44。"));
-      connect(together,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int i){finishWheel();cancelGesture();_groupRelative=i==0;QSettings().setValue("performanceEditor/groupRelative",_groupRelative);});add(together);
+      connect(together,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this](int i){finishWheel();cancelGesture();_groupRelative=i==0;DocumentSettings().setValue("performanceEditor/groupRelative",_groupRelative);});add(together);
       connect(_parameter,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[actual,arrangement,together](int i){actual->setVisible(i==0);arrangement->setVisible(i==0);together->setVisible(i==0);});
       auto sensitivity=new QComboBox(this);sensitivity->setObjectName("performanceDragSensitivity");
       const QList<double> factors{.25,.5,1,2,4};for(double factor:factors)sensitivity->addItem(tr("拖动 %1 倍").arg(factor),factor);
       sensitivity->setCurrentIndex(qMax(0,sensitivity->findData(_dragSensitivity)));
       sensitivity->setToolTip(tr("只改变鼠标上下拖动调整力度的速度；不改变滚轮步长或显示缩放。"));
-      connect(sensitivity,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this,sensitivity](int i){finishWheel();cancelGesture();_dragSensitivity=sensitivity->itemData(i).toDouble();QSettings().setValue("performanceEditor/dragSensitivity",_dragSensitivity);});add(sensitivity);
+      connect(sensitivity,QOverload<int>::of(&QComboBox::currentIndexChanged),this,[this,sensitivity](int i){finishWheel();cancelGesture();_dragSensitivity=sensitivity->itemData(i).toDouble();DocumentSettings().setValue("performanceEditor/dragSensitivity",_dragSensitivity);});add(sensitivity);
       auto tools=new QWidget(this);auto bar=new QGridLayout(tools);bar->setContentsMargins(0,0,0,0);bar->setSpacing(1);
       const QStringList labels{tr("选择"),tr("铅笔"),tr("直线")};
       for(int i=0;i<3;++i){auto button=new QToolButton(tools);button->setText(labels[i]);
@@ -115,9 +115,9 @@ void PerformanceEditor::setupUsabilityControls()
       add(tools);
       auto operations=new QToolButton(this);operations->setText(tr("操作设置…"));operations->setObjectName("performanceOperationSettings");setComponentToolIcon(operations,"settings");
       connect(operations,&QToolButton::clicked,this,[this]{showPerformanceSettings(_score,this,[this]{
-            const auto key=QKeySequence(QSettings().value("performanceEditor/peekKey").toString());
+            const auto key=QKeySequence(DocumentSettings().value("performanceEditor/peekKey").toString());
             _peekKey=key.isEmpty()?0:key[0];
-            _peekReleaseMs=qBound(0,QSettings().value("performanceEditor/peekReleaseMs",0).toInt(),10000);
+            _peekReleaseMs=qBound(0,DocumentSettings().value("performanceEditor/peekReleaseMs",0).toInt(),10000);
             });});add(operations);
       _wheelButton->setToolTip(tr("开启后指向音符滚轮调力度。Alt+Shift+滚轮临时选择视口内最近的音并细调 1；本次滚动中固定目标。普通 Shift 粗调 8，Ctrl 仍缩放。停转 300 ms 后写入，Esc 取消。"));
       _axis->setToolTip(tr("MIDI 力度：显示最终力度；相对 %：在力度记号和渐强渐弱给出的力度上增减百分比。切换显示不会转换音符的保存方式。"));

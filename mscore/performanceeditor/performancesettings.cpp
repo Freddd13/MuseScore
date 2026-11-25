@@ -2,7 +2,7 @@
 #include "performancesettings.h"
 #include "libmscore/mscore.h"
 #include <QCheckBox>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QColorDialog>
@@ -56,7 +56,7 @@ QColor PerformanceAppearance::noteColor(int value, int track) const
       }
 void PerformanceAppearance::load()
       {
-      QSettings settings; settings.beginGroup("performanceEditor/appearance");
+      DocumentSettings settings; settings.beginGroup("performanceEditor/appearance");
       auto read = [&settings](const QString& key, QColor& color) { const QColor candidate(settings.value(key, color.name()).toString()); if (candidate.isValid()) color = candidate; };
       for (int i = 0; i < RoleCount; ++i) read(QString("role%1").arg(i), colors[i]);
       for (int i = 0; i < 4; ++i) { read(QString("gradient%1").arg(i), gradient[i]); read(QString("voice%1").arg(i), voices[i]); }
@@ -83,7 +83,7 @@ void PerformanceAppearance::load()
       }
 void PerformanceAppearance::save() const
       {
-      QSettings settings; settings.beginGroup("performanceEditor/appearance");
+      DocumentSettings settings; settings.beginGroup("performanceEditor/appearance");
       for (int i = 0; i < RoleCount; ++i) settings.setValue(QString("role%1").arg(i), colors[i].name());
       for (int i = 0; i < 4; ++i) { settings.setValue(QString("gradient%1").arg(i), gradient[i].name()); settings.setValue(QString("voice%1").arg(i), voices[i].name()); settings.setValue(QString("stop%1").arg(i), stops[i]); }
       for (int i = 0; i < 8; ++i) settings.setValue(QString("staff%1").arg(i), staves[i].name());

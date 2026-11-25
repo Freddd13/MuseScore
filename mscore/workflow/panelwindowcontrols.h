@@ -13,6 +13,7 @@
 #include <QStyle>
 #include <QTimer>
 #include <QToolBar>
+#include <QVariantMap>
 #include <functional>
 
 namespace Ms {
@@ -211,6 +212,35 @@ public:
     ~PanelWindowControls() override { clearMinimized(); }
     QAction* fullscreenAction() const { return _fullscreen; }
     QAction* minimizeAction() const { return _minimize; }
+    QVariantMap documentState() const {
+        if (!_dock) return {};
+        return {{"fullscreen",_fullscreen->isChecked()},
+                {"minimized",_dock->property("kumoPanelMinimized").toBool()},
+                {"baseFloating",_wasFloating},{"baseGeometry",_geometry},{"baseSize",_dockedSize},
+                {"minimizedGeometry",_minimizedGeometry},{"minimizedSize",_minimizedSize},
+                {"features",int(_dock->features())},{"allowedAreas",int(_dock->allowedAreas())}};
+    }
+    void clearDocumentState() {
+        _fullscreen->setChecked(false);
+        if (_dock) _dock->setProperty("kumoPanelMinimized",false);
+        clearMinimized();
+    }
+    void restoreDocumentState(const QVariantMap& state) {
+        if (!_dock || state.isEmpty()) return;
+        _dock->setFeatures(QDockWidget::DockWidgetFeatures(state.value("features",int(_dock->features())).toInt()));
+        _dock->setAllowedAreas(Qt::DockWidgetAreas(state.value("allowedAreas",int(_dock->allowedAreas())).toInt()));
+        if (state.value("fullscreen").toBool()) {
+            const bool floating=state.value("baseFloating").toBool();
+            _dock->setFloating(floating);
+            if (floating) _dock->restoreGeometry(state.value("baseGeometry").toByteArray());
+            _fullscreen->setChecked(true);
+            _wasFloating=floating;_geometry=state.value("baseGeometry").toByteArray();_dockedSize=state.value("baseSize").toSize();
+        } else if (state.value("minimized").toBool()) {
+            _dock->show();minimize();
+            _minimizedGeometry=state.value("minimizedGeometry").toByteArray();
+            _minimizedSize=state.value("minimizedSize").toSize();
+        }
+    }
     void setTransport(std::function<bool()> playing, std::function<void()> stop)
     {
         _playing = std::move(playing);

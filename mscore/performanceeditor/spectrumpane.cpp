@@ -42,7 +42,7 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QScopedValueRollback>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QSignalBlocker>
 #include <QSlider>
 #include <QSpinBox>
@@ -174,11 +174,11 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _display->setObjectName("transcriptionDisplay");
     _display->addItems({tr("上下对照"), tr("叠加对照")});
     _display->setToolTip(tr("叠加在钢琴卷帘后对照；按住 Alt 可以选择和拖动谱中音符。"));
-    _display->setCurrentIndex(QSettings().value("spectrum/display", 0).toInt());
+    _display->setCurrentIndex(DocumentSettings().value("spectrum/display", 0).toInt());
     tools->addWidget(_display);
     _preset = new QComboBox;
     _preset->addItems({tr("音高与起音"), tr("低音更清楚"), tr("起音更清楚")});
-    _preset->setCurrentIndex(QSettings().value("spectrum/preset", 0).toInt());
+    _preset->setCurrentIndex(DocumentSettings().value("spectrum/preset", 0).toInt());
     tools->addWidget(_preset);
     _tool = new QComboBox;
     _tool->setObjectName("transcriptionTool");
@@ -196,7 +196,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _follow = new QComboBox;
     _follow->setObjectName("spectrumPlaybackFollow");
     _follow->addItems({tr("固定视图"), tr("到边翻页"), tr("平滑跟随")});
-    _follow->setCurrentIndex(qBound(0, QSettings().value("spectrum/playbackFollow", 0).toInt(), 2));
+    _follow->setCurrentIndex(qBound(0, DocumentSettings().value("spectrum/playbackFollow", 0).toInt(), 2));
     _follow->setToolTip(tr("原曲正在播放时，选择频谱视图怎样跟随播放线。"));
     transport->addWidget(_follow);
     _returnToPlayback = new QToolButton;
@@ -211,7 +211,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
         followPlaybackView(true);
     });
     connect(_follow, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int mode) {
-        QSettings().setValue("spectrum/playbackFollow", mode);
+        DocumentSettings().setValue("spectrum/playbackFollow", mode);
         _followSuspended = false;
         _returnToPlayback->setToolTip(tr("回到播放位置。手动平移或缩放后，也可在这里恢复跟随。"));
         if (mode)
@@ -264,14 +264,14 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _tuning->setDecimals(1);
     _tuning->setSuffix(" Hz");
     _tuning->setPrefix("A4 ");
-    _tuning->setValue(QSettings().value("spectrum/tuning", 440).toDouble());
+    _tuning->setValue(DocumentSettings().value("spectrum/tuning", 440).toDouble());
     _tuning->setToolTip(tr("A4 调律频率；只改变频率与音名的对照"));
     tools->addWidget(_tuning);
     _transpose = new QSpinBox;
     _transpose->setRange(-24, 24);
     _transpose->setPrefix(tr("移调 "));
     _transpose->setSuffix(tr(" 半音"));
-    _transpose->setValue(QSettings().value("spectrum/transpose", 0).toInt());
+    _transpose->setValue(DocumentSettings().value("spectrum/transpose", 0).toInt());
     _transpose->setToolTip(tr("将选出的音名移调后标注和输入；录音频率保持原值"));
     tools->addWidget(_transpose);
     _harmonics = button(tr("谐波参考"), 1, 5, [this] {
@@ -292,7 +292,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
                  _harmonics, inputButton};
     auto displayButton = button(tr("频谱设置"), 2, 0, [this] {
         _displayPanel->setVisible(!_displayPanel->isVisible());
-        QSettings().setValue("spectrum/displayControls", _displayPanel->isVisible());
+        DocumentSettings().setValue("spectrum/displayControls", _displayPanel->isVisible());
     });
     displayButton->setObjectName("spectrumDisplaySettings");
     setComponentToolIcon(displayButton, "settings");
@@ -344,15 +344,15 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     analysisBox->addWidget(_preset);
     _durationFromMark = new QCheckBox(tr("输入乐谱时，按标注长度估计记谱时值"));
     _durationFromMark->setObjectName("spectrumInputMarkedDuration");
-    _durationFromMark->setChecked(QSettings().value("spectrum/inputMarkedDuration", false).toBool());
+    _durationFromMark->setChecked(DocumentSettings().value("spectrum/inputMarkedDuration", false).toBool());
     analysisBox->addWidget(_durationFromMark);
     auto preload=new QCheckBox(tr("后台准备整条音轨"));preload->setObjectName("spectrumPreloadTrack");
-    preload->setChecked(QSettings().value("spectrum/preloadTrack",true).toBool());
+    preload->setChecked(DocumentSettings().value("spectrum/preloadTrack",true).toBool());
     preload->setToolTip(tr("先准备可见部分，再准备相邻位置和整条录音。关闭面板时暂停，重新打开继续复用。"));
     analysisBox->addWidget(preload);
-    connect(preload,&QCheckBox::clicked,this,[this](bool on){QSettings().setValue("spectrum/preloadTrack",on);_request.clear();viewChanged();});
+    connect(preload,&QCheckBox::clicked,this,[this](bool on){DocumentSettings().setValue("spectrum/preloadTrack",on);_request.clear();viewChanged();});
     connect(_durationFromMark, &QCheckBox::clicked, this,
-            [](bool checked) { QSettings().setValue("spectrum/inputMarkedDuration", checked); });
+            [](bool checked) { DocumentSettings().setValue("spectrum/inputMarkedDuration", checked); });
     auto analysisButtons = new QHBoxLayout;
     analysisButtons->addWidget(cacheButton);
     analysisButtons->addWidget(rebuild);
@@ -386,14 +386,14 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _displayPanel = options;
     _displayPanel->setMinimumHeight(64);
     _displayPanel->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Ignored);
-    _displayPanel->setVisible(QSettings().value("spectrum/displayControls", false).toBool());
+    _displayPanel->setVisible(DocumentSettings().value("spectrum/displayControls", false).toBool());
     _workspaceSplitter=new QSplitter(Qt::Vertical);_workspaceSplitter->setObjectName("spectrumWorkspaceSplitter");
     _workspaceSplitter->setChildrenCollapsible(false);_workspaceSplitter->addWidget(_displayPanel);
     layout->addWidget(_workspaceSplitter,1);
-    connect(_workspaceSplitter,&QSplitter::splitterMoved,this,[this]{const auto sizes=_workspaceSplitter->sizes();if(_displayPanel->isVisible() && !sizes.isEmpty() && sizes[0]>0)QSettings().setValue("spectrum/settingsHeight",sizes[0]);});
+    connect(_workspaceSplitter,&QSplitter::splitterMoved,this,[this]{const auto sizes=_workspaceSplitter->sizes();if(_displayPanel->isVisible() && !sizes.isEmpty() && sizes[0]>0)DocumentSettings().setValue("spectrum/settingsHeight",sizes[0]);});
     auto updateSettingsHeight = [this] {
         _workspaceSplitter->setVisible(!_displayPanel->isHidden()||!_marksSplitter->isHidden());
-        if(!_displayPanel->isHidden()){const int h=QSettings().value("spectrum/settingsHeight",160).toInt();_workspaceSplitter->setSizes({h,qMax(80,_workspaceSplitter->height()-h)});}
+        if(!_displayPanel->isHidden()){const int h=DocumentSettings().value("spectrum/settingsHeight",160).toInt();_workspaceSplitter->setSizes({h,qMax(80,_workspaceSplitter->height()-h)});}
         setMinimumHeight(_display->currentIndex()==0?180:72);
     };
     connect(displayButton, &QToolButton::clicked, this, updateSettingsHeight);
@@ -405,7 +405,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     connect(gridButton, &QToolButton::clicked, this, [this, options, updateSettingsHeight] {
         options->setCurrentIndex(2);
         options->show();
-        QSettings().setValue("spectrum/displayControls", true);
+        DocumentSettings().setValue("spectrum/displayControls", true);
         updateSettingsHeight();
     });
     connect(_beatControls, &SpectrumBeatControls::changed, this, [this] {
@@ -461,7 +461,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _marksSplitter->setChildrenCollapsible(false);
     _marksSplitter->addWidget(canvasHost);
     _workspaceSplitter->addWidget(_marksSplitter);
-    _workspaceSplitter->setSizes({QSettings().value("spectrum/settingsHeight",160).toInt(),400});
+    _workspaceSplitter->setSizes({DocumentSettings().value("spectrum/settingsHeight",160).toInt(),400});
     connect(_timeScroll, &QScrollBar::valueChanged, this, [this](int value) {
         suspendPlaybackFollow();
         if (!usesScoreTimeline())
@@ -514,10 +514,10 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _marksToggle = new QToolButton;
     _marksToggle->setObjectName("spectrumMarksToggle");
     _marksToggle->setCheckable(true);
-    _marksToggle->setChecked(QSettings().value("spectrum/showMarks", true).toBool());
+    _marksToggle->setChecked(DocumentSettings().value("spectrum/showMarks", true).toBool());
     _marksToggle->setToolTip(tr("展开或收起已经保存的音高标注。拖动频谱与列表之间的分隔条可调整高度。"));
     connect(_marksToggle, &QToolButton::clicked, this, [this](bool checked) {
-        QSettings().setValue("spectrum/showMarks", checked);
+        DocumentSettings().setValue("spectrum/showMarks", checked);
         updateMarksVisibility();
     });
     bottom->addWidget(_marksToggle);
@@ -533,11 +533,11 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _marksSplitter->setStretchFactor(0, 5);
     _marksSplitter->setStretchFactor(1, 1);
     _marksSplitter->setSizes({400, 80});
-    const auto markSizes = QSettings().value("spectrum/marksSplitter").toByteArray();
+    const auto markSizes = DocumentSettings().value("spectrum/marksSplitter").toByteArray();
     if (!markSizes.isEmpty())
         _marksSplitter->restoreState(markSizes);
     connect(_marksSplitter, &QSplitter::splitterMoved, this, [this] {
-        QSettings().setValue("spectrum/marksSplitter", _marksSplitter->saveState());
+        DocumentSettings().setValue("spectrum/marksSplitter", _marksSplitter->saveState());
     });
     connect(_marks, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
         auto m = item->data(Qt::UserRole + 1).toMap();
@@ -558,6 +558,9 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     _requestTimer.setInterval(90);
     connect(&_requestTimer, &QTimer::timeout, this, &SpectrumPane::requestVisible);
     connect(workflowContext(), &WorkflowContext::activeScoreChanged, this, &SpectrumPane::scoreChanged);
+    connect(documentUiState(),&DocumentUiState::captureRequested,this,[this](Score* score){
+        if(score&&_editor->score()&&score->masterScore()==_editor->score()->masterScore())captureDocumentState();
+    });
     connect(_tracks, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
         const auto tracks = _media->property("tracks").toList();
         const auto previousTrack = _track.value("id");
@@ -603,7 +606,7 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
             _clips->addItem(tr("按谱对齐 · %1").arg(a.value("name", tr("对应片段")).toString()), a);
         }
         int selected = 0;
-        const auto savedView = QSettings().value(timeViewKey()).toString();
+        const auto savedView = DocumentSettings().value(timeViewKey()).toString();
         for (int i = 1; i < _clips->count(); ++i)
             if (!savedView.isEmpty() && _clips->itemData(i).toMap().value("id").toString() == savedView) {
                 selected = i;
@@ -634,14 +637,14 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
     });
     connect(_clips, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
         _clip = _clips->currentData().toMap();
-        QSettings().setValue(timeViewKey(), _clip.value("id").toString());
+        DocumentSettings().setValue(timeViewKey(), _clip.value("id").toString());
         _request.clear();
         if (!_clip.isEmpty())
             fitTimeRange();
         viewChanged();
     });
     connect(_display, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int n) {
-        QSettings().setValue("spectrum/display", n);
+        DocumentSettings().setValue("spectrum/display", n);
         updateMarksVisibility();
         recolor();
         setMinimumHeight(n == 1 ? 126 : 180);
@@ -657,17 +660,17 @@ SpectrumPane::SpectrumPane(PerformanceEditor *editor) : QWidget(editor), _editor
             });
     });
     connect(_preset, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int n) {
-        QSettings().setValue("spectrum/preset", n);
+        DocumentSettings().setValue("spectrum/preset", n);
         viewChanged();
     });
     connect(_tuning, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double n) {
-        QSettings().setValue("spectrum/tuning", n);
+        DocumentSettings().setValue("spectrum/tuning", n);
         if (_hasPick)
             _cursorPitch = 69. + 12. * std::log2(_pickFrequency / n);
         viewChanged();
     });
     connect(_transpose, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int n) {
-        QSettings().setValue("spectrum/transpose", n);
+        DocumentSettings().setValue("spectrum/transpose", n);
         refreshMarks();
         _canvas->update();
         _editor->_noteCanvas->update();
@@ -1093,6 +1096,7 @@ void SpectrumPane::audioChanged() {
         _span = qBound(250., _audio->property("duration").toDouble(), 8000.);
         viewChanged();
     }
+    restoreNavigation();
     updateActions();
     _canvas->update();
     _editor->_noteCanvas->update();
@@ -1303,12 +1307,26 @@ void SpectrumPane::scoreChanged() {
     const auto score = _editor->score();
     const auto text = score ? score->masterScore()->metaTag("kumo.transcription") : QString();
     if (score != _documentScore) {
+        _documentScore = score;
+        DocumentSettings settings(score);
+        _pendingNavigation=settings.value("spectrum/navigation").toMap();
+        _display->setCurrentIndex(qBound(0,settings.value("spectrum/display",0).toInt(),1));
+        _preset->setCurrentIndex(qBound(0,settings.value("spectrum/preset",0).toInt(),_preset->count()-1));
+        _follow->setCurrentIndex(qBound(0,settings.value("spectrum/playbackFollow",0).toInt(),2));
+        _tuning->setValue(settings.value("spectrum/tuning",440.).toDouble());
+        _transpose->setValue(settings.value("spectrum/transpose",0).toInt());
+        _displayPanel->setVisible(settings.value("spectrum/displayControls",false).toBool());
+        _displayPanel->setCurrentIndex(qBound(0,settings.value("spectrum/settingsTab",0).toInt(),_displayPanel->count()-1));
+        _marksToggle->setChecked(settings.value("spectrum/showMarks",true).toBool());
+        _durationFromMark->setChecked(settings.value("spectrum/inputMarkedDuration",false).toBool());
+        _displayControls->reloadSettings();_listenControls->reloadSettings();
+        const auto marks=settings.value("spectrum/marksSplitter").toByteArray();if(!marks.isEmpty())_marksSplitter->restoreState(marks);
+        _workspaceSplitter->setSizes({settings.value("spectrum/settingsHeight",160).toInt(),400});
         const auto document = QJsonDocument::fromJson(text.toUtf8()).toVariant().toMap();
         _grids = document.value("grids").toMap();
         _annotations = document.value("pitches").toList();
         restoreGrid();
         refreshMarks();
-        _documentScore = score;
         _drawingMark = false;
         _editingMark.clear();
         _hasPick = false;
@@ -1332,6 +1350,27 @@ void SpectrumPane::scoreChanged() {
     }
     refreshTracks();
     viewChanged();
+}
+void SpectrumPane::captureDocumentState() {
+    if(!_documentScore)return;
+    DocumentSettings settings(_documentScore);
+    settings.setValue("spectrum/settingsTab",_displayPanel->currentIndex());
+    settings.setValue("spectrum/marksSplitter",_marksSplitter->saveState());
+    settings.setValue("spectrum/navigation",QVariantMap{{"track",_track.value("id")},{"clip",_clip.value("id")},
+        {"from",_from},{"span",_span},{"low",_low},{"high",_high},{"cursor",sourceInPlayback()?sourcePosition():_cursorMs},
+        {"pickFrequency",_pickFrequency},{"hasPick",_hasPick},{"pickMs",_pickMs},{"a",_a},{"b",_b},
+        {"loop",_loop->isChecked()},{"harmonics",_harmonics->isChecked()},{"tool",_tool->currentIndex()}});
+}
+void SpectrumPane::restoreNavigation() {
+    if(!_audioLoaded||_pendingNavigation.isEmpty()||_pendingNavigation.value("track")!=_track.value("id"))return;
+    const auto value=_pendingNavigation;_pendingNavigation.clear();
+    _from=qMax(0.,value.value("from").toDouble());_span=qMax(250.,value.value("span",8000.).toDouble());
+    _low=value.value("low",20.5).toDouble();_high=qMax(_low+1.,value.value("high",108.5).toDouble());
+    _cursorMs=value.value("cursor",0.).toDouble();_pickFrequency=value.value("pickFrequency",440.).toDouble();
+    _hasPick=value.value("hasPick").toBool();_pickMs=value.value("pickMs").toDouble();_a=value.value("a",-1.).toDouble();_b=value.value("b",-1.).toDouble();
+    _loop->setChecked(value.value("loop").toBool());_harmonics->setChecked(value.value("harmonics").toBool());
+    _tool->setCurrentIndex(qBound(0,value.value("tool").toInt(),_tool->count()-1));
+    _listenControls->setFrequency(_pickFrequency);viewChanged();
 }
 void SpectrumPane::viewChanged() {
     if (!isVisible())
@@ -1422,7 +1461,7 @@ void SpectrumPane::requestVisible() {
                         {"lowPitch", 0.},
                         {"highPitch", 128.},
                         {"fundamentalMix", _displayControls->values().value("fundamental", 0.)},
-                        {"preload",QSettings().value("spectrum/preloadTrack",true)},
+                        {"preload",DocumentSettings().value("spectrum/preloadTrack",true)},
                         {"fftSize", _preset->currentIndex() == 1   ? 32768
                                     : _preset->currentIndex() == 2 ? 4096
                                                                    : 16384},
@@ -2174,7 +2213,7 @@ void installSpectrumPane(PerformanceEditor *editor, QSplitter *splitter) {
         if (!pane->property("kumoDetachedArea").toBool())
             pane->setVisible(page == 2);
         const auto saved =
-            QSettings().value("performanceEditor/modeLayout/" + QString::number(page)).toByteArray();
+            DocumentSettings().value("performanceEditor/modeLayout/" + QString::number(page)).toByteArray();
         if (!saved.isEmpty())
             splitter->restoreState(saved);
         else if (page == 2)
@@ -2184,7 +2223,7 @@ void installSpectrumPane(PerformanceEditor *editor, QSplitter *splitter) {
         tabs->setProperty("previousLayoutPage", page);
     });
     QObject::connect(splitter, &QSplitter::splitterMoved, pane, [tabs, splitter] {
-        QSettings().setValue("performanceEditor/modeLayout/" + QString::number(tabs->currentIndex()),
+        DocumentSettings().setValue("performanceEditor/modeLayout/" + QString::number(tabs->currentIndex()),
                              splitter->saveState());
     });
 }

@@ -7,7 +7,7 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QSignalBlocker>
 #include <QSlider>
 #include <QToolButton>
@@ -33,13 +33,15 @@ SpectrumDisplayControls::SpectrumDisplayControls(QWidget *parent) : QWidget(pare
                                {"harmonicColor",QString("#ffdd88")},
                                {"middle", QString("#20a5b6")},
                                {"high", QString("#f5db87")}};
-    QSettings settings;
+    setProperty("documentDefaults", defaults);
+    DocumentSettings settings;
     for (auto it = defaults.cbegin(); it != defaults.cend(); ++it)
         _values[it.key()] = settings.value("spectrum/display/" + it.key(), it.value());
     auto grid = new QGridLayout(this);
     grid->setContentsMargins(4, 4, 4, 4);
     grid->setHorizontalSpacing(8);
     auto palette = new QComboBox;
+    palette->setProperty("documentPreference", "palette");
     palette->setObjectName("spectrumPalette");
     palette->addItems({tr("蓝金"), tr("绿紫"), tr("灰度"), tr("自定颜色"), tr("WaveTone 强弱色")});
     palette->setCurrentIndex(qBound(0, _values["palette"].toInt(), 4));
@@ -73,6 +75,7 @@ SpectrumDisplayControls::SpectrumDisplayControls(QWidget *parent) : QWidget(pare
         bar->setTickPosition(QSlider::TicksBelow);
         bar->setTickInterval(qMax(1, bar->maximum() / 4));
         auto number = new QDoubleSpinBox;
+        number->setProperty("documentPreference", key);
         number->setRange(low, high);
         number->setSingleStep(step);
         number->setDecimals(step < 1 ? 2 : 0);
@@ -98,11 +101,13 @@ SpectrumDisplayControls::SpectrumDisplayControls(QWidget *parent) : QWidget(pare
     slider(3, "fundamental", tr("突出基音"), 0, 1, .05, QString());
     slider(4, "opacity", tr("叠加浓度"), .1, 1., .05, QString());
     auto notes = new QCheckBox(tr("叠加时显示谱中音符块"));
+    notes->setProperty("documentPreference", "showNotes");
     notes->setObjectName("spectrumShowNotes");
     notes->setChecked(_values["showNotes"].toBool());
     auto noteOptions=new QWidget;auto noteRow=new QHBoxLayout(noteOptions);noteRow->setContentsMargins(0,0,0,0);
     noteRow->addWidget(notes);
     auto midi=new QCheckBox(tr("显示MIDI轨道"));midi->setObjectName("spectrumShowMidi");midi->setChecked(_values["showMidi"].toBool());
+    midi->setProperty("documentPreference", "showMidi");
     midi->setToolTip(tr("在频谱上对照MIDI轨道列表中开启显示的音符。静音轨也可作参考。"));
     noteRow->addWidget(midi);noteRow->addStretch(1);grid->addWidget(noteOptions,5,0,1,3);
     connect(midi,&QCheckBox::clicked,this,[this](bool on){save("showMidi",on);});
@@ -113,10 +118,12 @@ SpectrumDisplayControls::SpectrumDisplayControls(QWidget *parent) : QWidget(pare
     auto reference=new QToolButton;reference->setObjectName("spectrumReferenceSettings");reference->setText(tr("参考线…"));reference->setPopupMode(QToolButton::InstantPopup);
     auto menu=new QMenu(reference);reference->setMenu(menu);auto body=new QWidget;auto form=new QFormLayout(body);
     auto count=new QSpinBox;count->setObjectName("spectrumHarmonicCount");count->setRange(1,16);count->setValue(qBound(1,_values["harmonicCount"].toInt(),16));
+    count->setProperty("documentPreference", "harmonicCount");
     form->addRow(tr("显示几倍"),count);connect(count,QOverload<int>::of(&QSpinBox::valueChanged),this,[this](int n){save("harmonicCount",n);});
     auto strength=new QWidget;auto strengthRow=new QHBoxLayout(strength);strengthRow->setContentsMargins(0,0,0,0);
     auto alpha=new QSlider(Qt::Horizontal);alpha->setObjectName("spectrumHarmonicOpacity");alpha->setRange(0,100);alpha->setMinimumWidth(140);alpha->setValue(qRound(_values["harmonicOpacity"].toDouble()*100));
     auto number=new QSpinBox;number->setRange(0,100);number->setSuffix("%");number->setValue(alpha->value());strengthRow->addWidget(alpha);strengthRow->addWidget(number);form->addRow(tr("强度"),strength);
+    number->setProperty("documentPreference", "harmonicOpacity");number->setProperty("documentScale",100.);
     connect(alpha,&QSlider::valueChanged,this,[this,number](int n){QSignalBlocker block(number);number->setValue(n);save("harmonicOpacity",n/100.);});
     connect(number,QOverload<int>::of(&QSpinBox::valueChanged),this,[this,alpha](int n){QSignalBlocker block(alpha);alpha->setValue(n);save("harmonicOpacity",n/100.);});
     auto lineColor=new QToolButton;lineColor->setText(tr("选择颜色…"));form->addRow(tr("颜色"),lineColor);
@@ -127,8 +134,23 @@ SpectrumDisplayControls::SpectrumDisplayControls(QWidget *parent) : QWidget(pare
 }
 void SpectrumDisplayControls::save(const QString &key, const QVariant &value) {
     _values[key] = value;
-    QSettings().setValue("spectrum/display/" + key, value);
+    DocumentSettings().setValue("spectrum/display/" + key, value);
     emit changed(key == "fundamental");
+}
+void SpectrumDisplayControls::reloadSettings() {
+    const auto defaults=property("documentDefaults").toMap();
+    DocumentSettings settings;
+    for(auto it=defaults.cbegin();it!=defaults.cend();++it)
+        _values[it.key()]=settings.value("spectrum/display/"+it.key(),it.value());
+    for(auto widget:findChildren<QWidget*>()) {
+        const auto key=widget->property("documentPreference").toString();if(key.isEmpty())continue;
+        const double scale=widget->property("documentScale").isValid()?widget->property("documentScale").toDouble():1.;
+        if(auto number=qobject_cast<QDoubleSpinBox*>(widget))number->setValue(_values.value(key).toDouble()*scale);
+        else if(auto number=qobject_cast<QSpinBox*>(widget))number->setValue(qRound(_values.value(key).toDouble()*scale));
+        else if(auto box=qobject_cast<QComboBox*>(widget))box->setCurrentIndex(_values.value(key).toInt());
+        else if(auto check=qobject_cast<QCheckBox*>(widget))check->setChecked(_values.value(key).toBool());
+    }
+    emit changed(true);
 }
 QImage colorSpectrum(const QImage &raw, const QVariantMap &style, bool overlay) {
     if (raw.isNull())

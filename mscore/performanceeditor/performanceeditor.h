@@ -336,6 +336,8 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       bool noteEditable(const NoteInfo&) const;
       QString noteTooltip(int) const;
       void cancelSurfaceGesture();
+      void captureDocumentState();
+      void restoreDocumentState();
       void queueGesture(QPointF);
       void drainGesture();
       QLabel* _status;

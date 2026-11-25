@@ -69,6 +69,7 @@ signals:
       void auditionChanged();
       void captureChanged();
       void lastRecordingChanged();
+      void saveStateRequested();
       void requested(const QString& action,const QString& scoreId,const QString& midiId);
 };
 WorkflowContext* workflowContext();

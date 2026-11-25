@@ -789,3 +789,9 @@ CFX 切谱与预设	mscore/workflow/vstpanel.cpp	void saveVstBeforeScoreSwitch	1
 连续播放线	mscore/performanceeditor/performanceview.cpp	void PerformancePlayhead::sync	103	跨同一窗口roll和参数区的透明线	mtest/mscore/performanceeditor/roll_1701_tests.inc
 右键框选	mscore/performanceeditor/performanceinteraction.cpp	bool PerformanceEditor::surfaceEvent	431	实际发声块选择／右键和取消	mtest/mscore/performanceeditor/roll_1701_tests.inc
 MIDI框选	mscore/performanceeditor/miditrackinteraction.cpp	void MidiTrackPane::beginGesture	435	保留独立MIDI轨道选择模型	mtest/mscore/performanceeditor/roll_1701_tests.inc
+每谱工具配置	mscore/workflow/documentsettings.cpp	void prepareDocumentUiSave	80	正常保存与元数据	mtest/mscore/pluginhost/document_171_tests.inc
+切谱工具状态	mscore/workflow/documentsettings.cpp	void DocumentUiState::activate	67	收集旧谱并恢复目标谱	mtest/mscore/pluginhost/document_171_tests.inc
+编辑器状态	mscore/performanceeditor/editorstate.cpp	void PerformanceEditor::captureDocumentState	39	显示、筛选、缩放和播放位置	mtest/mscore/pluginhost/document_171_tests.inc
+鼠标派发	mscore/performanceeditor/performanceeditor.cpp	bool PerformanceEditor::eventFilter	1349	原生窗口与控件的事件归属	mtest/mscore/pluginhost/input_171_tests.inc
+频谱浏览保存	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::captureDocumentState	1354	时间视窗、音域、选音和工具	mtest/mscore/pluginhost/document_171_tests.inc
+节奏草稿保存	mscore/performanceeditor/rhythmpane.cpp	void RhythmPane::captureDocumentState	642	重新读取当前谱后恢复草稿	mtest/mscore/pluginhost/document_171_tests.inc

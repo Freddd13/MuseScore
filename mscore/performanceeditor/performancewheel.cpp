@@ -14,7 +14,7 @@
 #include <QToolTip>
 #include <QScopedValueRollback>
 #include <cmath>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QPainterPath>
 namespace Ms {
 bool PerformanceEditor::adjustNearestScoreVelocity(ScoreView* view,QWheelEvent* event)
@@ -136,7 +136,7 @@ void PerformanceEditor::repaintWheelTarget(int index)
 bool PerformanceEditor::nearestWheelShortcut(const QWheelEvent* event)
       {
       if(!personalFeaturesEnabled())return false;
-      const int required=QSettings().value("performanceEditor/nearestWheelModifiers",int(Qt::AltModifier|Qt::ShiftModifier)).toInt();
+      const int required=DocumentSettings().value("performanceEditor/nearestWheelModifiers",int(Qt::AltModifier|Qt::ShiftModifier)).toInt();
       return required && (int(event->modifiers())&~int(Qt::KeypadModifier))==required;
       }
 void PerformanceEditor::rememberWheelFeedback()

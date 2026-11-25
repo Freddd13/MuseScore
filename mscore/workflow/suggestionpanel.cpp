@@ -46,7 +46,7 @@
 #include <QTimer>
 #include <QDoubleSpinBox>
 #include <QSpinBox>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QSet>
 #include <QScrollArea>
 #include <QTabBar>
@@ -601,7 +601,7 @@ class SuggestionPanel : public QWidget {
         _preserveMelody->setChecked(true);
         choices->addWidget(_preserveMelody);
         layout->addLayout(choices);
-        _localSettings = QSettings().value("arrangementSuggestions/parameters").toMap();
+        _localSettings = DocumentSettings().value("arrangementSuggestions/parameters").toMap();
         connect(generate, &QPushButton::clicked, this, [this] {
             stopPlaybackPreview(true);
             if(mscore&&mscore->currentScoreView())clearArrangementPreview(mscore->currentScoreView());
@@ -671,7 +671,7 @@ class SuggestionPanel : public QWidget {
                 values[name] = costs[name]->value();
             _localSettings["weights"] = values;
             _localSettings["style"] = style->currentIndex();
-            QSettings().setValue("arrangementSuggestions/parameters", _localSettings);
+            DocumentSettings().setValue("arrangementSuggestions/parameters", _localSettings);
             inputsChanged();
         });
         auto velocity = new QHBoxLayout;
@@ -731,11 +731,11 @@ class SuggestionPanel : public QWidget {
         _showDifferences = new QPushButton(tr("谱面差异"));
         _showDifferences->setObjectName("arrangement-preview");
         _showDifferences->setCheckable(true);
-        _showDifferences->setChecked(QSettings().value("arrangementSuggestions/showDifferences", true).toBool());
+        _showDifferences->setChecked(DocumentSettings().value("arrangementSuggestions/showDifferences", true).toBool());
         _showDifferences->setToolTip(tr("选中写法后，在原谱上显示另一写法；关闭后收起差异。"));
         controls->addWidget(_showDifferences);
         connect(_showDifferences, &QPushButton::clicked, this, [this](bool checked) {
-            QSettings().setValue("arrangementSuggestions/showDifferences", checked);
+            DocumentSettings().setValue("arrangementSuggestions/showDifferences", checked);
             updateDifference();
         });
         button(tr("试听谱中"), "original", controls);

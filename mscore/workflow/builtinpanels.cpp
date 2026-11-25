@@ -28,7 +28,7 @@
 #include <QTabBar>
 #include <QVBoxLayout>
 #include <QTimer>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QDynamicPropertyChangeEvent>
 #include "mscore/scoreview.h"
 namespace Ms {namespace {
@@ -94,7 +94,7 @@ void showHarmonyPanel(bool visible){
 void installExpressionTools(QWidget* editor,QSplitter* splitter,QVBoxLayout* layout){
  auto tabs=new QTabBar(editor);tabs->setObjectName("workflowExpressionTabs");tabs->setExpanding(false);
  tabs->addTab(QObject::tr("演奏编辑"));tabs->addTab(QObject::tr("演奏表达"));layout->insertWidget(0,tabs);
- QObject::connect(tabs,&QTabBar::currentChanged,splitter,[tabs,splitter]{const int previous=tabs->property("previousLayoutPage").toInt();QSettings().setValue("performanceEditor/modeLayout/"+QString::number(previous),splitter->saveState());});
+ QObject::connect(tabs,&QTabBar::currentChanged,splitter,[tabs,splitter]{const int previous=tabs->property("previousLayoutPage").toInt();DocumentSettings().setValue("performanceEditor/modeLayout/"+QString::number(previous),splitter->saveState());});
  auto host=new QWidget(splitter);host->setObjectName("embeddedExpressionPage");host->setMinimumHeight(180);
  auto box=new QVBoxLayout(host);box->setContentsMargins(0,0,0,0);splitter->addWidget(host);host->hide();
  QObject::connect(tabs,&QTabBar::currentChanged,host,[host,box,splitter](int page){

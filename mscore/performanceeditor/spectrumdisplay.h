@@ -11,6 +11,7 @@ class SpectrumDisplayControls : public QWidget {
 
   public:
     explicit SpectrumDisplayControls(QWidget *);
+    void reloadSettings();
     QVariantMap values() const { return _values; }
   signals:
     void changed(bool analysis);

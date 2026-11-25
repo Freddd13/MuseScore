@@ -784,6 +784,8 @@ MuseScore {
     }
     function changeScore() {
         if (ownsCurrentScore()) return
+        savePreferences()
+        configurationTimer.stop()
         saveCorrections()
         undoPause = false
         restoreColors(true)
@@ -794,6 +796,7 @@ MuseScore {
         fileNotice="";fileNoticeKind="analysis"
         lastLiveHarmony=null;displayedLiveHarmony=null
         if (observer) observer.score = curScore
+        if (observer && advancedNative) applyPreferences(observer.loadConfiguration("HarmonyAssistant"))
         colorLedger = []
         activeColorKeys = ({})
         undoPause = false
@@ -1396,6 +1399,7 @@ MuseScore {
         }
     }
     Connections {target:root; ignoreUnknownSignals:true; onPanelDetailClosed:root.detailPanelClosed();onPanelSummaryClosed:root.detailPanelClosed()}
+    Connections {target:observer;ignoreUnknownSignals:true;onConfigurationSaveRequested:root.savePreferences()}
 
     Rectangle {
         id:backdrop

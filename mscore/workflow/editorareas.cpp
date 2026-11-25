@@ -16,7 +16,7 @@
 #include <QJSValue>
 #include <QMenu>
 #include <QPointer>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QSignalBlocker>
 #include <QSplitter>
 #include <QTabBar>
@@ -128,7 +128,7 @@ class EditorAreas : public QObject {
     for (int i = 0; i < split->count(); ++i)
       if (!split->widget(i)->isHidden())
         values[split->widget(i)->objectName()] = sizes[i];
-    QSettings().setValue(heightKey(), values);
+    DocumentSettings().setValue(heightKey(), values);
   }
   void updateChecks(Area &area) {
     if (!area.widget)
@@ -156,9 +156,9 @@ class EditorAreas : public QObject {
     if (!isDetachedPage(page))
       inlinePage = page;
     const auto heights =
-        QSettings()
+        DocumentSettings()
             .value(heightKey(),
-                   QSettings().value("performanceEditor/areaHeights/" +
+                   DocumentSettings().value("performanceEditor/areaHeights/" +
                                      QString::number(page)))
             .toMap();
     for (auto &area : areas) {
@@ -175,11 +175,11 @@ class EditorAreas : public QObject {
                                                      "performanceNotesArea")
                    : page == area.page;
         const QString pageChoice = "performanceEditor/pageArea/" + QString::number(page) + "/" + area.widget->objectName();
-        if (common && page == 2 && QSettings().contains(pageChoice))
-          visible = QSettings().value(pageChoice).toBool();
+        if (common && page == 2 && DocumentSettings().contains(pageChoice))
+          visible = DocumentSettings().value(pageChoice).toBool();
         else if (common && visible)
           visible =
-              QSettings()
+              DocumentSettings()
                   .value("performanceEditor/area/" + area.widget->objectName(),
                          !workflow)
                   .toBool();
@@ -207,9 +207,9 @@ class EditorAreas : public QObject {
       return;
     area.widget->setProperty("kumoAreaMoving", true);
     if (geometry)
-      QSettings().setValue(key(area) + "/geometry", area.dock->saveGeometry());
+      DocumentSettings().setValue(key(area) + "/geometry", area.dock->saveGeometry());
     if (remember)
-      QSettings().setValue(key(area) + "/position", "editor");
+      DocumentSettings().setValue(key(area) + "/position", "editor");
     int insertion = 0;
     while (insertion < split->count() &&
            split->widget(insertion)->property("kumoAreaOrder").toInt() <
@@ -259,7 +259,7 @@ class EditorAreas : public QObject {
                 auto &value = areas[index];
                 if (!updating &&
                     value.widget->property("kumoDetachedArea").toBool())
-                  QSettings().setValue(key(value) + "/position",
+                  DocumentSettings().setValue(key(value) + "/position",
                                        outside ? "floating" : "right");
                 updateChecks(value);
               });
@@ -283,7 +283,7 @@ class EditorAreas : public QObject {
     if (floating) {
       area.dock->setFloating(true);
       const auto geometry =
-          QSettings().value(key(area) + "/geometry").toByteArray();
+          DocumentSettings().value(key(area) + "/geometry").toByteArray();
       if (geometry.isEmpty())
         area.dock->resize(760, 440);
       else
@@ -291,7 +291,7 @@ class EditorAreas : public QObject {
     } else {
       area.dock->setFloating(false);
       const auto savedArea = Qt::DockWidgetArea(
-          QSettings()
+          DocumentSettings()
               .value(key(area) + "/dockArea", int(Qt::RightDockWidgetArea))
               .toInt());
       const auto target = updating && (savedArea == Qt::LeftDockWidgetArea ||
@@ -314,9 +314,9 @@ class EditorAreas : public QObject {
     area.dock->show();
     area.dock->raise();
     if (!updating) {
-      QSettings().setValue(key(area) + "/position",
+      DocumentSettings().setValue(key(area) + "/position",
                            floating ? "floating" : "right");
-      QSettings().setValue(key(area) + "/open", true);
+      DocumentSettings().setValue(key(area) + "/open", true);
     }
     area.widget->setProperty("kumoAreaMoving", false);
     applyPage();
@@ -383,7 +383,7 @@ public:
                 auto &value = areas[index];
                 if (value.widget->property("kumoDetachedArea").toBool()) {
                   value.dock->setVisible(visible);
-                  QSettings().setValue(key(value) + "/open", visible);
+                  DocumentSettings().setValue(key(value) + "/open", visible);
                 } else {
                   if (visible && value.page > 0 && tabs)
                     tabs->setCurrentIndex(value.page);
@@ -393,7 +393,7 @@ public:
                     const QString key = page == 2
                         ? "performanceEditor/pageArea/2/" + value.widget->objectName()
                         : "performanceEditor/area/" + value.widget->objectName();
-                    QSettings().setValue(key, visible);
+                    DocumentSettings().setValue(key, visible);
                   }
                 }
                 ensureEditorAreas(split);
@@ -403,7 +403,7 @@ public:
     }
     auto reset = menu->addAction(tr("恢复区域高度"));
     connect(reset, &QAction::triggered, this, [this] {
-      QSettings().remove(heightKey());
+      DocumentSettings().remove(heightKey());
       QList<int> sizes;
       for (int i = 0; i < split->count(); ++i)
         sizes.append(160);
@@ -428,6 +428,10 @@ public:
     }
     if (mscore)
       mscore->installEventFilter(this);
+    connect(documentUiState(), &DocumentUiState::captureRequested, this, [this](Score*) { saveLayout(); });
+    connect(documentUiState(), &DocumentUiState::scoreChanged, this, [this](Score* score) {
+      if (score) restoreWorkspace();
+    });
     const int initialPage = tabs ? tabs->currentIndex() : 0;
     QTimer::singleShot(0, this, [this, initialPage] {
       restoreWorkspace(tabs && tabs->currentIndex() != initialPage
@@ -442,17 +446,17 @@ public:
     const int page =
         requestedPage >= 0
             ? requestedPage
-            : QSettings()
+            : DocumentSettings()
                   .value("performanceEditor/activePage/" + workspace(), 0)
                   .toInt();
     if (tabs)
       tabs->setCurrentIndex(qBound(0, page, tabs->count() - 1));
     for (int index = 0; index < areas.size(); ++index) {
       const auto position =
-          QSettings().value(key(areas[index]) + "/position").toString();
+          DocumentSettings().value(key(areas[index]) + "/position").toString();
       if (position == "floating" || position == "right") {
         const bool open =
-            QSettings().value(key(areas[index]) + "/open", true).toBool();
+            DocumentSettings().value(key(areas[index]) + "/open", true).toBool();
         detach(index, position == "floating");
         if (areas[index].dock)
           areas[index].dock->setVisible(open);
@@ -469,17 +473,17 @@ public:
     if (updating)
       return;
     saveHeights();
-    QSettings().setValue("performanceEditor/activePage/" + workspace(),
+    DocumentSettings().setValue("performanceEditor/activePage/" + workspace(),
                          tabs ? tabs->currentIndex() : 0);
     for (const auto &area : areas)
       if (area.widget && area.dock &&
           area.widget->property("kumoDetachedArea").toBool()) {
-        QSettings().setValue(key(area) + "/geometry",
+        DocumentSettings().setValue(key(area) + "/geometry",
                              area.dock->saveGeometry());
-        QSettings().setValue(key(area) + "/position",
+        DocumentSettings().setValue(key(area) + "/position",
                              area.dock->isFloating() ? "floating" : "right");
         if (mscore && !area.dock->isFloating())
-          QSettings().setValue(key(area) + "/dockArea",
+          DocumentSettings().setValue(key(area) + "/dockArea",
                                int(mscore->dockWidgetArea(area.dock)));
       }
   }
@@ -511,11 +515,11 @@ public:
         if (area.widget->property("kumoDetachedArea").toBool()) {
           area.dock->setVisible(visible);
           area.widget->setVisible(visible);
-          QSettings().setValue(key(area) + "/open", visible);
+          DocumentSettings().setValue(key(area) + "/open", visible);
         } else {
           area.widget->setVisible(visible);
           if (area.page == 0)
-            QSettings().setValue("performanceEditor/area/" + name, visible);
+            DocumentSettings().setValue("performanceEditor/area/" + name, visible);
         }
         ensureEditorAreas(split);
         updateChecks(area);
@@ -539,11 +543,11 @@ public:
           areas[index].dock->show();
           areas[index].dock->raise();
           widget->show();
-          QSettings().setValue(key(areas[index]) + "/open", true);
+          DocumentSettings().setValue(key(areas[index]) + "/open", true);
           return true;
         }
         const auto position =
-            QSettings().value(key(areas[index]) + "/position").toString();
+            DocumentSettings().value(key(areas[index]) + "/position").toString();
         if (position == "floating" || position == "right") {
           detach(index, position == "floating");
           return true;
@@ -563,7 +567,7 @@ public:
     if (event->type() == QEvent::Close && !updating)
       for (const auto &area : areas)
         if (area.dock == watched && area.widget)
-          QSettings().setValue(key(area) + "/open", false);
+          DocumentSettings().setValue(key(area) + "/open", false);
     return QObject::eventFilter(watched, event);
   }
   void updateRulers() const {

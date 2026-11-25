@@ -29,7 +29,7 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QScrollArea>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QSlider>
@@ -310,7 +310,7 @@ ScoreVideoPanel::ScoreVideoPanel(QWidget* parent)
     setComponentToolIcon(settings, "settings");
     settings->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     settings->setCheckable(true);
-    settings->setChecked(QSettings().value("scoreVideoPanel/settingsVisible", true).toBool());
+    settings->setChecked(DocumentSettings().value("scoreVideoPanel/settingsVisible", true).toBool());
     controls->addWidget(settings);
     _write = button(tr("导出视频…"), "save", "scoreVideoExport");
     _cancel = button(tr("取消"), "close", "scoreVideoCancel");
@@ -499,7 +499,7 @@ ScoreVideoPanel::ScoreVideoPanel(QWidget* parent)
     connect(settings, &QToolButton::toggled, scroll, &QWidget::setVisible);
     scroll->setVisible(settings->isChecked());
     connect(settings, &QToolButton::clicked, this,
-            [](bool shown) { QSettings().setValue("scoreVideoPanel/settingsVisible", shown); });
+            [](bool shown) { DocumentSettings().setValue("scoreVideoPanel/settingsVisible", shown); });
     connect(_prepare, &QPushButton::clicked, this, [this] {
         commitCues();
         stopPlayback();
@@ -575,6 +575,12 @@ ScoreVideoPanel::ScoreVideoPanel(QWidget* parent)
     addEditorDockActions(this);
     installPanelWindowControls(this)->setTransport(
         [this] { return _playing || _playAfterPrepare; }, [this] { stopPlayback(); });
+    connect(documentUiState(),&DocumentUiState::captureRequested,this,[this](Score* score){
+        if(score&&_document.source()&&score->masterScore()==_document.source()->masterScore())captureDocumentState();
+    });
+    connect(documentUiState(),&DocumentUiState::scoreChanged,this,[this](Score* score){
+        stopPlayback();_previewKey.clear();_document.setScore(score);restoreDocumentState();
+    });
     refresh();
 }
 ScoreVideoPanel::~ScoreVideoPanel() { stopPlayback(); }
@@ -598,6 +604,7 @@ void ScoreVideoPanel::refresh()
         return;
     _updating = true;
     const auto state = _document.state();
+    if(_restoredPosition>=0&&_document.snapshot().duration>0){_position=qMin(_restoredPosition,_document.snapshot().duration);_restoredPosition=-1;}
     setWindowTitle(tr("动态乐谱视频 · %1").arg(state.value("source").toString()));
     const auto settings = _document.settings();
     const bool busy = _export.busy() || _document.busy();
@@ -716,11 +723,7 @@ void ScoreVideoPanel::showEvent(QShowEvent* event)
 {
     QDockWidget::showEvent(event);
     if (!property("videoLayoutRestored").toBool()) {
-        for (const char* name : {"scoreVideoHorizontal", "scoreVideoVertical"}) {
-            const auto state = QSettings().value(QString("scoreVideoPanel/") + name).toByteArray();
-            if (!state.isEmpty())
-                findChild<QSplitter*>(name)->restoreState(state);
-        }
+        restoreDocumentState();
         setProperty("videoLayoutRestored", true);
     }
     _document.setScore(mscore ? mscore->currentScore() : nullptr);
@@ -731,11 +734,26 @@ void ScoreVideoPanel::showEvent(QShowEvent* event)
                 _document.prepare();
         });
 }
+void ScoreVideoPanel::captureDocumentState() {
+    if(!_document.source())return;
+    DocumentSettings settings(_document.source());
+    for(const char* name:{"scoreVideoHorizontal","scoreVideoVertical"})settings.setValue(QString("scoreVideoPanel/")+name,findChild<QSplitter*>(name)->saveState());
+    settings.setValue("scoreVideoPanel/position",_restoredPosition>=0?_restoredPosition:_position);
+}
+void ScoreVideoPanel::restoreDocumentState() {
+    DocumentSettings settings(_document.source());
+    for(const char* name:{"scoreVideoHorizontal","scoreVideoVertical"}){
+        const auto state=settings.value(QString("scoreVideoPanel/")+name).toByteArray();
+        if(!state.isEmpty())findChild<QSplitter*>(name)->restoreState(state);
+    }
+    _restoredPosition=settings.value("scoreVideoPanel/position",0.).toDouble();
+    findChild<QToolButton*>("scoreVideoSettingsToggle")->setChecked(settings.value("scoreVideoPanel/settingsVisible",true).toBool());
+}
 void ScoreVideoPanel::hideEvent(QHideEvent* event)
 {
     commitCues();
     for (const char* name : {"scoreVideoHorizontal", "scoreVideoVertical"})
-        QSettings().setValue(QString("scoreVideoPanel/") + name,
+        DocumentSettings().setValue(QString("scoreVideoPanel/") + name,
                              findChild<QSplitter*>(name)->saveState());
     if (property("kumoPanelMinimized").toBool()) {
         QDockWidget::hideEvent(event);

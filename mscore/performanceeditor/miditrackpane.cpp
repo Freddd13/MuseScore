@@ -32,7 +32,7 @@
 #include <QMenu>
 #include <QScopedValueRollback>
 #include <QScrollBar>
-#include <QSettings>
+#include "mscore/workflow/documentsettings.h"
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QSlider>
@@ -289,11 +289,11 @@ MidiTrackPane::MidiTrackPane(PerformanceEditor* editor, QWidget* area, QVBoxLayo
     noteLayout->insertWidget(qMax(1, noteLayout->count() - 1), _bar);
     noteLayout->addWidget(split, 1);
     noteLayout->addWidget(_status);
-    split->setSizes({QSettings().value("performanceEditor/midiTrackWidth", 220).toInt(),
+    split->setSizes({DocumentSettings().value("performanceEditor/midiTrackWidth", 220).toInt(),
                      qMax(300, editor->width() - 220)});
     connect(split, &QSplitter::splitterMoved, this, [this, split] {
         if (isVisible() && width() > 80)
-            QSettings().setValue("performanceEditor/midiTrackWidth", split->sizes().first());
+            DocumentSettings().setValue("performanceEditor/midiTrackWidth", split->sizes().first());
         syncInset();
     });
     _toggle = trackButton(area, tr("轨道"), "list");

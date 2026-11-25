@@ -13,6 +13,7 @@
 //=============================================================================
 
 #include "scoreobserver.h"
+#include "mscore/workflow/documentsettings.h"
 #include "score.h"
 #include "mscore/scoreview.h"
 #include "mscore/workflow/workflowcontext.h"
@@ -67,6 +68,9 @@ ScoreObserver::ScoreObserver(QObject* parent) : QObject(parent)
             }
       auto context=workflowContext();context->setActiveScore(mscore?mscore->currentScore():nullptr);
       connect(context,&WorkflowContext::activeScoreChanged,this,&ScoreObserver::activeScoreChanged);
+      connect(documentUiState(),&DocumentUiState::captureRequested,this,[this](Ms::Score* score) {
+            if(_score&&score&&_score->masterScore()==score->masterScore())emit configurationSaveRequested();
+            });
       connect(context,&WorkflowContext::scoreFileChanged,this,[this](Ms::Score* score) {
             if (_score && score == _score->masterScore()) emit workflowFileChanged();
             });
@@ -702,9 +706,20 @@ static QString configurationPath(const QString& name)
       return directory + "/" + name + ".json";
       }
 QVariantMap ScoreObserver::loadConfiguration(const QString& name) const
-      { return QJsonDocument::fromJson(readTextFile(configurationPath(name)).toUtf8()).toVariant().toMap(); }
+      {
+      const auto path=configurationPath(name);if(path.isEmpty())return {};
+      const auto fallback=QJsonDocument::fromJson(readTextFile(path).toUtf8()).toVariant().toMap();
+      if(!_score)return fallback;
+      DocumentSettings settings(_score);const auto key="toolProjects/configuration/"+name;
+      if(!settings.contains(key))settings.setValue(key,fallback);
+      return settings.value(key,fallback).toMap();
+      }
 bool ScoreObserver::saveConfiguration(const QString& name, const QVariantMap& data) const
-      { return writeTextFile(configurationPath(name), QString::fromUtf8(QJsonDocument::fromVariant(data).toJson())); }
+      {
+      if(name.isEmpty()||name.contains('/')||name.contains('\\')||name.contains(".."))return false;
+      if(_score){DocumentSettings(_score).setValue("toolProjects/configuration/"+name,data);return true;}
+      return writeTextFile(configurationPath(name), QString::fromUtf8(QJsonDocument::fromVariant(data).toJson()));
+      }
 
 }
 }
