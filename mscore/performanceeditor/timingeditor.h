@@ -64,6 +64,7 @@ class TimingEditor final : public QWidget
         const int i = hit(point);
         return i < 0 ? -1 : _rows[i].noteIndex;
     }
+    QVector<int> notesIn(const QRectF&) const;
     int startTick() const;
     int endTick() const;
     void repaintNote(int);

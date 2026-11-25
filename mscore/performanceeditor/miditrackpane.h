@@ -100,7 +100,7 @@ class MidiTrackPane final : public QWidget
     QSet<int> _pitches;
     int _lastTick = 0;
     bool _gesture = false, _moved = false, _drawing = false;
-    bool _marquee = false, _parameterGesture = false, _marqueeAdd = false;
+    bool _marquee = false, _parameterGesture = false, _marqueeAdd = false, _rightMarquee = false;
     QSet<QString> _beforeSelected;
     ScoreContentState _musicState;
     int _edge = 0, _anchor = -1;
@@ -145,7 +145,7 @@ class MidiTrackPane final : public QWidget
     int hit(QPointF, bool parameter) const;
     void refreshAssociations();
     bool finishGesture(bool commit);
-    void beginGesture(QPointF, bool parameter, Qt::KeyboardModifiers);
+    void beginGesture(QPointF, bool parameter, Qt::KeyboardModifiers, bool marquee = false);
     void moveGesture(QPointF, bool parameter);
     void eraseNotes();
     void copyNotes();

@@ -344,6 +344,7 @@ void PerformanceEditor::syncTransport()
 void PerformanceEditor::updatePlayhead()
       {
       updateDetachedRulers(this);
+      if (_continuousPlayhead) _continuousPlayhead->sync();
       if (!_score || !surfacesActive()) { _playTimer.stop(); return; }
       const bool playing = seq && seq->isPlaying() && seq->score() == _score->masterScore();
       if (!playing) _playTimer.stop();
@@ -440,9 +441,18 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
             return true;
             }
       if(_midiTracks&&(!notes||!_spectrum||_spectrum->showMidiNotes())&&_midiTracks->handle(event,parameter,ruler))return true;
-      if(notes&&_timingEditor&&(!_spectrum||_spectrum->showRollNotes())&&_timingEditor->handle(event))return true;
-      if(notes&&_rollWriting&&(!_midiTracks||!_midiTracks->active())&&_rollWriting->handle(event))return true;
+      if(notes&&!_marquee&&_timingEditor&&(!_spectrum||_spectrum->showRollNotes())&&_timingEditor->handle(event))return true;
+      if(notes&&!_marquee&&_rollWriting&&(!_midiTracks||!_midiTracks->active())&&_rollWriting->handle(event))return true;
 #endif
+      if (notes && event->type() == QEvent::MouseButtonPress && _score && !_dirty) {
+            auto mouse = static_cast<QMouseEvent*>(event);
+            if (mouse->button() == Qt::RightButton && mouse->x() >= PerformanceViewport::gutter) {
+                  pauseFollow(); _marquee = true; _marqueeButton = Qt::RightButton;
+                  _marqueeStart = _marqueeEnd = mouse->pos(); _selectionModifiers = mouse->modifiers();
+                  _selectionBefore.clear(); for (auto note : _score->selection().noteList()) _selectionBefore.append(note);
+                  _noteCanvas->grabMouse(); syncInputTracking(); return true;
+                  }
+            }
       if (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) {
             auto key = static_cast<QKeyEvent*>(event);
             if (key->modifiers() == Qt::NoModifier && (key->key() == Qt::Key_Escape || key->key() == Qt::Key_Home)) {
@@ -565,7 +575,7 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
                               else if (candidates.size() > 1 && _notes[candidates.front()].selected && _selectedIndices.size() == 1 && mouse->modifiers() == Qt::NoModifier) cycleHit(candidates);
                               else { selectIndices({candidates.front()}, mouse->modifiers()); updateHover(candidates.front()); audition(candidates.front()); }
                               }
-                        else if (mouse->x() >= PerformanceViewport::gutter) { _marquee = true; _marqueeStart = _marqueeEnd = mouse->pos(); _selectionModifiers = mouse->modifiers(); _selectionBefore.clear(); for (auto note : _score->selection().noteList()) _selectionBefore.append(note); _noteCanvas->grabMouse(); syncInputTracking(); }
+                        else if (mouse->x() >= PerformanceViewport::gutter) { _marquee = true; _marqueeButton = Qt::LeftButton; _marqueeStart = _marqueeEnd = mouse->pos(); _selectionModifiers = mouse->modifiers(); _selectionBefore.clear(); for (auto note : _score->selection().noteList()) _selectionBefore.append(note); _noteCanvas->grabMouse(); syncInputTracking(); }
                         return true;
                         }
                   if (!candidates.isEmpty()) {
@@ -591,13 +601,29 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
             }
       if (event->type() == QEvent::MouseButtonRelease) {
             auto mouse = static_cast<QMouseEvent*>(event);
-            if (mouse->button() != Qt::LeftButton) return false;
+            if (mouse->button() != (_marquee ? _marqueeButton : Qt::LeftButton)) return false;
             if (_rangePanning) { cancelSurfaceGesture(); return true; }
             if (_seeking) { const int tick = tickForX(mouse->x(), false); cancelSurfaceGesture(); seek(tick); return true; }
             if (_marquee) {
                   _marqueeEnd = mouse->pos(); const QRectF box = QRectF(_marqueeStart, _marqueeEnd).normalized(); QVector<int> indices;
-                  buildGeometry(); for (const auto& g : _noteGeometry) if (g.rect.intersects(box) && _notes[g.index].enabled) indices.append(g.index);
-                  const bool click = QLineF(_marqueeStart, _marqueeEnd).length() < 3 && _selectionModifiers == Qt::NoModifier;
+                  buildGeometry();
+#ifdef SCRIPT_INTERFACE
+                  if (_timingEditor && _timingEditor->active()) indices = _timingEditor->notesIn(box);
+                  else
+#endif
+                  for (const auto& g : _noteGeometry) if (g.rect.intersects(box) && _notes[g.index].enabled) indices.append(g.index);
+                  const bool click = QLineF(_marqueeStart, _marqueeEnd).length() < 3 && _selectionModifiers == Qt::NoModifier && _marqueeButton == Qt::LeftButton;
+                  if (_marqueeButton == Qt::RightButton && QLineF(_marqueeStart, _marqueeEnd).length() < QApplication::startDragDistance()) {
+                        cancelSurfaceGesture(); const auto candidates = hits(mouse->pos(), false);
+                        if (!candidates.isEmpty()) {
+                              QMenu menu; for (int i : candidates) {
+                                    auto action = menu.addAction(tr("%1 · 谱表 %2 · 声部 %3").arg(_notes[i].name).arg(_notes[i].track / VOICES + 1).arg(_notes[i].track % VOICES + 1));
+                                    connect(action, &QAction::triggered, this, [this,i] { selectIndices({i}, Qt::NoModifier); });
+                                    }
+                              menu.exec(mouse->globalPos());
+                              }
+                        return true;
+                        }
                   selectIndices(indices, _selectionModifiers); cancelSurfaceGesture(); if (click) seek(tickForX(mouse->x(), false)); return true;
                   }
             if (_dragging) { queueGesture(mouse->pos()); finishGesture(); updateSurfaces(); return true; }

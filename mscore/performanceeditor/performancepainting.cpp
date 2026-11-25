@@ -32,6 +32,7 @@ int PerformanceEditor::rangeKind() const
       { return _parameter->currentIndex() == 0 ? _axis->currentIndex() : _parameter->currentIndex() + 1; }
 void PerformanceEditor::updateSurfaces()
       { if(property("kumoEditorClosing").toBool())return;
+      if (_continuousPlayhead) _continuousPlayhead->sync();
 #ifdef SCRIPT_INTERFACE
       if(_spectrum)_spectrum->viewChanged();
       if(_midiTracks)_midiTracks->contextChanged();

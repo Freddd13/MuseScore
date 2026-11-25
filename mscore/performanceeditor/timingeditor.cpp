@@ -52,7 +52,7 @@ TimingEditor::TimingEditor(PerformanceEditor* editor, QWidget* parent)
     for (int denominator : {8, 16, 32, 64, 128})
         _grid->addItem(tr("1/%1").arg(denominator), DIVISION * 4 / denominator);
     _grid->addItem(tr("自由"), 1);
-    _grid->setCurrentIndex(1);
+    _grid->setCurrentIndex(_grid->count() - 1);
     _grid->setToolTip(tr("实际起音和松键的吸附细分；按住Alt临时自由调整。"));
     layout->addWidget(_grid);
     _restore = new QToolButton(this);
@@ -439,10 +439,20 @@ bool TimingEditor::eventFilter(QObject* object, QEvent* event)
 {
     if (!_drag)
         return false;
+    auto canvas = _editor->_noteCanvas;
+    if (event->type() == QEvent::UngrabMouse && object == canvas) {
+        // Native release can drop capture before delivering MouseButtonRelease.
+        // Let that final position arrive before completing an interrupted drag.
+        QTimer::singleShot(0, this, [this, canvas] {
+            if (_drag && QWidget::mouseGrabber() != canvas) finish(true);
+        });
+        return false;
+    }
+    const bool ownWindow = object == canvas || object == canvas->window() || object == canvas->window()->windowHandle();
     if (event->type() == QEvent::ApplicationDeactivate ||
-        event->type() == QEvent::WindowDeactivate ||
+        (event->type() == QEvent::WindowDeactivate && ownWindow) ||
         (event->type() == QEvent::Hide && object == _editor->_noteCanvas) ||
-        (event->type() == QEvent::MouseMove &&
+        (object == canvas && event->type() == QEvent::MouseMove &&
          !(static_cast<QMouseEvent*>(event)->buttons() & Qt::LeftButton)))
         finish(true);
     else if (event->type() == QEvent::KeyPress &&
@@ -541,8 +551,8 @@ bool TimingEditor::handle(QEvent* event)
             _before.append({_rows[n].on, _rows[n].end});
         qApp->installEventFilter(this);
         _editor->_noteCanvas->setCursor(_handle ? Qt::SizeHorCursor : Qt::ClosedHandCursor);
-        _editor->_noteCanvas->grabMouse();
         _editor->_noteCanvas->setFocus();
+        _editor->_noteCanvas->grabMouse();
         return true;
     }
     if (event->type() == QEvent::MouseMove) {
@@ -560,16 +570,16 @@ bool TimingEditor::handle(QEvent* event)
             return false;
         }
         if (!_moved &&
-            (mouse->pos() - _press).manhattanLength() < QApplication::startDragDistance())
+            (mouse->pos() - _press).manhattanLength() < (_handle ? 2 : QApplication::startDragDistance()))
             return true;
         _moved = true;
-        const int position = _targets.indexOf(_hit);
-        const int initial = _handle == 2 ? _before[position].second : _before[position].first;
         const int raw =
-            _editor->tickForX(mouse->pos().x(), false) - _editor->tickForX(_press.x(), false);
+            _editor->tickForX(mouse->pos().x(), false, false) - _editor->tickForX(_press.x(), false, false);
         const int quantum =
             (mouse->modifiers() & Qt::AltModifier) ? 1 : _grid->currentData().toInt();
-        int delta = qRound(double(initial + raw) / quantum) * quantum - initial;
+        // Snap movement, preserving the existing articulation/gate offset.
+        // Crossing the press point must restore exactly the starting value.
+        int delta = qRound(double(raw) / quantum) * quantum;
         for (int n = 0; n < _targets.size(); ++n) {
             const auto b = _before[n];
             if (_handle == 1)
@@ -589,11 +599,24 @@ bool TimingEditor::handle(QEvent* event)
     }
     if (event->type() == QEvent::MouseButtonRelease && _drag) {
         if (static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+            // Windows can coalesce the final move into the release event.
+            auto release = static_cast<QMouseEvent*>(event);
+            QMouseEvent last(QEvent::MouseMove, release->localPos(), release->screenPos(),
+                             Qt::NoButton, Qt::LeftButton, release->modifiers());
+            handle(&last);
             finish(true);
             return true;
         }
     }
     return false;
+}
+QVector<int> TimingEditor::notesIn(const QRectF& box) const
+{
+    QVector<int> indices;
+    for (int i : visibleRows())
+        if (_editor->_notes[_rows[i].noteIndex].enabled && box.intersects(rectangle(_rows[i]))
+            && !indices.contains(_rows[i].noteIndex)) indices.append(_rows[i].noteIndex);
+    return indices;
 }
 void TimingEditor::restore(int scope)
 {

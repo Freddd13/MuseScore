@@ -3,6 +3,7 @@
 #include "performanceeditor.h"
 #ifdef SCRIPT_INTERFACE
 #include "spectrumpane.h"
+#include "miditrackpane.h"
 #endif
 #include "libmscore/mscore.h"
 #include <QPainter>
@@ -96,6 +97,43 @@ QVector<int> PerformanceIntervalIndex::query(int from, int until, int lowPitch, 
                   }
             }
       return result;
+      }
+PerformancePlayhead::PerformancePlayhead(PerformanceEditor* editor) : QWidget(editor), _editor(editor)
+      { setObjectName("performanceContinuousPlayhead"); setAttribute(Qt::WA_TransparentForMouseEvents); setAttribute(Qt::WA_NoSystemBackground); }
+void PerformancePlayhead::sync()
+      {
+      auto top = _editor->_ruler; auto bottom = _editor->_canvas;
+      if (!top || !bottom || !top->isVisible() || !bottom->isVisible() || top->window()!=_editor->window()
+          || bottom->window()!=_editor->window() || _editor->_noteCanvas->window()!=_editor->window()) { hide(); return; }
+      QPoint a = top->mapTo(_editor, QPoint());
+      if (_editor->_noteCanvas->isVisible()) a.setY(qMin(a.y(), _editor->_noteCanvas->mapTo(_editor, QPoint()).y()));
+      const QPoint b = bottom->mapTo(_editor, bottom->rect().bottomRight());
+      const QRect bounds(a, b);
+      if (geometry()!=bounds || !isVisible()) { setGeometry(bounds); show(); raise(); _lastX=-10000; update(); }
+      else {
+#ifdef SCRIPT_INTERFACE
+            if ((_editor->_midiTracks && _editor->_midiTracks->active()) ||
+                (_editor->_spectrum && _editor->_spectrum->controlsPlaybackViewport())) { _lastX=-10000; update(); return; }
+#endif
+            const int tick = _editor->_seeking ? _editor->_seekTick : _editor->_playTick;
+            const int x = qRound(_editor->xForTick(_editor->comparisonPlayTick(tick), false));
+            if (_lastX==-10000) update(); else update(QRect(_lastX-3,0,7,height()));
+            update(QRect(x-3,0,7,height())); _lastX=x;
+            }
+      }
+void PerformancePlayhead::paintEvent(QPaintEvent*)
+      {
+      QPainter painter(this);
+#ifdef SCRIPT_INTERFACE
+      if (_editor->_midiTracks && _editor->_midiTracks->paintPlayhead(painter, this)) return;
+      if (_editor->_spectrum && _editor->_spectrum->paintRollPlayhead(painter, this)) return;
+#endif
+      const int tick = _editor->_seeking ? _editor->_seekTick : _editor->_playTick;
+      if (tick < 0) return;
+      const double x = _editor->xForTick(_editor->comparisonPlayTick(tick), false);
+      if (x < PerformanceViewport::gutter || x >= width()) return;
+      painter.setPen(QPen(_editor->_appearance.colors[_editor->_seeking ? PerformanceAppearance::Preview : PerformanceAppearance::Playhead], 1.5));
+      painter.drawLine(QPointF(x, 0), QPointF(x, height()));
       }
 PerformanceCanvas::PerformanceCanvas(PerformanceEditor* editor, PerformanceSurface surface)
       : QWidget(editor), _editor(editor), _surface(surface)

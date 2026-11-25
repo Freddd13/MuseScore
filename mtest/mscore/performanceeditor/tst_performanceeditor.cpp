@@ -1,4 +1,6 @@
 #include <QJsonArray>
+#include "mscore/performanceeditor/timingeditor.h"
+#include "mscore/performanceeditor/miditrackpane.h"
 #include <QScopeGuard>
 #include <QGridLayout>
 #include <QJsonDocument>
@@ -199,6 +201,7 @@ class TestPerformanceEditor : public QObject, public MTest {
       void wheelOtherNoteEdit158();
       void playBoundaryKeepsGesture158();
       void timelineLeadingSpace170();
+      void rollTimingAndSelection1701();
       void canvasKeys139();
       void liveWheelHomeAndSpectrum139();
       void openTwoSavedCfxScores168_data();
@@ -1280,4 +1283,5 @@ QTEST_MAIN(TestPerformanceEditor)
 
 #include "interaction_158_tests.inc"
 #include "interaction_170_tests.inc"
+#include "roll_1701_tests.inc"
 #include "interaction_159_tests.inc"

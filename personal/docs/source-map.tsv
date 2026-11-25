@@ -785,3 +785,7 @@ CFX 切谱与预设	mscore/workflow/vstpanel.cpp	void saveVstBeforeScoreSwitch	1
 谱面雕版手柄	mscore/workflow/engravinghandles.cpp	void paintEngravingHandle	456	拖动预览、实际净距、落实原生排版和一次撤销	mtest/mscore/pluginhost/engraving_169_tests.inc
 力度资料标识	mscore/workflow/aiconnection.cpp	QString skillVersion	137	连接弹窗显示已装技能和固定版资料信息	../../mcp-musescore/tests/test_skill_configuration.py
 雕版候选	mscore/workflow/engravingcandidate.cpp	QVariantMap applyEngravingChanges	203	共享候选、布局和撤销	-
+演奏拖尾	mscore/performanceeditor/timingeditor.cpp	bool TimingEditor::handle	465	最终松手位置／自由微调和相对吸附	mtest/mscore/performanceeditor/roll_1701_tests.inc
+连续播放线	mscore/performanceeditor/performanceview.cpp	void PerformancePlayhead::sync	103	跨同一窗口roll和参数区的透明线	mtest/mscore/performanceeditor/roll_1701_tests.inc
+右键框选	mscore/performanceeditor/performanceinteraction.cpp	bool PerformanceEditor::surfaceEvent	431	实际发声块选择／右键和取消	mtest/mscore/performanceeditor/roll_1701_tests.inc
+MIDI框选	mscore/performanceeditor/miditrackinteraction.cpp	void MidiTrackPane::beginGesture	435	保留独立MIDI轨道选择模型	mtest/mscore/performanceeditor/roll_1701_tests.inc

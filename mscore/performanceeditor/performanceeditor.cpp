@@ -360,6 +360,7 @@ PerformanceEditor::PerformanceEditor(QWidget* parent) : QWidget(parent)
       _moveTimer.setSingleShot(true); _moveTimer.setInterval(16);
       connect(&_moveTimer, &QTimer::timeout, this, &PerformanceEditor::drainGesture);
       setupUsabilityControls();setupExpressionComparison();
+      _continuousPlayhead = new PerformancePlayhead(this);
       applyAppearance(); status();
       }
 
@@ -1048,12 +1049,12 @@ double PerformanceEditor::xForTick(int tick, bool onScore) const
       return _view->matrix().map(QPointF(x, 0)).x();
       }
 
-int PerformanceEditor::tickForX(double x, bool onScore) const
+int PerformanceEditor::tickForX(double x, bool onScore, bool clamp) const
       {
       if (!onScore) {
             const double units=(x-PerformanceViewport::timelineStart)/_viewport.pixelsPerQuarter;
             const int tick=comparisonTimeActive()?_score->tempomap()->time2tick(_score->tempomap()->tick2time(_scroll->value())+units*.5):qRound(units*DIVISION)+_scroll->value();
-            return qBound(0,tick,timelineEndTick());
+            return clamp ? qBound(0,tick,timelineEndTick()) : tick;
             }
       if (_systemSegments.isEmpty()) return 0;
       const double logical = _view->matrix().inverted().map(QPointF(x, 0)).x();
@@ -1354,7 +1355,7 @@ bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       // Windows has already released the button. End the old gesture before
       // dispatching this new input to another tool.
       const bool releasedBeforeMove = gestureOwner && event->type() == QEvent::MouseMove
-            && !(static_cast<QMouseEvent*>(event)->buttons() & Qt::LeftButton);
+            && !(static_cast<QMouseEvent*>(event)->buttons() & (_marquee ? _marqueeButton : Qt::LeftButton));
       const bool nextPress = gestureOwner && event->type() == QEvent::MouseButtonPress
             && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton;
       const bool releasedBeforeWheel = gestureOwner && event->type() == QEvent::Wheel

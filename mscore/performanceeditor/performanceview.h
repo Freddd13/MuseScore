@@ -42,6 +42,14 @@ class PerformanceIntervalIndex {
       void add(int index, int from, int until, int pitch);
       QVector<int> query(int from, int until, int lowPitch = 0, int highPitch = 127) const;
       };
+class PerformancePlayhead : public QWidget {
+      PerformanceEditor* _editor;
+      int _lastX = -10000;
+      void paintEvent(QPaintEvent*) override;
+   public:
+      explicit PerformancePlayhead(PerformanceEditor*);
+      void sync();
+      };
 class PerformanceCanvas : public QWidget {
       PerformanceEditor* _editor;
       PerformanceSurface _surface;

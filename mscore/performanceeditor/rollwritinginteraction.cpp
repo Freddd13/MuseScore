@@ -144,7 +144,7 @@ void RollWritingBar::selectSourceNotes() {
       mscore->selectionChanged(_score->selection().state());
   }
 }
-void RollWritingBar::begin(QPointF point, Qt::KeyboardModifiers modifiers) {
+void RollWritingBar::begin(QPointF point, Qt::KeyboardModifiers modifiers, bool marquee) {
   stopAudition();
   _press = point;
   _pressTick = _editor->tickForX(point.x(), false);
@@ -158,6 +158,11 @@ void RollWritingBar::begin(QPointF point, Qt::KeyboardModifiers modifiers) {
   _copy = modifiers & Qt::ControlModifier;
   _tail = false;
   const int index = hit(point);
+  if (marquee) {
+    if (!(modifiers & (Qt::ControlModifier | Qt::ShiftModifier))) _selected.clear();
+    _gesture = _marquee = true; _marqueeEnd = point;
+    _editor->_noteCanvas->grabMouse(); _editor->updateSurfaces(); return;
+  }
   if (_tool->currentIndex() == 2) {
     if (index >= 0) {
       _selected = {_rows[index].toMap()["id"].toString()};
@@ -511,8 +516,8 @@ bool RollWritingBar::handle(QEvent *event) {
       return true;
     }
     if (event->type() == QEvent::MouseButtonPress &&
-        mouse->button() == Qt::LeftButton) {
-      begin(mouse->localPos(), mouse->modifiers());
+        (mouse->button() == Qt::LeftButton || mouse->button() == Qt::RightButton)) {
+      begin(mouse->localPos(), mouse->modifiers(), mouse->button() == Qt::RightButton);
       return true;
     }
     if (_gesture) {

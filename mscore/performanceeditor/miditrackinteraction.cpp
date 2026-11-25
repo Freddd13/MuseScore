@@ -432,7 +432,7 @@ int MidiTrackPane::hit(QPointF point, bool parameter) const
     });
     return candidates.isEmpty() ? -1 : candidates.first();
 }
-void MidiTrackPane::beginGesture(QPointF point, bool parameter, Qt::KeyboardModifiers modifiers)
+void MidiTrackPane::beginGesture(QPointF point, bool parameter, Qt::KeyboardModifiers modifiers, bool marquee)
 {
     finishGesture(true);
     _press = _lastPointer = point;
@@ -440,10 +440,11 @@ void MidiTrackPane::beginGesture(QPointF point, bool parameter, Qt::KeyboardModi
     _before = _document.track(_activeId).value("notes").toList();
     _beforeSelected = _selected;
     _marqueeAdd = bool(modifiers & Qt::ControlModifier);
-    _anchor = hit(point, parameter);
+    _anchor = marquee ? -1 : hit(point, parameter);
     _edge = 0;
     _moved = false;
     _marquee = false;
+    _rightMarquee = marquee;
     _drawing = false;
     if (_anchor >= 0) {
         const auto& row = _rows[_anchor];
@@ -460,7 +461,7 @@ void MidiTrackPane::beginGesture(QPointF point, bool parameter, Qt::KeyboardModi
             auto rect = rectangle(row, false);
             _edge = point.x() - rect.left() < 5 ? -1 : rect.right() - point.x() < 5 ? 1 : 0;
         }
-    } else if (!parameter && _tool->currentIndex() == 1) {
+    } else if (!parameter && _tool->currentIndex() == 1 && !marquee) {
         _drawing = true;
         _selected.clear();
     } else if (!parameter) {
@@ -852,12 +853,17 @@ bool MidiTrackPane::handle(QEvent* event, bool parameter, bool ruler)
             return true;
         }
         if (_gesture && event->type() == QEvent::MouseMove &&
-            !(mouse->buttons() & Qt::LeftButton)) {
+            !(mouse->buttons() & (_rightMarquee ? Qt::RightButton : Qt::LeftButton))) {
             finishGesture(true);
             return true;
         }
         if (point.x() < PerformanceViewport::gutter && !_gesture)
             return false;
+        if (!parameter && !ruler && event->type() == QEvent::MouseButtonPress && mouse->button() == Qt::RightButton) {
+            if (!_loading.isRunning() && !(_capture && _capture->state().value("recording").toBool()))
+                beginGesture(point, false, mouse->modifiers(), true);
+            return true;
+        }
         if (event->type() == QEvent::MouseButtonPress && mouse->button() == Qt::LeftButton) {
             if (ruler) {
                 finishGesture(true);

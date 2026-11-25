@@ -94,7 +94,7 @@ class RollWritingBar final : public QWidget {
   int pitchAt(double) const;
   QRectF rectangle(const QVariantMap &) const;
   int hit(QPointF) const;
-  void begin(QPointF, Qt::KeyboardModifiers);
+  void begin(QPointF, Qt::KeyboardModifiers, bool marquee = false);
   void move(QPointF);
   void finish(QPointF);
   void cancelGesture();

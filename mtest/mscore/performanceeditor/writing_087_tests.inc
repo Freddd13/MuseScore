@@ -6,7 +6,8 @@ void TestPerformanceEditor::rollDraftReopenAndContinue()
     auto editor=main->performanceEditor();auto bar=editor->findChild<RollWritingBar*>();auto canvas=editor->findChild<QWidget*>("performanceNoteCanvas");
     auto toggle=editor->findChild<QToolButton*>("rollWriteToggle");auto mode=bar->findChild<QComboBox*>("rollWriteMode");QVERIFY(bar&&canvas&&toggle&&mode);
     auto floatAction=editor->findChild<QAction*>("editorArea/float/performanceNotesArea");auto restore=editor->findChild<QAction*>("editorArea/restore/performanceNotesArea");QVERIFY(floatAction&&restore);
-    floatAction->trigger();auto dock=qobject_cast<QDockWidget*>(canvas->parentWidget()->property("kumoDetachedDock").value<QObject*>());QVERIFY(dock);
+    auto notesArea=editor->findChild<QWidget*>("performanceNotesArea");QVERIFY(notesArea);
+    floatAction->trigger();auto dock=qobject_cast<QDockWidget*>(notesArea->property("kumoDetachedDock").value<QObject*>());QVERIFY(dock);
     std::unique_ptr<QWidget,std::function<void(QWidget*)>> cleanup(editor,[&](QWidget*){rollWritingAction()->setChecked(false);restore->trigger();});
     dock->resize(QSize(980,650).boundedTo(dock->screen()->availableGeometry().size()-QSize(24,48)));QTest::qWait(100);
     if(!toggle->isChecked())QTest::mouseClick(toggle,Qt::LeftButton);

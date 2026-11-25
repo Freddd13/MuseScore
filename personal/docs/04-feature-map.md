@@ -145,3 +145,5 @@ Arpeggio 属性/原生读写 → PlaybackTiming 参与音/窗口 → renderArpeg
 0.26 谱行带固定／行下方位置与原生音头中心在 performanceeditor.cpp／performanceoverlay.cpp；标题菜单和浮层损伤在 performanceoverlay.cpp；端点候选和播放窄列在 performanceinteraction.cpp；当前行速度绘制在 performancepainting.cpp。真实回归为 performance_controls_tests.inc 的 scoreStripPlacementAndNativeAnchors／scoreStripHiddenSelectionAndCursorDamage；性能范围见[审查](performance-audit.md)。
 
 0.71字体专用波浪滑音：外部JSON自愿声明，旧字体回退；实现libmscore/sym.*与glissando.cpp，测试tst_fontengraving，见[接口说明](font-engraving.md)。
+
+0.170.1卷帘拖尾、右键框选和连续播放线见[开发与操作](ROLL_170_1.md)，核心在timingeditor、performanceinteraction／performanceview及两类草稿roll交互。

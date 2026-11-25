@@ -135,3 +135,7 @@ xForNote 的谱面模式取布局缓存 Note::canvasBoundingRect 的中心（镜
 性能优化最后继承并行稳定版本：两表面均隐藏时 selectionChanged 只标记待同步；重新开启 refresh 路径恢复 contextTrack／过滤，不跳过销毁与内容失效。上下文相同的可见选择只更新选择标记，过滤控件仍显式 rebuildFilter。换行由二分进入本行小节区间并保留合成末端；谱带播放仅旧／新列更新，跨行仍完整擦除。谱面速度绘制复用 _systemSegments，速度节点二分访问可见范围，不改时间映射、TempoText／Pedal 或音频回调。详见[性能审查](performance-audit.md)。
 
 回归 scoreStripPlacementAndNativeAnchors 使用真实镜像／倚音／offset，检查相距6px的柱、整数坐标垂直铅笔、单音原生Undo、位置切换／回退和视图／播放位置不变。scoreStripHiddenSelectionAndCursorDamage 检查隐藏选择不请求原生重绘、独立带重开恢复当前谱表、停止后计时器、播放窄列损伤。跨进程配置保留位置选择。
+
+## 0.170.1 卷帘拖动和贯通播放线
+
+参见[操作与根因](ROLL_170_1.md)。演奏微调使用tickForX的可选不截断坐标，默认自由；右键框选在各自已有选择模型完成。PerformancePlayhead是鼠标透明的编辑器子控件，跨同一窗口的画布和中间控件绘制一条线；浮窗使用原表面绘制。测试：roll_1701_tests.inc。

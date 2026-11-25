@@ -37,6 +37,7 @@ class System;
 class TempoText;
 class TextLine;
 class PerformanceCanvas;
+class PerformancePlayhead;
 class SpectrumPane;
 class RollWritingBar;
 class MidiTrackPane;
@@ -44,6 +45,8 @@ class TimingEditor;
 class PerformanceEditor : public QWidget, public MuseScoreView {
       Q_OBJECT
       friend class PerformanceCanvas;
+      friend class PerformancePlayhead;
+      PerformancePlayhead* _continuousPlayhead = nullptr;
       friend class WorkflowLanes;
       friend class SpectrumPane;
       friend class RollWritingBar;
@@ -285,6 +288,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       bool _following = true, _automaticScroll = false, _geometryDirty = false;
       bool _ghostVoices = true, _showValues = false, _keyboardNames = true, _snapshotDegraded = false;
       int _voiceMask = 15, _playTick = -1, _seekTick = -1;
+      Qt::MouseButton _marqueeButton = Qt::LeftButton;
       QPointF _marqueeStart, _marqueeEnd;
       Qt::KeyboardModifiers _selectionModifiers;
       QList<Note*> _selectionBefore;
@@ -370,7 +374,7 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       QRectF laneRect() const;
       double xForTick(int tick, bool onScore) const;
       double xForNote(int index, bool onScore) const;
-      int tickForX(double x, bool onScore) const;
+      int tickForX(double x, bool onScore, bool clamp = true) const;
       int snap(int tick, bool end = false) const;
       double valueForY(double y, const QRectF&, bool onScore = false) const;
       double yForValue(double value, const QRectF&, bool onScore = false) const;
