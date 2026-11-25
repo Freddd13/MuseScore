@@ -381,7 +381,7 @@ void MidiTrackPane::paintNotes(QPainter& painter, const QRectF& clip)
             }
         }
     }
-    if (_marquee) {
+    if (_marquee && !_parameterGesture) {
         painter.setBrush(QColor(100, 170, 220, 30));
         painter.setPen(QPen(colors[PerformanceAppearance::Selection], 1, Qt::DashLine));
         painter.drawRect(QRectF(_press, _lastPointer).normalized());
@@ -414,6 +414,11 @@ bool MidiTrackPane::paintValues(QPainter& painter, const QRectF& clip)
             painter.drawEllipse(box.topLeft() + QPointF(3, 0), 4, 4);
         }
     }
+    if(_marquee&&_parameterGesture) {
+        auto color=_editor->_appearance.colors[PerformanceAppearance::Selection];auto fill=color;fill.setAlpha(35);
+        painter.setBrush(fill);painter.setPen(QPen(color,1,Qt::DashLine));
+        painter.drawRect(QRectF(_press,_lastPointer).normalized());
+    }
     painter.restore();
     return true;
 }
@@ -439,7 +444,7 @@ void MidiTrackPane::beginGesture(QPointF point, bool parameter, Qt::KeyboardModi
     _parameterGesture = parameter;
     _before = _document.track(_activeId).value("notes").toList();
     _beforeSelected = _selected;
-    _marqueeAdd = bool(modifiers & Qt::ControlModifier);
+    _marqueeModifiers = modifiers;
     _anchor = marquee ? -1 : hit(point, parameter);
     _edge = 0;
     _moved = false;
@@ -464,9 +469,9 @@ void MidiTrackPane::beginGesture(QPointF point, bool parameter, Qt::KeyboardModi
     } else if (!parameter && _tool->currentIndex() == 1 && !marquee) {
         _drawing = true;
         _selected.clear();
-    } else if (!parameter) {
+    } else if (!parameter || marquee) {
         _marquee = true;
-        if (!(modifiers & Qt::ControlModifier))
+        if (!(modifiers & (Qt::ControlModifier|Qt::ShiftModifier|Qt::AltModifier)))
             _selected.clear();
     } else {
         _selected.clear();
@@ -488,11 +493,13 @@ void MidiTrackPane::moveGesture(QPointF point, bool parameter)
         return;
     _moved = true;
     if (_marquee) {
-        _selected = _marqueeAdd ? _beforeSelected : QSet<QString>();
+        _selected = (_marqueeModifiers & (Qt::ControlModifier|Qt::ShiftModifier|Qt::AltModifier)) ? _beforeSelected : QSet<QString>();
         const auto area = QRectF(_press, point).normalized();
         for (const auto& row : _rows)
-            if (row.active && rectangle(row, false).intersects(area))
-                _selected.insert(row.id);
+            if (row.active && rectangle(row, _parameterGesture).intersects(area)) {
+                if(_marqueeModifiers & Qt::AltModifier)_selected.remove(row.id);
+                else _selected.insert(row.id);
+            }
     } else if (_drawing) {
     } // The temporary note is committed from the two pointer positions.
     else if (_parameterGesture) {
@@ -533,6 +540,7 @@ bool MidiTrackPane::finishGesture(bool commit)
     if (!_gesture)
         return false;
     const bool changed = _moved || _drawing;
+    _rightDragCompleted=_rightMarquee&&_moved;
     _gesture = false;
     if (commit && changed && !_marquee) {
         auto notes = _before;
@@ -788,6 +796,7 @@ bool MidiTrackPane::handle(QEvent* event, bool parameter, bool ruler)
     if (!active())
         return false;
     if (event->type() == QEvent::ContextMenu && !ruler) {
+        if(_rightDragCompleted){_rightDragCompleted=false;return true;}
         finishGesture(true);
         const auto context = static_cast<QContextMenuEvent*>(event);
         const int index = hit(context->pos(), parameter);
@@ -859,9 +868,10 @@ bool MidiTrackPane::handle(QEvent* event, bool parameter, bool ruler)
         }
         if (point.x() < PerformanceViewport::gutter && !_gesture)
             return false;
-        if (!parameter && !ruler && event->type() == QEvent::MouseButtonPress && mouse->button() == Qt::RightButton) {
+        if (!ruler && event->type() == QEvent::MouseButtonPress && mouse->button() == Qt::RightButton) {
+            _rightDragCompleted=false;
             if (!_loading.isRunning() && !(_capture && _capture->state().value("recording").toBool()))
-                beginGesture(point, false, mouse->modifiers(), true);
+                beginGesture(point, parameter, mouse->modifiers(), true);
             return true;
         }
         if (event->type() == QEvent::MouseButtonPress && mouse->button() == Qt::LeftButton) {

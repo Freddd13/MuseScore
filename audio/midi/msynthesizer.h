@@ -35,6 +35,7 @@ class MasterSynthesizer : public QObject {
       Q_OBJECT
 
       float _gain             { defaultGain };
+      std::atomic<float> _previewGain { -1.f };
       float _boost            { 10.0  };     // +20dB
       double _masterTuning    { 440.0 };
 
@@ -60,6 +61,7 @@ class MasterSynthesizer : public QObject {
 
       float _sampleRate;
       SynthesizerState _unavailableState;
+      SynthesizerState _defaultMixState;
 
       float effect1Buffer[MAX_BUFFERSIZE];
       float effect2Buffer[MAX_BUFFERSIZE];
@@ -102,6 +104,9 @@ class MasterSynthesizer : public QObject {
       MidiPatch* getPatchInfo(QString synti, int bank, int program);
 
       SynthesizerState state() const;
+      SynthesizerState mixState() const;
+      const SynthesizerState& defaultMixState() const { return _defaultMixState; }
+      void setMixState(const SynthesizerState&);
       bool setState(const SynthesizerState&);
 
       Synthesizer* synthesizer(const QString& name);
@@ -119,6 +124,9 @@ class MasterSynthesizer : public QObject {
       int indexOfEffect(int ab);
 
       float gain() const     { return _gain; }
+      float outputGain() const { const auto preview=_previewGain.load(std::memory_order_relaxed);return preview>=0?preview:_gain; }
+      void setPreviewGain(float value) { _previewGain.store(value,std::memory_order_relaxed); }
+      void clearPreviewGain() { _previewGain.store(-1.f,std::memory_order_relaxed); }
       float gainAsDecibels() const;
       float defaultGainAsDecibels;
       float minGainAsDecibels = -80;

@@ -509,9 +509,6 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
             if(_midiTracks&&(!_spectrum||_spectrum->showMidiNotes()))_midiTracks->paintNotes(painter,area);
             if(_timingEditor&&showNotes)_timingEditor->paint(painter,area);
 #endif
-            if (_marquee) {
-                  painter.setBrush(QColor(130, 190, 230, 35)); painter.setPen(QPen(c[PerformanceAppearance::Selection], 1, Qt::DashLine)); painter.drawRect(QRectF(_marqueeStart, _marqueeEnd).normalized());
-                  }
             // Overlap count uses identical native tick/pitch coordinates, never time shifts.
             if (_hover >= 0) {
                   int count = 0; for (const auto& g : _noteGeometry) if (_notes[g.index].enabled && _notes[g.index].tick == _notes[_hover].tick && _notes[g.index].pitch == _notes[_hover].pitch) ++count;
@@ -559,6 +556,7 @@ void PerformanceEditor::paintForeground(QPainter& painter, PerformanceSurface su
             QRectF badge(qBound(0.0, _last.x() + 10, double(widget->width() - 88)), qBound(0.0, _last.y() - 25, double(widget->height() - 24)), 84, 22);
             painter.fillRect(badge, c[PerformanceAppearance::Background]); painter.setPen(c[PerformanceAppearance::Preview]); painter.drawText(badge, Qt::AlignCenter, value + (rangeKind() == 1 ? " %" : (rangeKind() == 2 ? " BPM" : "")));
             }
+      paintBoxSelection(painter, widget);
       paintWheelBadge(painter, widget);
       }
 }

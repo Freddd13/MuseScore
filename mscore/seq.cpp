@@ -21,6 +21,7 @@
 
 #include "click.h"
 #include "config.h"
+#include "workflow/scoremixstate.h"
 #include "musescore.h"
 #include "pianotools.h"
 #include "playpanel.h"
@@ -313,6 +314,7 @@ void Seq::setScoreView(ScoreView* v)
       if (changeSources) {
             _synti->reset();
             restoreVstForScore(cs, true);
+              restoreScoreMix(_synti, cs);
             }
       if (cs) {
             initInstruments();

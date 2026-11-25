@@ -48,6 +48,7 @@ void MasterSynthesizer::init()
       if (!f.open(QIODevice::ReadOnly)) {
             // qDebug("cannot read synthesizer settings <%s>", qPrintable(s));
             setState(defaultState);
+            _defaultMixState = mixState();
             return;
             }
       XmlReader e(&f);
@@ -57,10 +58,12 @@ void MasterSynthesizer::init()
             else
                   e.unknown();
             }
+      state.setIsDefault(true); // synthesizer.xml supplies this computer's defaults.
       if (!setState(state)) {
             f.remove();
             setState(defaultState);
             }
+      _defaultMixState = mixState();
       }
 
 //---------------------------------------------------------
@@ -316,7 +319,7 @@ void MasterSynthesizer::process(unsigned n, float* p)
             sendUsed = sendUsed || useSend;
             }
       for (Synthesizer* s : _synthesizer) s->processMaster(n, p);
-      float g = _gain * _boost;
+      float g = outputGain() * _boost;
       for (unsigned i = 0; i < n * 2; ++i)
             *p++ *= g;
       lock1 = false;
@@ -352,40 +355,14 @@ int MasterSynthesizer::indexOfEffect(int ab)
 bool MasterSynthesizer::setState(const SynthesizerState& ss)
       {
       bool result = true;
+      setMixState(ss);
       _unavailableState.clear();
       for (auto s : _synthesizer) {
             bool found=false; for (const auto& g : ss) if (g.name()==s->name()) {found=true;break;}
             if (!found) s->clearState();
             }
       for (const SynthesizerGroup& g : ss) {
-            if (g.name() == "master") {
-                  for (const IdValue& v : g) {
-                        switch (v.id) {
-                              case 0:
-                                    setEffect(0, indexOfEffect(0, v.data));
-                                    break;
-                              case 1:
-                                    setEffect(1, indexOfEffect(1, v.data));
-                                    break;
-                              case 2: {
-                                    float f = preferences.getDouble(PREF_APP_PLAYBACK_DEFAULT_MASTER_VOLUME);
-                                    setGain(f);
-                                    }
-                                    break;
-                              case 3:
-                                    setMasterTuning(v.data.toDouble());
-                                    break;
-                              case 4:
-                                    setDynamicsMethod(v.data.toInt());
-                                    break;
-                              case 5:
-                                    setCcToUseIndex(v.data.toInt());
-                                    break;
-                              default:
-                                    qDebug("MasterSynthesizer::setState: unknown master id <%d>", v.id);
-                              }
-                        }
-                  }
+            if (g.name() == "master") continue;
             else {
                   Synthesizer* s = synthesizer(g.name());
                   if (s) {
@@ -393,11 +370,8 @@ bool MasterSynthesizer::setState(const SynthesizerState& ss)
                         result = result && r;
                         }
                   else {
-                        if (effect(0) && effect(0)->name() == g.name())
-                              effect(0)->setState(g);
-                        else if (effect(1) && effect(1)->name() == g.name())
-                              effect(1)->setState(g);
-                        else
+                        if (!(effect(0) && effect(0)->name() == g.name()) &&
+                            !(effect(1) && effect(1)->name() == g.name()))
                               _unavailableState.push_back(g);
                         }
                   }
@@ -411,6 +385,15 @@ bool MasterSynthesizer::setState(const SynthesizerState& ss)
 
 SynthesizerState MasterSynthesizer::state() const
       {
+      auto ss = mixState();
+      for (Synthesizer* s : _synthesizer)
+            if (s->hasStateToStore()) ss.push_back(s->state());
+      ss.insert(ss.end(), _unavailableState.begin(), _unavailableState.end());
+      return ss;
+      }
+
+SynthesizerState MasterSynthesizer::mixState() const
+      {
       SynthesizerState ss;
       SynthesizerGroup g;
       g.setName("master");
@@ -421,14 +404,28 @@ SynthesizerState MasterSynthesizer::state() const
       g.push_back(IdValue(4, QString("%1").arg(dynamicsMethod())));
       g.push_back(IdValue(5, QString("%1").arg(ccToUseIndex())));
       ss.push_back(g);
-      for (Synthesizer* s : _synthesizer)
-            if (s->hasStateToStore()) ss.push_back(s->state());
-      ss.insert(ss.end(), _unavailableState.begin(), _unavailableState.end());
       if (_effect[0])
             ss.push_back(_effect[0]->state());
       if (_effect[1])
             ss.push_back(_effect[1]->state());
+      ss.setIsDefault(false);
       return ss;
+      }
+
+void MasterSynthesizer::setMixState(const SynthesizerState& state)
+      {
+      for(const auto& value : state.group("master")) switch(value.id) {
+            case 0: setEffect(0,indexOfEffect(0,value.data));break;
+            case 1: setEffect(1,indexOfEffect(1,value.data));break;
+            case 2: setGain(state.isDefault()?preferences.getDouble(PREF_APP_PLAYBACK_DEFAULT_MASTER_VOLUME):value.data.toFloat());break;
+            case 3: setMasterTuning(value.data.toDouble());break;
+            case 4: setDynamicsMethod(value.data.toInt());break;
+            case 5: setCcToUseIndex(value.data.toInt());break;
+            }
+      for(int slot=0;slot<MAX_EFFECTS;++slot)if(_effect[slot]) {
+            const auto group=state.group(_effect[slot]->name());
+            if(!group.empty())_effect[slot]->setState(group);
+            }
       }
 
 //---------------------------------------------------------
@@ -464,7 +461,8 @@ qint64 MasterSynthesizer::processingTail() const
 
 void MasterSynthesizer::setGain(float f)
       {
-      if (_gain != f) {
+      const bool wasPreviewing = _previewGain.exchange(-1.f,std::memory_order_relaxed)>=0;
+      if (_gain != f || wasPreviewing) {
             _gain = f;
             emit gainChanged(_gain);
             }

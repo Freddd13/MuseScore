@@ -52,7 +52,7 @@ namespace Ms {
 ///
 /// If the callback function is non zero an returns false the export will be canceled.
 ///
-bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(float)> updateProgress)
+bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(float)> updateProgress, bool allowNormalization)
       {
       if (!device) {
             qDebug() << "Invalid device";
@@ -87,6 +87,9 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
       const bool setStateOk = synth->setState(state);
       routeVstChannels(synth,score);
 
+      if ((!setStateOk || !synth->hasSoundFontsLoaded()) && !allowNormalization) {
+            device->close();delete synth;return false;
+            }
       if (!setStateOk || !synth->hasSoundFontsLoaded())
             synth->init(); // re-initialize master synthesizer with default settings
 
@@ -102,6 +105,10 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
 
       int oldSampleRate  = MScore::sampleRate;
       MScore::sampleRate = sampleRate;
+      bool anySolo=false;
+      for(const auto& mapping:score->masterScore()->midiMapping())
+            if(mapping.articulation()->solo()){anySolo=true;break;}
+      const auto audible=[anySolo](const Channel* channel){return !channel->mute()&&!channel->soloMute()&&(!anySolo||channel->solo());};
 
       const double preRoll = -PlaybackTiming::time(score, -PlaybackTiming::exportOffset(events));
       if (preRoll > 0) fprintf(stderr, "Kumo audio: score first beat offset %.6f seconds\n", preRoll);
@@ -128,7 +135,7 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
             };
 
       bool cancelled = false;
-      int passes = preferences.getBool(PREF_EXPORT_AUDIO_NORMALIZE) ? 2 : 1;
+      int passes = allowNormalization && preferences.getBool(PREF_EXPORT_AUDIO_NORMALIZE) ? 2 : 1;
       for (int pass = 0; pass < passes; ++pass) {
             EventMap::const_iterator playPos;
             playPos = events.cbegin();
@@ -156,7 +163,7 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
             // Reapply before each normalization pass, after instrument initialization.
             for (const auto& event : setup) {
                   const Channel* channel = score->masterScore()->midiMapping(event.channel())->articulation();
-                  if (!channel->mute()) synth->play(event, synth->index(channel->synti()));
+                  if (audible(channel)) synth->play(event, synth->index(channel->synti()));
                   }
 
             static const unsigned FRAMES = 512;
@@ -189,7 +196,7 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
                         if (!(!e.velo() && e.discard()) && e.isChannelEvent()) {
                               int channelIdx = e.channel();
                               const Channel* c = score->masterScore()->midiMapping(channelIdx)->articulation();
-                              if (!c->mute()) {
+                              if (audible(c)) {
                                     synth->play(e, synth->index(c->synti()));
                                     }
                               }

@@ -203,6 +203,14 @@ bool SpectrumPane::rollEvent(QEvent* event, bool ruler)
         return false;
     if (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) {
         const auto key = static_cast<QKeyEvent*>(event);
+        if(key->key()==Qt::Key_Home&&key->modifiers()==Qt::NoModifier&&!_path.isEmpty()) {
+            event->accept();
+            if(event->type()==QEvent::KeyPress&&!key->isAutoRepeat()) {
+                const auto start=_clip.isEmpty()?0.:timeAtX(_editor->xForTick(_clip.value("start").toInt(),false));
+                seekSource(start);_editor->seek(_clip.isEmpty()?0:_clip.value("start").toInt());viewChanged();
+            }
+            return true;
+        }
         if (key->key() == Qt::Key_Space &&
             (key->modifiers() == Qt::NoModifier || key->modifiers() == Qt::ShiftModifier)) {
             event->accept();
@@ -238,13 +246,14 @@ bool SpectrumPane::rollEvent(QEvent* event, bool ruler)
 bool SpectrumPane::paintRollPlayhead(QPainter& p, QWidget* widget) const
 {
     const auto tabs = _editor->findChild<QTabBar*>("workflowExpressionTabs");
-    if (!isVisible() || (tabs && tabs->currentIndex() != 2) || !sourceInPlayback() ||
-        !_editor->_score)
+    if (!isVisible() || (tabs && tabs->currentIndex() != 2) || _path.isEmpty() ||
+        !_editor->_score || (seq && seq->isPlaying() && !sourceInPlayback()))
         return false;
+    const auto position=sourceInPlayback()?_lastAudioMs:_cursorMs;
     const double x =
         _clip.isEmpty()
-            ? _editor->xForTick(_editor->_score->tempomap()->time2tick(_lastAudioMs / 1000.), false)
-            : xAtTime(_lastAudioMs);
+              ? _editor->xForTick(_editor->_score->tempomap()->time2tick(position / 1000.), false)
+              : xAtTime(position);
     const auto color = palette().highlight().color();
     p.save();
     p.setPen(QPen(color, 1.5));

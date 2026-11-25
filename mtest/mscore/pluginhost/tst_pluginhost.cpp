@@ -167,6 +167,8 @@ class TestPluginHost : public QObject {
       void paletteRemainsInteractiveAfterPlayback();
       void wholeWindowInput171();
       void documentToolState171();
+      void sharedEditorSelection172();
+      void scoreMixCalibration172();
       void referencePanelsAfterPlayback120();
       void resizePanelsAfterPlayback121();
       void personalToolbarIcons121();
@@ -1654,5 +1656,6 @@ class TestPluginHost : public QObject {
 #include "playback_159_tests.inc"
 #include "miditracks_160_tests.inc"
 #include "timing_161_tests.inc"
+#include "editor_172_tests.inc"
 QTEST_MAIN(TestPluginHost)
 #include "tst_pluginhost.moc"

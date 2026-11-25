@@ -41,6 +41,8 @@
 
 #include "accessibletoolbutton.h"
 #include "config.h"
+#include "workflow/audiocalibration.h"
+#include "workflow/scoremixstate.h"
 #include "debuglog.h"
 #include "drumroll.h"
 #include "drumtools.h"
@@ -3365,8 +3367,10 @@ void MuseScore::setCurrentView(int tabIdx, int idx)
 
 void MuseScore::setCurrentScoreView(ScoreView* view)
       {
-      if (cv != view)
+      if (cv != view) {
+            captureScoreMix(cs);
             documentUiState()->capture(cs);
+            }
       if (cs && cs->masterScore() != (view && view->score() ? view->score()->masterScore() : nullptr))
             saveVstBeforeScoreSwitch(cs);
       cv = view;
@@ -4402,6 +4406,8 @@ static bool doConvert(Score* cs, const QJsonArray& outFiles, QString plugin)
 
 static bool doConvert(Score *cs, const QString& fn)
       {
+      if (fn.endsWith(".gain-peak.json"))
+            return writeAudioPeak(cs, fn);
       if (fn.endsWith(".mscx")) {
             QFileInfo fi(fn);
             return cs->saveFile(fi);

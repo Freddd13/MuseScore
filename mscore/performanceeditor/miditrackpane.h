@@ -100,7 +100,9 @@ class MidiTrackPane final : public QWidget
     QSet<int> _pitches;
     int _lastTick = 0;
     bool _gesture = false, _moved = false, _drawing = false;
-    bool _marquee = false, _parameterGesture = false, _marqueeAdd = false, _rightMarquee = false;
+    bool _marquee = false, _parameterGesture = false, _rightMarquee = false;
+    Qt::KeyboardModifiers _marqueeModifiers;
+    bool _rightDragCompleted=false;
     QSet<QString> _beforeSelected;
     ScoreContentState _musicState;
     int _edge = 0, _anchor = -1;

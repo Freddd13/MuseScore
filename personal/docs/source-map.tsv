@@ -795,3 +795,6 @@ MIDI框选	mscore/performanceeditor/miditrackinteraction.cpp	void MidiTrackPane:
 鼠标派发	mscore/performanceeditor/performanceeditor.cpp	bool PerformanceEditor::eventFilter	1349	原生窗口与控件的事件归属	mtest/mscore/pluginhost/input_171_tests.inc
 频谱浏览保存	mscore/performanceeditor/spectrumpane.cpp	void SpectrumPane::captureDocumentState	1354	时间视窗、音域、选音和工具	mtest/mscore/pluginhost/document_171_tests.inc
 节奏草稿保存	mscore/performanceeditor/rhythmpane.cpp	void RhythmPane::captureDocumentState	642	重新读取当前谱后恢复草稿	mtest/mscore/pluginhost/document_171_tests.inc
+共用框选	mscore/performanceeditor/selectiongestures.cpp	bool PerformanceEditor::boxSelectionEvent	47	画布、参数、对比与原生选音	mtest/mscore/pluginhost/editor_172_tests.inc
+每谱混音	mscore/workflow/scoremixstate.cpp	void captureScoreMix	20	主输出与原生声音数据	mtest/mscore/pluginhost/editor_172_tests.inc
+音量校准	mscore/workflow/audiocalibration.cpp	void AudioCalibrationPanel::start	188	独立测量、试听、采用与恢复	mtest/mscore/pluginhost/editor_172_tests.inc

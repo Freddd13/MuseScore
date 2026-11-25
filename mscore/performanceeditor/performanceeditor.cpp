@@ -1361,7 +1361,8 @@ bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
       QWidget* gestureOwner = nullptr;
       if (_comparisonDragging) gestureOwner = _canvas;
       else if (_bandResizing || _scoreRangePanning || (_dragging && _scoreGesture)) gestureOwner = _view;
-      else if (_marquee || (_dragging && _noteGesture)) gestureOwner = _noteCanvas;
+      else if (_marquee) gestureOwner = _marqueeSurface ? _marqueeSurface.data() : static_cast<QWidget*>(_noteCanvas);
+      else if (_dragging && _noteGesture) gestureOwner = _noteCanvas;
       else if (_seeking) gestureOwner = _seekingSurface ? _seekingSurface.data() : _canvas;
       else if (_rangePanning || _dragging) gestureOwner = _canvas;
       const auto gestureButton = _marquee ? _marqueeButton : Qt::LeftButton;
@@ -1390,6 +1391,7 @@ bool PerformanceEditor::eventFilter(QObject* object, QEvent* event)
 #ifdef SCRIPT_INTERFACE
       if(object==_noteCanvas && _spectrum && _spectrum->overlayEvent(event))return true;
 #endif
+      if(boxSelectionEvent(object,event))return true;
       if(comparisonEvent(object,event))return true;
       if ((_scoreRangePanning||_bandResizing) && (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress)
             && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {

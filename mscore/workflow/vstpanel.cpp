@@ -3,6 +3,7 @@
 #include "vstpanel.h"
 #include "vstparameters.h"
 #include "vstpresets.h"
+#include "audiocalibration.h"
 #include "sharedpiano.h"
 #ifdef KUMO_VST_HOST
 #include "audio/midi/midipatch.h"
@@ -850,6 +851,7 @@ public:
       state->setText(tr("闲置音源已释放，当前乐谱的声音继续保留。")); refreshRetained();
     });
     layout->addWidget(sourceGroup);
+    layout->addWidget(new AudioCalibrationPanel(body));
     auto libraryGroup = new QGroupBox(tr("添加或更换插件"), body);
     libraryGroup->setObjectName("kumoVstLibraryGroup");
     auto libraryLayout = new QVBoxLayout(libraryGroup);

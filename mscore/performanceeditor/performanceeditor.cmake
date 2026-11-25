@@ -1,4 +1,8 @@
 set(PERFORMANCEEDITOR_SRC
+      ${CMAKE_CURRENT_LIST_DIR}/../workflow/scoremixstate.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/../workflow/scoremixstate.h
+      ${CMAKE_CURRENT_LIST_DIR}/../workflow/audiocalibration.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/../workflow/audiocalibration.h
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/vstpanel.cpp
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/vstpanel.h
       ${CMAKE_CURRENT_LIST_DIR}/../workflow/sharedpiano.cpp
@@ -40,6 +44,7 @@ set(PERFORMANCEEDITOR_SRC
       ${CMAKE_CURRENT_LIST_DIR}/markvelocity.h
       ${CMAKE_CURRENT_LIST_DIR}/performancewheel.cpp
       ${CMAKE_CURRENT_LIST_DIR}/performanceinteraction.cpp
+      ${CMAKE_CURRENT_LIST_DIR}/selectiongestures.cpp
       ${CMAKE_CURRENT_LIST_DIR}/performancecontrols.cpp
       ${CMAKE_CURRENT_LIST_DIR}/performanceux.cpp
       ${CMAKE_CURRENT_LIST_DIR}/editorstate.cpp

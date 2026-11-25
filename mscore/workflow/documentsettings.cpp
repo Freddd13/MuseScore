@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Freddd13 and contributors; GPL-2.0-or-later.
 #include "documentsettings.h"
 #include "featuregate.h"
+#include "scoremixstate.h"
 #include "libmscore/score.h"
 #include <QCoreApplication>
 #include <QDataStream>
@@ -18,7 +19,7 @@ bool documentKey(const QString& key)
 {
     for (const auto& prefix : {"personalWorkspaceViews/", "performanceEditor/", "kumoPanels/",
                               "spectrum/", "rhythmWriting/", "regionalVariants/",
-                              "arrangementSuggestions/", "toolProjects/", "rollWriting/", "scoreVideoPanel/"})
+                              "arrangementSuggestions/", "toolProjects/", "rollWriting/", "scoreVideoPanel/", "audioCalibration/"})
         if (key.startsWith(QLatin1String(prefix))) return true;
     return key == "kumo/vst/commonPianoDetails";
 }
@@ -80,6 +81,7 @@ void DocumentUiState::activate(Score* score)
 void prepareDocumentUiSave(Score* score)
 {
     if (!score || !personalFeaturesEnabled()) return;
+    captureScoreMix(score);
     documentUiState()->capture(score);
     const auto values = valuesFor(score);
     QByteArray bytes;

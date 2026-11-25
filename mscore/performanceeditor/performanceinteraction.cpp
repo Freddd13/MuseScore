@@ -421,7 +421,7 @@ void PerformanceEditor::seek(int tick)
 void PerformanceEditor::cancelSurfaceGesture()
       {
       if (!_marquee && !_seeking && !_rangePanning) return;
-      _marquee = _seeking = _rangePanning = false; _selectionBefore.clear(); if (_canvas) _canvas->unsetCursor();
+      _marquee = _seeking = _rangePanning = false; _selectionBefore.clear(); _marqueeSurface.clear(); if (_canvas) _canvas->unsetCursor();
       syncInputTracking(); if (_noteCanvas) _noteCanvas->releaseMouse(); if (_ruler) _ruler->releaseMouse(); if(_seekingSurface)_seekingSurface->releaseMouse();_seekingSurface=nullptr; if (_canvas) _canvas->releaseMouse(); updateSurfaces();
       }
 void PerformanceEditor::queueGesture(QPointF point)
@@ -431,7 +431,10 @@ void PerformanceEditor::drainGesture()
 bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
       {
       if ((_marquee || _seeking || _rangePanning) && (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
-            event->accept(); if (event->type() == QEvent::KeyPress) cancelSurfaceGesture(); return true;
+            event->accept(); if (event->type() == QEvent::KeyPress) {
+                  if(_marquee&&_score){PerformanceSelection::apply(_score,_selectionBefore);updateSelection();}
+                  cancelSurfaceGesture();
+                  } return true;
             }
       const bool notes = object == _noteCanvas, ruler = object == _ruler || object->property("performanceExtraRuler").toBool(), parameter = object == _canvas;
       if (!notes && !ruler && !parameter) return false;
@@ -444,15 +447,6 @@ bool PerformanceEditor::surfaceEvent(QObject* object, QEvent* event)
       if(notes&&!_marquee&&_timingEditor&&(!_spectrum||_spectrum->showRollNotes())&&_timingEditor->handle(event))return true;
       if(notes&&!_marquee&&_rollWriting&&(!_midiTracks||!_midiTracks->active())&&_rollWriting->handle(event))return true;
 #endif
-      if (notes && event->type() == QEvent::MouseButtonPress && _score && !_dirty) {
-            auto mouse = static_cast<QMouseEvent*>(event);
-            if (mouse->button() == Qt::RightButton && mouse->x() >= PerformanceViewport::gutter) {
-                  pauseFollow(); _marquee = true; _marqueeButton = Qt::RightButton;
-                  _marqueeStart = _marqueeEnd = mouse->pos(); _selectionModifiers = mouse->modifiers();
-                  _selectionBefore.clear(); for (auto note : _score->selection().noteList()) _selectionBefore.append(note);
-                  _noteCanvas->grabMouse(); syncInputTracking(); return true;
-                  }
-            }
       if (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) {
             auto key = static_cast<QKeyEvent*>(event);
             if (key->modifiers() == Qt::NoModifier && (key->key() == Qt::Key_Escape || key->key() == Qt::Key_Home)) {

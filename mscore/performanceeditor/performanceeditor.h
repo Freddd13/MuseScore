@@ -289,6 +289,10 @@ class PerformanceEditor : public QWidget, public MuseScoreView {
       bool _ghostVoices = true, _showValues = false, _keyboardNames = true, _snapshotDegraded = false;
       int _voiceMask = 15, _playTick = -1, _seekTick = -1;
       Qt::MouseButton _marqueeButton = Qt::LeftButton;
+      QPointer<QWidget> _marqueeSurface;
+      bool boxSelectionEvent(QObject*, QEvent*);
+      QVector<int> boxSelectionNotes(const QRectF&, bool parameter);
+      void paintBoxSelection(QPainter&, QWidget*) const;
       QPointF _marqueeStart, _marqueeEnd;
       Qt::KeyboardModifiers _selectionModifiers;
       QList<Note*> _selectionBefore;
