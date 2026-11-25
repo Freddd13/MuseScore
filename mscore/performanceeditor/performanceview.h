@@ -19,6 +19,7 @@ struct PerformanceRange { double minimum, maximum; };
 struct PerformanceViewport {
       static constexpr int gutter = 76;
       static constexpr int rightMargin = 14;
+      static constexpr int timelineStart = gutter + 20;
       static constexpr int parameterPadding = 6;
       double pixelsPerQuarter = 72, rowHeight = 12, topPitch = 72;
       QVector<int> pitchRows;

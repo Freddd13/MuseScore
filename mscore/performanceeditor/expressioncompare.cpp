@@ -45,7 +45,7 @@ int PerformanceEditor::comparisonDisplayTick(int index)const
       {return comparisonTimeActive()?_comparisonValues.value(index).value("displayTick",_notes[index].tick).toInt():_notes[index].tick;}
 int PerformanceEditor::leftTickForAnchor(int tick,double x)const
       {
-      const double units=(x-PerformanceViewport::gutter)/_viewport.pixelsPerQuarter;
+      const double units=(x-PerformanceViewport::timelineStart)/_viewport.pixelsPerQuarter;
       return comparisonTimeActive()?_score->tempomap()->time2tick(_score->tempomap()->tick2time(tick)-units*.5):tick-qRound(units*DIVISION);
       }
 int PerformanceEditor::comparisonPlayTick(int tick)const

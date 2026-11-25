@@ -1,4 +1,9 @@
 topic	path	symbol	line	role	tests
+踏板时值与换算	mscore/performanceeditor/performancecontrols.cpp	class PedalDurationInput	33	音符时值与毫秒输入、当前速度换算及动作例子	mtest/mscore/performanceeditor/pedal_106_tests.inc
+踏板按时值播放	libmscore/pedalplayback.h	inline QVector<Span> schedule	50	按实际起音与音符时值安排松开和踩回，旧毫秒设置继续使用	mtest/mscore/performanceeditor/pedal_106_tests.inc
+时间轴起点留白	mscore/performanceeditor/performanceview.h	timelineStart	22	卷帘、参数区、时间尺及对比共用第一拍起点	mtest/mscore/performanceeditor/interaction_170_tests.inc
+符号面板可用高度	mscore/palette/palettewidget.cpp	void PaletteWidget::updateMinimumHeight	103	由QML标题及列表入口确定最小高度，避免底部编辑器挤空列表	mtest/mscore/pluginhost/workspace_093_tests.inc
+工作视图恢复完成	mscore/workflow/workspaceviews.cpp	restoring	39	尺寸恢复期间暂停保存，连续切换只采用最后一次恢复	mtest/mscore/pluginhost/workspace_093_tests.inc
 启动	main/main.cpp	int main(	56	资源与应用入口	-
 模块装配	main/modulessetup.cpp	void ModulesSetup::setup()	52	可选模块注册	-
 主应用初始化	mscore/musescore.cpp	int runApplication(	9039	应用初始化与CLI	-

@@ -33,6 +33,14 @@ void TestPerformanceEditor::pedalSchedule106() {
     result = schedule(input, {{0, 0}, {4, 4}}, seconds, tickAt);
     QVERIFY(result[0].down < result[0].up); QVERIFY(result[0].up < result[1].down); QVERIFY(result[1].down < result[1].up);
     const auto saved = encode(piano); QCOMPARE(decode(saved).releaseMs, 40); QVERIFY(decode(saved).piano);
+    piano.releaseTicks = DIVISION / 16;
+    piano.downTicks = DIVISION / 8;
+    QCOMPARE(decode(encode(piano)).releaseTicks, DIVISION / 16);
+    QCOMPARE(decode(encode(piano)).downTicks, DIVISION / 8);
+    input = {{0, 1000, 0, 1000, piano}, {1000, 2000, 1000, 2000, piano}};
+    result = schedule(input, {{0, 0}, {1000, 1000}}, seconds, tickAt);
+    QCOMPARE(result[0].up, 1000 + DIVISION / 16);
+    QCOMPARE(result[1].down, 1000 + DIVISION / 8);
 }
 void TestPerformanceEditor::pedalPlaybackPersistence106() {
     std::unique_ptr<MasterScore> score(fixture()); QVERIFY(score);
@@ -75,6 +83,25 @@ void TestPerformanceEditor::pedalPlaybackWindow106() {
     auto buttons = dialog->findChild<QDialogButtonBox*>(); QVERIFY(buttons);
     QTest::mouseClick(buttons->button(QDialogButtonBox::Apply), Qt::LeftButton); QTest::qWait(120);
     QVERIFY(PedalPlayback::decode(PedalPlayback::partData(score->parts().front())).piano);
+    auto releaseLength = dialog->findChild<QComboBox*>("pedalPlaybackReleaseMsLength");
+    auto downLength = dialog->findChild<QComboBox*>("pedalPlaybackDownMsLength");
+    QVERIFY(releaseLength && downLength);
+    releaseLength->setCurrentIndex(releaseLength->findData(DIVISION / 16));
+    downLength->setCurrentIndex(downLength->findData(DIVISION / 8));
+    QTest::mouseClick(buttons->button(QDialogButtonBox::Apply), Qt::LeftButton);
+    const auto usingNotes = PedalPlayback::decode(PedalPlayback::partData(score->parts().front()));
+    QCOMPARE(usingNotes.releaseTicks, DIVISION / 16);
+    QCOMPARE(usingNotes.downTicks, DIVISION / 8);
+    const auto file = _directory.filePath("pedal-notelength-170.mscx");
+    QVERIFY(saveScore(score, file));
+    std::unique_ptr<MasterScore> reopened(readCreatedScore(file)); QVERIFY(reopened);
+    QCOMPARE(PedalPlayback::decode(PedalPlayback::partData(reopened->parts().front())).releaseTicks, DIVISION / 16);
+    const auto beforeSpeed = sustain106(score);
+    const double firstGap = score->utick2utime(beforeSpeed[2].first) - score->utick2utime(beforeSpeed[1].first);
+    QVERIFY(ParameterEdit::tempos(score, {{0, 60}}, -1));
+    const auto afterSpeed = sustain106(score);
+    const double slowerGap = score->utick2utime(afterSpeed[2].first) - score->utick2utime(afterSpeed[1].first);
+    QVERIFY(slowerGap > firstGap);
     const auto screenshot = QString::fromLocal8Bit(qgetenv("P2_PEDAL_106_SCREENSHOT"));
     if (!screenshot.isEmpty()) QVERIFY(dialog->grab().save(screenshot));
     QVERIFY(dialog->height() < 430); QVERIFY(dialog->width() < 650);

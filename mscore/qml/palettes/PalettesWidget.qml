@@ -34,6 +34,12 @@ Item {
 
     implicitHeight: 4 * palettesWidgetHeader.implicitHeight
     implicitWidth: paletteTree.implicitWidth
+    readonly property real minimumContentHeight: separator.y + separator.height + paletteFontMetrics.height + 12
+
+    FontMetrics {
+        id: paletteFontMetrics
+        font: globalStyle.font
+    }
 
     enabled: mscore.palettesEnabled
 

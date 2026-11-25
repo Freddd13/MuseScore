@@ -26,6 +26,7 @@
 #include "qml/nativetooltip.h"
 
 #include <QQmlContext>
+#include <QtMath>
 #include <QTimer>
 
 namespace Ms {
@@ -83,6 +84,8 @@ PaletteWidget::PaletteWidget(PaletteWorkspace* w, QQmlEngine* e, QWidget* parent
       ctx->setContextProperty("mscore", qmlInterface);
 
       setSource(QUrl(qmlSourcePrefix() + "qml/palettes/PalettesWidget.qml"));
+      connect(rootObject(), SIGNAL(minimumContentHeightChanged()), this, SLOT(updateMinimumHeight()));
+      updateMinimumHeight();
       setObjectName("palette-widget");
       setAllowedAreas(Qt::DockWidgetAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea));
 
@@ -96,6 +99,11 @@ PaletteWidget::PaletteWidget(PaletteWorkspace* w, QWidget* parent, Qt::WindowFla
 //---------------------------------------------------------
 //   retranslate
 //---------------------------------------------------------
+
+void PaletteWidget::updateMinimumHeight()
+      {
+      widget()->setMinimumHeight(qCeil(rootObject()->property("minimumContentHeight").toReal()));
+      }
 
 void PaletteWidget::retranslate()
       {

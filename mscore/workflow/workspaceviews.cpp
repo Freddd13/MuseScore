@@ -36,13 +36,15 @@ class WorkspaceViews : public QObject {
   QAction *scoreComparison;
   QString current = "arrange";
   bool changing = false;
+  bool restoring = false;
+  quint64 restoreSerial = 0;
   bool initialRestorePending = true;
   QList<QPointer<QToolButton>> selectors;
   QString key(const QString &name) const {
     return "personalWorkspaceViews/" + name;
   }
   void save() {
-    if (!window || changing || !personalFeaturesEnabled())
+    if (!window || changing || restoring || !personalFeaturesEnabled())
       return;
     finishToolFullscreen(window);
     if (auto editor = window->findChild<PerformanceEditor *>())
@@ -312,6 +314,8 @@ public:
     if (rememberCurrent)
       save();
     changing = true;
+    restoring = true;
+    const auto serial = ++restoreSerial;
     if (mode == "engrave")
       openEngravingTools(window);
     current = mode;
@@ -359,12 +363,13 @@ public:
       window->QWidget::layout()->activate();
     restoreSideWidths(mode);
     // Restore internal heights after the main window has restored dock sizes.
-    QTimer::singleShot(0, this, [this, mode] {
-      if (window && current == mode) {
+    QTimer::singleShot(0, this, [this, mode, serial] {
+      if (window && current == mode && restoreSerial == serial) {
         if (auto editor = window->findChild<PerformanceEditor*>())
           settleEditorAreaLayout(editor);
         restoreEditorExtent(mode);
         restoreSideWidths(mode);
+        restoring = false;
       }
     });
     selected->setChecked(true);

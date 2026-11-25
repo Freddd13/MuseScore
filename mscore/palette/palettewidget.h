@@ -89,6 +89,9 @@ class PaletteWidget : public QmlDockWidget
       void retranslate();
       void setupStyle();
 
+   private slots:
+      void updateMinimumHeight();
+
    public:
       PaletteWidget(PaletteWorkspace* w, QWidget* parent = nullptr, Qt::WindowFlags flags = Qt::WindowFlags());
       PaletteWidget(PaletteWorkspace* w, QQmlEngine* e, QWidget* parent, Qt::WindowFlags flags = Qt::WindowFlags());
@@ -103,4 +106,3 @@ class PaletteWidget : public QmlDockWidget
 
 }
 #endif
-

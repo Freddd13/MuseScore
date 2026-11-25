@@ -997,7 +997,7 @@ void PerformanceEditor::fit(bool selection)
             from = _notes[chosen.front()].tick; until = from + 1;
             for (int index : chosen) { from = qMin(from, _notes[index].tick); until = qMax(until, _notes[index].end);if(comparisonTimeActive()&&_comparisonValues.contains(index)){from=qMin(from,comparisonDisplayTick(index));until=qMax(until,_score->tempomap()->time2tick(_comparisonClock.tick2time(_notes[index].end)));} }
             }
-      const double width=qMax(100,_canvas->width()-PerformanceViewport::gutter-PerformanceViewport::rightMargin);
+      const double width=qMax(100,_canvas->width()-PerformanceViewport::timelineStart-PerformanceViewport::rightMargin);
       const double units=comparisonTimeActive()?qMax(.001,2*(_score->tempomap()->tick2time(until)-_score->tempomap()->tick2time(from))):double(qMax(1,until-from))/DIVISION;
       const double previousScale = _viewport.pixelsPerQuarter;
       _viewport.pixelsPerQuarter=qBound(.01,width/units,1000.);
@@ -1036,7 +1036,7 @@ double PerformanceEditor::xForTick(int tick, bool onScore) const
       {
       if (!onScore) {
             const double units=comparisonTimeActive()?2*(_score->tempomap()->tick2time(tick)-_score->tempomap()->tick2time(_scroll->value())):double(tick-_scroll->value())/DIVISION;
-            return PerformanceViewport::gutter+units*_viewport.pixelsPerQuarter;
+            return PerformanceViewport::timelineStart+units*_viewport.pixelsPerQuarter;
             }
       if (!_view) return 0;
       if (_systemSegments.isEmpty()) return 0;
@@ -1051,7 +1051,7 @@ double PerformanceEditor::xForTick(int tick, bool onScore) const
 int PerformanceEditor::tickForX(double x, bool onScore) const
       {
       if (!onScore) {
-            const double units=(x-PerformanceViewport::gutter)/_viewport.pixelsPerQuarter;
+            const double units=(x-PerformanceViewport::timelineStart)/_viewport.pixelsPerQuarter;
             const int tick=comparisonTimeActive()?_score->tempomap()->time2tick(_score->tempomap()->tick2time(_scroll->value())+units*.5):qRound(units*DIVISION)+_scroll->value();
             return qBound(0,tick,timelineEndTick());
             }

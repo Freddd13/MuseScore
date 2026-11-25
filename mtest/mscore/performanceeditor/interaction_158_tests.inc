@@ -6,6 +6,7 @@ void TestPerformanceEditor::wheelSelectionCommit158()
     expressionShowMain080(main); main->showPerformanceEditor(true);
     auto editor=main->performanceEditor(); auto view=main->currentScoreView();
     editor->findChild<QTabBar*>("workflowExpressionTabs")->setCurrentIndex(0);
+    editor->findChild<QComboBox*>("performanceParameter")->setCurrentIndex(0);
     editor->findChild<QComboBox*>("performanceAxis")->setCurrentIndex(0);
     editor->findChild<QToolButton*>("performanceWheelVelocity")->setChecked(true);
     editor->setScoreBandEnabled(false);

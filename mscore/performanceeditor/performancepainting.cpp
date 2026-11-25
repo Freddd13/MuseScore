@@ -11,6 +11,7 @@
 #include "../workflow/arrangement.h"
 #endif
 #include "libmscore/select.h"
+#include "libmscore/notevelocity.h"
 #include "libmscore/pedal.h"
 #include "libmscore/staff.h"
 #include <QPainter>
@@ -61,7 +62,7 @@ void PerformanceEditor::surfaceResized(PerformanceSurface surface)
 #ifdef SCRIPT_INTERFACE
       if(_spectrum&&_spectrum->linkedTimelineWidth()>0)width=visible?qMin(width,_spectrum->linkedTimelineWidth()):_spectrum->linkedTimelineWidth();
 #endif
-      const double units=qMax(10,width-PerformanceViewport::gutter-PerformanceViewport::rightMargin)/_viewport.pixelsPerQuarter;
+      const double units=qMax(10,width-PerformanceViewport::timelineStart-PerformanceViewport::rightMargin)/_viewport.pixelsPerQuarter;
       const int span=qMax(1,comparisonTimeActive()?_score->tempomap()->time2tick(_score->tempomap()->tick2time(_scroll->value())+units*.5)-_scroll->value():qRound(units*DIVISION));
       int earliest=0;
 #ifdef SCRIPT_INTERFACE
@@ -158,7 +159,7 @@ void PerformanceEditor::paintBackground(QPainter& painter, PerformanceSurface su
             const double desired=80/(2*_viewport.pixelsPerQuarter);
             const double magnitude=std::pow(10.,std::floor(std::log10(desired)));const double ratio=desired/magnitude;const double step=magnitude*(ratio<=1?1:ratio<=2?2:ratio<=5?5:10);
             for(double seconds=std::ceil(left/step)*step;seconds<=right;seconds+=step){
-                  const double x=PerformanceViewport::gutter+(seconds-origin)*2*_viewport.pixelsPerQuarter;
+                  const double x=PerformanceViewport::timelineStart+(seconds-origin)*2*_viewport.pixelsPerQuarter;
                   painter.setPen(QPen(c[PerformanceAppearance::Grid],.7));painter.drawLine(QPointF(x,surface==PerformanceSurface::Parameter?laneRect().top():0),QPointF(x,surface==PerformanceSurface::Parameter?laneRect().bottom():widget->height()));
                   if(surface==PerformanceSurface::Ruler){const int minutes=int(seconds)/60;const QString label=QString("%1:%2").arg(minutes).arg(seconds-minutes*60,4,'f',1,QChar('0'));painter.setPen(c[PerformanceAppearance::Text]);painter.drawText(QPointF(x+3,19),label);}
                   }

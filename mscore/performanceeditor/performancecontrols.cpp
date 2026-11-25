@@ -29,6 +29,66 @@
 #include <QLabel>
 #include <QPushButton>
 namespace Ms {
+namespace {
+class PedalDurationInput final : public QWidget {
+    QSpinBox* _milliseconds;
+    QComboBox* _length;
+    QLabel* _equivalent;
+    double _quarterMs;
+    int _maximum;
+public:
+    PedalDurationInput(QWidget* parent, const QString& name, double quarterMs, int maximum)
+        : QWidget(parent), _quarterMs(quarterMs), _maximum(maximum)
+    {
+        auto row = new QHBoxLayout(this);
+        row->setContentsMargins(0, 0, 0, 0);
+        _milliseconds = new QSpinBox(this);
+        _milliseconds->setObjectName(name);
+        _milliseconds->setRange(name.endsWith("ReleaseMs") ? 1 : 0, maximum);
+        _milliseconds->setSuffix(tr(" 毫秒"));
+        row->addWidget(_milliseconds);
+        _length = new QComboBox(this);
+        _length->setObjectName(name + "Length");
+        _length->addItem(tr("按毫秒"), -1);
+        for (int denominator : {128, 64, 32, 16, 8, 4})
+            _length->addItem(tr("1/%1 音符").arg(denominator), DIVISION * 4 / denominator);
+        row->addWidget(_length);
+        _equivalent = new QLabel(this);
+        _equivalent->setObjectName(name + "Equivalent");
+        row->addWidget(_equivalent);
+        row->addStretch();
+        connect(_length, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { updateEquivalent(); });
+        connect(_milliseconds, QOverload<int>::of(&QSpinBox::valueChanged), this, [this] { updateEquivalent(); });
+    }
+    int ticks() const { return _length->currentData().toInt(); }
+    double durationMs() const { return ticks() < 0 ? _milliseconds->value() : ticks() * _quarterMs / DIVISION; }
+    int milliseconds() const { return qRound(durationMs()); }
+    void setDuration(int milliseconds, int tickCount)
+    {
+        QSignalBlocker block(_length);
+        int index = _length->findData(tickCount);
+        if (index < 0) {
+            _length->addItem(tr("四分音符的 %1 倍").arg(double(tickCount) / DIVISION, 0, 'g', 3), tickCount);
+            index = _length->count() - 1;
+        }
+        _length->setCurrentIndex(index);
+        _milliseconds->setValue(milliseconds);
+        updateEquivalent();
+    }
+    void updateEquivalent()
+    {
+        const bool timed = ticks() < 0;
+        _milliseconds->setEnabled(timed);
+        _milliseconds->setMaximum(timed ? _maximum : 60000);
+        if (timed)
+            _equivalent->setText(tr("约 %1 拍").arg(_milliseconds->value() / _quarterMs, 0, 'g', 3));
+        else {
+            _milliseconds->setValue(milliseconds());
+            _equivalent->setText(tr("随速度变化"));
+        }
+    }
+};
+}
 bool PerformanceEditor::staffEnabled(int track) const
       { return !_excludedStaves.contains(track / VOICES); }
 void PerformanceEditor::rebuildStaffMenu()
@@ -143,10 +203,15 @@ void PerformanceEditor::syncPedalSelection()
             : _score->staff(qBound(0, _contextTrack / VOICES, _score->nstaves() - 1))->part();
         const auto settings = _selectedPedal ? PedalPlayback::effective(_selectedPedal)
             : PedalPlayback::decode(PedalPlayback::partData(part));
+        auto duration = [this](int ticks, int milliseconds) {
+            return ticks < 0 ? tr("%1 毫秒").arg(milliseconds)
+                : tr("四分音符的 %1 倍").arg(double(ticks) / DIVISION, 0, 'g', 3);
+        };
         _pedalPlaybackButton->setText(settings.piano ? tr("踏板：钢琴…") : tr("踏板：SF2…"));
         _pedalPlaybackButton->setToolTip(tr("踏板播放方式：%1。%2\n点击设置整架乐器或选中踏板段；播放时机可在图中对照。")
             .arg(settings.piano ? tr("钢琴换踏板（VST）") : tr("SF2原有方式"),
-                 settings.piano ? tr("抬起间隔%1 ms，音后踩下%2 ms").arg(settings.releaseMs).arg(settings.downMs)
+                 settings.piano ? tr("踏板松开 %1，新音后 %2 踩回")
+                    .arg(duration(settings.releaseTicks, settings.releaseMs), duration(settings.downTicks, settings.downMs))
                                 : tr("沿用谱上踏板的原有时机")));
     }
 }
@@ -267,7 +332,7 @@ void PerformanceEditor::showPedalPlayback()
     auto target = _selectedPedal;
     auto dialog = new QDialog(this, Qt::Dialog); dialog->setObjectName("performancePedalPlaybackDialog");
     dialog->setAttribute(Qt::WA_DeleteOnClose); dialog->setWindowTitle(tr("踏板播放 · %1").arg(part->partName()));
-    dialog->setMinimumWidth(420);
+    dialog->setMinimumWidth(480);
     const auto theme = mscore ? mscore->palette() : QApplication::palette();
     dialog->setPalette(theme); dialog->setFont(QApplication::font());
     dialog->setStyleSheet(QString("QDialog {background:%1;color:%2;} QLabel,QCheckBox {color:%2;} QComboBox,QSpinBox,QPushButton {background:%3;color:%2;} QComboBox QAbstractItemView {background:%3;color:%2;selection-background-color:%4;selection-color:%5;}")
@@ -277,17 +342,30 @@ void PerformanceEditor::showPedalPlayback()
     scope->addItem(tr("这架乐器的全部踏板")); if (target) scope->addItem(tr("选中的踏板段"));
     if (target) scope->setCurrentIndex(1);
     auto mode = new QComboBox(dialog); mode->setObjectName("pedalPlaybackMode");
-    auto lift = new QSpinBox(dialog); lift->setObjectName("pedalPlaybackReleaseMs"); lift->setRange(1, 300); lift->setSuffix(tr(" ms"));
-    auto down = new QSpinBox(dialog); down->setObjectName("pedalPlaybackDownMs"); down->setRange(0, 500); down->setSuffix(tr(" ms"));
-    auto first = new QCheckBox(tr("开始处也在音后踩下"), dialog); first->setObjectName("pedalPlaybackDelayFirst");
-    auto explanation = new QLabel(tr("SF2原有方式沿用原来的踩下、抬起时机。CFX、Pianoteq等VST钢琴可选“钢琴换踏板”：换踏板时先抬起，等新音弹下后再踩下。下方分别设置抬起间隔和音后踩下时间；音符播放长度保持原值。"), dialog);
-    explanation->setWordWrap(true); explanation->setMaximumWidth(400);
+    const int at = target ? target->tick().ticks() : qBound(0, _playTick, _endTick);
+    const double bpm = _score->tempo(Fraction::fromTicks(at)) * 60;
+    auto lift = new PedalDurationInput(dialog, "pedalPlaybackReleaseMs", 60000. / bpm, 300);
+    auto down = new PedalDurationInput(dialog, "pedalPlaybackDownMs", 60000. / bpm, 500);
+    auto first = new QCheckBox(tr("第一段踏板也等音弹下后再踩"), dialog); first->setObjectName("pedalPlaybackDelayFirst");
+    auto explanation = new QLabel(tr("钢琴换踏板会先松开前一段，再等新音弹下后踩回。选择音符时值会随乐谱速度变化；毫秒按固定时间播放。这里以四分音符为一拍，此处每分钟 %1 拍。").arg(bpm, 0, 'f', 1), dialog);
+    explanation->setWordWrap(true); explanation->setMaximumWidth(480);
+    auto example = new QLabel(dialog); example->setObjectName("pedalPlaybackExample");
+    example->setWordWrap(true); example->setMaximumWidth(480);
     auto message = new QLabel(dialog); message->setWordWrap(true); message->setMaximumWidth(400); message->setObjectName("pedalPlaybackResult");
-    form->addRow(tr("应用于"), scope); form->addRow(tr("方式"), mode); form->addRow(tr("抬起间隔"), lift);
-    form->addRow(tr("音后踩下"), down); form->addRow(first); form->addRow(explanation); form->addRow(message);
+    form->addRow(tr("应用于"), scope); form->addRow(tr("播放方式"), mode);
+    form->addRow(tr("踏板松开多久"), lift); form->addRow(tr("新音后多久踩回"), down);
+    form->addRow(first); form->addRow(example); form->addRow(explanation); form->addRow(message);
     auto buttons = new QDialogButtonBox(QDialogButtonBox::Apply | QDialogButtonBox::Close, dialog);
     form->addRow(buttons); buttons->button(QDialogButtonBox::Apply)->setText(tr("保存设置")); buttons->button(QDialogButtonBox::Close)->setText(tr("关闭"));
-    auto updateEnabled = [=] { const bool active = mode->currentData().toInt() == 1; lift->setEnabled(active); down->setEnabled(active); first->setEnabled(active); };
+    auto updateEnabled = [=] {
+        const bool active = mode->currentData().toInt() == 1;
+        lift->setEnabled(active); down->setEnabled(active); first->setEnabled(active);
+        const double up = down->durationMs() - lift->durationMs();
+        example->setText(mode->currentData().toInt() < 0 ? tr("这段使用整架乐器的踏板设置。")
+            : !active ? tr("按谱上踏板的位置播放，适合当前的 SF2 音色。")
+            : tr("此处换踏板：新音%1 %2 毫秒松开，音后 %3 毫秒踩回；中间松开 %4 毫秒。")
+                .arg(up < 0 ? tr("前") : tr("后")).arg(qRound(qAbs(up))).arg(down->milliseconds()).arg(lift->milliseconds()));
+    };
     auto available = [=] {
         if (_score != originalScore || !_score->parts().contains(part)) return false;
         if (scope->currentIndex() == 1) {
@@ -305,16 +383,23 @@ void PerformanceEditor::showPedalPlayback()
         if (own) mode->addItem(tr("跟随这架乐器"), -1);
         mode->addItem(tr("SF2原有方式"), 0); mode->addItem(tr("钢琴换踏板"), 1);
         mode->setCurrentIndex(mode->findData(own && data.isEmpty() ? -1 : settings.piano ? 1 : 0));
-        lift->setValue(settings.releaseMs); down->setValue(settings.downMs); first->setChecked(settings.delayFirst); updateEnabled();
+        lift->setDuration(settings.releaseMs, settings.releaseTicks);
+        down->setDuration(settings.downMs, settings.downTicks);
+        first->setChecked(settings.delayFirst); updateEnabled();
     };
     connect(scope, QOverload<int>::of(&QComboBox::currentIndexChanged), dialog, load);
     connect(mode, QOverload<int>::of(&QComboBox::currentIndexChanged), dialog, updateEnabled);
+    for (auto duration : {lift, down}) {
+        connect(duration->findChild<QSpinBox*>(), QOverload<int>::of(&QSpinBox::valueChanged), dialog, updateEnabled);
+        connect(duration->findChild<QComboBox*>(), QOverload<int>::of(&QComboBox::currentIndexChanged), dialog, updateEnabled);
+    }
     connect(buttons->button(QDialogButtonBox::Close), &QPushButton::clicked, dialog, &QDialog::close);
     connect(buttons->button(QDialogButtonBox::Apply), &QPushButton::clicked, dialog, [=] {
         if (!available()) { message->setText(tr("乐谱或所选踏板已改变，请重新打开当前对象的设置。")); return; }
         auto selected = scope->currentIndex() == 1 ? target : nullptr;
         PedalPlayback::Settings settings; settings.piano = mode->currentData().toInt() == 1;
-        settings.releaseMs = lift->value(); settings.downMs = down->value(); settings.delayFirst = first->isChecked();
+        settings.releaseMs = lift->milliseconds(); settings.downMs = down->milliseconds(); settings.delayFirst = first->isChecked();
+        settings.releaseTicks = lift->ticks(); settings.downTicks = down->ticks();
         QString error; _committing = true;
         const bool changed = ParameterEdit::pedalPlayback(_score, part, selected, settings, mode->currentData().toInt() == -1, &error);
         _committing = false;

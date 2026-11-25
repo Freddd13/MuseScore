@@ -15,6 +15,8 @@ struct Settings {
     int releaseMs = 40;
     int downMs = 60;
     bool delayFirst = true;
+    int releaseTicks = -1;
+    int downTicks = -1;
 };
 inline Settings decode(const QString& data) {
     Settings s;
@@ -24,11 +26,16 @@ inline Settings decode(const QString& data) {
     s.releaseMs = qBound(1, obj.value("releaseMs").toInt(40), 300);
     s.downMs = qBound(0, obj.value("downMs").toInt(60), 500);
     s.delayFirst = obj.value("delayFirst").toBool(true);
+    s.releaseTicks = obj.contains("releaseTicks") ? qBound(1, obj.value("releaseTicks").toInt(), DIVISION) : -1;
+    s.downTicks = obj.contains("downTicks") ? qBound(0, obj.value("downTicks").toInt(), DIVISION) : -1;
     return s;
 }
 inline QString encode(const Settings& s) {
-    return QString::fromUtf8(QJsonDocument(QJsonObject{{"version", 1}, {"piano", s.piano},
-        {"releaseMs", s.releaseMs}, {"downMs", s.downMs}, {"delayFirst", s.delayFirst}}).toJson(QJsonDocument::Compact));
+    QJsonObject data{{"version", 2}, {"piano", s.piano}, {"releaseMs", s.releaseMs},
+                     {"downMs", s.downMs}, {"delayFirst", s.delayFirst}};
+    if (s.releaseTicks >= 0) data.insert("releaseTicks", s.releaseTicks);
+    if (s.downTicks >= 0) data.insert("downTicks", s.downTicks);
+    return QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact));
 }
 inline QString partData(const Part* part) {
     return part ? part->masterPart()->getProperty(Pid::PEDAL_PLAYBACK).toString() : QString();
@@ -57,14 +64,16 @@ inline QVector<Span> schedule(QVector<Span> spans, const QVector<Attack>& attack
         if (attack == onset.end()) continue;
         const bool connected = i > 0 && spans[i - 1].until >= span.from;
         if (!connected && !span.settings.delayFirst) continue;
-        const int desired = tickAt(seconds(attack->second) + span.settings.downMs / 1000.);
+        const int desired = span.settings.downTicks >= 0 ? attack->second + span.settings.downTicks
+            : tickAt(seconds(attack->second) + span.settings.downMs / 1000.);
         const int limit = span.until - 1;
         span.down = qBound(std::min(attack->second, span.from), desired, limit);
     }
     for (int i = 1; i < spans.size(); ++i) {
         auto& next = spans[i]; auto& previous = spans[i - 1];
         if (!next.settings.piano || previous.until < next.from || !onset.count(next.from)) continue;
-        const int desired = tickAt(seconds(next.down) - next.settings.releaseMs / 1000.);
+        const int desired = next.settings.releaseTicks >= 0 ? next.down - next.settings.releaseTicks
+            : tickAt(seconds(next.down) - next.settings.releaseMs / 1000.);
         // Short passages compress the lift; every held interval and up gap stays valid.
         if (next.down - previous.down >= 2)
             previous.up = qBound(previous.down + 1, desired, next.down - 1);

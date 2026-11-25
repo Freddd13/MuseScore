@@ -198,6 +198,7 @@ class TestPerformanceEditor : public QObject, public MTest {
       void interruptedGestureWheel158();
       void wheelOtherNoteEdit158();
       void playBoundaryKeepsGesture158();
+      void timelineLeadingSpace170();
       void canvasKeys139();
       void liveWheelHomeAndSpectrum139();
       void openTwoSavedCfxScores168_data();
@@ -1278,4 +1279,5 @@ QTEST_MAIN(TestPerformanceEditor)
 #include "tst_performanceeditor.moc"
 
 #include "interaction_158_tests.inc"
+#include "interaction_170_tests.inc"
 #include "interaction_159_tests.inc"

@@ -69,6 +69,10 @@ void TestPluginHost::workspaceSideWidthsRoundTrip()
     main->resizeDocks({palette, inspector}, {310, 260}, Qt::Horizontal); QTest::qWait(100);
     const auto engraving = QList<int>{palette->width(), inspector->width()};
     main->findChild<QAction*>("kumo-workspace-arrange")->trigger(); QTest::qWait(100);
+    auto video = main->findChild<QAction*>("kumo-score-video");
+    QVERIFY(video);
+    if (!video->isChecked()) video->trigger();
+    main->findChild<QAction*>("kumo-workspace-arrange")->trigger();
     QSettings().remove("personalWorkspaceViews/engrave/sideWidths");
     QSettings().remove("personalWorkspaceViews/engrave/windowWidth");
     main->findChild<QAction*>("kumo-workspace-engrave")->trigger(); QTest::qWait(100);
@@ -135,6 +139,10 @@ void TestPluginHost::paletteRemainsInteractiveAfterPlayback()
     QTest::qWait(150);
     auto window = const_cast<QQuickView*>(palette->view());
     QVERIFY(window && window->rootObject());
+    auto clickWindow = [](QWindow* target, QPoint point) {
+        QTest::mouseMove(target, point);
+        QTest::mouseClick(target, Qt::LeftButton, {}, point);
+    };
     auto header = [&]() -> QQuickItem* {
         QList<QQuickItem*> pending{window->rootObject()};
         while (!pending.isEmpty()) {
@@ -148,17 +156,30 @@ void TestPluginHost::paletteRemainsInteractiveAfterPlayback()
     };
     auto clickHeader = [&]() {
         auto item = header();
-        if (!item) return false;
+        if (!item) {
+            qInfo() << "palette has no visible header" << "dock" << palette->geometry()
+                << "view" << window->geometry() << window->isVisible() << window->isExposed()
+                << "root" << window->rootObject()->size() << window->rootObject()->isVisible();
+            return false;
+        }
         const bool before = item->property("expanded").toBool();
         const auto point = item->mapToScene(QPointF(10, item->height()/2)).toPoint();
-        QTest::mouseMove(window, point); QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
+        clickWindow(window, point);
         QTest::qWait(80);
+        if (item->property("expanded").toBool() == before) {
+            qInfo() << "missed palette click" << point << "header" << item->size() << item->isEnabled()
+                << "view" << window->size() << window->isVisible() << window->isExposed()
+                << "root" << window->rootObject()->size() << "grabber" << QWidget::mouseGrabber()
+                << window->mouseGrabberItem() << "modal" << QGuiApplication::modalWindow()
+                << "buttons" << QGuiApplication::mouseButtons();
+            window->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS", _settings.path())).filePath("palette-stop-missed-170.png"));
+        }
         return item->property("expanded").toBool() != before;
     };
     QVERIFY2(clickHeader(), "播放前可展开或收起符号组");
     QSignalSpy messages(sequence, SIGNAL(toGui(int,int)));
     QSignalSpy stops(sequence, SIGNAL(stopped()));
-    for (int round = 0; round < 4; ++round) {
+    for (int round = 0; round < 5; ++round) {
         messages.clear(); stops.clear();
         struct PressedSurface {
             QPointer<QWidget> widget;
@@ -208,8 +229,26 @@ void TestPluginHost::paletteRemainsInteractiveAfterPlayback()
         if (round == 0) main->showPerformanceEditor(true);
         if (round == 1) { showExpressionPanel(); showReferencePanel(true); QTest::qWait(150); }
         if (round == 2) main->findChild<QAction*>("kumo-workspace-daw")->trigger();
+        if (round == 4) {
+            auto editor = main->performanceEditor();
+            editor->findChild<QTabBar*>("workflowExpressionTabs")->setCurrentIndex(0);
+            editor->findChild<QToolButton*>("performanceWheelVelocity")->setChecked(true);
+            auto segment = score->tick2segment(Fraction::fromTicks(480), false, SegmentType::ChordRest);
+            QVERIFY(segment && segment->element(0) && segment->element(0)->isChord());
+            auto chord = toChord(segment->element(0));
+            auto first = chord->notes().front();
+            auto second = chord->notes().back();
+            score->select(first); score->select(second, SelectType::ADD);
+            main->endCmd();
+            const auto view = main->currentScoreView();
+            const auto point = view->matrix().mapRect(first->canvasBoundingRect()).center();
+            QWheelEvent wheel(point, view->mapToGlobal(point.toPoint()), {}, QPoint(0, 120),
+                              Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+            QApplication::sendEvent(view, &wheel);
+            QVERIFY(editor->hasPending());
+        }
         if (round == 0) getAction("play")->trigger();
-        else if (round == 1) sequence->stopWait();
+        else if (round == 1 || round == 4) sequence->stopWait();
         else for (int step=0; step<500 && sequence->isPlaying(); ++step) driver->pulse();
         QTRY_VERIFY(!sequence->isPlaying());
         QCoreApplication::processEvents();
@@ -218,6 +257,7 @@ void TestPluginHost::paletteRemainsInteractiveAfterPlayback()
                 << "messages" << messages << "stops" << stops.count() << "blocked" << sequence->signalsBlocked();
         QTRY_VERIFY(palette->isEnabled());
         QTRY_VERIFY(window->rootObject()->isEnabled());
+        QVERIFY2(clickHeader(), "停播后立即展开符号组，无需切换工作视图或窗口");
         main->findChild<QAction*>("kumo-workspace-daw")->trigger(); QTest::qWait(100);
         main->findChild<QAction*>("kumo-workspace-arrange")->trigger(); QTest::qWait(150);
         qInfo() << "stopped" << main->state() << palette->isEnabled() << window->rootObject()->isEnabled()
@@ -237,8 +277,7 @@ void TestPluginHost::paletteRemainsInteractiveAfterPlayback()
         QVERIFY(loop);
         const bool loopBefore = reference->property("looping").toBool();
         const auto point = loop->mapToScene(QPointF(loop->width()/2, loop->height()/2)).toPoint();
-        QTest::mouseMove(reference->window(), point);
-        QTest::mouseClick(reference->window(), Qt::LeftButton, Qt::NoModifier, point);
+        clickWindow(reference->window(), point);
         QTRY_COMPARE(reference->property("looping").toBool(), !loopBefore);
     }
     // Apply an actual palette symbol, then undo and redo it on the same score.
@@ -275,7 +314,8 @@ void TestPluginHost::paletteRemainsInteractiveAfterPlayback()
     const auto count = chord->articulations().size();
     // Capturing a native Quick window can finish pending polish/layout. Resolve
     // the click position afterwards, just as the user sees the resulting cell.
-    QVERIFY(window->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS", _settings.path())).filePath("palette-before-apply-093.png")));
+    if (QGuiApplication::platformName() != "offscreen")
+        QVERIFY(window->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS", _settings.path())).filePath("palette-before-apply-093.png")));
     QVERIFY(main->grab().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS", _settings.path())).filePath("palette-layout-before-apply-093.png")));
     QPoint point(-1, -1);
     QVERIFY(QTest::qWaitFor([&] {
@@ -309,7 +349,8 @@ void TestPluginHost::paletteRemainsInteractiveAfterPlayback()
     QTest::mouseMove(referenceWindow, loopPoint);
     QTest::mouseClick(referenceWindow, Qt::LeftButton, Qt::NoModifier, loopPoint);
     QTRY_COMPARE(reference->property("looping").toBool(), !loopBefore);
-    QVERIFY(window->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS", _settings.path())).filePath("palette-symbol-applied-093.png")));
+    if (QGuiApplication::platformName() != "offscreen")
+        QVERIFY(window->grabWindow().save(QDir(qEnvironmentVariable("HARMONY_TEST_ARTIFACTS", _settings.path())).filePath("palette-symbol-applied-093.png")));
     auto capture = main->grab();
     { QPainter painter(&capture); painter.drawImage(palette->widget()->mapTo(main, QPoint()), window->grabWindow());
       if (auto dock = main->findChild<QDockWidget*>("kumoPanel/ReferencePlayer_MS3"))
